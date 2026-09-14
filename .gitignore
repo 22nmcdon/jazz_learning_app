@@ -3,6 +3,8 @@ build/
 build-*/
 cmake-build-*/
 _deps/
+web/dist/
+web/jazz-engine.js
 
 # JUCE checkouts placed beside or inside the repo
 /JUCE/

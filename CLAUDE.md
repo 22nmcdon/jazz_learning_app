@@ -106,6 +106,11 @@ Two rules the build itself enforces:
   `modules/core_engine`; `tests/` links only against it and uses the small harness in
   `tests/TestFramework.h` (no third-party test dependency).
 
+There is a third platform shell besides `app/`: `web/` compiles the engine to WebAssembly
+with Emscripten (`web/build.sh`) for a browser demo of the engine. It exists as a standing
+check that the engine stays portable - if a change makes `web/build.sh` fail, something
+platform-specific has leaked into the Core Engine. Like `app/`, it must contain no theory.
+
 Android is the exception to CMake-everywhere: JUCE's CMake support does not cover Android,
 so that target needs the Projucer/Gradle exporter over the same source tree. Nothing in
 the source layout assumes either build system.

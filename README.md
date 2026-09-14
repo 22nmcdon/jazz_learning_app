@@ -71,6 +71,26 @@ Below 600px wide the panes collapse into tabs and the keyboard drops to two octa
 `JAZZ_UI_TOUCH=1` switches the scale picker from a popup menu to a bottom sheet and grows
 every tap target. Same components either way — there is no second UI.
 
+## Trying the engine in a browser
+
+The JUCE interface cannot run on the web - JUCE has no supported WebAssembly target. The
+**engine** can, because it links no JUCE, so `web/` is a third platform shell alongside
+`app/`: the same C++ behind a browser front end.
+
+```bash
+sudo apt install emscripten   # or install the emsdk
+./web/build.sh                # -> web/dist/jazz-engine.js, wasm included, 212 KB
+python3 -m http.server -d web 8000
+```
+
+Then open <http://localhost:8000>. A published copy of that page is at
+<https://claude.ai/code/artifact/bb45867f-890b-46e3-bd96-c9c2a2618713> (private until
+shared from the page's share menu).
+
+`web/src/JazzWebBindings.cpp` marshals engine results to JSON; it holds no theory, the same
+way `app/` holds none. What the page cannot tell you is whether the JUCE UI works - for
+that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
+
 ## What the engine does today
 
 - **Chord parsing** — `Dm7`, `F#m7b5`, `Bb13#11`, `C7alt`, `EbmMaj7`, `G7sus4`, `Am7/D`
