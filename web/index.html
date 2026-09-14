@@ -1,572 +1,738 @@
 <title>Jazz Engine Workbench</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Jost:wght@300;400;500;600&family=Kalam:wght@700&display=swap">
 
 <style>
 /* ---------------------------------------------------------------------------
    Jazz Engine Workbench - the C++ core engine compiled to WebAssembly.
-   Single dark palette on purpose: this is the same instrument panel as the
-   desktop app, so every colour is painted explicitly rather than inherited.
+
+   Palette and type follow the Milo McDonald portfolio: cream paper, charcoal
+   ink, blush and gold accents, Playfair / Cormorant / Jost. The chord chart
+   itself is hand-lettered, the way a Real Book page is.
 --------------------------------------------------------------------------- */
 :root {
-  --ink:        #0f1319;
-  --surface:    #161c25;
-  --surface-2:  #1d2530;
-  --surface-3:  #252f3d;
-  --line:       #2a3441;
-  --line-soft:  #212a36;
-  --text:       #e7edf3;
-  --muted:      #93a1b1;
-  --faint:      #64707e;
-  --accent:     #4dd0c0;
-  --accent-dim: #2b6d66;
-  --good:       #6fcf7f;
-  --amber:      #dba546;
-  --bad:        #e5605f;
+  --cream:      #faf6f0;
+  --cream-2:    #f2ebe1;
+  --paper:      #fffcf7;
+  --charcoal:   #241f1d;
+  --blush:      #d9a6a0;
+  --blush-deep: #c07f79;
+  --gold:       #b08d57;
+  --line:       #e4d9cc;
+  --text:       #3a332f;
+  --text-soft:  #6b615a;
 
-  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --display: "Archivo", var(--sans);
+  /* Semantic colours, kept inside the same warm family. */
+  --sage: #6f7f63;
+  --rust: #a4553f;
 
-  --radius: 9px;
-  --pad: 16px;
+  --serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  --script: "Cormorant Garamond", Georgia, serif;
+  --sans: "Jost", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --hand: "Kalam", "Bradley Hand", "Segoe Print", cursive;
+  --mono: ui-monospace, Menlo, Consolas, monospace;
+
+  --max: 1080px;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--ink);
+  background: var(--cream);
   color: var(--text);
   font-family: var(--sans);
-  font-size: 15px;
-  line-height: 1.5;
+  font-weight: 300;
+  font-size: 16px;
+  line-height: 1.65;
   -webkit-font-smoothing: antialiased;
 }
 
-.shell {
-  max-width: 1240px;
+h1, h2, h3 {
+  font-family: var(--serif);
+  font-weight: 600;
+  color: var(--charcoal);
+  letter-spacing: 0.01em;
+  margin: 0;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  font-size: 11px;
+  color: var(--blush-deep);
+  font-weight: 500;
+  margin: 0 0 12px;
+}
+
+button { font-family: inherit; cursor: pointer; }
+
+:focus-visible {
+  outline: 2px solid var(--blush-deep);
+  outline-offset: 2px;
+}
+
+.wrap {
+  max-width: var(--max);
   margin: 0 auto;
-  padding-inline: 16px;
-  padding-block: 20px 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  padding-inline: 24px;
 }
 
 /* --- masthead ------------------------------------------------------------ */
 .masthead {
+  padding-block: 26px 18px;
+  border-bottom: 1px solid var(--line);
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 18px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--line);
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 28px;
 }
 .masthead h1 {
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 23px;
-  letter-spacing: -0.015em;
-  margin: 0;
+  font-size: clamp(26px, 4vw, 34px);
+  line-height: 1.1;
   text-wrap: balance;
 }
-.tagline {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13.5px;
+.masthead h1 em { font-style: italic; color: var(--blush-deep); }
+.masthead .lede {
+  font-family: var(--script);
+  font-style: italic;
+  font-size: 18px;
+  color: var(--text-soft);
+  margin: 4px 0 0;
   max-width: 62ch;
 }
 .status {
-  margin-left: auto;
-  font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--muted);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-soft);
   border: 1px solid var(--line);
-  border-radius: 100px;
-  padding: 3px 11px;
+  border-radius: 30px;
+  padding: 5px 15px;
   white-space: nowrap;
 }
-.status[data-state="ready"] { color: var(--accent); border-color: var(--accent-dim); }
-.status[data-state="failed"] { color: var(--bad); border-color: var(--bad); }
+.status[data-state="ready"] { color: var(--gold); border-color: var(--gold); }
+.status[data-state="failed"] { color: var(--rust); border-color: var(--rust); }
 
-/* --- workbench grid ------------------------------------------------------ */
-.workbench {
+/* --- lead sheet ---------------------------------------------------------- */
+.sheet-section { padding-block: 26px 22px; }
+
+.sheet {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 0 var(--cream-2), 0 14px 34px rgba(36, 31, 29, 0.06);
+  padding: clamp(22px, 4vw, 44px);
+}
+
+.sheet-head {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: 1fr auto 1fr;
   align-items: start;
+  gap: 10px;
+  margin-bottom: 26px;
 }
-.column { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-
-.panel {
-  background: var(--surface);
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius);
-  padding: var(--pad);
-  min-width: 0;
-}
-
-.eyebrow {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
+.style-mark {
+  font-size: 11px;
   text-transform: uppercase;
-  color: var(--faint);
-  margin: 0 0 10px;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+  letter-spacing: 0.2em;
+  color: var(--text-soft);
+  padding-top: 8px;
 }
-.eyebrow .count { color: var(--muted); font-family: var(--mono); letter-spacing: 0; }
+.sheet-title {
+  font-size: clamp(22px, 3.4vw, 30px);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.sheet-credit {
+  font-family: var(--script);
+  font-style: italic;
+  font-size: 16px;
+  color: var(--text-soft);
+  text-align: right;
+  padding-top: 6px;
+}
 
-/* --- chart --------------------------------------------------------------- */
+.sheet-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.sheet-hint { font-size: 14px; color: var(--text-soft); margin: 0; }
+
+.link-btn {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--blush);
+  padding: 0 0 2px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--charcoal);
+  font-weight: 500;
+}
+.link-btn:hover { color: var(--blush-deep); border-color: var(--blush-deep); }
+.tools-right { margin-left: auto; display: flex; gap: 18px; }
+
+.editor { margin-bottom: 24px; }
+.editor[hidden] { display: none; }
 #progression {
   width: 100%;
-  background: var(--ink);
-  color: var(--text);
+  background: var(--cream);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 9px 11px;
+  color: var(--text);
   font-family: var(--mono);
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.7;
+  padding: 12px 14px;
   resize: vertical;
-  min-height: 62px;
+  min-height: 74px;
 }
-#progression:focus-visible, button:focus-visible, .key:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.parse-error {
-  color: var(--bad);
-  font-size: 13px;
-  margin: 8px 0 0;
-  min-height: 0;
-}
+.parse-error { color: var(--rust); font-size: 14px; margin: 10px 0 0; }
 .parse-error:empty { display: none; }
 
-.bars {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 12px;
+/* Systems of four bars, barlines drawn between them - no staff, no melody. */
+.systems { display: flex; flex-direction: column; gap: 4px; }
+.system {
+  display: flex;
+  align-items: stretch;
+  border-right: 2px solid var(--charcoal);
+  position: relative;
 }
+.system:last-child { border-right: 5px double var(--charcoal); }
+.system .system-number {
+  position: absolute;
+  left: 8px;
+  top: 5px;
+  font-size: 11px;
+  color: var(--gold);
+  font-family: var(--sans);
+  letter-spacing: 0.08em;
+}
+
 .bar {
   position: relative;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 16px 8px 12px;
-  text-align: center;
-  cursor: pointer;
-  color: var(--text);
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 18px;
-  letter-spacing: -0.01em;
-  transition: border-color 120ms ease, background 120ms ease;
+  flex: 1 1 0;
+  min-width: 0;
+  border-left: 2px solid var(--charcoal);
+  background: none;
+  padding: 26px 0 18px;
+  min-height: 86px;
+  text-align: left;
+  transition: background 140ms ease;
 }
-.bar:hover { background: var(--surface-3); }
-.bar[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--surface-3);
-}
-.bar .num {
+.bar:hover { background: rgba(217, 166, 160, 0.16); }
+.bar[aria-pressed="true"] { background: rgba(217, 166, 160, 0.26); }
+.bar.reharmonised::after {
+  content: "reharm";
   position: absolute;
-  top: 4px;
-  left: 7px;
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 400;
-  color: var(--faint);
-}
-.bar .changed {
-  position: absolute;
-  top: 4px;
-  right: 7px;
-  font-family: var(--sans);
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  right: 8px;
+  top: 6px;
+  font-size: 9px;
   text-transform: uppercase;
-  color: var(--accent);
+  letter-spacing: 0.14em;
+  color: var(--blush-deep);
 }
-.bar .split { display: flex; justify-content: space-between; gap: 6px; font-size: 15px; }
 
-/* --- scales -------------------------------------------------------------- */
-.scale-name {
-  font-family: var(--display);
+.chord {
+  position: absolute;
+  top: 26px;
+  font-family: var(--hand);
   font-weight: 700;
-  font-size: 21px;
-  color: var(--accent);
-  margin: 0;
-  letter-spacing: -0.01em;
+  font-size: clamp(19px, 2.6vw, 28px);
+  line-height: 1;
+  color: var(--charcoal);
+  white-space: nowrap;
+  padding-left: 12px;
 }
-.scale-notes {
-  font-family: var(--mono);
-  font-size: 14px;
-  margin: 6px 0 0;
+.chord .acc {
+  /* Handwriting faces have no flat or sharp glyph - borrow the serif's. */
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 0.82em;
+  padding-inline: 0.02em;
+}
+.chord .ext { font-size: 0.74em; vertical-align: 0.42em; }
+
+/* --- dock: feedback above, keyboard below, always in reach --------------- */
+.dock {
+  position: sticky;
+  bottom: 0;
+  background: var(--cream-2);
+  border-top: 1px solid var(--line);
+  padding-block: 14px 16px;
+  z-index: 40;
+}
+
+.feedback {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-}
-.scale-notes span { color: var(--text); }
-.scale-notes span.avoid { color: var(--amber); }
-.rationale { color: var(--muted); font-size: 13.5px; margin: 9px 0 0; max-width: 60ch; }
-.avoid-note { color: var(--amber); font-size: 12.5px; margin: 8px 0 0; }
-
-.scale-list {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
-  max-height: 180px;
-  overflow-y: auto;
-  border-top: 1px solid var(--line-soft);
-  /* Fade the last row so a scrolled-off scale reads as more to come,
-     not as clipped text. */
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent 100%);
-}
-.scale-list li { border-bottom: 1px solid var(--line-soft); }
-.scale-list button {
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: 0;
-  color: var(--text);
-  font: inherit;
-  padding: 8px 4px;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
   align-items: baseline;
-  gap: 10px;
+  gap: 4px 18px;
+  margin-bottom: 12px;
+  min-height: 46px;
 }
-.scale-list button:hover { background: var(--surface-2); }
-.scale-list button[aria-pressed="true"] { color: var(--accent); }
-.scale-list .why { color: var(--faint); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
-
-/* --- reharmonisation ----------------------------------------------------- */
-.subs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
-.sub {
-  width: 100%;
-  text-align: left;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--good);
-  border-radius: 6px;
-  padding: 9px 11px;
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-}
-.sub:hover { background: var(--surface-3); }
-.sub.advanced { border-left-color: var(--amber); }
-.sub-head { display: flex; align-items: baseline; gap: 10px; }
-.sub-chords {
-  font-family: var(--display);
-  font-weight: 700;
-  font-size: 15.5px;
-}
-.sub-name { color: var(--muted); font-size: 13px; }
-.tag {
-  margin-left: auto;
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+.verdict { font-family: var(--serif); font-size: 17px; color: var(--charcoal); }
+.verdict.matches { color: var(--sage); }
+.played { font-size: 13.5px; color: var(--text-soft); letter-spacing: 0.04em; }
+.expecting {
+  font-size: 11px;
   text-transform: uppercase;
-  color: var(--good);
+  letter-spacing: 0.18em;
+  color: var(--blush-deep);
+  margin-left: auto;
   white-space: nowrap;
 }
-.sub.advanced .tag { color: var(--amber); }
-.sub-why { color: var(--faint); font-size: 12.5px; margin: 3px 0 0; }
+.expecting b { font-family: var(--serif); font-size: 15px; letter-spacing: 0.02em; text-transform: none; }
 
-.toggle-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 11px;
-  color: var(--muted);
-  font-size: 13px;
-}
-.toggle-row input { accent-color: var(--accent); width: 15px; height: 15px; }
-
-/* --- feedback ------------------------------------------------------------ */
-.verdict {
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: 17px;
-  margin: 0;
-  letter-spacing: -0.005em;
-  text-wrap: balance;
-}
-.verdict.matches { color: var(--good); }
-.played { font-family: var(--mono); font-size: 13px; color: var(--muted); margin: 7px 0 0; }
-.meter {
-  height: 5px;
-  background: var(--surface-3);
-  border-radius: 3px;
-  margin: 10px 0 12px;
-  overflow: hidden;
-}
-.meter span { display: block; height: 100%; background: var(--good); transition: width 180ms ease; }
-.meter span.warn { background: var(--amber); }
-.meter span.bad  { background: var(--bad); }
-
-.findings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
-.findings li {
-  border-left: 3px solid var(--good);
-  padding: 2px 0 2px 10px;
-  font-size: 13.5px;
-  color: var(--text);
-}
-.findings li.suggestion { border-left-color: var(--amber); }
-.findings li.problem { border-left-color: var(--bad); }
-.hint { color: var(--muted); font-size: 13.5px; margin: 0; max-width: 58ch; }
-
-.starters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.chip {
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 100px;
-  color: var(--muted);
-  font: inherit;
-  font-size: 12.5px;
-  padding: 4px 11px;
-  cursor: pointer;
-}
-.chip:hover { color: var(--text); border-color: var(--accent-dim); }
-
-/* --- keyboard dock ------------------------------------------------------- */
-.dock { padding-bottom: 12px; }
-.dock-head {
+.finding-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 10px 14px;
-  margin-bottom: 11px;
+  gap: 6px 20px;
+  width: 100%;
+  margin-top: 2px;
 }
-.dock-head .held { font-family: var(--mono); font-size: 13px; color: var(--accent); }
-.dock-head .expecting { color: var(--muted); font-size: 13px; }
-.dock-head .expecting b { color: var(--text); font-family: var(--display); font-weight: 700; }
+.finding {
+  font-size: 13.5px;
+  color: var(--text);
+  border-left: 2px solid var(--sage);
+  padding-left: 9px;
+  max-width: 62ch;
+}
+.finding.suggestion { border-left-color: var(--gold); }
+.finding.problem { border-left-color: var(--rust); }
+
+.meter { width: 100%; height: 3px; background: var(--line); margin-bottom: 10px; }
+.meter[hidden] { display: none; }
+.meter span { display: block; height: 100%; background: var(--sage); transition: width 200ms ease; }
+.meter span.warn { background: var(--gold); }
+.meter span.bad { background: var(--rust); }
 
 .keyboard {
   position: relative;
-  height: 148px;
+  height: 124px;
   display: flex;
+  border: 1px solid var(--charcoal);
+  background: var(--charcoal);
   user-select: none;
   touch-action: manipulation;
 }
-.key {
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  font: inherit;
-}
+.key { border: 0; padding: 0; font: inherit; }
 .key.white {
   flex: 1 1 0;
-  background: #eef2f6;
-  border-right: 1px solid #9aa6b2;
-  border-radius: 0 0 4px 4px;
+  background: var(--paper);
+  border-right: 1px solid var(--charcoal);
   display: flex;
   align-items: flex-end;
   justify-content: center;
   padding-bottom: 6px;
-  font-family: var(--mono);
   font-size: 10px;
-  color: #6b7785;
+  letter-spacing: 0.08em;
+  color: #9d938a;
 }
-.key.white:last-child { border-right: 0; }
+.key.white:last-of-type { border-right: 0; }
 .key.black {
   position: absolute;
   top: 0;
   height: 62%;
-  background: #12161c;
-  border-radius: 0 0 3px 3px;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+  background: var(--charcoal);
+  border: 1px solid var(--charcoal);
   z-index: 2;
 }
-/* Held notes fill the key; scale degrees only get a dot, so a seven-note
-   scale marks the keyboard without looking like seven keys are down. */
-.key[aria-pressed="true"] { background: var(--accent); color: #0d2320; }
-.key.white.ghost { background-image: radial-gradient(circle at 50% 84%, var(--accent-dim) 0 4px, transparent 4px); }
-.key.white.avoid { background-image: radial-gradient(circle at 50% 84%, #b98626 0 4px, transparent 4px); }
-.key.black.ghost { background-image: radial-gradient(circle at 50% 88%, var(--accent) 0 3.5px, transparent 3.5px); }
-.key.black.avoid { background-image: radial-gradient(circle at 50% 88%, var(--amber) 0 3.5px, transparent 3.5px); }
+.key[aria-pressed="true"] { background: var(--blush-deep); color: var(--paper); }
+.key.white.scale { background-image: radial-gradient(circle at 50% 86%, var(--gold) 0 3.5px, transparent 3.5px); }
+.key.white.avoid { background-image: radial-gradient(circle at 50% 86%, transparent 0 1.6px, var(--gold) 1.6px 3.4px, transparent 3.4px); }
+.key.black.scale { background-image: radial-gradient(circle at 50% 88%, var(--gold) 0 3px, transparent 3px); }
+.key.black.avoid { background-image: radial-gradient(circle at 50% 88%, transparent 0 1.4px, var(--gold) 1.4px 3px, transparent 3px); }
 
-/* --- footer -------------------------------------------------------------- */
-.colophon {
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
-  color: var(--faint);
-  font-size: 12.5px;
+.dock-foot {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  align-items: center;
+  gap: 8px 18px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-soft);
 }
-.colophon code { font-family: var(--mono); color: var(--muted); }
+.dock-foot .legend { display: flex; align-items: center; gap: 7px; }
+.dock-foot .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); display: inline-block; }
+.dock-foot .ring { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--gold); display: inline-block; }
 
-@media (max-width: 900px) {
-  .workbench { grid-template-columns: minmax(0, 1fr); }
-  .bars { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .keyboard { height: 124px; }
+/* --- chord popup --------------------------------------------------------- */
+dialog {
+  border: 1px solid var(--line);
+  background: var(--cream);
+  color: var(--text);
+  padding: 0;
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(78vh, 720px);
+  box-shadow: 0 24px 60px rgba(36, 31, 29, 0.24);
 }
+dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
+
+.dialog-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 22px 26px 0;
+}
+.dialog-head .bar-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--blush-deep);
+}
+.dialog-head .chord-title {
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 34px;
+  line-height: 1.1;
+  color: var(--charcoal);
+}
+.close-btn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  font-size: 15px;
+  color: var(--text-soft);
+  line-height: 1;
+}
+.close-btn:hover { color: var(--blush-deep); border-color: var(--blush); }
+
+.tabs {
+  display: flex;
+  gap: 26px;
+  padding: 16px 26px 0;
+  border-bottom: 1px solid var(--line);
+}
+.tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0 0 10px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-soft);
+}
+.tab[aria-selected="true"] { color: var(--charcoal); border-bottom-color: var(--blush-deep); }
+
+.tab-body {
+  padding: 22px 26px 26px;
+  overflow-y: auto;
+  max-height: calc(78vh - 150px);
+}
+.tab-panel[hidden] { display: none; }
+
+.scale-name { font-family: var(--serif); font-size: 24px; color: var(--charcoal); }
+.scale-notes { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 0; padding: 0; list-style: none; }
+.scale-notes li {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  padding: 3px 11px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+.scale-notes li.avoid { border-color: var(--gold); color: var(--gold); }
+.rationale { color: var(--text-soft); font-size: 15px; margin: 14px 0 0; max-width: 58ch; }
+.avoid-line { color: var(--gold); font-size: 13.5px; margin: 8px 0 0; }
+
+.subhead {
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--charcoal);
+  margin: 24px 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.option-list { list-style: none; margin: 0; padding: 0; }
+.option-list li + li { margin-top: 8px; }
+.option {
+  width: 100%;
+  text-align: left;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--sage);
+  padding: 12px 14px;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+.option:hover { border-color: var(--blush); border-left-color: var(--blush-deep); }
+.option.advanced { border-left-color: var(--gold); }
+.option-head { display: flex; align-items: baseline; gap: 12px; }
+.option-chords { font-family: var(--hand); font-weight: 700; font-size: 19px; color: var(--charcoal); }
+.option-name { font-size: 14px; color: var(--text-soft); }
+.option-tag {
+  margin-left: auto;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--sage);
+  white-space: nowrap;
+}
+.option.advanced .option-tag { color: var(--gold); }
+.option-why { font-size: 13.5px; color: var(--text-soft); margin: 5px 0 0; }
+
+.scale-rows { list-style: none; margin: 0; padding: 0; }
+.scale-rows li { border-bottom: 1px solid var(--line); }
+.scale-rows button {
+  width: 100%;
+  background: none;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text);
+  padding: 10px 2px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.scale-rows button:hover { color: var(--blush-deep); }
+.scale-rows button[aria-pressed="true"] { color: var(--blush-deep); }
+.scale-rows .why { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-soft); white-space: nowrap; }
+
+.toggle-row { display: flex; align-items: center; gap: 9px; margin-top: 16px; font-size: 14px; color: var(--text-soft); }
+.toggle-row input { accent-color: var(--blush-deep); width: 15px; height: 15px; }
+
+.voicing-note { font-size: 14px; color: var(--text-soft); margin: 0 0 14px; max-width: 56ch; }
+
+/* --- colophon ------------------------------------------------------------ */
+.colophon {
+  border-top: 1px solid var(--line);
+  padding-block: 22px 40px;
+  color: var(--text-soft);
+  font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+}
+.colophon code { font-family: var(--mono); font-size: 12px; color: var(--charcoal); }
+
+@media (max-width: 760px) {
+  .masthead { padding-block: 26px 18px; }
+  .sheet-head { grid-template-columns: 1fr; text-align: center; }
+  .sheet-title { text-align: center; }
+  .sheet-credit, .style-mark { text-align: center; padding-top: 0; }
+  .keyboard { height: 100px; }
+  .bar { min-height: 70px; padding-top: 22px; }
+  .chord { top: 22px; padding-left: 8px; }
+
+  /* The popup becomes a bottom sheet, the way the app does on touch. */
+  dialog {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 86vh;
+    margin: 0;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    top: auto;
+    transform: none;
+  }
+  .tab-body { max-height: calc(86vh - 150px); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
 </style>
 
-<div class="shell">
+<div class="wrap">
   <header class="masthead">
     <div>
-      <h1>Jazz Engine Workbench</h1>
-      <p class="tagline">
-        The jazz app's C++ theory engine, compiled to WebAssembly. Same chord parser,
-        scale suggester, reharmoniser and voicing analyser the desktop and mobile app runs -
-        this page is a browser front end for it, not the JUCE interface.
+      <p class="eyebrow">Core engine &middot; WebAssembly build</p>
+      <h1>Jazz Engine <em>Workbench</em></h1>
+      <p class="lede">
+        The jazz app's C++ theory engine, running in your browser - chord parsing, scale
+        suggestion, reharmonisation and voicing analysis. Not the JUCE interface.
       </p>
     </div>
     <div class="status" id="engineStatus" data-state="loading">starting engine</div>
   </header>
 
-  <div class="workbench">
-    <div class="column">
-      <section class="panel">
-        <p class="eyebrow">Chart <span class="count" id="barCount">12 bars</span></p>
-        <label class="hint" for="progression" style="display:block;margin-bottom:7px">
-          Bars separated by <code style="font-family:var(--mono)">|</code>, two chords in a bar separated by a space,
-          <code style="font-family:var(--mono)">%</code> repeats the bar before.
-        </label>
+  <section class="sheet-section">
+    <div class="sheet">
+      <div class="sheet-head">
+        <span class="style-mark">Medium Swing</span>
+        <h2 class="sheet-title" id="sheetTitle">Practice Chart</h2>
+        <span class="sheet-credit">chord chart</span>
+      </div>
+
+      <div class="sheet-tools">
+        <p class="sheet-hint">Click any bar for its scales, reharmonisations and voicings.</p>
+        <div class="tools-right">
+          <button class="link-btn" type="button" id="editToggle">Edit chart</button>
+          <button class="link-btn" type="button" id="restoreChart">Restore original</button>
+        </div>
+      </div>
+
+      <div class="editor" id="editor" hidden>
+        <label class="eyebrow" for="progression" style="display:block">Progression</label>
         <textarea id="progression" rows="3" spellcheck="false">| Dm7 | G7 | Cmaj7 | Cmaj7 | Cm7 | F7 | Bbmaj7 | Bbmaj7 | Am7b5 | D7alt | Gm7 | Gm7 |</textarea>
         <p class="parse-error" id="parseError"></p>
-        <div class="bars" id="bars">
-          <button class="bar" type="button" aria-pressed="true"><span class="num">1</span>Dm7</button>
-          <button class="bar" type="button" aria-pressed="false"><span class="num">2</span>G7</button>
-          <button class="bar" type="button" aria-pressed="false"><span class="num">3</span>Cmaj7</button>
-          <button class="bar" type="button" aria-pressed="false"><span class="num">4</span>Cmaj7</button>
-          <button class="bar" type="button" aria-pressed="false"><span class="num">5</span>Cm7</button>
-          <button class="bar" type="button" aria-pressed="false"><span class="num">6</span>F7</button>
-          <button class="bar" type="button" aria-pressed="false"><span class="num">7</span>Bbmaj7</button>
-          <button class="bar" type="button" aria-pressed="false"><span class="num">8</span>Bbmaj7</button>
-          <button class="bar" type="button" aria-pressed="false"><span class="num">9</span>Am7b5</button>
-          <button class="bar" type="button" aria-pressed="false"><span class="num">10</span>D7alt</button>
-          <button class="bar" type="button" aria-pressed="false"><span class="num">11</span>Gm7</button>
-          <button class="bar" type="button" aria-pressed="false"><span class="num">12</span>Gm7</button>
+      </div>
+
+      <div class="systems" id="systems">
+        <div class="system">
+          <span class="system-number">1</span>
+          <div class="bar"><span class="chord">Dm7</span></div>
+          <div class="bar"><span class="chord">G7</span></div>
+          <div class="bar"><span class="chord">Cmaj7</span></div>
+          <div class="bar"><span class="chord">Cmaj7</span></div>
         </div>
-      </section>
-
-      <section class="panel">
-        <p class="eyebrow">Scale for this bar <span class="count" id="scaleCount"></span></p>
-        <h2 class="scale-name" id="scaleName">D Dorian</h2>
-        <p class="scale-notes" id="scaleNotes"></p>
-        <p class="rationale" id="scaleWhy">The default minor-7th sound: natural 13th, no avoid notes.</p>
-        <p class="avoid-note" id="scaleAvoid"></p>
-        <ul class="scale-list" id="scaleList"></ul>
-      </section>
+        <div class="system">
+          <span class="system-number">5</span>
+          <div class="bar"><span class="chord">Cm7</span></div>
+          <div class="bar"><span class="chord">F7</span></div>
+          <div class="bar"><span class="chord">B&#9837;maj7</span></div>
+          <div class="bar"><span class="chord">B&#9837;maj7</span></div>
+        </div>
+        <div class="system">
+          <span class="system-number">9</span>
+          <div class="bar"><span class="chord">Am7&#9837;5</span></div>
+          <div class="bar"><span class="chord">D7alt</span></div>
+          <div class="bar"><span class="chord">Gm7</span></div>
+          <div class="bar"><span class="chord">Gm7</span></div>
+        </div>
+      </div>
     </div>
+  </section>
+</div>
 
-    <div class="column">
-      <section class="panel">
-        <p class="eyebrow">Reharmonise <span class="count" id="subCount"></span></p>
-        <ul class="subs" id="subs"></ul>
-        <label class="toggle-row" for="advanced">
-          <input type="checkbox" id="advanced" checked>
-          Include advanced substitutions
-        </label>
-      </section>
-
-      <section class="panel">
-        <p class="eyebrow">Voicing feedback</p>
-        <p class="verdict" id="verdict">Play a chord on the keyboard below.</p>
-        <p class="played" id="played"></p>
-        <div class="meter" id="meter" hidden><span id="meterFill" style="width:0%"></span></div>
-        <ul class="findings" id="findings"></ul>
-        <p class="hint" id="feedbackHint">
-          Click keys to build a voicing against the selected bar. Notes stay down until you click
-          them again, the way the desktop app's Hold mode works for mouse input.
-        </p>
-        <div class="starters" id="starters"></div>
-      </section>
+<div class="dock">
+  <div class="wrap">
+    <div class="feedback" id="feedback">
+      <span class="verdict" id="verdict">Play a chord on the keyboard.</span>
+      <span class="played" id="played"></span>
+      <span class="expecting">Expecting <b id="expecting">Dm7</b></span>
+      <div class="finding-row" id="findingRow"></div>
+    </div>
+    <div class="meter" id="meter" hidden><span id="meterFill" style="width:0%"></span></div>
+    <div class="keyboard" id="keyboard"></div>
+    <div class="dock-foot">
+      <span class="legend"><span class="dot"></span> scale tone</span>
+      <span class="legend"><span class="ring"></span> handle as a passing tone</span>
+      <span>Keys stay down until you click them again.</span>
+      <button class="link-btn" type="button" id="clearKeys" style="margin-left:auto">Clear keys</button>
     </div>
   </div>
+</div>
 
-  <section class="panel dock">
-    <div class="dock-head">
-      <p class="eyebrow" style="margin:0">Keyboard</p>
-      <span class="expecting">Expecting <b id="expecting">Dm7</b></span>
-      <span class="held" id="heldNotes"></span>
-      <button class="chip" type="button" id="clearKeys" style="margin-left:auto">Clear keys</button>
-    </div>
-    <div class="keyboard" id="keyboard"></div>
-  </section>
-
+<div class="wrap">
   <footer class="colophon">
-    <span>Core engine: <code>modules/core_engine</code>, 73 unit tests, no JUCE.</span>
-    <span>Compiled with <code>em++ -O2</code>, 212 KB including the wasm.</span>
+    <span>Engine: <code>modules/core_engine</code> - 73 unit tests, no JUCE.</span>
     <span>Bindings: <code>web/src/JazzWebBindings.cpp</code>.</span>
+    <span>Built with <code>em++ -O2</code>.</span>
   </footer>
 </div>
+
+<dialog id="chordDialog">
+  <div class="dialog-head">
+    <div>
+      <div class="bar-label" id="dialogBar">Bar 1</div>
+      <div class="chord-title" id="dialogChord">Dm7</div>
+    </div>
+    <button class="close-btn" type="button" id="dialogClose" aria-label="Close">&times;</button>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" type="button" role="tab" id="tabScales" aria-selected="true" aria-controls="panelScales">Scales</button>
+    <button class="tab" type="button" role="tab" id="tabReharm" aria-selected="false" aria-controls="panelReharm">Reharmonise</button>
+    <button class="tab" type="button" role="tab" id="tabVoicings" aria-selected="false" aria-controls="panelVoicings">Voicings</button>
+  </div>
+
+  <div class="tab-body">
+    <section class="tab-panel" id="panelScales" role="tabpanel" aria-labelledby="tabScales">
+      <div class="scale-name" id="scaleName"></div>
+      <ul class="scale-notes" id="scaleNotes"></ul>
+      <p class="rationale" id="scaleWhy"></p>
+      <p class="avoid-line" id="scaleAvoid"></p>
+      <h3 class="subhead" id="scaleCount">Every scale that fits</h3>
+      <ul class="scale-rows" id="scaleRows"></ul>
+    </section>
+
+    <section class="tab-panel" id="panelReharm" role="tabpanel" aria-labelledby="tabReharm" hidden>
+      <p class="voicing-note">Choosing one rewrites this bar in the chart.</p>
+      <ul class="option-list" id="subs"></ul>
+      <label class="toggle-row" for="advanced">
+        <input type="checkbox" id="advanced" checked>
+        Include advanced substitutions
+      </label>
+    </section>
+
+    <section class="tab-panel" id="panelVoicings" role="tabpanel" aria-labelledby="tabVoicings" hidden>
+      <p class="voicing-note">
+        Idiomatic shapes for this chord. Choosing one puts it on the keyboard, where the
+        analyser reads it back like anything you play yourself.
+      </p>
+      <ul class="option-list" id="voicings"></ul>
+    </section>
+  </div>
+</dialog>
 
 <script src="jazz-engine.js"></script>
 <script>
 (function () {
   "use strict";
 
+  var FLAT = "\u266D";   // MUSIC FLAT SIGN
+  var SHARP = "\u266F";  // MUSIC SHARP SIGN
+  var DEFAULT_PROGRESSION = document.getElementById("progression").value;
+
   var engine = null;
   var state = {
-    progression: document.getElementById("progression").value,
+    progression: DEFAULT_PROGRESSION,
     measures: [],
     selected: 0,
     reharmonised: {},
     heldNotes: [],
-    ghostPitchClasses: [],
+    scalePitchClasses: [],
     avoidPitchClasses: [],
     scales: [],
     chosenScale: 0
   };
 
-  var el = {
-    status: document.getElementById("engineStatus"),
-    progression: document.getElementById("progression"),
-    parseError: document.getElementById("parseError"),
-    bars: document.getElementById("bars"),
-    barCount: document.getElementById("barCount"),
-    scaleName: document.getElementById("scaleName"),
-    scaleNotes: document.getElementById("scaleNotes"),
-    scaleWhy: document.getElementById("scaleWhy"),
-    scaleAvoid: document.getElementById("scaleAvoid"),
-    scaleList: document.getElementById("scaleList"),
-    scaleCount: document.getElementById("scaleCount"),
-    subs: document.getElementById("subs"),
-    subCount: document.getElementById("subCount"),
-    advanced: document.getElementById("advanced"),
-    verdict: document.getElementById("verdict"),
-    played: document.getElementById("played"),
-    meter: document.getElementById("meter"),
-    meterFill: document.getElementById("meterFill"),
-    findings: document.getElementById("findings"),
-    feedbackHint: document.getElementById("feedbackHint"),
-    starters: document.getElementById("starters"),
-    keyboard: document.getElementById("keyboard"),
-    expecting: document.getElementById("expecting"),
-    heldNotes: document.getElementById("heldNotes"),
-    clearKeys: document.getElementById("clearKeys")
-  };
+  var el = {};
+  ["engineStatus", "sheetTitle", "editToggle", "restoreChart", "editor", "progression",
+   "parseError", "systems", "verdict", "played", "expecting", "findingRow", "meter",
+   "meterFill", "keyboard", "clearKeys", "chordDialog", "dialogBar", "dialogChord",
+   "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
+   "scaleRows", "subs", "advanced", "voicings"].forEach(function (id) {
+    el[id] = document.getElementById(id);
+  });
 
-  // --- engine calls --------------------------------------------------------
+  var tabs = [
+    { button: document.getElementById("tabScales"), panel: document.getElementById("panelScales") },
+    { button: document.getElementById("tabReharm"), panel: document.getElementById("panelReharm") },
+    { button: document.getElementById("tabVoicings"), panel: document.getElementById("panelVoicings") }
+  ];
+
+  // --- engine --------------------------------------------------------------
   function call(name, types, args) {
     if (engine === null) return null;
     try {
       return JSON.parse(engine.ccall(name, "string", types, args));
-    } catch (e) {
-      return { ok: false, error: String(e) };
+    } catch (error) {
+      return { ok: false, error: String(error) };
     }
   }
 
-  var LOWEST_NOTE = 48;          // C3
-  var HIGHEST_NOTE = 72;         // C5
+  // --- note helpers --------------------------------------------------------
+  var LOWEST_NOTE = 48;   // C3
+  var HIGHEST_NOTE = 72;  // C5
   var WHITE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
   var NOTE_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
@@ -574,13 +740,332 @@ body {
   function isWhite(note) { return WHITE_OFFSETS.indexOf(pitchClass(note)) !== -1; }
   function noteName(note) { return NOTE_NAMES[pitchClass(note)] + (Math.floor(note / 12) - 1); }
 
+  /** Writes a chord symbol into an element with real flat and sharp glyphs,
+      the way it would be engraved on a chart. */
+  function writeChord(target, symbol) {
+    target.textContent = "";
+
+    for (var i = 0; i < symbol.length; i++) {
+      var character = symbol[i];
+
+      // No chord quality the engine writes contains a 'b' or a '#' - m, maj,
+      // min, dim, aug, sus, alt - so both characters are always accidentals.
+      if (character === "b" || character === "#") {
+        var accidental = document.createElement("span");
+        accidental.className = "acc";
+        accidental.textContent = character === "#" ? SHARP : FLAT;
+        target.appendChild(accidental);
+      } else {
+        target.appendChild(document.createTextNode(character));
+      }
+    }
+  }
+
+  function chordText(symbol) {
+    var holder = document.createElement("span");
+    writeChord(holder, symbol);
+    return holder;
+  }
+
+  // --- lead sheet ----------------------------------------------------------
+  var BARS_PER_SYSTEM = 4;
+
+  function renderSheet() {
+    el.systems.textContent = "";
+
+    for (var start = 0; start < state.measures.length; start += BARS_PER_SYSTEM) {
+      var system = document.createElement("div");
+      system.className = "system";
+
+      var number = document.createElement("span");
+      number.className = "system-number";
+      number.textContent = String(start + 1);
+      system.appendChild(number);
+
+      for (var offset = 0; offset < BARS_PER_SYSTEM; offset++) {
+        var index = start + offset;
+        var measure = state.measures[index];
+        var bar = document.createElement("button");
+        bar.type = "button";
+        bar.className = "bar";
+        bar.setAttribute("aria-pressed", index === state.selected ? "true" : "false");
+
+        if (measure) {
+          if (state.reharmonised[index]) bar.classList.add("reharmonised");
+          bar.setAttribute("aria-label", "Bar " + (index + 1) + ", " + measure.chords.map(function (c) { return c.symbol; }).join(" "));
+          placeChords(bar, measure);
+          bar.addEventListener("click", makeBarHandler(index));
+        } else {
+          bar.disabled = true;   // pads the last system out to a full four bars
+          bar.style.cursor = "default";
+        }
+
+        system.appendChild(bar);
+      }
+
+      el.systems.appendChild(system);
+    }
+  }
+
+  /** Chords sit where they fall in the bar: beat 1 at the barline, beat 3 halfway. */
+  function placeChords(bar, measure) {
+    var totalBeats = measure.chords.reduce(function (sum, chord) { return sum + chord.beats; }, 0) || 4;
+    var beatsSoFar = 0;
+
+    measure.chords.forEach(function (chord) {
+      var symbol = document.createElement("span");
+      symbol.className = "chord";
+      symbol.style.left = (beatsSoFar / totalBeats * 100) + "%";
+      writeChord(symbol, chord.symbol);
+      bar.appendChild(symbol);
+      beatsSoFar += chord.beats;
+    });
+  }
+
+  function makeBarHandler(index) {
+    return function () {
+      state.selected = index;
+      renderSheet();
+      updateExpecting();
+      analyseVoicing();
+      openDialog();
+    };
+  }
+
+  function selectedChord() {
+    var measure = state.measures[state.selected];
+    return measure && measure.chords.length ? measure.chords[0].symbol : null;
+  }
+
+  function parseChart() {
+    var result = call("jazzParseChart", ["string"], [state.progression]);
+    if (result === null) return false;
+
+    if (!result.ok) {
+      el.parseError.textContent = result.error;
+      return false;
+    }
+
+    el.parseError.textContent = "";
+    state.measures = result.measures;
+    if (state.selected >= state.measures.length) state.selected = 0;
+    renderSheet();
+    updateExpecting();
+    return true;
+  }
+
+  function updateExpecting() {
+    var chord = selectedChord();
+    el.expecting.textContent = "";
+    el.expecting.appendChild(chordText(chord || "-"));
+  }
+
+  // --- popup ---------------------------------------------------------------
+  function showTab(index) {
+    tabs.forEach(function (tab, i) {
+      tab.button.setAttribute("aria-selected", i === index ? "true" : "false");
+      tab.panel.hidden = i !== index;
+    });
+  }
+
+  tabs.forEach(function (tab, index) {
+    tab.button.addEventListener("click", function () { showTab(index); });
+  });
+
+  function openDialog() {
+    var chord = selectedChord();
+    if (!chord) return;
+
+    el.dialogBar.textContent = "Bar " + (state.selected + 1);
+    writeChord(el.dialogChord, chord);
+
+    renderScales();
+    renderSubstitutions();
+    renderVoicings();
+    showTab(0);
+
+    if (!el.chordDialog.open) el.chordDialog.showModal();
+  }
+
+  el.dialogClose.addEventListener("click", function () { el.chordDialog.close(); });
+  el.chordDialog.addEventListener("click", function (event) {
+    // A click on the backdrop lands on the dialog element itself.
+    if (event.target === el.chordDialog) el.chordDialog.close();
+  });
+
+  // --- scales --------------------------------------------------------------
+  function renderScales() {
+    var chord = selectedChord();
+    var result = call("jazzScalesForChord", ["string"], [chord]);
+    if (result === null || !result.ok) return;
+
+    state.scales = result.scales;
+    state.chosenScale = 0;
+    el.scaleCount.textContent = result.scales.length + " scales fit this chord";
+    showScale(0);
+
+    el.scaleRows.textContent = "";
+    result.scales.forEach(function (scale, index) {
+      var item = document.createElement("li");
+      var button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("aria-pressed", index === 0 ? "true" : "false");
+
+      var name = document.createElement("span");
+      name.textContent = scale.name;
+      button.appendChild(name);
+
+      var why = document.createElement("span");
+      why.className = "why";
+      why.textContent = scale.avoidPitchClasses.length
+        ? scale.avoidPitchClasses.length + " to handle"
+        : "no avoid notes";
+      button.appendChild(why);
+
+      button.addEventListener("click", function () {
+        state.chosenScale = index;
+        showScale(index);
+        Array.prototype.forEach.call(el.scaleRows.querySelectorAll("button"), function (other, i) {
+          other.setAttribute("aria-pressed", i === index ? "true" : "false");
+        });
+      });
+
+      item.appendChild(button);
+      el.scaleRows.appendChild(item);
+    });
+  }
+
+  function showScale(index) {
+    var scale = state.scales[index];
+    if (!scale) return;
+
+    el.scaleName.textContent = scale.name;
+    el.scaleWhy.textContent = scale.rationale;
+
+    el.scaleNotes.textContent = "";
+    scale.noteNames.forEach(function (name, degree) {
+      var item = document.createElement("li");
+      writeChord(item, name);
+      if (scale.avoidPitchClasses.indexOf(scale.pitchClasses[degree]) !== -1) item.className = "avoid";
+      el.scaleNotes.appendChild(item);
+    });
+
+    el.scaleAvoid.textContent = scale.avoidPitchClasses.length
+      ? "Ringed notes on the keyboard sit a semitone above a chord tone - passing tones, not landing notes."
+      : "";
+
+    state.scalePitchClasses = scale.pitchClasses;
+    state.avoidPitchClasses = scale.avoidPitchClasses;
+    paintKeyboard();
+  }
+
+  // --- reharmonisation -----------------------------------------------------
+  function renderSubstitutions() {
+    var result = call(
+      "jazzReharmonise",
+      ["string", "number", "number"],
+      [state.progression, state.selected, el.advanced.checked ? 1 : 0]
+    );
+    if (result === null || !result.ok) return;
+
+    el.subs.textContent = "";
+
+    result.substitutions.forEach(function (substitution) {
+      var item = document.createElement("li");
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "option" + (substitution.difficulty === "Advanced" ? " advanced" : "");
+
+      var head = document.createElement("div");
+      head.className = "option-head";
+
+      var chords = document.createElement("span");
+      chords.className = "option-chords";
+      writeChord(chords, substitution.replacement);
+      head.appendChild(chords);
+
+      var name = document.createElement("span");
+      name.className = "option-name";
+      name.textContent = substitution.name;
+      head.appendChild(name);
+
+      var tag = document.createElement("span");
+      tag.className = "option-tag";
+      tag.textContent = substitution.difficulty;
+      head.appendChild(tag);
+
+      button.appendChild(head);
+
+      var why = document.createElement("p");
+      why.className = "option-why";
+      why.textContent = substitution.explanation;
+      button.appendChild(why);
+
+      button.addEventListener("click", function () {
+        state.progression = substitution.progression;
+        el.progression.value = substitution.progression;
+        state.reharmonised[state.selected] = true;
+        parseChart();
+        openDialog();
+      });
+
+      item.appendChild(button);
+      el.subs.appendChild(item);
+    });
+  }
+
+  el.advanced.addEventListener("change", renderSubstitutions);
+
+  // --- idiomatic voicings --------------------------------------------------
+  function renderVoicings() {
+    var chord = selectedChord();
+    var result = call("jazzIdiomaticVoicings", ["string", "number"], [chord, 53]);
+    if (result === null || !result.ok) return;
+
+    el.voicings.textContent = "";
+
+    result.voicings.forEach(function (group) {
+      if (!group.options.length) return;
+
+      var option = group.options[0];
+      var item = document.createElement("li");
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "option";
+
+      var head = document.createElement("div");
+      head.className = "option-head";
+
+      var notes = document.createElement("span");
+      notes.className = "option-chords";
+      notes.textContent = option.describe;
+      head.appendChild(notes);
+
+      var name = document.createElement("span");
+      name.className = "option-name";
+      name.textContent = group.type;
+      head.appendChild(name);
+
+      button.appendChild(head);
+
+      button.addEventListener("click", function () {
+        state.heldNotes = option.notes.slice().sort(function (a, b) { return a - b; });
+        paintKeyboard();
+        analyseVoicing();
+        el.chordDialog.close();
+      });
+
+      item.appendChild(button);
+      el.voicings.appendChild(item);
+    });
+  }
+
   // --- keyboard ------------------------------------------------------------
   function buildKeyboard() {
     var whites = [];
     var blacks = [];
-    var note;
 
-    for (note = LOWEST_NOTE; note <= HIGHEST_NOTE; note++) {
+    for (var note = LOWEST_NOTE; note <= HIGHEST_NOTE; note++) {
       (isWhite(note) ? whites : blacks).push(note);
     }
 
@@ -599,15 +1084,15 @@ body {
     });
 
     blacks.forEach(function (blackNote) {
-      var whitesBelow = whites.filter(function (w) { return w < blackNote; }).length;
+      var whitesBelow = whites.filter(function (white) { return white < blackNote; }).length;
       var key = document.createElement("button");
       key.type = "button";
       key.className = "key black";
       key.dataset.note = String(blackNote);
       key.setAttribute("aria-pressed", "false");
       key.setAttribute("aria-label", noteName(blackNote));
-      key.style.width = (whiteWidth * 0.62) + "%";
-      key.style.left = "calc(" + (whitesBelow * whiteWidth) + "% - " + (whiteWidth * 0.31) + "%)";
+      key.style.width = (whiteWidth * 0.6) + "%";
+      key.style.left = "calc(" + (whitesBelow * whiteWidth) + "% - " + (whiteWidth * 0.3) + "%)";
       fragment.appendChild(key);
     });
 
@@ -615,305 +1100,31 @@ body {
   }
 
   function paintKeyboard() {
-    var keys = el.keyboard.querySelectorAll(".key");
-
-    Array.prototype.forEach.call(keys, function (key) {
+    Array.prototype.forEach.call(el.keyboard.querySelectorAll(".key"), function (key) {
       var note = Number(key.dataset.note);
       var held = state.heldNotes.indexOf(note) !== -1;
-      var ghost = state.ghostPitchClasses.indexOf(pitchClass(note)) !== -1;
+      var inScale = state.scalePitchClasses.indexOf(pitchClass(note)) !== -1;
       var avoid = state.avoidPitchClasses.indexOf(pitchClass(note)) !== -1;
 
       key.setAttribute("aria-pressed", held ? "true" : "false");
-      key.classList.toggle("ghost", !held && ghost && !avoid);
+      key.classList.toggle("scale", !held && inScale && !avoid);
       key.classList.toggle("avoid", !held && avoid);
     });
-
-    el.heldNotes.textContent = state.heldNotes.length
-      ? state.heldNotes.map(noteName).join(" ")
-      : "";
-  }
-
-  function toggleNote(note) {
-    var index = state.heldNotes.indexOf(note);
-    if (index === -1) state.heldNotes.push(note);
-    else state.heldNotes.splice(index, 1);
-    state.heldNotes.sort(function (a, b) { return a - b; });
-    paintKeyboard();
-    analyseVoicing();
-  }
-
-  // --- chart ---------------------------------------------------------------
-  function renderBars() {
-    el.bars.textContent = "";
-    el.barCount.textContent = state.measures.length + (state.measures.length === 1 ? " bar" : " bars");
-
-    state.measures.forEach(function (measure, index) {
-      var bar = document.createElement("button");
-      bar.type = "button";
-      bar.className = "bar";
-      bar.setAttribute("aria-pressed", index === state.selected ? "true" : "false");
-
-      var num = document.createElement("span");
-      num.className = "num";
-      num.textContent = String(index + 1);
-      bar.appendChild(num);
-
-      if (state.reharmonised[index]) {
-        var badge = document.createElement("span");
-        badge.className = "changed";
-        badge.textContent = "reharm";
-        bar.appendChild(badge);
-      }
-
-      if (measure.chords.length > 1) {
-        var split = document.createElement("span");
-        split.className = "split";
-        measure.chords.forEach(function (chord) {
-          var part = document.createElement("span");
-          part.textContent = chord.symbol;
-          split.appendChild(part);
-        });
-        bar.appendChild(split);
-      } else {
-        bar.appendChild(document.createTextNode(measure.chords.length ? measure.chords[0].symbol : "-"));
-      }
-
-      bar.addEventListener("click", function () {
-        state.selected = index;
-        renderBars();
-        refreshSelection();
-      });
-
-      el.bars.appendChild(bar);
-    });
-  }
-
-  function selectedChord() {
-    var measure = state.measures[state.selected];
-    return measure && measure.chords.length ? measure.chords[0].symbol : null;
-  }
-
-  function parseChart() {
-    var result = call("jazzParseChart", ["string"], [state.progression]);
-    if (result === null) return;
-
-    if (!result.ok) {
-      el.parseError.textContent = result.error;
-      return;
-    }
-
-    el.parseError.textContent = "";
-    state.measures = result.measures;
-    if (state.selected >= state.measures.length) state.selected = 0;
-    renderBars();
-  }
-
-  // --- scales --------------------------------------------------------------
-  function renderScales() {
-    var chord = selectedChord();
-    if (!chord) return;
-
-    var result = call("jazzScalesForChord", ["string"], [chord]);
-    if (result === null || !result.ok) return;
-
-    state.scales = result.scales;
-    state.chosenScale = 0;
-    el.scaleCount.textContent = result.scales.length + " fit " + chord;
-    showScale(0);
-
-    el.scaleList.textContent = "";
-    result.scales.forEach(function (scale, index) {
-      var item = document.createElement("li");
-      var button = document.createElement("button");
-      button.type = "button";
-      button.setAttribute("aria-pressed", index === 0 ? "true" : "false");
-
-      var name = document.createElement("span");
-      name.textContent = scale.name;
-      button.appendChild(name);
-
-      var why = document.createElement("span");
-      why.className = "why";
-      why.textContent = scale.avoidPitchClasses.length
-        ? scale.avoidPitchClasses.length + " avoid"
-        : "no avoid notes";
-      button.appendChild(why);
-
-      button.addEventListener("click", function () {
-        state.chosenScale = index;
-        showScale(index);
-        Array.prototype.forEach.call(el.scaleList.querySelectorAll("button"), function (other, i) {
-          other.setAttribute("aria-pressed", i === index ? "true" : "false");
-        });
-      });
-
-      item.appendChild(button);
-      el.scaleList.appendChild(item);
-    });
-  }
-
-  function showScale(index) {
-    var scale = state.scales[index];
-    if (!scale) return;
-
-    el.scaleName.textContent = scale.name;
-    el.scaleWhy.textContent = scale.rationale;
-
-    el.scaleNotes.textContent = "";
-    scale.noteNames.forEach(function (name, degree) {
-      var span = document.createElement("span");
-      span.textContent = name;
-      if (scale.avoidPitchClasses.indexOf(scale.pitchClasses[degree]) !== -1) span.className = "avoid";
-      el.scaleNotes.appendChild(span);
-    });
-
-    el.scaleAvoid.textContent = scale.avoidPitchClasses.length
-      ? "Dots mark the scale on the keyboard; amber ones sit a semitone above a chord tone - passing tones, not landing notes."
-      : "";
-
-    state.ghostPitchClasses = scale.pitchClasses;
-    state.avoidPitchClasses = scale.avoidPitchClasses;
-    paintKeyboard();
-  }
-
-  // --- reharmonisation -----------------------------------------------------
-  function renderSubstitutions() {
-    var result = call(
-      "jazzReharmonise",
-      ["string", "number", "number"],
-      [state.progression, state.selected, el.advanced.checked ? 1 : 0]
-    );
-    if (result === null || !result.ok) return;
-
-    el.subCount.textContent = result.substitutions.length + " for bar " + (state.selected + 1);
-    el.subs.textContent = "";
-
-    result.substitutions.forEach(function (substitution) {
-      var item = document.createElement("li");
-      var button = document.createElement("button");
-      button.type = "button";
-      button.className = "sub" + (substitution.difficulty === "Advanced" ? " advanced" : "");
-
-      var head = document.createElement("div");
-      head.className = "sub-head";
-
-      var chords = document.createElement("span");
-      chords.className = "sub-chords";
-      chords.textContent = substitution.replacement;
-      head.appendChild(chords);
-
-      var name = document.createElement("span");
-      name.className = "sub-name";
-      name.textContent = substitution.name;
-      head.appendChild(name);
-
-      var tag = document.createElement("span");
-      tag.className = "tag";
-      tag.textContent = substitution.difficulty;
-      head.appendChild(tag);
-
-      button.appendChild(head);
-
-      var why = document.createElement("p");
-      why.className = "sub-why";
-      why.textContent = substitution.explanation;
-      button.appendChild(why);
-
-      button.addEventListener("click", function () {
-        state.progression = substitution.progression;
-        el.progression.value = substitution.progression;
-        state.reharmonised[state.selected] = true;
-        parseChart();
-        refreshSelection();
-      });
-
-      item.appendChild(button);
-      el.subs.appendChild(item);
-    });
-  }
-
-  // --- voicing analysis ----------------------------------------------------
-  function analyseVoicing() {
-    var chord = selectedChord();
-
-    if (!chord || state.heldNotes.length === 0) {
-      el.verdict.textContent = "Play a chord on the keyboard below.";
-      el.verdict.classList.remove("matches");
-      el.played.textContent = "";
-      el.meter.hidden = true;
-      el.findings.textContent = "";
-      el.feedbackHint.hidden = false;
-      return;
-    }
-
-    var result = call("jazzAnalyseVoicing", ["string", "string"], [chord, state.heldNotes.join(",")]);
-    if (result === null || !result.ok) return;
-
-    el.feedbackHint.hidden = true;
-    el.verdict.textContent = result.summary;
-    el.verdict.classList.toggle("matches", result.matches);
-    el.played.textContent = "You played: " + result.played + "  -  " + result.voicingType;
-
-    el.meter.hidden = false;
-    el.meterFill.style.width = result.score + "%";
-    el.meterFill.className = result.matches ? "" : (result.score >= 60 ? "warn" : "bad");
-
-    el.findings.textContent = "";
-    result.findings.forEach(function (finding) {
-      var item = document.createElement("li");
-      item.className = finding.severity;
-      item.textContent = finding.message;
-      el.findings.appendChild(item);
-    });
-
-    result.suggestions.slice(0, 2).forEach(function (suggestion) {
-      var item = document.createElement("li");
-      item.className = "suggestion";
-      item.textContent = suggestion;
-      el.findings.appendChild(item);
-    });
-  }
-
-  // --- idiomatic voicings --------------------------------------------------
-  function renderStarters() {
-    var chord = selectedChord();
-    if (!chord) return;
-
-    var result = call("jazzIdiomaticVoicings", ["string", "number"], [chord, 53]);
-    if (result === null || !result.ok) return;
-
-    el.starters.textContent = "";
-
-    result.voicings.forEach(function (group) {
-      if (!group.options.length) return;
-
-      var chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "chip";
-      chip.textContent = group.type;
-      chip.title = group.options[0].describe;
-      chip.addEventListener("click", function () {
-        state.heldNotes = group.options[0].notes.slice().sort(function (a, b) { return a - b; });
-        paintKeyboard();
-        analyseVoicing();
-      });
-      el.starters.appendChild(chip);
-    });
-  }
-
-  // --- wiring --------------------------------------------------------------
-  function refreshSelection() {
-    var chord = selectedChord();
-    el.expecting.textContent = chord || "-";
-    renderScales();
-    renderSubstitutions();
-    renderStarters();
-    analyseVoicing();
   }
 
   el.keyboard.addEventListener("click", function (event) {
     var key = event.target.closest(".key");
-    if (key) toggleNote(Number(key.dataset.note));
+    if (!key) return;
+
+    var note = Number(key.dataset.note);
+    var index = state.heldNotes.indexOf(note);
+
+    if (index === -1) state.heldNotes.push(note);
+    else state.heldNotes.splice(index, 1);
+
+    state.heldNotes.sort(function (a, b) { return a - b; });
+    paintKeyboard();
+    analyseVoicing();
   });
 
   el.clearKeys.addEventListener("click", function () {
@@ -922,27 +1133,83 @@ body {
     analyseVoicing();
   });
 
+  // --- voicing feedback ----------------------------------------------------
+  function analyseVoicing() {
+    var chord = selectedChord();
+    el.findingRow.textContent = "";
+
+    if (!chord || state.heldNotes.length === 0) {
+      el.verdict.textContent = "Play a chord on the keyboard.";
+      el.verdict.classList.remove("matches");
+      el.played.textContent = "";
+      el.meter.hidden = true;
+      return;
+    }
+
+    var result = call("jazzAnalyseVoicing", ["string", "string"], [chord, state.heldNotes.join(",")]);
+    if (result === null || !result.ok) return;
+
+    el.verdict.textContent = result.summary;
+    el.verdict.classList.toggle("matches", result.matches);
+    el.played.textContent = result.played + "  -  " + result.voicingType;
+
+    el.meter.hidden = false;
+    el.meterFill.style.width = result.score + "%";
+    el.meterFill.className = result.matches ? "" : (result.score >= 60 ? "warn" : "bad");
+
+    result.findings.slice(0, 2).forEach(function (finding) {
+      var line = document.createElement("span");
+      line.className = "finding " + finding.severity;
+      line.textContent = finding.message;
+      el.findingRow.appendChild(line);
+    });
+  }
+
+  // --- chart editing -------------------------------------------------------
+  el.editToggle.addEventListener("click", function () {
+    el.editor.hidden = !el.editor.hidden;
+    el.editToggle.textContent = el.editor.hidden ? "Edit chart" : "Hide editor";
+    if (!el.editor.hidden) el.progression.focus();
+  });
+
+  el.restoreChart.addEventListener("click", function () {
+    state.progression = DEFAULT_PROGRESSION;
+    el.progression.value = DEFAULT_PROGRESSION;
+    state.reharmonised = {};
+    parseChart();
+    analyseVoicing();
+  });
+
   el.progression.addEventListener("input", function () {
     state.progression = el.progression.value;
     state.reharmonised = {};
     parseChart();
-    refreshSelection();
+    analyseVoicing();
   });
 
-  el.advanced.addEventListener("change", renderSubstitutions);
-
+  // --- boot ----------------------------------------------------------------
   buildKeyboard();
 
   createJazzEngine().then(function (module) {
     engine = module;
-    el.status.dataset.state = "ready";
-    el.status.textContent = "engine ready";
+    el.engineStatus.dataset.state = "ready";
+    el.engineStatus.textContent = "engine ready";
     parseChart();
-    refreshSelection();
+
+    // Light the keyboard with the opening chord's scale, so the page shows what
+    // it does before anything is clicked.
+    var opening = call("jazzScalesForChord", ["string"], [selectedChord()]);
+    if (opening && opening.ok && opening.scales.length) {
+      state.scales = opening.scales;
+      state.scalePitchClasses = opening.scales[0].pitchClasses;
+      state.avoidPitchClasses = opening.scales[0].avoidPitchClasses;
+      paintKeyboard();
+    }
   }).catch(function (error) {
-    el.status.dataset.state = "failed";
-    el.status.textContent = "engine failed to load";
-    el.parseError.textContent = "WebAssembly engine did not start: " + error;
+    el.engineStatus.dataset.state = "failed";
+    el.engineStatus.textContent = "engine failed";
+    el.parseError.textContent = "The WebAssembly engine did not start: " + error;
+    el.editor.hidden = false;
   });
 })();
 </script>
