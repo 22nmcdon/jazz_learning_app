@@ -55,6 +55,14 @@ public:
     /** Chooses a sensible octave count for the size class. */
     void applySizeClass (SizeClass sizeClass);
 
+    /** Widens the drawn keyboard until every one of @p midiNotes is on it.
+
+        A hardware keyboard reaches further than the two or three octaves drawn
+        for touch, and a voicing half off the end of the keyboard tells the
+        player nothing.
+    */
+    void ensureNotesVisible (const std::vector<int>& midiNotes);
+
     void paint (juce::Graphics& g) override;
     void resized() override;
 
@@ -88,6 +96,7 @@ private:
 
     bool latchEnabled { true };
     int visibleOctaves { 2 };
+    int minimumOctaves { 1 };   ///< raised by ensureNotesVisible, so a resize cannot undo it
     int lowestNote { 48 };  // C3
 
     /** Which note each active touch or mouse is holding, keyed by source index. */

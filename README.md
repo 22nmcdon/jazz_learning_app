@@ -68,6 +68,13 @@ that needs Chrome or Edge, and an embedded page may not be allowed to ask for pe
 at all, in which case use the page in its own tab or the desktop app, which talks to MIDI
 devices directly.
 
+The menu also carries the sound bank: an **electric piano** synthesised with Web Audio (a
+sine ringing another, with the modulation dying away fast so the attack barks), or silent.
+Banks are a registry in the page - adding an organ or an acoustic piano later is one entry
+and one radio button. Connecting a MIDI keyboard widens the drawn keyboard to four octaves,
+and anything played outside that widens it further, so a two-handed voicing is never partly
+off the end. The desktop app widens its keyboard the same way, but makes no sound yet.
+
 Two environment variables help check the responsive layout without a device:
 
 ```bash

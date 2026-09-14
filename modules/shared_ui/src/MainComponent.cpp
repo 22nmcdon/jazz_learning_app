@@ -109,6 +109,7 @@ MainComponent::MainComponent()
 
     collector.onHeldNotesChanged = [this] (const core::Voicing& voicing)
     {
+        keyboard.ensureNotesVisible (voicing.midiNotes);
         keyboard.setHighlightedNotes (voicing.midiNotes);
     };
 

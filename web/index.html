@@ -430,6 +430,7 @@ button { font-family: inherit; cursor: pointer; }
   color: #9d938a;
 }
 .key.white:last-of-type { border-right: 0; }
+.keyboard.dense .key.white { font-size: 0; padding-bottom: 0; }
 .key.black {
   position: absolute;
   top: 0;
@@ -708,6 +709,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <p class="menu-note">Everything you play is checked against this shape, on every bar.</p>
           </div>
 
+          <div class="menu-group" role="radiogroup" aria-label="Sound">
+            <span class="menu-title">Sound</span>
+            <label class="menu-option"><input type="radio" name="soundBank" value="ep" checked> Electric piano</label>
+            <label class="menu-option"><input type="radio" name="soundBank" value="silent"> Silent</label>
+            <p class="menu-note" id="soundNote">Browsers start audio on the first click, so the first key you press may be quiet.</p>
+          </div>
+
           <div class="menu-group">
             <span class="menu-title">MIDI keyboard</span>
             <button class="link-btn" type="button" id="connectMidi">Connect a keyboard</button>
@@ -861,7 +869,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     chosenScale: 0,
     openFamily: null,
     spotted: null,
-    style: "any"
+    style: "any",
+    range: { low: 48, high: 72 }
   };
 
   // Per-viewer convenience only; the page works the same if it is unavailable.
@@ -908,8 +917,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   // --- note helpers --------------------------------------------------------
-  var LOWEST_NOTE = 48;   // C3
-  var HIGHEST_NOTE = 72;  // C5
+  // The clickable default is two octaves; a connected MIDI keyboard widens it,
+  // and anything played outside the drawn range widens it further, so a spread
+  // voicing is never partly invisible.
+  var MIDI_RANGE = { low: 36, high: 84 };   // C2 - C6
+  var LOWEST_PLAYABLE = 24;                 // C1
+  var HIGHEST_PLAYABLE = 108;               // C8
   var WHITE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
   var NOTE_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 
@@ -1248,7 +1261,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var whites = [];
     var blacks = [];
 
-    for (var note = LOWEST_NOTE; note <= HIGHEST_NOTE; note++) {
+    el.keyboard.textContent = "";
+
+    for (var note = state.range.low; note <= state.range.high; note++) {
       (isWhite(note) ? whites : blacks).push(note);
     }
 
@@ -1280,6 +1295,30 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     });
 
     el.keyboard.appendChild(fragment);
+
+    // Narrow keys need their C labels more than wide ones do, but they fit
+    // less well: drop the labels once a key is too thin to hold one.
+    el.keyboard.classList.toggle("dense", whites.length > 36);
+  }
+
+  /** Widens the drawn keyboard until every note in @p notes is on it. */
+  function ensureNotesVisible(notes) {
+    var low = state.range.low;
+    var high = state.range.high;
+
+    notes.forEach(function (note) {
+      if (note < low) low = Math.floor(note / 12) * 12;
+      if (note > high) high = Math.ceil(note / 12) * 12;
+    });
+
+    low = Math.max(LOWEST_PLAYABLE - (LOWEST_PLAYABLE % 12), low);
+    high = Math.min(HIGHEST_PLAYABLE, high);
+
+    if (low === state.range.low && high === state.range.high) return;
+
+    state.range = { low: low, high: high };
+    buildKeyboard();
+    paintKeyboard();
   }
 
   function paintKeyboard() {
@@ -1302,8 +1341,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var note = Number(key.dataset.note);
     var index = state.heldNotes.indexOf(note);
 
-    if (index === -1) state.heldNotes.push(note);
-    else state.heldNotes.splice(index, 1);
+    if (index === -1) {
+      state.heldNotes.push(note);
+      playNote(note, 0.8);
+    } else {
+      state.heldNotes.splice(index, 1);
+      stopNote(note);
+    }
 
     state.heldNotes.sort(function (a, b) { return a - b; });
     paintKeyboard();
@@ -1312,6 +1356,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.clearKeys.addEventListener("click", function () {
     state.heldNotes = [];
+    stopAllNotes();
     paintKeyboard();
     analyseVoicing();
   });
@@ -1435,16 +1480,151 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var group = result.voicings[0];
     if (!group.options.length) return;
 
+    stopAllNotes();
     state.heldNotes = group.options[0].notes.slice().sort(function (a, b) { return a - b; });
+    ensureNotesVisible(state.heldNotes);
+    playChord(state.heldNotes);
     paintKeyboard();
     analyseVoicing();
+  });
+
+  // --- sound ---------------------------------------------------------------
+  // Sound banks are a registry: a bank is a function that builds one voice for
+  // one note. Adding an acoustic piano or an organ later means adding an entry
+  // here and a radio to the menu - nothing else in the page changes.
+  var audio = { ctx: null, master: null, voices: {}, bank: "ep" };
+
+  var SOUND_BANKS = {
+    ep: { name: "Electric piano", buildVoice: buildElectricPianoVoice },
+    silent: { name: "Silent", buildVoice: null }
+  };
+
+  function noteFrequency(midiNote) {
+    return 440 * Math.pow(2, (midiNote - 69) / 12);
+  }
+
+  function audioContext() {
+    if (audio.ctx !== null) return audio.ctx;
+
+    var Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return null;
+
+    audio.ctx = new Ctor();
+    audio.master = audio.ctx.createGain();
+    audio.master.gain.value = 0.22;
+    audio.master.connect(audio.ctx.destination);
+    return audio.ctx;
+  }
+
+  /** A Rhodes-ish voice: one sine ringing another, with the modulation dying
+      away fast so the attack barks and the body stays sweet. */
+  function buildElectricPianoVoice(ctx, frequency, velocity, when) {
+    var carrier = ctx.createOscillator();
+    carrier.type = "sine";
+    carrier.frequency.value = frequency;
+
+    var tine = ctx.createOscillator();
+    tine.type = "sine";
+    tine.frequency.value = frequency * 2;   // the bell in the attack
+
+    var tineDepth = ctx.createGain();
+    tineDepth.gain.setValueAtTime(frequency * 5 * velocity, when);
+    tineDepth.gain.exponentialRampToValueAtTime(frequency * 0.25, when + 0.14);
+    tine.connect(tineDepth);
+    tineDepth.connect(carrier.frequency);
+
+    var amp = ctx.createGain();
+    var peak = Math.max(0.08, velocity) * 0.5;
+    amp.gain.setValueAtTime(0.0001, when);
+    amp.gain.exponentialRampToValueAtTime(peak, when + 0.006);
+    amp.gain.exponentialRampToValueAtTime(peak * 0.3, when + 0.9);
+    amp.gain.exponentialRampToValueAtTime(0.0001, when + 3.4);
+
+    // Bright notes get darker as they climb, the way a real tine does.
+    var tone = ctx.createBiquadFilter();
+    tone.type = "lowpass";
+    tone.frequency.value = Math.min(7000, 1400 + frequency * 4);
+    tone.Q.value = 0.5;
+
+    carrier.connect(amp);
+    amp.connect(tone);
+
+    carrier.start(when);
+    tine.start(when);
+
+    return {
+      output: tone,
+      amp: amp,
+      stop: function (at) {
+        carrier.stop(at);
+        tine.stop(at);
+      },
+      stopAt: when + 3.5
+    };
+  }
+
+  function playNote(midiNote, velocity) {
+    var bank = SOUND_BANKS[audio.bank];
+    if (!bank || bank.buildVoice === null) return;
+
+    var ctx = audioContext();
+    if (ctx === null) return;
+
+    if (ctx.state === "suspended") ctx.resume();
+
+    stopNote(midiNote, 0.02);
+
+    var when = ctx.currentTime;
+    var voice = bank.buildVoice(ctx, noteFrequency(midiNote), velocity, when);
+    voice.output.connect(audio.master);
+    voice.stop(voice.stopAt);
+    audio.voices[midiNote] = voice;
+
+    window.setTimeout(function () {
+      if (audio.voices[midiNote] === voice) delete audio.voices[midiNote];
+    }, (voice.stopAt - when) * 1000 + 100);
+  }
+
+  function stopNote(midiNote, release) {
+    var voice = audio.voices[midiNote];
+    if (!voice) return;
+
+    var now = audio.ctx.currentTime;
+    var fade = release || 0.28;
+
+    voice.amp.gain.cancelScheduledValues(now);
+    voice.amp.gain.setValueAtTime(Math.max(voice.amp.gain.value, 0.0001), now);
+    voice.amp.gain.exponentialRampToValueAtTime(0.0001, now + fade);
+    voice.stop(now + fade + 0.02);
+
+    delete audio.voices[midiNote];
+  }
+
+  function stopAllNotes() {
+    Object.keys(audio.voices).forEach(function (note) { stopNote(Number(note)); });
+  }
+
+  function playChord(notes) {
+    notes.forEach(function (note) { playNote(note, 0.8); });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll("input[name=soundBank]"), function (radio) {
+    radio.addEventListener("change", function () {
+      if (!radio.checked) return;
+      audio.bank = radio.value;
+      if (radio.value === "silent") stopAllNotes();
+    });
   });
 
   // --- MIDI keyboard -------------------------------------------------------
   // Web MIDI needs a secure context and permission, and an embedded page may
   // not be allowed to ask at all - so every failure says what happened rather
   // than leaving the button looking broken.
-  var midi = { access: null, held: [], chord: [], settleTimer: null };
+  var midi = { access: null, held: [], chord: [], settleTimer: null, velocities: {} };
+
+  function velocityOf(note) {
+    return midi.velocities[note] || 0.8;
+  }
 
   function setMidiStatus(text, tone) {
     el.midiStatus.textContent = text;
@@ -1481,6 +1661,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (names.length) {
       setMidiStatus("Connected: " + names.join(", "), "good");
       el.connectMidi.textContent = "Reconnect";
+
+      // Playing on hardware means the whole hand is in play, so show enough
+      // keyboard for a two-handed voicing to land on.
+      ensureNotesVisible([MIDI_RANGE.low, MIDI_RANGE.high]);
     } else {
       setMidiStatus("No MIDI inputs found. Plug one in and it will appear here.", "warn");
     }
@@ -1491,7 +1675,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var note = event.data[1];
     var velocity = event.data.length > 2 ? event.data[2] : 0;
 
-    if (status === 0x90 && velocity > 0) midiNoteOn(note);
+    if (status === 0x90 && velocity > 0) {
+      midi.velocities[note] = velocity / 127;
+      midiNoteOn(note);
+    }
     else if (status === 0x80 || (status === 0x90 && velocity === 0)) midiNoteOff(note);
   }
 
@@ -1504,9 +1691,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (midi.held.indexOf(note) === -1) midi.held.push(note);
     if (midi.chord.indexOf(note) === -1) midi.chord.push(note);
 
+    playNote(note, velocityOf(note));
+
     window.clearTimeout(midi.settleTimer);
     midi.settleTimer = window.setTimeout(function () {
       state.heldNotes = midi.chord.slice().sort(function (a, b) { return a - b; });
+      ensureNotesVisible(state.heldNotes);
       paintKeyboard();
       analyseVoicing();
     }, 70);
@@ -1515,6 +1705,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function midiNoteOff(note) {
     var index = midi.held.indexOf(note);
     if (index !== -1) midi.held.splice(index, 1);
+
+    stopNote(note);
     // The voicing stays on screen after the hands lift, so it can be read.
   }
 

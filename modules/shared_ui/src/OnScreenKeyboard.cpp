@@ -86,7 +86,7 @@ void OnScreenKeyboard::toggleLatchedNote (int midiNote)
 
 void OnScreenKeyboard::setVisibleOctaves (int octaves)
 {
-    const auto clamped = jlimit (1, 5, octaves);
+    const auto clamped = jlimit (jmax (1, minimumOctaves), 7, octaves);
 
     if (clamped == visibleOctaves)
         return;
@@ -114,6 +114,29 @@ void OnScreenKeyboard::shiftOctave (int direction)
     setLowestOctaveNote (lowestNote + direction * core::semitonesPerOctave);
 }
 
+void OnScreenKeyboard::ensureNotesVisible (const std::vector<int>& midiNotes)
+{
+    if (midiNotes.empty())
+        return;
+
+    const auto lowest = *std::min_element (midiNotes.begin(), midiNotes.end());
+    const auto highest = *std::max_element (midiNotes.begin(), midiNotes.end());
+    const auto drawnHighest = lowestNote + visibleOctaves * core::semitonesPerOctave - 1;
+
+    if (lowest >= lowestNote && highest <= drawnHighest)
+        return;
+
+    const auto newLowest = jmin (lowestNote, lowest - core::toPitchClass (lowest));
+    const auto octaves = (jmax (highest, drawnHighest) - newLowest) / core::semitonesPerOctave + 1;
+
+    minimumOctaves = jlimit (1, 7, octaves);
+    lowestNote = jlimit (12, 96, newLowest);
+
+    setVisibleOctaves (minimumOctaves);
+    rebuildKeys();
+    repaint();
+}
+
 void OnScreenKeyboard::setHighlightedNotes (const std::vector<int>& midiNotes)
 {
     highlightedNotes = midiNotes;
@@ -130,11 +153,13 @@ void OnScreenKeyboard::applySizeClass (SizeClass sizeClass)
 {
     // A phone gets one or two octaves and the octave buttons; a desktop window
     // has room for more of the keyboard at once.
+    // jmax against the minimum keeps a widened keyboard wide: a note played
+    // off the end of it must not disappear on the next resize.
     switch (sizeClass)
     {
-        case SizeClass::compact:  setVisibleOctaves (2); break;
-        case SizeClass::regular:  setVisibleOctaves (3); break;
-        case SizeClass::expanded: setVisibleOctaves (4); break;
+        case SizeClass::compact:  setVisibleOctaves (jmax (2, minimumOctaves)); break;
+        case SizeClass::regular:  setVisibleOctaves (jmax (3, minimumOctaves)); break;
+        case SizeClass::expanded: setVisibleOctaves (jmax (4, minimumOctaves)); break;
     }
 
     setLatchEnabled (currentInteractionMode() == InteractionMode::pointer);
