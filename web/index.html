@@ -248,6 +248,23 @@ button { font-family: inherit; cursor: pointer; }
   font-weight: 500;
 }
 .link-btn:hover { color: var(--blush-deep); border-color: var(--blush-deep); }
+
+/* Sounding the whole voicing at once - what a mouse cannot do by clicking keys
+   one at a time. Hidden once a MIDI keyboard is doing the playing. */
+.play-btn {
+  background: var(--charcoal);
+  color: var(--cream);
+  border: 1px solid var(--charcoal);
+  border-radius: 1px;
+  padding: 6px 15px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 500;
+}
+.play-btn:hover:not(:disabled) { background: var(--blush-deep); border-color: var(--blush-deep); }
+.play-btn:disabled { opacity: 0.35; cursor: default; }
+.play-btn[hidden] { display: none; }
 .tools-right { margin-left: auto; display: flex; gap: 18px; }
 
 .editor { margin-bottom: 24px; }
@@ -421,16 +438,8 @@ button { font-family: inherit; cursor: pointer; }
   flex: 1 1 0;
   background: var(--paper);
   border-right: 1px solid var(--charcoal);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 6px;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  color: #9d938a;
 }
 .key.white:last-of-type { border-right: 0; }
-.keyboard.dense .key.white { font-size: 0; padding-bottom: 0; }
 .key.black {
   position: absolute;
   top: 0;
@@ -792,6 +801,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     <div class="keyboard" id="keyboard"></div>
     <div class="dock-foot">
       <span class="practising">Practising <b id="styleLabel">any shape</b></span>
+      <button class="play-btn" type="button" id="playChord" disabled>Play chord</button>
       <button class="link-btn" type="button" id="showVoicing">Show me one</button>
       <span class="legend"><span class="dot"></span> scale tone</span>
       <span class="legend"><span class="ring"></span> passing tone</span>
@@ -889,7 +899,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
    "scaleRows", "subs", "advanced", "spotted", "spottedText", "useSpotted",
    "menuButton", "menuPanel", "connectMidi", "midiStatus", "styleLabel",
-   "showVoicing"].forEach(function (id) {
+   "showVoicing", "playChord"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
 
@@ -1276,8 +1286,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       key.className = "key white";
       key.dataset.note = String(whiteNote);
       key.setAttribute("aria-pressed", "false");
+      // No printed note names: the keys stay clean, and the played readout
+      // under the verdict names the notes. The label is still there for
+      // screen readers.
       key.setAttribute("aria-label", noteName(whiteNote));
-      if (pitchClass(whiteNote) === 0) key.textContent = noteName(whiteNote);
       fragment.appendChild(key);
     });
 
@@ -1295,10 +1307,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     });
 
     el.keyboard.appendChild(fragment);
-
-    // Narrow keys need their C labels more than wide ones do, but they fit
-    // less well: drop the labels once a key is too thin to hold one.
-    el.keyboard.classList.toggle("dense", whites.length > 36);
   }
 
   /** Widens the drawn keyboard until every note in @p notes is on it. */
@@ -1352,6 +1360,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     state.heldNotes.sort(function (a, b) { return a - b; });
     paintKeyboard();
     analyseVoicing();
+    updatePlayChordButton();
   });
 
   el.clearKeys.addEventListener("click", function () {
@@ -1359,6 +1368,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     stopAllNotes();
     paintKeyboard();
     analyseVoicing();
+    updatePlayChordButton();
   });
 
   // --- voicing feedback ----------------------------------------------------
@@ -1486,6 +1496,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     playChord(state.heldNotes);
     paintKeyboard();
     analyseVoicing();
+    updatePlayChordButton();
   });
 
   // --- sound ---------------------------------------------------------------
@@ -1608,11 +1619,38 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     notes.forEach(function (note) { playNote(note, 0.8); });
   }
 
+  /** The button only earns its place while a mouse is doing the playing, and
+      only does anything with notes down and a sound chosen. */
+  function updatePlayChordButton() {
+    el.playChord.hidden = midi.connected;
+    el.playChord.disabled = state.heldNotes.length === 0 || audio.bank === "silent";
+    el.playChord.title = audio.bank === "silent"
+      ? "Choose a sound in the Practice menu"
+      : "Sound every key you have pressed, together";
+  }
+
+  el.playChord.addEventListener("click", function () {
+    if (state.heldNotes.length === 0) return;
+    stopAllNotes();
+    playChord(state.heldNotes);
+  });
+
+  // Space plays the chord too, as long as nothing else has the keyboard.
+  document.addEventListener("keydown", function (event) {
+    if (event.code !== "Space" || event.target !== document.body) return;
+    if (midi.connected || state.heldNotes.length === 0) return;
+
+    event.preventDefault();
+    stopAllNotes();
+    playChord(state.heldNotes);
+  });
+
   Array.prototype.forEach.call(document.querySelectorAll("input[name=soundBank]"), function (radio) {
     radio.addEventListener("change", function () {
       if (!radio.checked) return;
       audio.bank = radio.value;
       if (radio.value === "silent") stopAllNotes();
+      updatePlayChordButton();
     });
   });
 
@@ -1620,7 +1658,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // Web MIDI needs a secure context and permission, and an embedded page may
   // not be allowed to ask at all - so every failure says what happened rather
   // than leaving the button looking broken.
-  var midi = { access: null, held: [], chord: [], settleTimer: null, velocities: {} };
+  var midi = { access: null, connected: false, held: [], chord: [], settleTimer: null, velocities: {} };
 
   function velocityOf(note) {
     return midi.velocities[note] || 0.8;
@@ -1663,9 +1701,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       el.connectMidi.textContent = "Reconnect";
 
       // Playing on hardware means the whole hand is in play, so show enough
-      // keyboard for a two-handed voicing to land on.
+      // keyboard for a two-handed voicing to land on - and the Play chord
+      // button has nothing left to do.
+      midi.connected = true;
+      updatePlayChordButton();
       ensureNotesVisible([MIDI_RANGE.low, MIDI_RANGE.high]);
     } else {
+      midi.connected = false;
+      updatePlayChordButton();
       setMidiStatus("No MIDI inputs found. Plug one in and it will appear here.", "warn");
     }
   }

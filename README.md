@@ -71,7 +71,9 @@ devices directly.
 The menu also carries the sound bank: an **electric piano** synthesised with Web Audio (a
 sine ringing another, with the modulation dying away fast so the attack barks), or silent.
 Banks are a registry in the page - adding an organ or an acoustic piano later is one entry
-and one radio button. Connecting a MIDI keyboard widens the drawn keyboard to four octaves,
+and one radio button. A mouse can only press one key at a time, so **Play chord** (or the
+space bar) sounds every key currently down at once; it retires itself once a MIDI keyboard
+is connected and doing the playing. Connecting a MIDI keyboard widens the drawn keyboard to four octaves,
 and anything played outside that widens it further, so a two-handed voicing is never partly
 off the end. The desktop app widens its keyboard the same way, but makes no sound yet.
 
