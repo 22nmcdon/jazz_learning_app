@@ -413,9 +413,10 @@ std::vector<ChordTone> ChordSymbol::chordTones() const
              isAlteration (extension));
     }
 
-    // A named 13th implies the 9th underneath it as available colour.
-    if (hasExtension (Extension::thirteen) && ! hasExtension (Extension::flatNine)
-        && ! hasExtension (Extension::sharpNine))
+    // A named 11th or 13th implies the 9th underneath it as available colour,
+    // so a written Dm11 and a Dm7 extended to the 11th hold the same notes.
+    if ((hasExtension (Extension::thirteen) || hasExtension (Extension::eleven))
+        && ! hasExtension (Extension::flatNine) && ! hasExtension (Extension::sharpNine))
         add (2, ChordToneRole::extension, "9", false);
 
     std::stable_sort (tones.begin(), tones.end(),
@@ -461,6 +462,19 @@ std::uint16_t ChordSymbol::pitchClassMask() const
 bool ChordSymbol::containsPitchClass (PitchClass pitchClass) const
 {
     return (pitchClassMask() & (1u << toPitchClass (pitchClass))) != 0;
+}
+
+std::string ChordSymbol::toString() const
+{
+    return toString (preferredAccidental);
+}
+
+ChordSymbol ChordSymbol::withAccidental (Accidental accidental) const
+{
+    auto copy = *this;
+    copy.preferredAccidental = accidental;
+    copy.sourceText = copy.toString();
+    return copy;
 }
 
 std::string ChordSymbol::toString (Accidental accidental) const
@@ -565,6 +579,29 @@ ChordSymbol ChordSymbol::transposed (int semitones) const
 
     copy.sourceText = copy.toString();
     return copy;
+}
+
+ChordSymbol ChordSymbol::overBass (PitchClass bass) const
+{
+    auto copy = *this;
+    const auto folded = toPitchClass (bass);
+
+    if (folded == rootPitchClass)
+        copy.bassPitchClass.reset();
+    else
+        copy.bassPitchClass = folded;
+
+    copy.sourceText = copy.toString();
+    return copy;
+}
+
+int ChordSymbol::thirdSemitones() const
+{
+    for (const auto& tone : chordTones())
+        if (tone.role == ChordToneRole::third)
+            return tone.semitones;
+
+    return hasMinorThird() ? 3 : 4;
 }
 
 bool ChordSymbol::operator== (const ChordSymbol& other) const

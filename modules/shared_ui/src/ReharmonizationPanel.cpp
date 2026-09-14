@@ -120,11 +120,18 @@ void ReharmonizationPanel::SubstitutionList::paint (juce::Graphics& g)
         auto content = row.reduced (10, 8);
         auto topLine = content.removeFromTop (20);
 
-        // Difficulty tag on the right, so the eye can filter down the column.
-        auto tagArea = topLine.removeFromRight (74);
-        g.setColour (isSafe ? theme::good : theme::warning);
+        // Family and difficulty on the right, so the eye can filter down the
+        // column: what kind of move this is, and how far out it goes.
+        auto tagArea = topLine.removeFromRight (150);
         g.setFont (Font (FontOptions (10.0f, Font::bold)));
+
+        auto difficultyArea = tagArea.removeFromRight (74);
+        g.setColour (isSafe ? theme::good : theme::warning);
         g.drawText (String (core::difficultyName (substitution.difficulty)).toUpperCase(),
+                    difficultyArea, Justification::centredRight);
+
+        g.setColour (theme::textDim);
+        g.drawText (String (core::familyName (substitution.family)).toUpperCase(),
                     tagArea, Justification::centredRight);
 
         g.setColour (theme::text);

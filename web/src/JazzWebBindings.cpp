@@ -238,6 +238,7 @@ JAZZ_EXPORT const char* jazzReharmonise (const char* progressionText, int measur
                             + ",\"replacement\":" + quoted (substitution.replacementText())
                             + ",\"explanation\":" + quoted (substitution.explanation)
                             + ",\"difficulty\":" + quoted (difficultyName (substitution.difficulty))
+                            + ",\"family\":" + quoted (familyName (substitution.family))
                             + ",\"style\":" + quoted (styleName (substitution.style))
                             + ",\"voiceLeadingCost\":" + std::to_string (substitution.voiceLeadingCost)
                             + ",\"progression\":" + quoted (applied.toProgressionText()) + "}";

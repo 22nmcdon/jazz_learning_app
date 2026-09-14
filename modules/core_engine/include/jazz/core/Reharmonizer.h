@@ -32,6 +32,25 @@ enum class ReharmStyle
 
 std::string styleName (ReharmStyle style);
 
+/** What kind of move a substitution is.
+
+    Ordered from the ones closest to the original harmony to the ones furthest
+    from it, so a list grouped by family reads as a path a learner can walk
+    down rather than a flat pile of options.
+*/
+enum class SubstitutionFamily
+{
+    extension,        ///< same chord, richer colour
+    diatonic,         ///< another chord from the same key
+    dominantFunction, ///< re-routing the pull to the next chord
+    modalInterchange, ///< borrowed from the parallel minor or another mode
+    chromaticMediant, ///< a third away, sharing tones but not a key
+    passingChord,     ///< something inserted on the way to the next chord
+    bassMotion        ///< same harmony, different note underneath
+};
+
+std::string familyName (SubstitutionFamily family);
+
 /** One offered reharmonisation of a single measure. */
 struct Substitution
 {
@@ -40,6 +59,7 @@ struct Substitution
     std::string explanation;              ///< why it works, in the user's language
     SubstitutionDifficulty difficulty { SubstitutionDifficulty::safe };
     ReharmStyle style { ReharmStyle::common };
+    SubstitutionFamily family { SubstitutionFamily::extension };
 
     /** Total guide-tone movement into the following chord, in semitones. Lower
         is smoother; used to rank substitutions and to drive the voice-leading

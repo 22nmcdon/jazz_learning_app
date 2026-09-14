@@ -120,12 +120,32 @@ public:
     bool containsPitchClass (PitchClass pitchClass) const;
 
     /** Re-renders the symbol from the parsed data rather than echoing the input,
-        so generated chords (reharmonisations) print consistently.
+        so generated chords (reharmonisations) print consistently. Uses the
+        chord's own accidental preference, which is flats unless set otherwise.
     */
-    std::string toString (Accidental accidental = Accidental::flats) const;
+    std::string toString() const;
+
+    /** Re-renders with a specific accidental, ignoring the chord's preference. */
+    std::string toString (Accidental accidental) const;
+
+    /** Returns a copy that spells itself with @p accidental. Chromatic chords
+        that rise into the next chord read better sharp (C#dim7 between Cmaj7
+        and Dm7); everything else in jazz is conventionally flat.
+    */
+    ChordSymbol withAccidental (Accidental accidental) const;
 
     /** Returns a copy transposed by @p semitones. */
     ChordSymbol transposed (int semitones) const;
+
+    /** Returns a copy sounding over @p bass, e.g. Cmaj7 over E, or a D triad
+        over a C pedal. Passing the chord's own root clears the slash.
+    */
+    ChordSymbol overBass (PitchClass bass) const;
+
+    /** Semitones from the root to the chord's third (or the 4th/2nd of a
+        suspended chord), for rules that need the third specifically.
+    */
+    int thirdSemitones() const;
 
     /** Builds a symbol directly, for reharmonisation output. */
     static ChordSymbol build (PitchClass root,
@@ -146,6 +166,7 @@ private:
     SeventhType seventhType { SeventhType::none };
     std::vector<Extension> namedExtensions;
     bool suspendedSecond {};   ///< sus2 rather than sus4
+    Accidental preferredAccidental { Accidental::flats };
     std::string sourceText;
 };
 

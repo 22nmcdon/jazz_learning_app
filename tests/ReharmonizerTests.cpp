@@ -105,19 +105,32 @@ TEST ("filters by style preset")
         CHECK (substitution.style == ReharmStyle::modal || substitution.style == ReharmStyle::common);
 }
 
-TEST ("safe substitutions are listed before advanced ones")
+TEST ("options are grouped by family, nearest the original harmony first")
+{
+    const Reharmonizer reharmonizer;
+    const auto substitutions = reharmonizer.substitutionsFor (chartFrom ("| Cmaj7 | Dm7 |"), 0);
+
+    auto lastFamily = -1;
+
+    for (const auto& substitution : substitutions)
+    {
+        CHECK (static_cast<int> (substitution.family) >= lastFamily);
+        lastFamily = static_cast<int> (substitution.family);
+    }
+}
+
+TEST ("within a family, safe options come before advanced ones")
 {
     const Reharmonizer reharmonizer;
     const auto substitutions = reharmonizer.substitutionsFor (chartFrom ("| G7 | Cmaj7 |"), 0);
 
-    auto seenAdvanced = false;
-
-    for (const auto& substitution : substitutions)
+    for (std::size_t i = 1; i < substitutions.size(); ++i)
     {
-        if (substitution.difficulty == SubstitutionDifficulty::advanced)
-            seenAdvanced = true;
-        else
-            CHECK (! seenAdvanced);
+        if (substitutions[i].family != substitutions[i - 1].family)
+            continue;
+
+        if (substitutions[i - 1].difficulty == SubstitutionDifficulty::advanced)
+            CHECK (substitutions[i].difficulty == SubstitutionDifficulty::advanced);
     }
 }
 
@@ -167,4 +180,180 @@ TEST ("a measure index outside the chart yields nothing")
 
     CHECK (reharmonizer.substitutionsFor (chart, 5).empty());
     CHECK (reharmonizer.substitutionsFor (chart, -1).empty());
+}
+
+
+//==============================================================================
+// Substitutions beyond the common vocabulary: chords borrowed from the parallel
+// minor, chromatic mediants, passing chords and bass motion.
+
+TEST ("offers the bVI major seventh over a major chord")
+{
+    const Reharmonizer reharmonizer;
+    const auto substitutions = reharmonizer.substitutionsFor (chartFrom ("| Cmaj7 | Cmaj7 |"), 0);
+    const auto* borrowed = find (substitutions, "bVI major seventh");
+
+    CHECK (borrowed != nullptr);
+    CHECK_EQ (borrowed->replacementText(), std::string ("Abmaj7"));
+    CHECK (borrowed->family == SubstitutionFamily::modalInterchange);
+    CHECK (borrowed->difficulty == SubstitutionDifficulty::advanced);
+}
+
+TEST ("the bVI substitution holds on to the original root and fifth")
+{
+    const auto original = *ChordSymbol::parse ("Cmaj7");
+    const auto borrowed = *ChordSymbol::parse ("Abmaj7");
+
+    // C and G are what let a chord from another key sit under the same melody.
+    CHECK (borrowed.containsPitchClass (original.root()));
+    CHECK (borrowed.containsPitchClass (original.root() + 7));
+    CHECK (! borrowed.containsPitchClass (original.root() + 4));   // the 3rd goes
+    CHECK (! borrowed.containsPitchClass (original.root() + 11));  // so does the 7th
+}
+
+TEST ("explanations name the notes the substitution keeps")
+{
+    const Reharmonizer reharmonizer;
+    const auto substitutions = reharmonizer.substitutionsFor (chartFrom ("| Cmaj7 | Cmaj7 |"), 0);
+    const auto* borrowed = find (substitutions, "bVI major seventh");
+
+    CHECK (borrowed != nullptr);
+    CHECK (borrowed->explanation.find ("keeps C and G") != std::string::npos);
+}
+
+TEST ("offers the other borrowed and mediant major chords")
+{
+    const Reharmonizer reharmonizer;
+    const auto substitutions = reharmonizer.substitutionsFor (chartFrom ("| Cmaj7 | Cmaj7 |"), 0);
+
+    CHECK_EQ (find (substitutions, "bIII major seventh")->replacementText(), std::string ("Ebmaj7"));
+    CHECK_EQ (find (substitutions, "bVII approach")->replacementText(), std::string ("Bbmaj7 Cmaj7"));
+    CHECK_EQ (find (substitutions, "Minor plagal approach")->replacementText(), std::string ("Fm6 Cmaj7"));
+
+    const auto* mediant = find (substitutions, "III major seventh");
+    CHECK_EQ (mediant->replacementText(), std::string ("Emaj7"));
+    CHECK (mediant->family == SubstitutionFamily::chromaticMediant);
+}
+
+TEST ("the chromatic mediant keeps both guide tones of the original")
+{
+    const auto original = *ChordSymbol::parse ("Cmaj7");
+    const auto mediant = *ChordSymbol::parse ("Emaj7");
+
+    for (const auto& guide : original.guideTones())
+        CHECK (mediant.containsPitchClass (original.root() + guide.semitones));
+}
+
+TEST ("offers modal colours for a minor chord")
+{
+    const Reharmonizer reharmonizer;
+    const auto substitutions = reharmonizer.substitutionsFor (chartFrom ("| Dm7 | G7 |"), 0);
+
+    CHECK_EQ (find (substitutions, "Dorian 6th")->replacementText(), std::string ("Dm6"));
+    CHECK_EQ (find (substitutions, "Minor-major seventh")->replacementText(), std::string ("DmMaj7"));
+    CHECK_EQ (find (substitutions, "Darken it to m7b5")->replacementText(), std::string ("Dm7b5"));
+}
+
+TEST ("a diminished passing chord appears only when the roots move a whole tone")
+{
+    const Reharmonizer reharmonizer;
+
+    const auto stepwise = chartFrom ("| Cmaj7 | Dm7 |");
+    const auto stepwiseOptions = reharmonizer.substitutionsFor (stepwise, 0);
+    const auto* passing = find (stepwiseOptions, "Diminished passing chord");
+
+    CHECK (passing != nullptr);
+
+    // Rising into Dm7, so it is spelled with a sharp rather than as Dbdim7.
+    CHECK_EQ (passing->replacementText(), std::string ("Cmaj7 C#dim7"));
+
+    const auto leap = chartFrom ("| Cmaj7 | Fmaj7 |");
+    const auto leapOptions = reharmonizer.substitutionsFor (leap, 0);
+    CHECK (find (leapOptions, "Diminished passing chord") == nullptr);
+}
+
+TEST ("the diminished passing chord shares four notes with the secondary dominant")
+{
+    const auto passing = *ChordSymbol::parse ("C#dim7");
+    const auto secondary = *ChordSymbol::parse ("A7b9");
+
+    auto shared = 0;
+
+    for (auto pitchClass = 0; pitchClass < 12; ++pitchClass)
+        if (passing.containsPitchClass (pitchClass) && secondary.containsPitchClass (pitchClass))
+            ++shared;
+
+    CHECK_EQ (shared, 4);
+}
+
+TEST ("offers bass motion without changing the harmony")
+{
+    const Reharmonizer reharmonizer;
+    const auto substitutions = reharmonizer.substitutionsFor (chartFrom ("| Cmaj7 | Dm7 |"), 0);
+
+    const auto* inversion = find (substitutions, "Third in the bass");
+    CHECK_EQ (inversion->replacementText(), std::string ("Cmaj7/E"));
+    CHECK (inversion->family == SubstitutionFamily::bassMotion);
+    CHECK (inversion->difficulty == SubstitutionDifficulty::safe);
+
+    const auto* pedal = find (substitutions, "Triad over a tonic pedal");
+    CHECK_EQ (pedal->replacementText(), std::string ("D/C"));
+    CHECK_EQ (*pedal->replacement.front().bass(), 0);
+}
+
+TEST ("a triad over the tonic pedal spells the Lydian tensions")
+{
+    const auto pedal = *ChordSymbol::parse ("D/C");
+
+    CHECK (pedal.containsPitchClass (2));   // 9th
+    CHECK (pedal.containsPitchClass (6));   // #11
+    CHECK (pedal.containsPitchClass (9));   // 13th
+    CHECK (pedal.containsPitchClass (0));   // the pedal itself
+}
+
+TEST ("every generated substitution can be read back as a chord symbol")
+{
+    const Reharmonizer reharmonizer;
+
+    for (const auto& text : { "| Cmaj7 | Dm7 |", "| Dm7 | G7 |", "| G7 | Cmaj7 |",
+                              "| Bbmaj7 | Eb7 |", "| F#m7b5 | B7alt |", "| Ab13 | Dbmaj7 |" })
+    {
+        const auto chart = chartFrom (text);
+
+        for (auto measure = 0; measure < chart.measureCount(); ++measure)
+        {
+            for (const auto& substitution : reharmonizer.substitutionsFor (chart, measure))
+            {
+                CHECK (! substitution.replacement.empty());
+                CHECK (! substitution.explanation.empty());
+
+                for (const auto& chord : substitution.replacement)
+                {
+                    const auto reparsed = ChordSymbol::parse (chord.toString());
+                    CHECK (reparsed.has_value());
+                    CHECK (*reparsed == chord);
+                }
+            }
+        }
+    }
+}
+
+TEST ("a chord not in the common vocabulary still gets options")
+{
+    const Reharmonizer reharmonizer;
+    const auto substitutions = reharmonizer.substitutionsFor (chartFrom ("| Cdim7 | Dm7 |"), 0);
+
+    // Nothing quality-specific fires for a diminished chord, but the rules that
+    // depend only on the next chord, and bass motion, still apply.
+    CHECK (! substitutions.empty());
+    CHECK (find (substitutions, "Third in the bass") != nullptr);
+}
+
+TEST ("the modal style preset keeps the borrowed chords")
+{
+    const Reharmonizer modal { Reharmonizer::Options { true, ReharmStyle::modal } };
+    const auto substitutions = modal.substitutionsFor (chartFrom ("| Cmaj7 | Dm7 |"), 0);
+
+    CHECK (find (substitutions, "bVI major seventh") != nullptr);
+    CHECK (find (substitutions, "Tritone substitution") == nullptr);
 }

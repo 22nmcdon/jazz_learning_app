@@ -191,3 +191,18 @@ TEST ("transposition moves root and bass together")
     CHECK_EQ (chord.root(), 11);
     CHECK_EQ (*chord.bass(), 4);
 }
+
+TEST ("an eleventh implies the ninth beneath it")
+{
+    const auto eleventh = parsed ("Dm11");
+
+    CHECK (hasTone (eleventh, 2));    // the 9th
+    CHECK (hasTone (eleventh, 5));    // the 11th
+    CHECK (! hasEssentialTone (eleventh, 2));  // colour, not identity
+
+    // A chord built with the 11th and one written as m11 must hold the same notes.
+    const auto built = ChordSymbol::build (2, ChordQuality::minor, SeventhType::minor,
+                                           { Extension::eleven });
+    CHECK (built == eleventh);
+    CHECK_EQ (built.pitchClassMask(), eleventh.pitchClassMask());
+}

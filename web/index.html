@@ -457,6 +457,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
 .option-list { list-style: none; margin: 0; padding: 0; }
 .option-list li + li { margin-top: 8px; }
+.option-list li.family-heading {
+  margin-top: 20px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--blush-deep);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 5px;
+}
+.option-list li.family-heading:first-child { margin-top: 0; }
 .option {
   width: 100%;
   text-align: left;
@@ -665,7 +675,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     </section>
 
     <section class="tab-panel" id="panelReharm" role="tabpanel" aria-labelledby="tabReharm" hidden>
-      <p class="voicing-note">Choosing one rewrites this bar in the chart.</p>
+      <p class="voicing-note">
+        Grouped from the closest to the original harmony outwards. Choosing one rewrites
+        this bar in the chart.
+      </p>
       <ul class="option-list" id="subs"></ul>
       <label class="toggle-row" for="advanced">
         <input type="checkbox" id="advanced" checked>
@@ -969,8 +982,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (result === null || !result.ok) return;
 
     el.subs.textContent = "";
+    var currentFamily = null;
 
     result.substitutions.forEach(function (substitution) {
+      // The engine returns them grouped from nearest the original harmony to
+      // furthest, so a heading per family turns the list into a path.
+      if (substitution.family !== currentFamily) {
+        currentFamily = substitution.family;
+        var heading = document.createElement("li");
+        heading.className = "family-heading";
+        heading.textContent = substitution.family;
+        el.subs.appendChild(heading);
+      }
+
       var item = document.createElement("li");
       var button = document.createElement("button");
       button.type = "button";

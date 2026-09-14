@@ -102,10 +102,16 @@ that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
   primary suggestion; every other scale containing the chord's essential tones is offered,
   ranked by avoid notes, each with a plain-language rationale. Seven-note scales are
   spelled one letter per degree (`G A B C# D E F`, not `G A B Db D E F`).
-- **Reharmonisation** — tritone subs, related and tritone ii-Vs, altered dominants, sus
-  dominants, backdoor ii-Vs, diatonic substitutions, Lydian colour, quartal m11, secondary
-  and chromatic approach dominants. Each is tagged safe/advanced and ranked by guide-tone
-  voice leading into the next chord.
+- **Reharmonisation** — substitutions grouped into families and ordered from the closest
+  to the original harmony outwards: *extension* (altered, whole-tone and sus dominants,
+  Lydian colour, quartal m11), *diatonic* (iii-7, vi-7), *dominant function* (tritone subs,
+  related and tritone ii-Vs, backdoor ii-Vs, secondary dominants), *modal interchange*
+  (bVImaj7, bIIImaj7, the bVII approach, minor plagal IVm6, Dorian 6ths, minor-major 7ths,
+  borrowed m7b5), *chromatic mediant* (IIImaj7), *passing chords* (diminished passing
+  chords, chromatic approach dominants, chromatic ii-Vs) and *bass motion* (inversions,
+  a triad over a tonic pedal). Each carries a difficulty tag, a style tag, a ranking by
+  guide-tone voice leading into the next chord, and an explanation that names the notes the
+  substitution keeps from the original chord.
 - **Voicing analysis** — classifies what was played (shell, root position, rootless
   left-hand, two-handed rootless, spread), checks it against the symbol, and explains what
   is missing, outside, clashing or muddy in the low register. A rootless voicing is not
