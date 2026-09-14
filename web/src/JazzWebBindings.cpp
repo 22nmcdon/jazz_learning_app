@@ -282,6 +282,39 @@ JAZZ_EXPORT const char* jazzAnalyseVoicing (const char* symbol, const char* midi
                  + "}");
 }
 
+/** Reads a played voicing against the substitutions available for a measure,
+    so a player who stumbles onto a reharmonisation is told what they found.
+*/
+JAZZ_EXPORT const char* jazzRecogniseSubstitution (const char* progressionText,
+                                                   int measureIndex,
+                                                   const char* midiNotesCsv,
+                                                   int includeAdvanced)
+{
+    auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
+
+    if (! parsed.ok())
+        return hold (jsonError (parsed.error));
+
+    const auto voicing = Voicing::fromNotes (parseNoteList (midiNotesCsv != nullptr ? midiNotesCsv : ""));
+    const Reharmonizer::Options options { includeAdvanced != 0, ReharmStyle::common };
+    const auto found = recogniseSubstitution (voicing, *parsed.chart, measureIndex, options);
+
+    if (! found.has_value())
+        return hold ("{\"ok\":true,\"found\":false}");
+
+    const auto applied = Reharmonizer::applySubstitution (*parsed.chart, measureIndex, found->substitution);
+
+    return hold ("{\"ok\":true,\"found\":true"
+                 + std::string (",\"chord\":") + quoted (found->chord.toString())
+                 + ",\"name\":" + quoted (found->substitution.name)
+                 + ",\"family\":" + quoted (familyName (found->substitution.family))
+                 + ",\"difficulty\":" + quoted (difficultyName (found->substitution.difficulty))
+                 + ",\"explanation\":" + quoted (found->substitution.explanation)
+                 + ",\"replacement\":" + quoted (found->substitution.replacementText())
+                 + ",\"progression\":" + quoted (applied.toProgressionText())
+                 + ",\"score\":" + std::to_string (found->score) + "}");
+}
+
 /** Idiomatic "sentence starter" voicings for a chord. */
 JAZZ_EXPORT const char* jazzIdiomaticVoicings (const char* symbol, int anchorNote)
 {

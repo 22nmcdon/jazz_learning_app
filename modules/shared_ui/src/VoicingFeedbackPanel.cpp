@@ -44,6 +44,13 @@ void VoicingFeedbackPanel::clearAnalysis()
     hasAnalysis = false;
     analysis = {};
     playedVoicing = {};
+    spotted.reset();
+    repaint();
+}
+
+void VoicingFeedbackPanel::setRecognisedSubstitution (std::optional<core::RecognisedSubstitution> recognised)
+{
+    spotted = std::move (recognised);
     repaint();
 }
 
@@ -105,6 +112,24 @@ void VoicingFeedbackPanel::paint (juce::Graphics& g)
 
     paintScoreMeter (g, area.removeFromTop (6).withSizeKeepingCentre (area.getWidth(), 6));
     area.removeFromTop (10);
+
+    // A voicing that spells one of this bar's substitutions is news, not an
+    // error - say so before the findings that call it a mismatch.
+    if (spotted.has_value())
+    {
+        auto row = area.removeFromTop (34);
+
+        g.setColour (theme::accent);
+        g.fillRoundedRectangle (row.removeFromLeft (3).reduced (0, 2).toFloat(), 1.5f);
+
+        g.setColour (theme::accent);
+        g.setFont (Font (FontOptions (theme::bodyFontSize() - 1.0f, Font::bold)));
+        g.drawFittedText ("That is " + String (spotted->chord.toString()) + " - the "
+                              + String (spotted->substitution.name) + " substitution for this bar.",
+                          row.reduced (8, 0), Justification::centredLeft, 2);
+
+        area.removeFromTop (4);
+    }
 
     for (const auto& finding : analysis.findings)
     {

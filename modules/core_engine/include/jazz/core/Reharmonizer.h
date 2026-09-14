@@ -2,7 +2,9 @@
 
 #include "jazz/core/Chart.h"
 #include "jazz/core/ChordSymbol.h"
+#include "jazz/core/Voicing.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -71,6 +73,20 @@ struct Substitution
     std::string replacementText() const;
 };
 
+/** A substitution the player has landed on by ear rather than by choosing it.
+
+    When someone tries a voicing over a bar and what they play spells one of the
+    substitutions available for that bar, that is worth telling them: they have
+    found a reharmonisation, not made a mistake.
+*/
+struct RecognisedSubstitution
+{
+    Substitution substitution;  ///< the substitution the voicing belongs to
+    ChordSymbol chord;          ///< which of its chords was played
+    int score {};               ///< how cleanly the voicing spells that chord, 0-100
+    int writtenChordScore {};   ///< how the same voicing reads against the written chord
+};
+
 /** Movement of one guide tone (3rd or 7th) between two chords. */
 struct GuideToneMotion
 {
@@ -123,5 +139,21 @@ public:
 private:
     Options options;
 };
+
+/** Reads a voicing against every substitution available for a measure.
+
+    Returns the substitution the voicing spells, if it spells one clearly better
+    than it spells the chord actually written in the bar. Voicings that simply
+    are the written chord, or that are too small to be conclusive, return
+    nothing - silence is the common case and a false positive is worse than none.
+
+    @param minimumImprovement  how far the reading has to beat the written chord
+                               before it is worth mentioning
+*/
+std::optional<RecognisedSubstitution> recogniseSubstitution (const Voicing& voicing,
+                                                             const Chart& chart,
+                                                             int measureIndex,
+                                                             Reharmonizer::Options options = {},
+                                                             int minimumImprovement = 10);
 
 } // namespace jazz::core

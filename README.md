@@ -116,6 +116,10 @@ that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
   left-hand, two-handed rootless, spread), checks it against the symbol, and explains what
   is missing, outside, clashing or muddy in the low register. A rootless voicing is not
   told off for having no root. Findings are ordered problems-first.
+- **Spotting a reharmonisation by ear** — a played voicing is read back against every
+  substitution available for that bar, so playing Ab C Eb G over a Cmaj7 bar is reported as
+  "that is Abmaj7, the bVI major seventh substitution" rather than as a broken Cmaj7. When
+  two substitutions spell the same notes, the reading closest to the written chord wins.
 - **Input abstraction** — hardware MIDI and the on-screen keyboard emit identical events;
   `VoicingCollector` groups notes that arrive together into one voicing, so a rolled chord
   or three fingers landing at once both arrive as a chord rather than a stream of notes.

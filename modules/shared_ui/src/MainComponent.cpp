@@ -182,6 +182,8 @@ void MainComponent::handleVoicing (const core::Voicing& voicing, core::NoteSourc
         return;
 
     feedbackPanel.setAnalysis (analyzer.analyse (voicing, *chord), voicing, *chord);
+    feedbackPanel.setRecognisedSubstitution (
+        core::recogniseSubstitution (voicing, chart, selectedMeasure));
 
     // On compact layouts the feedback pane is not visible while playing, so
     // bring it forward as soon as there is something to say.

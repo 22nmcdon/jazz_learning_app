@@ -308,6 +308,28 @@ button { font-family: inherit; cursor: pointer; }
 .finding.suggestion { border-left-color: var(--gold); }
 .finding.problem { border-left-color: var(--rust); }
 
+/* Shown when a played voicing spells one of the substitutions for this bar. */
+.spotted {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  border-left: 2px solid var(--gold);
+  padding: 6px 0 6px 11px;
+  margin-bottom: 10px;
+  background: rgba(176, 141, 87, 0.08);
+}
+.spotted[hidden] { display: none; }
+.spotted .spotted-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+}
+.spotted .spotted-text { font-size: 14px; color: var(--text); }
+.spotted .spotted-text b { font-family: var(--hand); font-size: 17px; color: var(--charcoal); }
+
 .meter { width: 100%; height: 3px; background: var(--line); margin-bottom: 10px; }
 .meter[hidden] { display: none; }
 .meter span { display: block; height: 100%; background: var(--sage); transition: width 200ms ease; }
@@ -457,16 +479,41 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
 .option-list { list-style: none; margin: 0; padding: 0; }
 .option-list li + li { margin-top: 8px; }
-.option-list li.family-heading {
-  margin-top: 20px;
-  font-size: 10.5px;
+/* Each family is a disclosure, so the list opens as seven named choices
+   rather than fourteen options at once. */
+.family { border-bottom: 1px solid var(--line); }
+.family > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 11px 2px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.2em;
   color: var(--blush-deep);
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 5px;
 }
-.option-list li.family-heading:first-child { margin-top: 0; }
+.family > summary::-webkit-details-marker { display: none; }
+.family > summary::after {
+  content: "";
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--blush-deep);
+  border-bottom: 1.5px solid var(--blush-deep);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 150ms ease;
+}
+.family[open] > summary::after { transform: translateY(1px) rotate(-135deg); }
+.family > summary:hover { color: var(--charcoal); }
+.family > summary:hover::after { border-color: var(--charcoal); }
+.family .count {
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+  font-size: 10.5px;
+}
+.family .option-list { padding-bottom: 14px; }
 .option {
   width: 100%;
   text-align: left;
@@ -629,6 +676,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <span class="played" id="played"></span>
       <span class="expecting">Expecting <b id="expecting">Dm7</b></span>
       <div class="finding-row" id="findingRow"></div>
+      <div class="spotted" id="spotted" hidden>
+        <span class="spotted-label">Reharm spotted</span>
+        <span class="spotted-text" id="spottedText"></span>
+        <button class="link-btn" type="button" id="useSpotted">Write it into the bar</button>
+      </div>
     </div>
     <div class="meter" id="meter" hidden><span id="meterFill" style="width:0%"></span></div>
     <div class="keyboard" id="keyboard"></div>
@@ -679,7 +731,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         Grouped from the closest to the original harmony outwards. Choosing one rewrites
         this bar in the chart.
       </p>
-      <ul class="option-list" id="subs"></ul>
+      <div id="subs"></div>
       <label class="toggle-row" for="advanced">
         <input type="checkbox" id="advanced" checked>
         Include advanced substitutions
@@ -715,7 +767,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     scalePitchClasses: [],
     avoidPitchClasses: [],
     scales: [],
-    chosenScale: 0
+    chosenScale: 0,
+    openFamily: null,
+    spotted: null
   };
 
   var el = {};
@@ -723,7 +777,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "parseError", "systems", "verdict", "played", "expecting", "findingRow", "meter",
    "meterFill", "keyboard", "clearKeys", "chordDialog", "dialogBar", "dialogChord",
    "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
-   "scaleRows", "subs", "advanced", "voicings"].forEach(function (id) {
+   "scaleRows", "subs", "advanced", "voicings", "spotted", "spottedText",
+   "useSpotted"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
 
@@ -982,19 +1037,54 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (result === null || !result.ok) return;
 
     el.subs.textContent = "";
-    var currentFamily = null;
+
+    // The engine returns them grouped from nearest the original harmony to
+    // furthest; each family becomes a disclosure the reader can open.
+    var families = [];
+    var byFamily = {};
 
     result.substitutions.forEach(function (substitution) {
-      // The engine returns them grouped from nearest the original harmony to
-      // furthest, so a heading per family turns the list into a path.
-      if (substitution.family !== currentFamily) {
-        currentFamily = substitution.family;
-        var heading = document.createElement("li");
-        heading.className = "family-heading";
-        heading.textContent = substitution.family;
-        el.subs.appendChild(heading);
+      if (!byFamily[substitution.family]) {
+        byFamily[substitution.family] = [];
+        families.push(substitution.family);
       }
+      byFamily[substitution.family].push(substitution);
+    });
 
+    if (families.indexOf(state.openFamily) === -1) state.openFamily = families[0] || null;
+
+    families.forEach(function (family) {
+      var group = document.createElement("details");
+      group.className = "family";
+      group.open = family === state.openFamily;
+
+      var summary = document.createElement("summary");
+      summary.appendChild(document.createTextNode(family));
+
+      var count = document.createElement("span");
+      count.className = "count";
+      count.textContent = byFamily[family].length;
+      summary.appendChild(count);
+      group.appendChild(summary);
+
+      // Only one family stays open, so the list never grows past a screenful.
+      summary.addEventListener("click", function () {
+        state.openFamily = group.open ? null : family;
+      });
+
+      var list = document.createElement("ul");
+      list.className = "option-list";
+      byFamily[family].forEach(function (substitution) {
+        list.appendChild(buildSubstitutionRow(substitution));
+      });
+
+      group.appendChild(list);
+      el.subs.appendChild(group);
+    });
+  }
+
+  function buildSubstitutionRow(substitution) {
+    {
       var item = document.createElement("li");
       var button = document.createElement("button");
       button.type = "button";
@@ -1026,19 +1116,24 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       button.appendChild(why);
 
       button.addEventListener("click", function () {
-        state.progression = substitution.progression;
-        el.progression.value = substitution.progression;
-        state.reharmonised[state.selected] = true;
-        parseChart();
+        applyProgression(substitution.progression);
         openDialog();
       });
 
       item.appendChild(button);
-      el.subs.appendChild(item);
-    });
+      return item;
+    }
   }
 
   el.advanced.addEventListener("change", renderSubstitutions);
+
+  function applyProgression(progression) {
+    state.progression = progression;
+    el.progression.value = progression;
+    state.reharmonised[state.selected] = true;
+    parseChart();
+    analyseVoicing();
+  }
 
   // --- idiomatic voicings --------------------------------------------------
   function renderVoicings() {
@@ -1187,7 +1282,44 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       line.textContent = finding.message;
       el.findingRow.appendChild(line);
     });
+
+    showSpottedSubstitution();
   }
+
+  /** Tells the player when what they just voiced is one of this bar's
+      substitutions - they have found a reharmonisation, not made a mistake. */
+  function showSpottedSubstitution() {
+    state.spotted = null;
+    el.spotted.hidden = true;
+
+    if (state.heldNotes.length < 3) return;
+
+    var result = call(
+      "jazzRecogniseSubstitution",
+      ["string", "number", "string", "number"],
+      [state.progression, state.selected, state.heldNotes.join(","), el.advanced.checked ? 1 : 0]
+    );
+
+    if (result === null || !result.ok || !result.found) return;
+
+    state.spotted = result;
+    el.spottedText.textContent = "";
+    el.spottedText.appendChild(document.createTextNode("That is "));
+
+    var chord = document.createElement("b");
+    writeChord(chord, result.chord);
+    el.spottedText.appendChild(chord);
+
+    // Not lower-cased: the names carry Roman numerals, and "bvi" is not a chord.
+    el.spottedText.appendChild(document.createTextNode(
+      " - the " + result.name + " substitution for this bar."));
+
+    el.spotted.hidden = false;
+  }
+
+  el.useSpotted.addEventListener("click", function () {
+    if (state.spotted !== null) applyProgression(state.spotted.progression);
+  });
 
   // --- chart editing -------------------------------------------------------
   el.editToggle.addEventListener("click", function () {

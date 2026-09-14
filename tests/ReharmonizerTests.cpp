@@ -2,6 +2,7 @@
 #include "jazz/core/Reharmonizer.h"
 
 #include <cstdlib>
+#include <optional>
 
 using namespace jazz::core;
 
@@ -356,4 +357,108 @@ TEST ("the modal style preset keeps the borrowed chords")
 
     CHECK (find (substitutions, "bVI major seventh") != nullptr);
     CHECK (find (substitutions, "Tritone substitution") == nullptr);
+}
+
+//==============================================================================
+// Spotting a reharmonisation the player has found by ear.
+
+namespace
+{
+    std::optional<RecognisedSubstitution> recognise (const std::string& progression,
+                                                     int measureIndex,
+                                                     std::vector<int> notes,
+                                                     Reharmonizer::Options options = {})
+    {
+        return recogniseSubstitution (Voicing::fromNotes (std::move (notes)),
+                                      chartFrom (progression), measureIndex, options);
+    }
+}
+
+TEST ("spots the bVI substitution when it is played over the written chord")
+{
+    // Ab C Eb G over a bar of Cmaj7: the player has found Abmaj7.
+    const auto found = recognise ("| Cmaj7 | Dm7 |", 0, { 56, 60, 63, 67 });
+
+    CHECK (found.has_value());
+    CHECK_EQ (found->substitution.name, std::string ("bVI major seventh"));
+    CHECK_EQ (found->chord.toString(), std::string ("Abmaj7"));
+    CHECK (found->score > found->writtenChordScore);
+}
+
+TEST ("says nothing when the voicing is simply the written chord")
+{
+    CHECK (! recognise ("| Cmaj7 | Dm7 |", 0, { 60, 64, 67, 71 }).has_value());
+    CHECK (! recognise ("| Dm7 | G7 |", 0, { 53, 57, 60, 62 }).has_value());
+}
+
+TEST ("says nothing about two notes")
+{
+    CHECK (! recognise ("| Cmaj7 | Dm7 |", 0, { 56, 60 }).has_value());
+}
+
+TEST ("spots a diatonic substitution")
+{
+    // A C E G over Cmaj7 is the relative minor, not a broken Cmaj7.
+    const auto found = recognise ("| Cmaj7 | Dm7 |", 0, { 57, 60, 64, 67 });
+
+    CHECK (found.has_value());
+    CHECK_EQ (found->chord.toString(), std::string ("Am7"));
+    CHECK (found->substitution.family == SubstitutionFamily::diatonic);
+}
+
+TEST ("spots an altered dominant")
+{
+    // B Db Eb F Ab Bb over G7: the 3rd and b7 with every tension altered.
+    const auto found = recognise ("| G7 | Cmaj7 |", 0, { 59, 61, 63, 65, 68, 70 });
+
+    CHECK (found.has_value());
+    CHECK_EQ (found->substitution.name, std::string ("Altered dominant"));
+}
+
+TEST ("spots half of a two-chord substitution")
+{
+    // F Ab C D over a Cmaj7 bar is the Fm6 that opens the minor plagal approach.
+    const auto found = recognise ("| Cmaj7 | Dm7 |", 0, { 53, 56, 60, 62 });
+
+    CHECK (found.has_value());
+    CHECK_EQ (found->chord.toString(), std::string ("Fm6"));
+    CHECK_EQ (found->substitution.name, std::string ("Minor plagal approach"));
+}
+
+TEST ("when two substitutions spell the same notes, the nearer one is named")
+{
+    // D F A C over a G7 bar is a rootless G9sus4 and a Dm7 at the same time -
+    // both are offered for that bar. The reading closest to the written chord
+    // wins, so the player is told they suspended the dominant rather than that
+    // they played a different chord.
+    const auto found = recognise ("| G7 | Cmaj7 |", 0, { 50, 57, 60, 65 });
+
+    CHECK (found.has_value());
+    CHECK_EQ (found->substitution.name, std::string ("Suspend the dominant"));
+    CHECK (found->substitution.family == SubstitutionFamily::extension);
+}
+
+TEST ("keeps quiet about advanced substitutions when the learner asked for safe ones")
+{
+    const Reharmonizer::Options safeOnly { false, ReharmStyle::common };
+
+    CHECK (recognise ("| Cmaj7 | Dm7 |", 0, { 56, 60, 63, 67 }).has_value());
+    CHECK (! recognise ("| Cmaj7 | Dm7 |", 0, { 56, 60, 63, 67 }, safeOnly).has_value());
+}
+
+TEST ("a spotted substitution can be applied to the chart it was spotted in")
+{
+    const auto chart = chartFrom ("| Cmaj7 | Dm7 |");
+    const auto found = recogniseSubstitution (Voicing::fromNotes ({ 56, 60, 63, 67 }), chart, 0);
+
+    CHECK (found.has_value());
+
+    const auto reharmonised = Reharmonizer::applySubstitution (chart, 0, found->substitution);
+    CHECK_EQ (reharmonised.toProgressionText(), std::string ("| Abmaj7 | Dm7 |"));
+}
+
+TEST ("a voicing that fits nothing in particular is not forced into a substitution")
+{
+    // A cluster with no clear reading: C Db D Eb.
+    CHECK (! recognise ("| Cmaj7 | Dm7 |", 0, { 60, 61, 62, 63 }).has_value());
 }

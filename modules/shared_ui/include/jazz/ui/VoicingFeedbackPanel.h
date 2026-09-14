@@ -1,6 +1,7 @@
 #pragma once
 
 #include "jazz/ui/SizeClass.h"
+#include "jazz/core/Reharmonizer.h"
 #include "jazz/core/VoicingAnalyzer.h"
 
 namespace jazz::ui
@@ -27,6 +28,11 @@ public:
     void setExpectedChord (const core::ChordSymbol* chord);
     void clearAnalysis();
 
+    /** Notes that the voicing just played spells one of this bar's
+        substitutions - the player has found a reharmonisation by ear.
+    */
+    void setRecognisedSubstitution (std::optional<core::RecognisedSubstitution> recognised);
+
     /** Running accuracy across the session, for the progress-tracking module. */
     float sessionAccuracy() const;
     int voicingsAnalysed() const noexcept { return analysedCount; }
@@ -38,6 +44,7 @@ private:
     void paintScoreMeter (juce::Graphics& g, juce::Rectangle<int> area);
 
     core::VoicingAnalysis analysis;
+    std::optional<core::RecognisedSubstitution> spotted;
     core::Voicing playedVoicing;
     std::optional<core::ChordSymbol> expectedChord;
     bool hasAnalysis { false };

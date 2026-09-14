@@ -1,5 +1,7 @@
 #include "jazz/core/Reharmonizer.h"
 
+#include "jazz/core/VoicingAnalyzer.h"
+
 #include <algorithm>
 #include <cstdlib>
 
@@ -516,6 +518,47 @@ std::vector<Substitution> Reharmonizer::substitutionsFor (const Chart& chart, in
                       });
 
     return substitutions;
+}
+
+std::optional<RecognisedSubstitution> recogniseSubstitution (const Voicing& voicing,
+                                                             const Chart& chart,
+                                                             int measureIndex,
+                                                             Reharmonizer::Options options,
+                                                             int minimumImprovement)
+{
+    const auto* written = chart.chordAt (measureIndex);
+
+    // Two notes are an interval, not a reharmonisation - there is not enough
+    // there to claim the player meant a different chord.
+    if (written == nullptr || voicing.size() < 3)
+        return std::nullopt;
+
+    const VoicingAnalyzer analyzer { VoicingAnalyzer::Options { false, 53, false } };
+    const auto writtenScore = analyzer.analyse (voicing, *written).score;
+
+    const Reharmonizer reharmonizer { options };
+    std::optional<RecognisedSubstitution> best;
+
+    for (const auto& substitution : reharmonizer.substitutionsFor (chart, measureIndex))
+    {
+        for (const auto& candidate : substitution.replacement)
+        {
+            // Half of a split-bar substitution is the written chord itself;
+            // playing that is just playing the bar.
+            if (candidate == *written)
+                continue;
+
+            const auto analysis = analyzer.analyse (voicing, candidate);
+
+            if (! analysis.matchesChord || analysis.score < writtenScore + minimumImprovement)
+                continue;
+
+            if (! best.has_value() || analysis.score > best->score)
+                best = RecognisedSubstitution { substitution, candidate, analysis.score, writtenScore };
+        }
+    }
+
+    return best;
 }
 
 Chart Reharmonizer::applySubstitution (const Chart& chart, int measureIndex, const Substitution& substitution)
