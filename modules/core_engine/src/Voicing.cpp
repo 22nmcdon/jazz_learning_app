@@ -38,6 +38,21 @@ bool Voicing::containsPitchClass (PitchClass pitchClass) const
     return (pitchClassMask() & (1u << toPitchClass (pitchClass))) != 0;
 }
 
+std::vector<PitchClass> Voicing::pitchClasses() const
+{
+    std::vector<PitchClass> pitches;
+
+    for (auto note : midiNotes)
+    {
+        const auto pitchClass = toPitchClass (note);
+
+        if (std::find (pitches.begin(), pitches.end(), pitchClass) == pitches.end())
+            pitches.push_back (pitchClass);
+    }
+
+    return pitches;
+}
+
 std::vector<int> Voicing::doubledNotes() const
 {
     std::vector<int> doubled;

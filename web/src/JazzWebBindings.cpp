@@ -9,6 +9,7 @@
 // needs no knowledge of the C++ types.
 
 #include "jazz/core/Chart.h"
+#include "jazz/core/ChordIdentifier.h"
 #include "jazz/core/Reharmonizer.h"
 #include "jazz/core/ScaleSuggester.h"
 #include "jazz/core/VoicingAnalyzer.h"
@@ -299,6 +300,27 @@ JAZZ_EXPORT const char* jazzAnalyseVoicing (const char* symbol, const char* midi
                            notes += (i > 0 ? "," : "") + std::to_string (example.midiNotes[i]);
 
                        return "{\"notes\":" + notes + "],\"describe\":" + quoted (example.describe()) + "}";
+                   })
+                 + "}");
+}
+
+/** Names the notes currently held down, with no chart and no expected chord. */
+JAZZ_EXPORT const char* jazzIdentifyChord (const char* midiNotesCsv)
+{
+    const auto voicing = Voicing::fromNotes (parseNoteList (midiNotesCsv != nullptr ? midiNotesCsv : ""));
+    const ChordIdentifier identifier;
+    const auto candidates = identifier.identify (voicing);
+
+    return hold ("{\"ok\":true,\"played\":" + quoted (voicing.describe())
+                 + ",\"readings\":" + jsonArray (candidates, [] (const ChordCandidate& candidate)
+                   {
+                       return "{\"chord\":" + quoted (candidate.chord.toString())
+                            + ",\"score\":" + std::to_string (candidate.score)
+                            + ",\"rootInBass\":" + (candidate.rootInBass ? "true" : "false")
+                            + ",\"rootPlayed\":" + (candidate.rootPlayed ? "true" : "false")
+                            + ",\"omitted\":" + jsonArray (candidate.omittedTones,
+                                                            [] (const std::string& label) { return quoted (label); })
+                            + "}";
                    })
                  + "}");
 }

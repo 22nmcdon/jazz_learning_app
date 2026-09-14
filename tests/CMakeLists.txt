@@ -5,6 +5,7 @@
 add_executable(jazz_core_tests
     TestMain.cpp
     ChordSymbolTests.cpp
+    ChordIdentifierTests.cpp
     ScaleSuggesterTests.cpp
     VoicingAnalyzerTests.cpp
     ReharmonizerTests.cpp

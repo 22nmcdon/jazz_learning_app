@@ -8,6 +8,7 @@
 add_library(jazz_core_engine STATIC
     src/Pitch.cpp
     src/ChordSymbol.cpp
+    src/ChordIdentifier.cpp
     src/Scale.cpp
     src/ScaleSuggester.cpp
     src/Voicing.cpp

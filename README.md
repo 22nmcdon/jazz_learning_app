@@ -134,6 +134,10 @@ that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
   left-hand, two-handed rootless, spread), checks it against the symbol, and explains what
   is missing, outside, clashing or muddy in the low register. A rootless voicing is not
   told off for having no root. Findings are ordered problems-first.
+- **Naming a shape** — `ChordIdentifier` answers "what did I just play" with no chart and
+  no expected chord. Every note has to be accounted for, so a chromatic cluster returns
+  nothing rather than the least bad guess, and a name that leaves out more than it explains
+  is not offered: E G B D reads as Em7, then G6/E, with the rootless Cmaj9 further down.
 - **Spotting a reharmonisation by ear** — a played voicing is read back against every
   substitution available for that bar, so playing Ab C Eb G over a Cmaj7 bar is reported as
   "that is Abmaj7, the bVI major seventh substitution" rather than as a broken Cmaj7. When

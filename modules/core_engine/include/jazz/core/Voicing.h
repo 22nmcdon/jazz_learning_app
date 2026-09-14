@@ -30,6 +30,9 @@ struct Voicing
     std::uint16_t pitchClassMask() const;
     bool containsPitchClass (PitchClass pitchClass) const;
 
+    /** The distinct pitch classes in the voicing, lowest note first. */
+    std::vector<PitchClass> pitchClasses() const;
+
     /** MIDI notes sharing a pitch class with another note in the voicing. */
     std::vector<int> doubledNotes() const;
 

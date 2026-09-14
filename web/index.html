@@ -396,6 +396,33 @@ button { font-family: inherit; cursor: pointer; }
 .finding.suggestion { border-left-color: var(--gold); }
 .finding.problem { border-left-color: var(--rust); }
 
+/* The answer to "what is this", asked of the notes alone. */
+.named {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  border-left: 2px solid var(--blush-deep);
+  padding: 6px 0 6px 11px;
+  margin-bottom: 10px;
+  background: rgba(217, 166, 160, 0.14);
+}
+.named[hidden] { display: none; }
+.named .named-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--blush-deep);
+}
+.named .named-text { font-size: 14px; color: var(--text); }
+.named .named-text b {
+  font-family: var(--hand);
+  font-size: 19px;
+  color: var(--charcoal);
+}
+.named .named-text .alt { color: var(--text-soft); }
+
 /* Shown when a played voicing spells one of the substitutions for this bar. */
 .spotted {
   width: 100%;
@@ -791,6 +818,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <span class="played" id="played"></span>
       <span class="expecting">Expecting <b id="expecting">Dm7</b></span>
       <div class="finding-row" id="findingRow"></div>
+      <div class="named" id="named" hidden>
+        <span class="named-label">These notes</span>
+        <span class="named-text" id="namedText"></span>
+      </div>
       <div class="spotted" id="spotted" hidden>
         <span class="spotted-label">Reharm spotted</span>
         <span class="spotted-text" id="spottedText"></span>
@@ -802,6 +833,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     <div class="dock-foot">
       <span class="practising">Practising <b id="styleLabel">any shape</b></span>
       <button class="play-btn" type="button" id="playChord" disabled>Play chord</button>
+      <button class="link-btn" type="button" id="nameChord" disabled>Name it</button>
       <button class="link-btn" type="button" id="showVoicing">Show me one</button>
       <span class="legend"><span class="dot"></span> scale tone</span>
       <span class="legend"><span class="ring"></span> passing tone</span>
@@ -899,7 +931,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
    "scaleRows", "subs", "advanced", "spotted", "spottedText", "useSpotted",
    "menuButton", "menuPanel", "connectMidi", "midiStatus", "styleLabel",
-   "showVoicing", "playChord"].forEach(function (id) {
+   "showVoicing", "playChord", "nameChord", "named", "namedText"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
 
@@ -1360,7 +1392,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     state.heldNotes.sort(function (a, b) { return a - b; });
     paintKeyboard();
     analyseVoicing();
-    updatePlayChordButton();
+    updateVoicingControls();
   });
 
   el.clearKeys.addEventListener("click", function () {
@@ -1368,7 +1400,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     stopAllNotes();
     paintKeyboard();
     analyseVoicing();
-    updatePlayChordButton();
+    updateVoicingControls();
   });
 
   // --- voicing feedback ----------------------------------------------------
@@ -1496,7 +1528,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     playChord(state.heldNotes);
     paintKeyboard();
     analyseVoicing();
-    updatePlayChordButton();
+    updateVoicingControls();
   });
 
   // --- sound ---------------------------------------------------------------
@@ -1619,15 +1651,82 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     notes.forEach(function (note) { playNote(note, 0.8); });
   }
 
-  /** The button only earns its place while a mouse is doing the playing, and
-      only does anything with notes down and a sound chosen. */
-  function updatePlayChordButton() {
+  /** Keeps the dock's controls honest about what is under the hands: Play
+      chord only earns its place while a mouse is doing the playing, Name it
+      needs three notes to say anything, and a naming answer belongs to the
+      notes it was asked about. */
+  function updateVoicingControls() {
     el.playChord.hidden = midi.connected;
     el.playChord.disabled = state.heldNotes.length === 0 || audio.bank === "silent";
+    el.nameChord.disabled = state.heldNotes.length < 3;
+    el.named.hidden = true;
     el.playChord.title = audio.bank === "silent"
       ? "Choose a sound in the Practice menu"
       : "Sound every key you have pressed, together";
   }
+
+  /** "5" reads as "5th" in a sentence. */
+  function toneWord(label) {
+    if (label === "root") return "root";
+    if (label === "5") return "5th";
+    if (label === "9") return "9th";
+    if (label === "11") return "11th";
+    if (label === "13") return "13th";
+    return label;
+  }
+
+  /** Names the notes held down, on demand - the question a player asks about a
+      shape they found rather than one the chart asked for. */
+  el.nameChord.addEventListener("click", function () {
+    var result = call("jazzIdentifyChord", ["string"], [state.heldNotes.join(",")]);
+    if (result === null || !result.ok) return;
+
+    el.namedText.textContent = "";
+
+    if (!result.readings.length) {
+      el.namedText.appendChild(document.createTextNode(
+        "do not spell a chord this engine can name. Try letting one of them go."));
+      el.named.hidden = false;
+      return;
+    }
+
+    var best = result.readings[0];
+    el.namedText.appendChild(document.createTextNode("are "));
+
+    var name = document.createElement("b");
+    writeChord(name, best.chord);
+    el.namedText.appendChild(name);
+
+    // A missing 5th is worth mentioning; it is the difference between the name
+    // and what is actually under the hands.
+    if (best.omitted.length) {
+      el.namedText.appendChild(document.createTextNode(
+        " (no " + best.omitted.map(toneWord).join(", no ") + ")"));
+    }
+
+    // Only readings that promise no more than the best one does: Fmaj9 is not
+    // an alternative name for F A C E, it is Fmaj7 plus a note nobody played.
+    var others = result.readings.slice(1).filter(function (reading) {
+      return reading.omitted.length <= best.omitted.length;
+    }).slice(0, 2);
+
+    if (others.length) {
+      var alternatives = document.createElement("span");
+      alternatives.className = "alt";
+      alternatives.appendChild(document.createTextNode("  -  also reads as "));
+
+      others.forEach(function (reading, index) {
+        if (index > 0) alternatives.appendChild(document.createTextNode(", "));
+        var alt = document.createElement("span");
+        writeChord(alt, reading.chord);
+        alternatives.appendChild(alt);
+      });
+
+      el.namedText.appendChild(alternatives);
+    }
+
+    el.named.hidden = false;
+  });
 
   el.playChord.addEventListener("click", function () {
     if (state.heldNotes.length === 0) return;
@@ -1650,7 +1749,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       if (!radio.checked) return;
       audio.bank = radio.value;
       if (radio.value === "silent") stopAllNotes();
-      updatePlayChordButton();
+      updateVoicingControls();
     });
   });
 
@@ -1704,11 +1803,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       // keyboard for a two-handed voicing to land on - and the Play chord
       // button has nothing left to do.
       midi.connected = true;
-      updatePlayChordButton();
+      updateVoicingControls();
       ensureNotesVisible([MIDI_RANGE.low, MIDI_RANGE.high]);
     } else {
       midi.connected = false;
-      updatePlayChordButton();
+      updateVoicingControls();
       setMidiStatus("No MIDI inputs found. Plug one in and it will appear here.", "warn");
     }
   }
@@ -1742,6 +1841,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       ensureNotesVisible(state.heldNotes);
       paintKeyboard();
       analyseVoicing();
+      updateVoicingControls();
     }, 70);
   }
 
