@@ -12,6 +12,12 @@ namespace
         return type == VoicingType::rootlessLeftHand || type == VoicingType::twoHandedRootless;
     }
 
+    /** "shell voicing" -> "shell voicings" */
+    std::string plural (VoicingType type)
+    {
+        return voicingTypeName (type) + "s";
+    }
+
     std::string noteList (const std::vector<int>& midiNotes)
     {
         std::string result;
@@ -26,6 +32,12 @@ namespace
 
         return result;
     }
+}
+
+bool VoicingAnalyzer::expectsRoot (VoicingType type)
+{
+    return type == VoicingType::shell || type == VoicingType::rootPosition
+           || type == VoicingType::spread;
 }
 
 VoicingType VoicingAnalyzer::classify (const Voicing& voicing, const ChordSymbol& chord)
@@ -87,6 +99,8 @@ VoicingAnalysis VoicingAnalyzer::analyse (const Voicing& voicing, const ChordSym
     }
 
     const auto rootless = isRootless (analysis.type);
+    const auto practising = options.practiseType.has_value();
+    const auto rootIsPresent = voicing.containsPitchClass (chord.root());
     const auto primaryScale = suggester.primarySuggestionFor (chord);
     const auto scaleMask = primaryScale.scale.definition != nullptr ? primaryScale.scale.pitchClassMask() : 0;
     const auto avoidNotes = primaryScale.avoidNotes;
@@ -102,6 +116,11 @@ VoicingAnalysis VoicingAnalyzer::analyse (const Voicing& voicing, const ChordSym
         const auto pitchClass = toPitchClass (chord.root() + tone.semitones);
 
         if (voicing.containsPitchClass (pitchClass))
+            continue;
+
+        // While a shape is being practised, the style check below owns what is
+        // said about the root - saying it twice helps nobody.
+        if (tone.role == ChordToneRole::root && practising)
             continue;
 
         if (tone.role == ChordToneRole::root && rootless && ! options.requireRoot)
@@ -219,6 +238,48 @@ VoicingAnalysis VoicingAnalyzer::analyse (const Voicing& voicing, const ChordSym
                                        doubled });
     }
 
+    // --- the shape being practised -------------------------------------------
+    if (practising && analysis.type != VoicingType::unknown)
+    {
+        const auto expected = *options.practiseType;
+        analysis.expectedType = expected;
+        analysis.matchesStyle = analysis.type == expected;
+
+        if (expectsRoot (expected) && ! rootIsPresent)
+        {
+            score -= 25;
+            analysis.findings.push_back ({ FindingSeverity::problem,
+                                           "You are practising " + plural (expected)
+                                               + ", which put the root underneath - "
+                                               + pitchClassName (chord.root())
+                                               + " needs to be the lowest note.",
+                                           {} });
+        }
+        else if (isRootless (expected) && rootIsPresent)
+        {
+            score -= 25;
+            analysis.findings.push_back ({ FindingSeverity::problem,
+                                           "You are practising " + plural (expected) + " - leave the "
+                                               + pitchClassName (chord.root())
+                                               + " to the bass and give that finger a tension instead.",
+                                           {} });
+        }
+        else if (! analysis.matchesStyle)
+        {
+            score -= 10;
+            analysis.findings.push_back ({ FindingSeverity::suggestion,
+                                           "That is a " + voicingTypeName (analysis.type)
+                                               + "; this exercise is on " + plural (expected) + ".",
+                                           {} });
+        }
+        else
+        {
+            analysis.findings.push_back ({ FindingSeverity::good,
+                                           "A " + voicingTypeName (expected) + ", as asked for.",
+                                           {} });
+        }
+    }
+
     // --- colour tones the symbol names and the player left out ---------------
     for (auto extension : chord.extensions())
     {
@@ -244,6 +305,9 @@ VoicingAnalysis VoicingAnalyzer::analyse (const Voicing& voicing, const ChordSym
 
     if (analysis.type == VoicingType::singleNote)
         analysis.summary = "One note - play a full voicing to get feedback on it.";
+    else if (analysis.matchesChord && ! analysis.matchesStyle)
+        analysis.summary = "That reads as " + chord.toString() + ", but not as a "
+                           + voicingTypeName (*analysis.expectedType) + ".";
     else if (analysis.matchesChord)
         analysis.summary = "That reads as " + chord.toString() + " - "
                            + voicingTypeName (analysis.type) + ".";
@@ -252,10 +316,12 @@ VoicingAnalysis VoicingAnalyzer::analyse (const Voicing& voicing, const ChordSym
     else
         analysis.summary = "Recognisable as " + chord.toString() + ", with notes to clean up.";
 
-    if (options.includeExamples && analysis.score < 85)
+    if (options.includeExamples && (analysis.score < 85 || ! analysis.matchesStyle))
     {
         const auto anchor = voicing.lowestNote() > 0 ? voicing.lowestNote() : 53;
-        analysis.examples = idiomaticVoicings (chord, analysis.type, anchor);
+
+        // Show the shape being practised, not the one that was played by mistake.
+        analysis.examples = idiomaticVoicings (chord, options.practiseType.value_or (analysis.type), anchor);
 
         for (const auto& example : analysis.examples)
             analysis.suggestions.push_back ("Try: " + example.describe());

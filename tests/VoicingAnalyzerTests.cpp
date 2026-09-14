@@ -61,7 +61,10 @@ TEST ("does not penalise a rootless voicing for having no root")
 
 TEST ("but does flag the missing root when the caller demands it")
 {
-    const VoicingAnalyzer analyzer { VoicingAnalyzer::Options { true, 53, true } };
+    VoicingAnalyzer::Options options;
+    options.requireRoot = true;
+
+    const VoicingAnalyzer analyzer { options };
     const auto analysis = analyzer.analyse (Voicing::fromNotes ({ 52, 57, 58, 62 }), chordFrom ("C7"));
 
     CHECK_EQ (analysis.missingTones.size(), std::size_t (1));
@@ -209,4 +212,107 @@ TEST ("problems are reported before confirmations")
 TEST ("describes a voicing by note name")
 {
     CHECK_EQ (Voicing::fromNotes ({ 51, 55, 58, 62 }).describe(), std::string ("Eb3 G3 Bb3 D4"));
+}
+
+//==============================================================================
+// Practising one shape: the analyser judges the voicing as an exercise as well
+// as a chord.
+
+namespace
+{
+    VoicingAnalyzer practising (VoicingType type)
+    {
+        VoicingAnalyzer::Options options;
+        options.practiseType = type;
+        return VoicingAnalyzer { options };
+    }
+}
+
+TEST ("accepts the shape being practised")
+{
+    // Root-position Cmaj7: C E G B.
+    const auto analysis = practising (VoicingType::rootPosition)
+                              .analyse (Voicing::fromNotes ({ 48, 52, 55, 59 }), chordFrom ("Cmaj7"));
+
+    CHECK (analysis.matchesStyle);
+    CHECK (analysis.expectedType.has_value());
+    CHECK (mentions (analysis, "as asked for"));
+}
+
+TEST ("says so when a rootless voicing turns up in a root-position exercise")
+{
+    // E G B D spells Cmaj7 perfectly - but there is no root under it.
+    const auto analysis = practising (VoicingType::rootPosition)
+                              .analyse (Voicing::fromNotes ({ 52, 55, 59, 62 }), chordFrom ("Cmaj7"));
+
+    CHECK (analysis.matchesChord);      // the notes are right
+    CHECK (! analysis.matchesStyle);    // the exercise is not
+    CHECK (hasProblem (analysis));
+    CHECK (mentions (analysis, "C needs to be the lowest note"));
+    CHECK (analysis.score < 85);
+}
+
+TEST ("says so when the root turns up in a rootless exercise")
+{
+    const auto analysis = practising (VoicingType::rootlessLeftHand)
+                              .analyse (Voicing::fromNotes ({ 48, 52, 55, 59 }), chordFrom ("Cmaj7"));
+
+    CHECK (! analysis.matchesStyle);
+    CHECK (hasProblem (analysis));
+    CHECK (mentions (analysis, "leave the C to the bass"));
+}
+
+TEST ("a shape mismatch that is not about the root is a milder note")
+{
+    // A rootless left-hand voicing where two-handed ones are being practised.
+    const auto analysis = practising (VoicingType::twoHandedRootless)
+                              .analyse (Voicing::fromNotes ({ 52, 55, 59, 62 }), chordFrom ("Cmaj7"));
+
+    CHECK (! analysis.matchesStyle);
+    CHECK (! hasProblem (analysis));
+    CHECK (mentions (analysis, "this exercise is on two-handed rootless voicings"));
+}
+
+TEST ("the root is reported once, not twice, while practising")
+{
+    const auto analysis = practising (VoicingType::rootPosition)
+                              .analyse (Voicing::fromNotes ({ 52, 55, 59, 62 }), chordFrom ("Cmaj7"));
+
+    auto mentionsOfRoot = 0;
+
+    for (const auto& finding : analysis.findings)
+        if (finding.message.find ("root") != std::string::npos)
+            ++mentionsOfRoot;
+
+    CHECK_EQ (mentionsOfRoot, 1);
+}
+
+TEST ("examples show the shape being practised, not the one played")
+{
+    const auto analysis = practising (VoicingType::rootPosition)
+                              .analyse (Voicing::fromNotes ({ 52, 55, 59, 62 }), chordFrom ("Cmaj7"));
+
+    CHECK (! analysis.examples.empty());
+
+    // Every example puts the root at the bottom, which is what was asked for.
+    for (const auto& example : analysis.examples)
+        CHECK_EQ (jazz::core::toPitchClass (example.lowestNote()), 0);
+}
+
+TEST ("with no shape being practised, any shape is accepted")
+{
+    const VoicingAnalyzer analyzer;
+    const auto analysis = analyzer.analyse (Voicing::fromNotes ({ 52, 55, 59, 62 }), chordFrom ("Cmaj7"));
+
+    CHECK (analysis.matchesStyle);
+    CHECK (! analysis.expectedType.has_value());
+    CHECK (! hasProblem (analysis));
+}
+
+TEST ("the summary names the shape that was missed")
+{
+    const auto analysis = practising (VoicingType::rootlessLeftHand)
+                              .analyse (Voicing::fromNotes ({ 48, 52, 55, 59 }), chordFrom ("Cmaj7"));
+
+    CHECK (analysis.summary.find ("rootless left-hand voicing") != std::string::npos);
 }

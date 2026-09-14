@@ -149,6 +149,19 @@ namespace
              + ",\"primary\":" + (suggestion.isPrimary ? "true" : "false") + "}";
     }
 
+    /** Maps the style key the page sends to the shape being practised. */
+    std::optional<VoicingType> practiseTypeFor (const char* key)
+    {
+        const std::string name = key != nullptr ? key : "";
+
+        if (name == "shell")      return VoicingType::shell;
+        if (name == "root")       return VoicingType::rootPosition;
+        if (name == "rootless")   return VoicingType::rootlessLeftHand;
+        if (name == "twohanded")  return VoicingType::twoHandedRootless;
+
+        return std::nullopt;  // "any": read the chart, do not drill a shape
+    }
+
     std::string severityName (FindingSeverity severity)
     {
         switch (severity)
@@ -246,8 +259,11 @@ JAZZ_EXPORT const char* jazzReharmonise (const char* progressionText, int measur
                  + "}");
 }
 
-/** Analyses a played voicing against a chord symbol. */
-JAZZ_EXPORT const char* jazzAnalyseVoicing (const char* symbol, const char* midiNotesCsv)
+/** Analyses a played voicing against a chord symbol, optionally as an exercise
+    in one particular voicing shape.
+*/
+JAZZ_EXPORT const char* jazzAnalyseVoicing (const char* symbol, const char* midiNotesCsv,
+                                            const char* practiseStyle)
 {
     const auto chord = ChordSymbol::parse (symbol != nullptr ? symbol : "");
 
@@ -255,12 +271,17 @@ JAZZ_EXPORT const char* jazzAnalyseVoicing (const char* symbol, const char* midi
         return hold (jsonError (std::string ("Not a chord symbol: ") + (symbol != nullptr ? symbol : "")));
 
     const auto voicing = Voicing::fromNotes (parseNoteList (midiNotesCsv != nullptr ? midiNotesCsv : ""));
-    const VoicingAnalyzer analyzer;
+
+    VoicingAnalyzer::Options options;
+    options.practiseType = practiseTypeFor (practiseStyle);
+
+    const VoicingAnalyzer analyzer { options };
     const auto analysis = analyzer.analyse (voicing, *chord);
 
     return hold ("{\"ok\":true,\"summary\":" + quoted (analysis.summary)
                  + ",\"score\":" + std::to_string (analysis.score)
                  + ",\"matches\":" + (analysis.matchesChord ? "true" : "false")
+                 + ",\"matchesStyle\":" + (analysis.matchesStyle ? "true" : "false")
                  + ",\"voicingType\":" + quoted (voicingTypeName (analysis.type))
                  + ",\"played\":" + quoted (voicing.describe())
                  + ",\"findings\":" + jsonArray (analysis.findings, [] (const VoicingFinding& finding)
@@ -316,19 +337,28 @@ JAZZ_EXPORT const char* jazzRecogniseSubstitution (const char* progressionText,
 }
 
 /** Idiomatic "sentence starter" voicings for a chord. */
-JAZZ_EXPORT const char* jazzIdiomaticVoicings (const char* symbol, int anchorNote)
+JAZZ_EXPORT const char* jazzIdiomaticVoicings (const char* symbol, int anchorNote,
+                                               const char* practiseStyle)
 {
     const auto chord = ChordSymbol::parse (symbol != nullptr ? symbol : "");
 
     if (! chord.has_value())
         return hold (jsonError ("Not a chord symbol"));
 
-    const std::vector<std::pair<std::string, VoicingType>> types {
+    const std::vector<std::pair<std::string, VoicingType>> allTypes {
         { "Shell",              VoicingType::shell },
         { "Rootless left hand", VoicingType::rootlessLeftHand },
         { "Two-handed",         VoicingType::twoHandedRootless },
         { "Root position",      VoicingType::rootPosition }
     };
+
+    // With a shape being practised, only that shape is worth showing.
+    const auto wanted = practiseTypeFor (practiseStyle);
+    std::vector<std::pair<std::string, VoicingType>> types;
+
+    for (const auto& entry : allTypes)
+        if (! wanted.has_value() || entry.second == *wanted)
+            types.push_back (entry);
 
     return hold ("{\"ok\":true,\"voicings\":"
                  + jsonArray (types, [&chord, anchorNote] (const std::pair<std::string, VoicingType>& entry)

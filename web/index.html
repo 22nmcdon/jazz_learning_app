@@ -116,6 +116,76 @@ button { font-family: inherit; cursor: pointer; }
 .status[data-state="ready"] { color: var(--gold); border-color: var(--gold); }
 .status[data-state="failed"] { color: var(--rust); border-color: var(--rust); }
 
+/* --- practice menu -------------------------------------------------------- */
+.masthead-controls { display: flex; align-items: center; gap: 14px; }
+.menu-wrap { position: relative; }
+.menu-button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  padding: 7px 16px 7px 13px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--charcoal);
+  font-weight: 500;
+}
+.menu-button:hover { border-color: var(--blush); color: var(--blush-deep); }
+.menu-button[aria-expanded="true"] { border-color: var(--blush-deep); color: var(--blush-deep); }
+.menu-button .bars { display: flex; flex-direction: column; gap: 3px; }
+.menu-button .bars span {
+  display: block;
+  width: 15px;
+  height: 1.5px;
+  background: currentColor;
+}
+
+.menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: min(310px, calc(100vw - 32px));
+  background: var(--cream);
+  border: 1px solid var(--line);
+  box-shadow: 0 16px 40px rgba(36, 31, 29, 0.16);
+  padding: 18px 20px 16px;
+  text-align: left;
+}
+.menu-panel[hidden] { display: none; }
+.menu-group + .menu-group { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.menu-group > .menu-title {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--blush-deep);
+  margin-bottom: 10px;
+}
+.menu-option {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 5px 0;
+  font-size: 14.5px;
+  cursor: pointer;
+}
+.menu-option input { accent-color: var(--blush-deep); margin: 0; }
+.menu-option .hint { color: var(--text-soft); font-size: 12.5px; }
+.menu-note { font-size: 12.5px; color: var(--text-soft); margin: 10px 0 0; }
+.menu-note.warn { color: var(--rust); }
+.menu-note.good { color: var(--sage); }
+
+.practising b {
+  font-family: var(--serif);
+  font-weight: 600;
+  color: var(--charcoal);
+  font-size: 13px;
+}
+
 /* --- lead sheet ---------------------------------------------------------- */
 .sheet-section { padding-block: 26px 22px; }
 
@@ -280,6 +350,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .verdict { font-family: var(--serif); font-size: 17px; color: var(--charcoal); }
 .verdict.matches { color: var(--sage); }
+.verdict.wrong-shape { color: var(--rust); }
 .played { font-size: 13.5px; color: var(--text-soft); letter-spacing: 0.04em; }
 .expecting {
   font-size: 11px;
@@ -617,7 +688,34 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         suggestion, reharmonisation and voicing analysis. Not the JUCE interface.
       </p>
     </div>
-    <div class="status" id="engineStatus" data-state="loading">starting engine</div>
+    <div class="masthead-controls">
+      <div class="status" id="engineStatus" data-state="loading">starting engine</div>
+
+      <div class="menu-wrap">
+        <button class="menu-button" type="button" id="menuButton" aria-expanded="false" aria-controls="menuPanel">
+          <span class="bars" aria-hidden="true"><span></span><span></span><span></span></span>
+          Practice
+        </button>
+
+        <div class="menu-panel" id="menuPanel" hidden>
+          <div class="menu-group" role="radiogroup" aria-label="Voicing style">
+            <span class="menu-title">Voicing style</span>
+            <label class="menu-option"><input type="radio" name="voicingStyle" value="any" checked> Any shape</label>
+            <label class="menu-option"><input type="radio" name="voicingStyle" value="root"> Root position</label>
+            <label class="menu-option"><input type="radio" name="voicingStyle" value="shell"> Shell <span class="hint">root, 3rd, 7th</span></label>
+            <label class="menu-option"><input type="radio" name="voicingStyle" value="rootless"> Rootless, left hand</label>
+            <label class="menu-option"><input type="radio" name="voicingStyle" value="twohanded"> Two-handed rootless</label>
+            <p class="menu-note">Everything you play is checked against this shape, on every bar.</p>
+          </div>
+
+          <div class="menu-group">
+            <span class="menu-title">MIDI keyboard</span>
+            <button class="link-btn" type="button" id="connectMidi">Connect a keyboard</button>
+            <p class="menu-note" id="midiStatus">Not connected. The on-screen keyboard works either way.</p>
+          </div>
+        </div>
+      </div>
+    </div>
   </header>
 
   <section class="sheet-section">
@@ -685,9 +783,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     <div class="meter" id="meter" hidden><span id="meterFill" style="width:0%"></span></div>
     <div class="keyboard" id="keyboard"></div>
     <div class="dock-foot">
+      <span class="practising">Practising <b id="styleLabel">any shape</b></span>
+      <button class="link-btn" type="button" id="showVoicing">Show me one</button>
       <span class="legend"><span class="dot"></span> scale tone</span>
-      <span class="legend"><span class="ring"></span> handle as a passing tone</span>
-      <span>Keys stay down until you click them again.</span>
+      <span class="legend"><span class="ring"></span> passing tone</span>
       <button class="link-btn" type="button" id="clearKeys" style="margin-left:auto">Clear keys</button>
     </div>
   </div>
@@ -713,7 +812,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   <div class="tabs" role="tablist">
     <button class="tab" type="button" role="tab" id="tabScales" aria-selected="true" aria-controls="panelScales">Scales</button>
     <button class="tab" type="button" role="tab" id="tabReharm" aria-selected="false" aria-controls="panelReharm">Reharmonise</button>
-    <button class="tab" type="button" role="tab" id="tabVoicings" aria-selected="false" aria-controls="panelVoicings">Voicings</button>
   </div>
 
   <div class="tab-body">
@@ -738,13 +836,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       </label>
     </section>
 
-    <section class="tab-panel" id="panelVoicings" role="tabpanel" aria-labelledby="tabVoicings" hidden>
-      <p class="voicing-note">
-        Idiomatic shapes for this chord. Choosing one puts it on the keyboard, where the
-        analyser reads it back like anything you play yourself.
-      </p>
-      <ul class="option-list" id="voicings"></ul>
-    </section>
   </div>
 </dialog>
 
@@ -769,24 +860,42 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     scales: [],
     chosenScale: 0,
     openFamily: null,
-    spotted: null
+    spotted: null,
+    style: "any"
   };
+
+  // Per-viewer convenience only; the page works the same if it is unavailable.
+  function rememberStyle(style) {
+    try { window.localStorage.setItem("jazzVoicingStyle", style); } catch (e) { /* private window */ }
+  }
+
+  function recallStyle() {
+    try { return window.localStorage.getItem("jazzVoicingStyle"); } catch (e) { return null; }
+  }
 
   var el = {};
   ["engineStatus", "sheetTitle", "editToggle", "restoreChart", "editor", "progression",
    "parseError", "systems", "verdict", "played", "expecting", "findingRow", "meter",
    "meterFill", "keyboard", "clearKeys", "chordDialog", "dialogBar", "dialogChord",
    "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
-   "scaleRows", "subs", "advanced", "voicings", "spotted", "spottedText",
-   "useSpotted"].forEach(function (id) {
+   "scaleRows", "subs", "advanced", "spotted", "spottedText", "useSpotted",
+   "menuButton", "menuPanel", "connectMidi", "midiStatus", "styleLabel",
+   "showVoicing"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
 
   var tabs = [
     { button: document.getElementById("tabScales"), panel: document.getElementById("panelScales") },
-    { button: document.getElementById("tabReharm"), panel: document.getElementById("panelReharm") },
-    { button: document.getElementById("tabVoicings"), panel: document.getElementById("panelVoicings") }
+    { button: document.getElementById("tabReharm"), panel: document.getElementById("panelReharm") }
   ];
+
+  var STYLE_NAMES = {
+    any: "any shape",
+    root: "root position",
+    shell: "shell voicings",
+    rootless: "rootless left hand",
+    twohanded: "two-handed rootless"
+  };
 
   // --- engine --------------------------------------------------------------
   function call(name, types, args) {
@@ -949,7 +1058,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     renderScales();
     renderSubstitutions();
-    renderVoicings();
     showTab(0);
 
     if (!el.chordDialog.open) el.chordDialog.showModal();
@@ -1135,50 +1243,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     analyseVoicing();
   }
 
-  // --- idiomatic voicings --------------------------------------------------
-  function renderVoicings() {
-    var chord = selectedChord();
-    var result = call("jazzIdiomaticVoicings", ["string", "number"], [chord, 53]);
-    if (result === null || !result.ok) return;
-
-    el.voicings.textContent = "";
-
-    result.voicings.forEach(function (group) {
-      if (!group.options.length) return;
-
-      var option = group.options[0];
-      var item = document.createElement("li");
-      var button = document.createElement("button");
-      button.type = "button";
-      button.className = "option";
-
-      var head = document.createElement("div");
-      head.className = "option-head";
-
-      var notes = document.createElement("span");
-      notes.className = "option-chords";
-      notes.textContent = option.describe;
-      head.appendChild(notes);
-
-      var name = document.createElement("span");
-      name.className = "option-name";
-      name.textContent = group.type;
-      head.appendChild(name);
-
-      button.appendChild(head);
-
-      button.addEventListener("click", function () {
-        state.heldNotes = option.notes.slice().sort(function (a, b) { return a - b; });
-        paintKeyboard();
-        analyseVoicing();
-        el.chordDialog.close();
-      });
-
-      item.appendChild(button);
-      el.voicings.appendChild(item);
-    });
-  }
-
   // --- keyboard ------------------------------------------------------------
   function buildKeyboard() {
     var whites = [];
@@ -1265,11 +1329,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       return;
     }
 
-    var result = call("jazzAnalyseVoicing", ["string", "string"], [chord, state.heldNotes.join(",")]);
+    var result = call("jazzAnalyseVoicing", ["string", "string", "string"],
+                      [chord, state.heldNotes.join(","), state.style === "any" ? "" : state.style]);
     if (result === null || !result.ok) return;
 
     el.verdict.textContent = result.summary;
-    el.verdict.classList.toggle("matches", result.matches);
+    el.verdict.classList.toggle("matches", result.matches && result.matchesStyle);
+    el.verdict.classList.toggle("wrong-shape", !result.matchesStyle);
     el.played.textContent = result.played + "  -  " + result.voicingType;
 
     el.meter.hidden = false;
@@ -1321,6 +1387,137 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (state.spotted !== null) applyProgression(state.spotted.progression);
   });
 
+  // --- practice menu -------------------------------------------------------
+  function setMenuOpen(open) {
+    el.menuPanel.hidden = !open;
+    el.menuButton.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  el.menuButton.addEventListener("click", function () {
+    setMenuOpen(el.menuPanel.hidden);
+  });
+
+  document.addEventListener("click", function (event) {
+    if (!el.menuPanel.hidden && !event.target.closest(".menu-wrap")) setMenuOpen(false);
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !el.menuPanel.hidden) {
+      setMenuOpen(false);
+      el.menuButton.focus();
+    }
+  });
+
+  function applyStyle(style) {
+    state.style = style;
+    el.styleLabel.textContent = STYLE_NAMES[style] || style;
+    rememberStyle(style);
+    analyseVoicing();
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll("input[name=voicingStyle]"), function (radio) {
+    radio.addEventListener("change", function () {
+      if (radio.checked) applyStyle(radio.value);
+    });
+  });
+
+  /** Puts an idiomatic voicing of the chosen shape on the keyboard - the
+      "sentence starter" for a chord the player does not have under their hands. */
+  el.showVoicing.addEventListener("click", function () {
+    var chord = selectedChord();
+    if (!chord) return;
+
+    var result = call("jazzIdiomaticVoicings", ["string", "number", "string"],
+                      [chord, 53, state.style === "any" ? "" : state.style]);
+
+    if (result === null || !result.ok || !result.voicings.length) return;
+
+    var group = result.voicings[0];
+    if (!group.options.length) return;
+
+    state.heldNotes = group.options[0].notes.slice().sort(function (a, b) { return a - b; });
+    paintKeyboard();
+    analyseVoicing();
+  });
+
+  // --- MIDI keyboard -------------------------------------------------------
+  // Web MIDI needs a secure context and permission, and an embedded page may
+  // not be allowed to ask at all - so every failure says what happened rather
+  // than leaving the button looking broken.
+  var midi = { access: null, held: [], chord: [], settleTimer: null };
+
+  function setMidiStatus(text, tone) {
+    el.midiStatus.textContent = text;
+    el.midiStatus.className = "menu-note" + (tone ? " " + tone : "");
+  }
+
+  el.connectMidi.addEventListener("click", function () {
+    if (!navigator.requestMIDIAccess) {
+      setMidiStatus("This browser has no Web MIDI. Chrome or Edge on a computer does.", "warn");
+      return;
+    }
+
+    setMidiStatus("Asking for permission...");
+
+    navigator.requestMIDIAccess({ sysex: false }).then(function (access) {
+      midi.access = access;
+      access.onstatechange = attachMidiInputs;
+      attachMidiInputs();
+    }).catch(function (error) {
+      var name = error && error.name ? error.name : "error";
+      setMidiStatus("MIDI was blocked here (" + name + "). An embedded page often cannot ask - "
+                    + "open this page in its own tab, or use the desktop app.", "warn");
+    });
+  });
+
+  function attachMidiInputs() {
+    var names = [];
+
+    midi.access.inputs.forEach(function (input) {
+      input.onmidimessage = handleMidiMessage;
+      names.push(input.name);
+    });
+
+    if (names.length) {
+      setMidiStatus("Connected: " + names.join(", "), "good");
+      el.connectMidi.textContent = "Reconnect";
+    } else {
+      setMidiStatus("No MIDI inputs found. Plug one in and it will appear here.", "warn");
+    }
+  }
+
+  function handleMidiMessage(event) {
+    var status = event.data[0] & 0xf0;
+    var note = event.data[1];
+    var velocity = event.data.length > 2 ? event.data[2] : 0;
+
+    if (status === 0x90 && velocity > 0) midiNoteOn(note);
+    else if (status === 0x80 || (status === 0x90 && velocity === 0)) midiNoteOff(note);
+  }
+
+  function midiNoteOn(note) {
+    // The first note after everything was released starts a new chord; notes
+    // that arrive together are gathered into one voicing, as the engine's
+    // collector does for the app.
+    if (midi.held.length === 0) midi.chord = [];
+
+    if (midi.held.indexOf(note) === -1) midi.held.push(note);
+    if (midi.chord.indexOf(note) === -1) midi.chord.push(note);
+
+    window.clearTimeout(midi.settleTimer);
+    midi.settleTimer = window.setTimeout(function () {
+      state.heldNotes = midi.chord.slice().sort(function (a, b) { return a - b; });
+      paintKeyboard();
+      analyseVoicing();
+    }, 70);
+  }
+
+  function midiNoteOff(note) {
+    var index = midi.held.indexOf(note);
+    if (index !== -1) midi.held.splice(index, 1);
+    // The voicing stays on screen after the hands lift, so it can be read.
+  }
+
   // --- chart editing -------------------------------------------------------
   el.editToggle.addEventListener("click", function () {
     el.editor.hidden = !el.editor.hidden;
@@ -1345,6 +1542,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   // --- boot ----------------------------------------------------------------
   buildKeyboard();
+
+  var savedStyle = recallStyle();
+
+  if (savedStyle !== null && STYLE_NAMES[savedStyle]) {
+    var saved = document.querySelector('input[name=voicingStyle][value="' + savedStyle + '"]');
+    if (saved) saved.checked = true;
+    state.style = savedStyle;
+    el.styleLabel.textContent = STYLE_NAMES[savedStyle];
+  }
 
   createJazzEngine().then(function (module) {
     engine = module;

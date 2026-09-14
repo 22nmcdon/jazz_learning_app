@@ -4,6 +4,7 @@
 #include "jazz/core/ScaleSuggester.h"
 #include "jazz/core/Voicing.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,8 +28,10 @@ struct VoicingFinding
 struct VoicingAnalysis
 {
     bool matchesChord {};              ///< no missing guide tones, nothing outside
+    bool matchesStyle { true };        ///< the shape the player was practising
     int score {};                      ///< 0-100, for progress tracking
     VoicingType type { VoicingType::unknown };
+    std::optional<VoicingType> expectedType;  ///< the shape being practised, if any
     std::string summary;               ///< one line for the feedback panel header
     std::vector<VoicingFinding> findings;
     std::vector<std::string> suggestions;
@@ -58,6 +61,16 @@ public:
 
         /** Include example voicings when the played one can be improved. */
         bool includeExamples { true };
+
+        /** The shape the player is working on.
+
+            Set this and the analyser judges the voicing as an exercise as well
+            as a chord: a rootless voicing played where root-position ones are
+            being practised is reported, even though the notes spell the chord
+            perfectly well. Unset, any shape is accepted - which is the right
+            default for reading a chart rather than drilling a shape.
+        */
+        std::optional<VoicingType> practiseType;
     };
 
     VoicingAnalyzer() = default;
@@ -67,6 +80,9 @@ public:
 
     /** Works out how the player laid the voicing out. */
     static VoicingType classify (const Voicing& voicing, const ChordSymbol& chord);
+
+    /** True for the shapes that put the root underneath the chord. */
+    static bool expectsRoot (VoicingType type);
 
 private:
     Options options;

@@ -49,6 +49,21 @@ MainComponent::MainComponent()
     inputLabel.setJustificationType (Justification::centredRight);
     inputLabel.setText ("On-screen keyboard", dontSendNotification);
 
+    // Practising one shape is a session-wide choice, not a per-bar one, so it
+    // lives in the header rather than beside any single chord.
+    addAndMakeVisible (styleSelector);
+    styleSelector.addItem ("Any shape", 1);
+    styleSelector.addItem ("Root position", 2);
+    styleSelector.addItem ("Shell", 3);
+    styleSelector.addItem ("Rootless, left hand", 4);
+    styleSelector.addItem ("Two-handed rootless", 5);
+    styleSelector.setSelectedId (1, dontSendNotification);
+    styleSelector.setColour (ComboBox::backgroundColourId, theme::surfaceRaised);
+    styleSelector.setColour (ComboBox::textColourId, theme::text);
+    styleSelector.setColour (ComboBox::outlineColourId, theme::outline);
+    styleSelector.setColour (ComboBox::arrowColourId, theme::textDim);
+    styleSelector.onChange = [this] { applyPractiseStyle(); };
+
     addAndMakeVisible (connectMidiButton);
     connectMidiButton.setColour (TextButton::buttonColourId, theme::surfaceRaised);
     connectMidiButton.setColour (TextButton::textColourOffId, theme::text);
@@ -119,6 +134,28 @@ void MainComponent::attachInputSource (core::NoteInputSource& source)
 void MainComponent::detachInputSource (core::NoteInputSource& source)
 {
     source.removeListener (&collector);
+}
+
+void MainComponent::applyPractiseStyle()
+{
+    core::VoicingAnalyzer::Options options;
+
+    switch (styleSelector.getSelectedId())
+    {
+        case 2:  options.practiseType = core::VoicingType::rootPosition; break;
+        case 3:  options.practiseType = core::VoicingType::shell; break;
+        case 4:  options.practiseType = core::VoicingType::rootlessLeftHand; break;
+        case 5:  options.practiseType = core::VoicingType::twoHandedRootless; break;
+        default: break;  // "Any shape": read the chart, do not drill a shape
+    }
+
+    analyzer = core::VoicingAnalyzer { options };
+
+    // Re-read whatever is still under the hands against the new expectation.
+    const auto held = collector.heldNotes();
+
+    if (! held.isEmpty())
+        handleVoicing (held, core::NoteSource::onScreenKeyboard);
 }
 
 void MainComponent::setMidiStatus (const juce::String& status)
@@ -247,7 +284,14 @@ void MainComponent::resized()
 
     auto header = area.removeFromTop (jmax (minimumTouchTarget(), 28));
     connectMidiButton.setBounds (header.removeFromRight (jmax (minimumTouchTarget() + 20, 64)).reduced (2));
-    inputLabel.setBounds (header.removeFromRight (jmin (220, header.getWidth() / 2)));
+    styleSelector.setBounds (header.removeFromRight (jmin (190, header.getWidth() / 3)).reduced (2));
+
+    // The device line is the first thing to go when the header runs out of room.
+    if (sizeClass == SizeClass::compact)
+        inputLabel.setBounds ({});
+    else
+        inputLabel.setBounds (header.removeFromRight (jmin (200, header.getWidth() / 2)));
+
     titleLabel.setBounds (header);
 
     area.removeFromTop (6);

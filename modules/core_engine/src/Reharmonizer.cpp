@@ -533,7 +533,10 @@ std::optional<RecognisedSubstitution> recogniseSubstitution (const Voicing& voic
     if (written == nullptr || voicing.size() < 3)
         return std::nullopt;
 
-    const VoicingAnalyzer analyzer { VoicingAnalyzer::Options { false, 53, false } };
+    VoicingAnalyzer::Options readingOptions;
+    readingOptions.includeExamples = false;   // only the score matters here
+
+    const VoicingAnalyzer analyzer { readingOptions };
     const auto writtenScore = analyzer.analyse (voicing, *written).score;
 
     const Reharmonizer reharmonizer { options };

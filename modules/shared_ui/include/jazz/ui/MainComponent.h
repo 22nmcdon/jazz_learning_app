@@ -56,6 +56,7 @@ private:
     void layoutRegular (juce::Rectangle<int> area);
     void layoutExpanded (juce::Rectangle<int> area);
     void updateTabVisibility (bool tabbed);
+    void applyPractiseStyle();
     const core::ChordSymbol* selectedChord() const;
 
     core::Chart chart;
@@ -74,6 +75,7 @@ private:
 
     juce::Label titleLabel;
     juce::Label inputLabel;
+    juce::ComboBox styleSelector;
     juce::TextButton connectMidiButton { "MIDI" };
     juce::TextButton chartTab { "Chart" };
     juce::TextButton scalesTab { "Scales" };

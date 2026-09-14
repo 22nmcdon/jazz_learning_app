@@ -59,6 +59,15 @@ With a mouse the keyboard defaults to **Hold** (latch) mode, so clicking several
 builds a chord; on touch, latch is off and several fingers register as one voicing. Any
 MIDI keyboard found at startup — or plugged in or paired later — is opened automatically.
 
+The **Practice** menu at the top of the browser page sets a voicing shape for the whole
+session - root position, shell, rootless left hand, two-handed rootless - and every voicing
+you play is then checked against it, so a rootless voicing played during a root-position
+exercise is reported even though the notes spell the chord. The desktop app has the same
+control in its header. The menu also connects a MIDI keyboard through the Web MIDI API;
+that needs Chrome or Edge, and an embedded page may not be allowed to ask for permission
+at all, in which case use the page in its own tab or the desktop app, which talks to MIDI
+devices directly.
+
 Two environment variables help check the responsive layout without a device:
 
 ```bash
