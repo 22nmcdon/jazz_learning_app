@@ -304,6 +304,37 @@ JAZZ_EXPORT const char* jazzAnalyseVoicing (const char* symbol, const char* midi
                  + "}");
 }
 
+/** Every whole-tune reharmonisation on offer, lightest touch first. */
+JAZZ_EXPORT const char* jazzReharmPlans (const char* progressionText)
+{
+    auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
+
+    if (! parsed.ok())
+        return hold (jsonError (parsed.error));
+
+    const auto plans = reharmPlansFor (*parsed.chart);
+
+    return hold ("{\"ok\":true,\"plans\":"
+                 + jsonArray (plans, [] (const ReharmPlan& plan)
+                   {
+                       return "{\"name\":" + quoted (plan.name)
+                            + ",\"description\":" + quoted (plan.description)
+                            + ",\"barsChanged\":" + std::to_string (plan.barsChanged())
+                            + ",\"progression\":" + quoted (plan.chart.toProgressionText())
+                            + ",\"moves\":" + jsonArray (plan.moves, [] (const PlannedMove& move)
+                              {
+                                  return "{\"bar\":" + std::to_string (move.measureIndex + 1)
+                                       + ",\"index\":" + std::to_string (move.measureIndex)
+                                       + ",\"before\":" + quoted (move.before)
+                                       + ",\"after\":" + quoted (move.after)
+                                       + ",\"substitution\":" + quoted (move.substitution)
+                                       + ",\"family\":" + quoted (familyName (move.family)) + "}";
+                              })
+                            + "}";
+                   })
+                 + "}");
+}
+
 /** Names the notes currently held down, with no chart and no expected chord. */
 JAZZ_EXPORT const char* jazzIdentifyChord (const char* midiNotesCsv)
 {

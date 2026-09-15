@@ -140,6 +140,53 @@ private:
     Options options;
 };
 
+//==============================================================================
+/** A named way of reharmonising a whole tune rather than one bar. */
+enum class ReharmPlanKind
+{
+    minimalTouch,    ///< colour on the bars that were only marking time
+    recommended,     ///< safe moves, spaced out, the tune still recognisable
+    adventurous,     ///< borrowed chords and mediants, every bar in play
+    cycleOfFifths,   ///< ii-Vs and secondary dominants: keep it moving
+    modalColour      ///< borrow from the parallel minor throughout
+};
+
+std::string planName (ReharmPlanKind kind);
+
+/** One bar the plan rewrites, kept so the UI can show its working. */
+struct PlannedMove
+{
+    int measureIndex {};
+    std::string before;          ///< the bar as written, e.g. "G7"
+    std::string after;           ///< what it becomes, e.g. "Dm7 G7"
+    std::string substitution;    ///< the name of the move
+    SubstitutionFamily family { SubstitutionFamily::extension };
+};
+
+/** A whole-tune reharmonisation: the resulting chart and how it got there. */
+struct ReharmPlan
+{
+    ReharmPlanKind kind { ReharmPlanKind::recommended };
+    std::string name;
+    std::string description;     ///< what this plan does, in the user's language
+    Chart chart;                 ///< the tune with the plan applied
+    std::vector<PlannedMove> moves;
+
+    int barsChanged() const { return static_cast<int> (moves.size()); }
+};
+
+/** Applies @p kind across the whole of @p chart.
+
+    Each bar is decided against the chart as it stands, so a bar sees what the
+    bar before it became. The pass is deterministic: the same chart and plan
+    give the same result every time.
+*/
+ReharmPlan makeReharmPlan (const Chart& chart, ReharmPlanKind kind);
+
+/** Every plan, in the order they should be offered - lightest touch first. */
+std::vector<ReharmPlan> reharmPlansFor (const Chart& chart);
+
+//==============================================================================
 /** Reads a voicing against every substitution available for a measure.
 
     Returns the substitution the voicing spells, if it spells one clearly better

@@ -520,6 +520,204 @@ std::vector<Substitution> Reharmonizer::substitutionsFor (const Chart& chart, in
     return substitutions;
 }
 
+//==============================================================================
+std::string planName (ReharmPlanKind kind)
+{
+    switch (kind)
+    {
+        case ReharmPlanKind::minimalTouch:  return "Minimal touch";
+        case ReharmPlanKind::recommended:   return "Recommended";
+        case ReharmPlanKind::adventurous:   return "Adventurous";
+        case ReharmPlanKind::cycleOfFifths: return "Cycle of fifths";
+        case ReharmPlanKind::modalColour:   return "Modal colour";
+    }
+
+    return "Reharmonisation";
+}
+
+namespace
+{
+    /** How a plan decides which bars to rewrite and with what.
+
+        Keeping the policy as data rather than as five separate passes means the
+        plans differ only where they should: what they are willing to play, and
+        how often they are willing to interrupt the tune.
+    */
+    struct PlanPolicy
+    {
+        std::string description;
+        std::vector<SubstitutionFamily> families;  ///< tried in this order
+        bool allowAdvanced {};
+        int barsBetweenChanges {};                 ///< 0 lets consecutive bars change
+        bool onlyStaticBars {};                    ///< bars repeating the one before them
+        bool keepFinalBar { true };                ///< the last bar is where the tune lands
+    };
+
+    PlanPolicy policyFor (ReharmPlanKind kind)
+    {
+        switch (kind)
+        {
+            case ReharmPlanKind::minimalTouch:
+                return { "Colour on the bars that were only marking time, and nothing else. "
+                         "The tune comes back unchanged in shape.",
+                         { SubstitutionFamily::extension, SubstitutionFamily::bassMotion },
+                         false, 1, true, true };
+
+            case ReharmPlanKind::recommended:
+                return { "Safe moves, spaced out so no two bars in a row change: ii-Vs where a "
+                         "dominant was sitting still, diatonic substitutions, a little colour.",
+                         { SubstitutionFamily::dominantFunction, SubstitutionFamily::diatonic,
+                           SubstitutionFamily::extension },
+                         false, 1, false, true };
+
+            case ReharmPlanKind::adventurous:
+                return { "Borrowed chords and chromatic mediants wherever they fit, with the "
+                         "safer moves filling the gaps. Every bar is in play.",
+                         { SubstitutionFamily::modalInterchange, SubstitutionFamily::chromaticMediant,
+                           SubstitutionFamily::dominantFunction, SubstitutionFamily::passingChord,
+                           SubstitutionFamily::diatonic },
+                         true, 0, false, false };
+
+            case ReharmPlanKind::cycleOfFifths:
+                return { "Keep it moving: a ii-V or a secondary dominant in front of everything "
+                         "that will take one, and passing chords between the rest.",
+                         { SubstitutionFamily::dominantFunction, SubstitutionFamily::passingChord },
+                         true, 0, false, false };
+
+            case ReharmPlanKind::modalColour:
+                return { "Borrow from the parallel minor all the way through - bVI and bIII major "
+                         "sevenths, minor plagal approaches, Dorian and melodic-minor colours.",
+                         { SubstitutionFamily::modalInterchange, SubstitutionFamily::chromaticMediant,
+                           SubstitutionFamily::extension },
+                         true, 1, false, true };
+        }
+
+        return {};
+    }
+
+    /** "G7", or "Dm7 G7" for a split bar. */
+    std::string measureText (const Measure& measure)
+    {
+        std::string text;
+
+        for (std::size_t i = 0; i < measure.slots.size(); ++i)
+        {
+            if (i > 0)
+                text += " ";
+
+            text += measure.slots[i].chord.toString();
+        }
+
+        return text;
+    }
+
+    bool sameChords (const Measure& first, const Measure& second)
+    {
+        return measureText (first) == measureText (second);
+    }
+}
+
+ReharmPlan makeReharmPlan (const Chart& chart, ReharmPlanKind kind)
+{
+    const auto policy = policyFor (kind);
+
+    ReharmPlan plan;
+    plan.kind = kind;
+    plan.name = planName (kind);
+    plan.description = policy.description;
+    plan.chart = chart;
+
+    const Reharmonizer reharmonizer {
+        Reharmonizer::Options { policy.allowAdvanced, ReharmStyle::common }
+    };
+
+    auto lastChanged = -1000;
+
+    for (auto measureIndex = 0; measureIndex < plan.chart.measureCount(); ++measureIndex)
+    {
+        const auto isFinalBar = measureIndex == plan.chart.measureCount() - 1;
+
+        if (policy.keepFinalBar && isFinalBar)
+            continue;
+
+        if (measureIndex - lastChanged <= policy.barsBetweenChanges)
+            continue;
+
+        const auto& measure = plan.chart.measures[static_cast<std::size_t> (measureIndex)];
+
+        if (measure.isEmpty())
+            continue;
+
+        if (policy.onlyStaticBars)
+        {
+            if (measureIndex == 0)
+                continue;
+
+            if (! sameChords (measure, plan.chart.measures[static_cast<std::size_t> (measureIndex - 1)]))
+                continue;
+        }
+
+        // Decided against the chart as it stands, so each bar sees what the bar
+        // before it became.
+        const auto substitutions = reharmonizer.substitutionsFor (plan.chart, measureIndex);
+        const Substitution* chosen = nullptr;
+
+        for (auto family : policy.families)
+        {
+            for (const auto& substitution : substitutions)
+            {
+                if (substitution.family != family)
+                    continue;
+
+                // Within a family the list is already safest-first and then
+                // smoothest, so the first match is the one to take.
+                chosen = &substitution;
+                break;
+            }
+
+            if (chosen != nullptr)
+                break;
+        }
+
+        if (chosen == nullptr)
+            continue;
+
+        PlannedMove move;
+        move.measureIndex = measureIndex;
+        move.before = measureText (measure);
+        move.after = chosen->replacementText();
+        move.substitution = chosen->name;
+        move.family = chosen->family;
+
+        if (move.before == move.after)
+            continue;   // nothing actually changes; do not claim it did
+
+        // Rewriting two bars in a row into the same thing reads as a stutter
+        // rather than a reharmonisation.
+        if (measureIndex > 0
+            && move.after == measureText (plan.chart.measures[static_cast<std::size_t> (measureIndex - 1)]))
+            continue;
+
+        plan.chart = Reharmonizer::applySubstitution (plan.chart, measureIndex, *chosen);
+        plan.moves.push_back (std::move (move));
+        lastChanged = measureIndex;
+    }
+
+    return plan;
+}
+
+std::vector<ReharmPlan> reharmPlansFor (const Chart& chart)
+{
+    std::vector<ReharmPlan> plans;
+
+    for (auto kind : { ReharmPlanKind::minimalTouch, ReharmPlanKind::recommended,
+                       ReharmPlanKind::modalColour, ReharmPlanKind::cycleOfFifths,
+                       ReharmPlanKind::adventurous })
+        plans.push_back (makeReharmPlan (chart, kind));
+
+    return plans;
+}
+
 std::optional<RecognisedSubstitution> recogniseSubstitution (const Voicing& voicing,
                                                              const Chart& chart,
                                                              int measureIndex,

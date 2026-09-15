@@ -21,7 +21,7 @@ em++ -O2 -std=c++17 \
   -s EXPORT_NAME=createJazzEngine \
   -s ENVIRONMENT=web \
   -s ALLOW_MEMORY_GROWTH=1 \
-  -s EXPORTED_FUNCTIONS='["_jazzParseChart","_jazzScalesForChord","_jazzReharmonise","_jazzAnalyseVoicing","_jazzIdiomaticVoicings","_jazzRecogniseSubstitution","_jazzIdentifyChord","_malloc","_free"]' \
+  -s EXPORTED_FUNCTIONS='["_jazzParseChart","_jazzScalesForChord","_jazzReharmonise","_jazzAnalyseVoicing","_jazzIdiomaticVoicings","_jazzRecogniseSubstitution","_jazzIdentifyChord","_jazzReharmPlans","_malloc","_free"]' \
   -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","UTF8ToString"]'
 
 echo "Built $out/jazz-engine.js ($(du -h "$out/jazz-engine.js" | cut -f1))"

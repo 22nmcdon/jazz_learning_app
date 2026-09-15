@@ -396,6 +396,58 @@ button { font-family: inherit; cursor: pointer; }
 .finding.suggestion { border-left-color: var(--gold); }
 .finding.problem { border-left-color: var(--rust); }
 
+/* --- whole-tune reharmonisation ------------------------------------------ */
+.plan-title {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.1;
+  color: var(--charcoal);
+}
+.plan-list { list-style: none; margin: 0; padding: 0; }
+.plan-list li + li { margin-top: 10px; }
+.plan {
+  width: 100%;
+  text-align: left;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--blush);
+  padding: 14px 16px;
+  color: var(--text);
+  font: inherit;
+}
+.plan:hover { border-color: var(--blush); border-left-color: var(--blush-deep); }
+.plan-head { display: flex; align-items: baseline; gap: 12px; }
+.plan-name { font-family: var(--serif); font-weight: 600; font-size: 17px; color: var(--charcoal); }
+.plan-count {
+  margin-left: auto;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+.plan-why { font-size: 13.5px; color: var(--text-soft); margin: 6px 0 0; max-width: 56ch; }
+.plan-moves {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--text);
+}
+.plan-moves li { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
+.plan-moves .bar-no {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  min-width: 42px;
+}
+.plan-moves .from { color: var(--text-soft); }
+.plan-moves .to { font-family: var(--hand); font-weight: 700; font-size: 15px; color: var(--charcoal); }
+.plan-moves .more { color: var(--text-soft); font-size: 12.5px; padding-top: 4px; }
+.plan-none { font-size: 13.5px; color: var(--text-soft); margin: 8px 0 0; }
+
 /* The answer to "what is this", asked of the notes alone. */
 .named {
   width: 100%;
@@ -773,6 +825,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <div class="sheet-tools">
         <p class="sheet-hint">Click any bar for its scales, reharmonisations and voicings.</p>
         <div class="tools-right">
+          <button class="link-btn" type="button" id="planButton">Reharmonise the tune</button>
           <button class="link-btn" type="button" id="editToggle">Edit chart</button>
           <button class="link-btn" type="button" id="restoreChart">Restore original</button>
         </div>
@@ -849,6 +902,24 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     <span>Built with <code>em++ -O2</code>.</span>
   </footer>
 </div>
+
+<dialog id="planDialog">
+  <div class="dialog-head">
+    <div>
+      <div class="bar-label">Whole tune</div>
+      <div class="plan-title">Reharmonise</div>
+    </div>
+    <button class="close-btn" type="button" id="planClose" aria-label="Close">&times;</button>
+  </div>
+
+  <div class="tab-body">
+    <p class="voicing-note">
+      Each of these rewrites the whole chart in one go, from the lightest touch to the one
+      that leaves least of it alone. Restore original puts it back.
+    </p>
+    <ul class="plan-list" id="planList"></ul>
+  </div>
+</dialog>
 
 <dialog id="chordDialog">
   <div class="dialog-head">
@@ -931,7 +1002,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
    "scaleRows", "subs", "advanced", "spotted", "spottedText", "useSpotted",
    "menuButton", "menuPanel", "connectMidi", "midiStatus", "styleLabel",
-   "showVoicing", "playChord", "nameChord", "named", "namedText"].forEach(function (id) {
+   "showVoicing", "playChord", "nameChord", "named", "namedText",
+   "planButton", "planDialog", "planClose", "planList"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
 
@@ -1472,6 +1544,108 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.useSpotted.addEventListener("click", function () {
     if (state.spotted !== null) applyProgression(state.spotted.progression);
+  });
+
+  // --- whole-tune reharmonisation ------------------------------------------
+  el.planButton.addEventListener("click", function () {
+    var result = call("jazzReharmPlans", ["string"], [state.progression]);
+    if (result === null || !result.ok) return;
+
+    el.planList.textContent = "";
+
+    result.plans.forEach(function (plan) {
+      var item = document.createElement("li");
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "plan";
+
+      var head = document.createElement("div");
+      head.className = "plan-head";
+
+      var name = document.createElement("span");
+      name.className = "plan-name";
+      name.textContent = plan.name;
+      head.appendChild(name);
+
+      var count = document.createElement("span");
+      count.className = "plan-count";
+      count.textContent = plan.barsChanged === 1 ? "1 bar" : plan.barsChanged + " bars";
+      head.appendChild(count);
+      button.appendChild(head);
+
+      var why = document.createElement("p");
+      why.className = "plan-why";
+      why.textContent = plan.description;
+      button.appendChild(why);
+
+      if (!plan.moves.length) {
+        var none = document.createElement("p");
+        none.className = "plan-none";
+        none.textContent = "Nothing in this tune fits this one - it would come back unchanged.";
+        button.appendChild(none);
+        button.disabled = true;
+        button.style.opacity = "0.55";
+      } else {
+        // Show the working: which bars change and into what.
+        var moves = document.createElement("ul");
+        moves.className = "plan-moves";
+
+        plan.moves.slice(0, 4).forEach(function (move) {
+          var row = document.createElement("li");
+
+          var bar = document.createElement("span");
+          bar.className = "bar-no";
+          bar.textContent = "Bar " + move.bar;
+          row.appendChild(bar);
+
+          var from = document.createElement("span");
+          from.className = "from";
+          writeChord(from, move.before);
+          row.appendChild(from);
+
+          row.appendChild(document.createTextNode("\u2192"));
+
+          var to = document.createElement("span");
+          to.className = "to";
+          writeChord(to, move.after);
+          row.appendChild(to);
+
+          moves.appendChild(row);
+        });
+
+        if (plan.moves.length > 4) {
+          var more = document.createElement("li");
+          more.className = "more";
+          more.textContent = "and " + (plan.moves.length - 4) + " more";
+          moves.appendChild(more);
+        }
+
+        button.appendChild(moves);
+
+        button.addEventListener("click", function () {
+          state.progression = plan.progression;
+          el.progression.value = plan.progression;
+          state.reharmonised = {};
+
+          plan.moves.forEach(function (move) { state.reharmonised[move.index] = true; });
+
+          parseChart();
+          analyseVoicing();
+          updateVoicingControls();
+          el.planDialog.close();
+        });
+      }
+
+      item.appendChild(button);
+      el.planList.appendChild(item);
+    });
+
+    if (!el.planDialog.open) el.planDialog.showModal();
+  });
+
+  el.planClose.addEventListener("click", function () { el.planDialog.close(); });
+  el.planDialog.addEventListener("click", function (event) {
+    if (event.target === el.planDialog) el.planDialog.close();
   });
 
   // --- practice menu -------------------------------------------------------

@@ -462,3 +462,170 @@ TEST ("a voicing that fits nothing in particular is not forced into a substituti
     // A cluster with no clear reading: C Db D Eb.
     CHECK (! recognise ("| Cmaj7 | Dm7 |", 0, { 60, 61, 62, 63 }).has_value());
 }
+
+//==============================================================================
+// Reharmonising a whole tune rather than one bar.
+
+namespace
+{
+    const char* practiceChart = "| Dm7 | G7 | Cmaj7 | Cmaj7 | Cm7 | F7 "
+                                "| Bbmaj7 | Bbmaj7 | Am7b5 | D7alt | Gm7 | Gm7 |";
+
+    std::string measureTextAt (const Chart& chart, int index)
+    {
+        std::string text;
+
+        for (const auto& slot : chart.measures[static_cast<std::size_t> (index)].slots)
+            text += (text.empty() ? "" : " ") + slot.chord.toString();
+
+        return text;
+    }
+}
+
+TEST ("every plan returns a tune of the same length")
+{
+    const auto chart = chartFrom (practiceChart);
+
+    for (const auto& plan : reharmPlansFor (chart))
+    {
+        CHECK_EQ (plan.chart.measureCount(), chart.measureCount());
+        CHECK (! plan.name.empty());
+        CHECK (! plan.description.empty());
+    }
+}
+
+TEST ("the plans are offered lightest touch first")
+{
+    const auto plans = reharmPlansFor (chartFrom (practiceChart));
+
+    CHECK_EQ (plans.size(), std::size_t (5));
+    CHECK_EQ (plans.front().name, std::string ("Minimal touch"));
+    CHECK (plans.front().barsChanged() < plans.back().barsChanged());
+}
+
+TEST ("the minimal plan only rewrites bars that were repeating the one before")
+{
+    const auto chart = chartFrom (practiceChart);
+    const auto plan = makeReharmPlan (chart, ReharmPlanKind::minimalTouch);
+
+    CHECK (plan.barsChanged() > 0);
+
+    for (const auto& move : plan.moves)
+    {
+        CHECK (move.measureIndex > 0);
+        CHECK_EQ (measureTextAt (chart, move.measureIndex),
+                  measureTextAt (chart, move.measureIndex - 1));
+    }
+}
+
+TEST ("the recommended plan never changes two bars in a row")
+{
+    const auto plan = makeReharmPlan (chartFrom (practiceChart), ReharmPlanKind::recommended);
+
+    for (std::size_t i = 1; i < plan.moves.size(); ++i)
+        CHECK (plan.moves[i].measureIndex - plan.moves[i - 1].measureIndex > 1);
+}
+
+TEST ("plans that keep the final bar leave the tune where it landed")
+{
+    const auto chart = chartFrom (practiceChart);
+    const auto lastBar = chart.measureCount() - 1;
+
+    for (auto kind : { ReharmPlanKind::minimalTouch, ReharmPlanKind::recommended,
+                       ReharmPlanKind::modalColour })
+    {
+        const auto plan = makeReharmPlan (chart, kind);
+        CHECK_EQ (measureTextAt (plan.chart, lastBar), measureTextAt (chart, lastBar));
+    }
+}
+
+TEST ("no plan rewrites a bar into the bar before it")
+{
+    for (auto kind : { ReharmPlanKind::minimalTouch, ReharmPlanKind::recommended,
+                       ReharmPlanKind::modalColour, ReharmPlanKind::cycleOfFifths,
+                       ReharmPlanKind::adventurous })
+    {
+        const auto plan = makeReharmPlan (chartFrom (practiceChart), kind);
+
+        for (const auto& move : plan.moves)
+            if (move.measureIndex > 0)
+                CHECK (move.after != measureTextAt (plan.chart, move.measureIndex - 1));
+    }
+}
+
+TEST ("what a plan says it did is what is in the chart")
+{
+    const auto plan = makeReharmPlan (chartFrom (practiceChart), ReharmPlanKind::adventurous);
+
+    CHECK (plan.barsChanged() > 0);
+
+    for (const auto& move : plan.moves)
+    {
+        CHECK_EQ (measureTextAt (plan.chart, move.measureIndex), move.after);
+        CHECK (move.before != move.after);
+        CHECK (! move.substitution.empty());
+    }
+}
+
+TEST ("every chord a plan writes can be read back")
+{
+    for (const auto& plan : reharmPlansFor (chartFrom (practiceChart)))
+        for (const auto& measure : plan.chart.measures)
+            for (const auto& slot : measure.slots)
+            {
+                const auto reparsed = ChordSymbol::parse (slot.chord.toString());
+                CHECK (reparsed.has_value());
+                CHECK (*reparsed == slot.chord);
+            }
+}
+
+TEST ("planning the same tune twice gives the same tune")
+{
+    const auto chart = chartFrom (practiceChart);
+
+    for (auto kind : { ReharmPlanKind::recommended, ReharmPlanKind::cycleOfFifths,
+                       ReharmPlanKind::adventurous })
+        CHECK_EQ (makeReharmPlan (chart, kind).chart.toProgressionText(),
+                  makeReharmPlan (chart, kind).chart.toProgressionText());
+}
+
+TEST ("a plan can be made of a one-bar tune without trouble")
+{
+    const auto chart = chartFrom ("| Cmaj7 |");
+
+    for (const auto& plan : reharmPlansFor (chart))
+    {
+        CHECK_EQ (plan.chart.measureCount(), 1);
+
+        // Every plan but the two that play through the final bar leaves it alone.
+        if (plan.kind != ReharmPlanKind::adventurous && plan.kind != ReharmPlanKind::cycleOfFifths)
+            CHECK_EQ (plan.barsChanged(), 0);
+    }
+}
+
+TEST ("the cycle plan puts dominants in front of things")
+{
+    const auto plan = makeReharmPlan (chartFrom (practiceChart), ReharmPlanKind::cycleOfFifths);
+
+    CHECK (plan.barsChanged() >= 6);
+
+    auto barsWithTwoChords = 0;
+
+    for (const auto& measure : plan.chart.measures)
+        if (measure.slots.size() > 1)
+            ++barsWithTwoChords;
+
+    CHECK (barsWithTwoChords >= 5);
+}
+
+TEST ("the modal plan borrows rather than re-routes")
+{
+    const auto plan = makeReharmPlan (chartFrom (practiceChart), ReharmPlanKind::modalColour);
+
+    CHECK (plan.barsChanged() > 0);
+
+    for (const auto& move : plan.moves)
+        CHECK (move.family == SubstitutionFamily::modalInterchange
+               || move.family == SubstitutionFamily::chromaticMediant
+               || move.family == SubstitutionFamily::extension);
+}

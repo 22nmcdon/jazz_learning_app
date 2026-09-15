@@ -134,6 +134,13 @@ that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
   left-hand, two-handed rootless, spread), checks it against the symbol, and explains what
   is missing, outside, clashing or muddy in the low register. A rootless voicing is not
   told off for having no root. Findings are ordered problems-first.
+- **Whole-tune reharmonisation** — five named plans, lightest touch first: *Minimal touch*
+  (colour on the bars that were only marking time), *Recommended* (safe moves, never two
+  bars in a row), *Modal colour* (borrowed chords throughout), *Cycle of fifths* (ii-Vs and
+  secondary dominants in front of everything that takes one) and *Adventurous* (mediants
+  and borrowings, every bar in play). Each bar is decided against the chart as it stands,
+  so a bar sees what the bar before it became; the pass is deterministic, and it will not
+  rewrite a bar into the bar before it.
 - **Naming a shape** — `ChordIdentifier` answers "what did I just play" with no chart and
   no expected chord. Every note has to be accounted for, so a chromatic cluster returns
   nothing rather than the least bad guess, and a name that leaves out more than it explains
