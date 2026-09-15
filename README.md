@@ -17,7 +17,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/core_engine` | Chord parsing, scale suggestion, reharmonisation, voicing analysis, note-input abstraction. Pure C++17. | nothing |
 | `modules/shared_ui` | Chart view, on-screen keyboard, scale panel, reharm panel, feedback panel, responsive `MainComponent`. | core engine, JUCE |
 | `app` | Platform shell: MIDI devices, window and app lifecycle. | shared UI, JUCE |
-| `tests` | Engine unit tests (73), no JUCE, no third-party framework. | core engine |
+| `tests` | Engine unit tests (181), no JUCE, no third-party framework. | core engine |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -77,6 +77,15 @@ is connected and doing the playing. Connecting a MIDI keyboard widens the drawn 
 and anything played outside that widens it further, so a two-handed voicing is never partly
 off the end. The desktop app widens its keyboard the same way, but makes no sound yet.
 
+**Import / export** on the browser page opens a chart that came from somewhere else and
+writes the one on screen back out. It reads an iReal Pro link, a PDF lead sheet (iReal Pro
+exports one, and so does this page), or a progression typed as `| Dm7 | G7 | Cmaj7 |`,
+pasted in or picked as a file. Going the other way, **Print or save as PDF** prints the
+lead sheet alone - menus, keyboard and feedback are left off the page - and **Copy iReal
+Pro link** puts an `irealbook://` link on the clipboard that iReal Pro opens directly.
+A chart that arrives with a chord the engine cannot read says so and names it rather than
+quietly dropping it, and the title, composer and style survive a round trip.
+
 Two environment variables help check the responsive layout without a device:
 
 ```bash
@@ -97,7 +106,7 @@ The JUCE interface cannot run on the web - JUCE has no supported WebAssembly tar
 
 ```bash
 sudo apt install emscripten   # or install the emsdk
-./web/build.sh                # -> web/dist/jazz-engine.js, wasm included, 212 KB
+./web/build.sh                # -> web/dist/jazz-engine.js, wasm included, 387 KB
 python3 -m http.server -d web 8000
 ```
 
@@ -159,28 +168,40 @@ that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
   substitution available for that bar, so playing Ab C Eb G over a Cmaj7 bar is reported as
   "that is Abmaj7, the bVI major seventh substitution" rather than as a broken Cmaj7. When
   two substitutions spell the same notes, the reading closest to the written chord wins.
+- **Reading and writing charts** — `ChartFormats` reads an iReal Pro link (`irealbook://`,
+  URL-encoded or not) and writes one back, keeping the title, composer, style and time
+  signature; a chart that leaves the engine and comes back is the chart that left.
+  It also rebuilds a chart from the text of a page: hand it every run of text with its
+  position and it stitches the runs back into symbols, groups them into lines, works out
+  where the barlines were from the spacing, and reads past the tempo marking, the bar
+  numbers and the rest of the page furniture to find the title. Pulling text out of a PDF
+  needs a PDF library and belongs to the shell; deciding which of that text is a chord
+  chart needs none and belongs here. Either reader reports the chord symbols it could not
+  understand instead of handing back a chart that looks complete and is not.
 - **Input abstraction** — hardware MIDI and the on-screen keyboard emit identical events;
   `VoicingCollector` groups notes that arrive together into one voicing, so a rolled chord
   or three fingers landing at once both arrive as a chord rather than a stream of notes.
 
 ## Not in this POC
 
-- **iReal Pro and MusicXML import.** `ChartImporter` is defined and a plain-text
-  progression importer (`| Dm7 | G7 | Cmaj7 |`) implements it; no file-format importer
-  ships, because which format comes first is an open question in the design doc.
+- **MusicXML / MuseScore import.** iReal Pro and PDF import both ship (see above); which
+  further format comes next is still an open question in the design doc.
 - **Audio/pitch-detection input**, deliberately out of scope for this phase.
 - **Solo/improv feedback, voicing library, ear training, metronome/practice loop,
   progress tracking.** The analyser already reports a per-voicing score and the feedback
   panel keeps a session average, which is the hook progress tracking would build on.
-- **Export to iReal Pro or PDF**, and the voice-leading visualiser — though
-  `guideToneMotion()` in the engine is the primitive that visualiser needs.
+- **The voice-leading visualiser** — though `guideToneMotion()` in the engine is the
+  primitive it needs.
+- **Import and export in the desktop app.** The codecs live in the engine, so the JUCE
+  shell can pick them up; the browser demo is where they are wired to a UI today.
 
 ## Open questions carried over from the design doc
 
 These were left open rather than silently decided:
 
-1. **Import scope** — iReal Pro first, or MusicXML/MuseScore on day one? The POC parses
-   plain progression text and leaves the interface ready for either.
+1. **Import scope** — iReal Pro and PDF now both import, which answers the immediate half
+   of this. Whether MusicXML/MuseScore is needed as well is still open, and the page
+   reader is format-agnostic enough that a MusicXML path would feed the same code.
 2. **Rule-based vs. data-informed reharmonisation** — the POC is entirely rule-based, with
    every rule in one file (`Reharmonizer.cpp`) and its own difficulty and style tag, so a
    data-informed ranking could replace the ordering without touching the rules.

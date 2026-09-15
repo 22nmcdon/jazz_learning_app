@@ -261,3 +261,25 @@ TEST ("every chord the engine can name prints as itself")
         }
     }
 }
+
+TEST ("a minor triad with a major seventh is a minor-major however it is spelled")
+{
+    // iReal Pro writes this one "C-^7"; it used to read as a plain Cm.
+    for (const auto& text : { "CmMaj7", "C-^7", "Cm^7", "C-Maj7", "CmM7" })
+    {
+        const auto chord = parsed (text);
+        CHECK (chord.quality() == ChordQuality::minorMajor);
+        CHECK (chord.seventh() == SeventhType::major);
+        CHECK_EQ (chord.toString(), std::string ("CmMaj7"));
+    }
+}
+
+TEST ("chords written with real accidentals are read")
+{
+    // What a printed chart contains, and what a PDF hands back.
+    CHECK_EQ (parsed ("B♭maj7").toString(), std::string ("Bbmaj7"));
+    CHECK_EQ (parsed ("Am7♭5").toString(), std::string ("Am7b5"));
+    CHECK_EQ (parsed ("F♯m7").toString(), std::string ("Gbm7"));
+    CHECK_EQ (parsed ("G7♯11").toString(), std::string ("G7#11"));
+    CHECK_EQ (parsed ("E♭13sus4").toString(), std::string ("Eb13sus4"));
+}

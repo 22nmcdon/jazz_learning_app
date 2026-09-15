@@ -10,6 +10,7 @@ add_executable(jazz_core_tests
     VoicingAnalyzerTests.cpp
     ReharmonizerTests.cpp
     ChartTests.cpp
+    ChartFormatsTests.cpp
     NoteInputTests.cpp)
 
 target_link_libraries(jazz_core_tests PRIVATE jazz::core_engine)

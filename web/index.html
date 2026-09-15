@@ -396,6 +396,51 @@ button { font-family: inherit; cursor: pointer; }
 .finding.suggestion { border-left-color: var(--gold); }
 .finding.problem { border-left-color: var(--rust); }
 
+/* --- import and export ---------------------------------------------------- */
+.io-heading {
+  font-family: var(--serif);
+  font-size: 17px;
+  color: var(--charcoal);
+  margin: 26px 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.io-heading:first-child { margin-top: 0; }
+.io-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 12px; }
+.io-status { font-size: 13px; color: var(--text-soft); }
+.io-status.good { color: var(--sage); }
+.io-status.bad { color: var(--rust); }
+.io-status.warn { color: var(--gold); }
+
+.file-btn {
+  display: inline-block;
+  background: var(--charcoal);
+  color: var(--cream);
+  border: 1px solid var(--charcoal);
+  border-radius: 1px;
+  padding: 6px 15px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 500;
+  cursor: pointer;
+}
+.file-btn:hover { background: var(--blush-deep); border-color: var(--blush-deep); }
+.file-btn input { display: none; }
+
+#pasteBox, #irealLink {
+  width: 100%;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  resize: vertical;
+}
+#irealLink { margin-top: 12px; color: var(--text-soft); }
+
 /* --- whole-tune reharmonisation ------------------------------------------ */
 .plan-title {
   font-family: var(--serif);
@@ -776,6 +821,30 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   .tab-body { max-height: calc(86vh - 150px); }
 }
 
+@media print {
+  /* What prints is the chart, on its own, in black ink. */
+  .masthead, .sheet-tools, .editor, .dock, .colophon, dialog { display: none !important; }
+
+  body { background: #fff; color: #000; }
+  .shell, .wrap { max-width: none; padding: 0; }
+  .sheet-section { padding: 0; }
+  .sheet {
+    background: #fff;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+  }
+  /* Letter-spacing makes a PDF reader see one run per letter, so a printed
+     chart that is read back in comes apart. Not worth the styling. */
+  .sheet-title, .style-mark, .sheet-credit { color: #000; letter-spacing: normal; }
+  .system { border-right-color: #000; }
+  .system:last-child { border-right-color: #000; }
+  .bar { border-left-color: #000; background: none !important; }
+  .chord { color: #000; }
+  .system .system-number { color: #555; }
+  .bar.reharmonised::after { color: #555; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
@@ -839,6 +908,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <div class="sheet-tools">
         <p class="sheet-hint">Click any bar for its scales, reharmonisations and voicings.</p>
         <div class="tools-right">
+          <button class="link-btn" type="button" id="ioButton">Import / export</button>
           <button class="link-btn" type="button" id="planButton">Reharmonise the tune</button>
           <button class="link-btn" type="button" id="editToggle">Edit chart</button>
           <button class="link-btn" type="button" id="restoreChart">Restore original</button>
@@ -911,11 +981,52 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
 <div class="wrap">
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 73 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 181 unit tests, no JUCE.</span>
     <span>Bindings: <code>web/src/JazzWebBindings.cpp</code>.</span>
     <span>Built with <code>em++ -O2</code>.</span>
   </footer>
 </div>
+
+<dialog id="ioDialog">
+  <div class="dialog-head">
+    <div>
+      <div class="bar-label">Chart</div>
+      <div class="plan-title">Import &amp; export</div>
+    </div>
+    <button class="close-btn" type="button" id="ioClose" aria-label="Close">&times;</button>
+  </div>
+
+  <div class="tab-body">
+    <h3 class="io-heading">Bring a chart in</h3>
+    <p class="voicing-note">
+      A PDF lead sheet - including one exported from iReal Pro - an iReal Pro link, or
+      chords typed as text. Whatever arrives, only the chord symbols are kept.
+    </p>
+
+    <div class="io-row">
+      <label class="file-btn" for="chartFile">Choose a PDF<input type="file" id="chartFile" accept="application/pdf,.pdf,.txt,text/plain"></label>
+      <span class="io-status" id="importStatus"></span>
+    </div>
+
+    <label class="eyebrow" for="pasteBox" style="display:block;margin-top:18px">Or paste a link or chords</label>
+    <textarea id="pasteBox" rows="3" spellcheck="false"
+              placeholder="irealbook://My Tune=...    or    | Dm7 | G7 | Cmaj7 |"></textarea>
+    <button class="play-btn" type="button" id="readPaste" style="margin-top:10px">Read it</button>
+
+    <h3 class="io-heading">Take this chart away</h3>
+    <p class="voicing-note">
+      The chart as it stands now, reharmonisations and all.
+    </p>
+
+    <div class="io-row">
+      <button class="play-btn" type="button" id="printChart">Print or save as PDF</button>
+      <button class="link-btn" type="button" id="copyIReal">Copy iReal Pro link</button>
+      <span class="io-status" id="exportStatus"></span>
+    </div>
+
+    <textarea id="irealLink" rows="3" spellcheck="false" readonly></textarea>
+  </div>
+</dialog>
 
 <dialog id="planDialog">
   <div class="dialog-head">
@@ -979,6 +1090,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   </div>
 </dialog>
 
+<!-- Reading a PDF is the one job the engine cannot do: pdf.js pulls the text
+     and its positions off the page, and the engine works out which of it is a
+     chord chart. If the library is blocked, the paste box still works. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="jazz-engine.js"></script>
 <script>
 (function () {
@@ -991,6 +1106,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   var engine = null;
   var state = {
     progression: DEFAULT_PROGRESSION,
+    composer: "",
+    chartStyle: "",   // the feel written on the chart, not the reharm style below
     measures: [],
     selected: 0,
     reharmonised: {},
@@ -1022,7 +1139,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "scaleRows", "subs", "advanced", "risky", "spotted", "spottedText", "useSpotted",
    "menuButton", "menuPanel", "connectMidi", "midiStatus", "styleLabel",
    "showVoicing", "playChord", "nameChord", "named", "namedText",
-   "planButton", "planDialog", "planClose", "planList"].forEach(function (id) {
+   "planButton", "planDialog", "planClose", "planList",
+   "ioButton", "ioDialog", "ioClose", "chartFile", "importStatus", "pasteBox",
+   "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
 
@@ -1582,6 +1701,196 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.useSpotted.addEventListener("click", function () {
     if (state.spotted !== null) applyProgression(state.spotted.progression);
+  });
+
+  // --- import and export ---------------------------------------------------
+  function setImportStatus(text, tone) {
+    el.importStatus.textContent = text;
+    el.importStatus.className = "io-status" + (tone ? " " + tone : "");
+  }
+
+  /** Loads a chart the engine has just read from somewhere. */
+  function adoptChart(result, source) {
+    if (result === null) return;
+
+    if (!result.ok) {
+      setImportStatus(result.error, "bad");
+      return;
+    }
+
+    state.progression = result.progression;
+    el.progression.value = result.progression;
+    state.reharmonised = {};
+    state.selected = 0;
+
+    if (!parseChart()) {
+      setImportStatus("The chart came through but could not be laid out.", "bad");
+      return;
+    }
+
+    if (result.title) el.sheetTitle.textContent = result.title;
+
+    // Who wrote it and how it is played belong to the chart, not to the link
+    // it arrived in, so they survive being written back out.
+    state.composer = result.composer || "";
+    state.chartStyle = result.style || "";
+
+    analyseVoicing();
+    updateVoicingControls();
+
+    // The export side of the dialog is open in front of the reader, so it has
+    // to describe the chart that just arrived, not the one it replaced.
+    refreshExport();
+
+    var message = "Read " + result.bars + " bars from " + source + ".";
+    var missed = result.unreadable || [];
+
+    // A chart that came through missing chords must not look like a clean read.
+    if (missed.length) {
+      setImportStatus(message + " "
+                      + (missed.length === 1 ? "One chord was left out because it could not be read: "
+                                             : missed.length + " chords were left out because they could "
+                                               + "not be read: ")
+                      + missed.join(", ") + ".", "warn");
+      return;
+    }
+
+    setImportStatus(message, "good");
+  }
+
+  el.ioButton.addEventListener("click", function () {
+    refreshExport();
+    if (!el.ioDialog.open) el.ioDialog.showModal();
+  });
+
+  el.ioClose.addEventListener("click", function () { el.ioDialog.close(); });
+  el.ioDialog.addEventListener("click", function (event) {
+    if (event.target === el.ioDialog) el.ioDialog.close();
+  });
+
+  el.readPaste.addEventListener("click", function () {
+    var text = el.pasteBox.value.trim();
+
+    if (!text) {
+      setImportStatus("Nothing pasted yet.", "bad");
+      return;
+    }
+
+    // An iReal Pro link and a line of chords are told apart by the engine.
+    var result = text.indexOf("ireal") !== -1 || text.indexOf("=n=") !== -1
+      ? call("jazzImportIRealPro", ["string"], [text])
+      : call("jazzParseChart", ["string"], [text]);
+
+    if (result !== null && result.ok && result.progression === undefined) {
+      // jazzParseChart answers with measures rather than a progression.
+      result = { ok: true, progression: text, bars: result.measures.length, title: "" };
+    }
+
+    adoptChart(result, "what you pasted");
+  });
+
+  el.chartFile.addEventListener("change", function () {
+    var file = el.chartFile.files && el.chartFile.files[0];
+    if (!file) return;
+
+    if (file.type === "text/plain" || /\.txt$/i.test(file.name)) {
+      file.text().then(function (text) {
+        el.pasteBox.value = text;
+        el.readPaste.click();
+      });
+      return;
+    }
+
+    readPdf(file);
+  });
+
+  /** Pulls the text off every page of a PDF and hands it to the engine. */
+  function readPdf(file) {
+    if (typeof window.pdfjsLib === "undefined") {
+      setImportStatus("The PDF reader did not load here. Paste an iReal Pro link or the chords "
+                      + "instead.", "bad");
+      return;
+    }
+
+    setImportStatus("Reading " + file.name + "...");
+
+    // Without a worker pdf.js runs on this thread, which is slower but works
+    // where a cross-origin worker is not allowed.
+    try {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    } catch (error) { /* the fake worker will take over */ }
+
+    file.arrayBuffer().then(function (buffer) {
+      return window.pdfjsLib.getDocument({ data: buffer, isEvalSupported: false }).promise;
+    }).then(function (pdf) {
+      var rows = [];
+      var pageTop = 0;
+
+      // Pages are read in order and stacked, so a chart that runs over a page
+      // break stays one chart.
+      function readPage(number) {
+        return pdf.getPage(number).then(function (page) {
+          var height = page.getViewport({ scale: 1 }).height;
+
+          return page.getTextContent().then(function (content) {
+            content.items.forEach(function (item) {
+              var text = String(item.str).replace(/[\t\n]/g, " ").trim();
+              if (text === "") return;
+
+              // transform is [a, b, c, d, x, y] with y measured up from the
+              // bottom; the engine reads down from the top of the page.
+              var x = item.transform ? item.transform[4] : 0;
+              var y = pageTop + height - (item.transform ? item.transform[5] : 0);
+
+              rows.push(x + "\t" + y + "\t" + text + "\t" + (item.width || 0));
+            });
+
+            pageTop += height;
+            return number < pdf.numPages ? readPage(number + 1) : null;
+          });
+        });
+      }
+
+      return readPage(1).then(function () {
+        adoptChart(call("jazzChartFromPage", ["string"], [rows.join("\n")]), file.name);
+      });
+    }).catch(function (error) {
+      setImportStatus("Could not read that PDF: " + (error && error.message ? error.message : error),
+                      "bad");
+    });
+  }
+
+  function refreshExport() {
+    var result = call("jazzExportIRealPro", ["string", "string", "string", "string"],
+                      [state.progression, el.sheetTitle.textContent,
+                       state.composer || "", state.chartStyle || ""]);
+
+    el.irealLink.value = result !== null && result.ok ? result.link : "";
+    el.exportStatus.textContent = "";
+    el.exportStatus.className = "io-status";
+  }
+
+  el.copyIReal.addEventListener("click", function () {
+    el.irealLink.select();
+
+    var done = function (ok) {
+      el.exportStatus.textContent = ok ? "Copied." : "Select the link above and copy it.";
+      el.exportStatus.className = "io-status " + (ok ? "good" : "bad");
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(el.irealLink.value).then(function () { done(true); },
+                                                             function () { done(false); });
+    } else {
+      done(false);
+    }
+  });
+
+  el.printChart.addEventListener("click", function () {
+    el.ioDialog.close();
+    // The print stylesheet leaves the chart and nothing else on the page.
+    window.setTimeout(function () { window.print(); }, 120);
   });
 
   // --- whole-tune reharmonisation ------------------------------------------

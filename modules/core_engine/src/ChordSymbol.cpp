@@ -143,8 +143,52 @@ bool ChordSymbol::hasExtension (Extension extension) const
            != namedExtensions.end();
 }
 
+namespace
+{
+    /** Charts in the wild are written with real accidentals - Bbmaj7 is printed
+        "B<flat>maj7" - so they are folded to ASCII before anything is read.
+    */
+    std::string withPlainAccidentals (std::string_view text)
+    {
+        std::string out;
+        out.reserve (text.size());
+
+        for (std::size_t i = 0; i < text.size(); ++i)
+        {
+            const auto byte = static_cast<unsigned char> (text[i]);
+
+            if (byte == 0xE2 && i + 2 < text.size())
+            {
+                const auto second = static_cast<unsigned char> (text[i + 1]);
+                const auto third = static_cast<unsigned char> (text[i + 2]);
+
+                if (second == 0x99 && third == 0xAD) { out += 'b'; i += 2; continue; }  // U+266D
+                if (second == 0x99 && third == 0xAF) { out += '#'; i += 2; continue; }  // U+266F
+                if (second == 0x99 && third == 0xAE) { i += 2; continue; }              // natural
+            }
+
+            out += text[i];
+        }
+
+        return out;
+    }
+
+    bool hasNonAscii (std::string_view text)
+    {
+        return std::any_of (text.begin(), text.end(),
+                            [] (char c) { return static_cast<unsigned char> (c) > 127; });
+    }
+}
+
 std::optional<ChordSymbol> ChordSymbol::parse (std::string_view text)
 {
+    // Only pay for a copy when there is something to fold.
+    if (hasNonAscii (text))
+    {
+        const auto folded = withPlainAccidentals (text);
+        return parse (std::string_view (folded));
+    }
+
     // Trim surrounding whitespace without copying the whole symbol first.
     while (! text.empty() && std::isspace (static_cast<unsigned char> (text.front())))
         text.remove_prefix (1);
@@ -352,6 +396,11 @@ std::optional<ChordSymbol> ChordSymbol::parse (std::string_view text)
     {
         chord.chordQuality = ChordQuality::dominant;
     }
+
+    // A minor triad that picked up a major 7th along the way is a minor-major,
+    // however it was spelled - iReal Pro writes it "C-^7".
+    if (chord.chordQuality == ChordQuality::minor && chord.seventhType == SeventhType::major)
+        chord.chordQuality = ChordQuality::minorMajor;
 
     return chord;
 }

@@ -66,6 +66,13 @@ struct ChartParseResult
     std::optional<Chart> chart;
     std::string error;          ///< empty when parsing succeeded
 
+    /** Chord symbols the reader found but could not understand, in the order
+        they appeared. A chart can come through with these and still be usable,
+        but it is missing those chords, so an importer should say so rather than
+        hand back a chart that looks complete and is not.
+    */
+    std::vector<std::string> unreadable;
+
     bool ok() const { return chart.has_value(); }
 };
 

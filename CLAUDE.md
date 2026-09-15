@@ -42,6 +42,11 @@ Rules of thumb when writing or reviewing code:
 - **MIDI input is abstracted behind one interface** so Core Engine / UI logic never
   branches on whether a note came from hardware MIDI or the on-screen keyboard — both
   should produce the same event shape.
+- **File formats split the same way.** Getting bytes out of a file — opening a PDF, asking
+  a PDF library for its text — is the shell's job. Deciding which of that text is a chord
+  chart, and turning chords into an iReal Pro link or back, is the engine's, and it does it
+  without knowing what a file is: `ChartFormats` takes positioned text in and gives a
+  `Chart` out. A new format should add a reader to the shell, not theory to it.
 - Keeping Core Engine UI-agnostic is what makes a future AUv3/VST3 plugin target
   (sharing the same engine) possible without a rewrite. Don't take shortcuts that couple
   engine logic to the standalone app shell.

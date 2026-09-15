@@ -14,6 +14,7 @@ add_library(jazz_core_engine STATIC
     src/Voicing.cpp
     src/VoicingAnalyzer.cpp
     src/Chart.cpp
+    src/ChartFormats.cpp
     src/Reharmonizer.cpp
     src/NoteInput.cpp)
 

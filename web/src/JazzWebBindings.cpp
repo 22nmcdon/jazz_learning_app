@@ -9,6 +9,7 @@
 // needs no knowledge of the C++ types.
 
 #include "jazz/core/Chart.h"
+#include "jazz/core/ChartFormats.h"
 #include "jazz/core/ChordIdentifier.h"
 #include "jazz/core/Reharmonizer.h"
 #include "jazz/core/ScaleSuggester.h"
@@ -310,6 +311,125 @@ JAZZ_EXPORT const char* jazzAnalyseVoicing (const char* symbol, const char* midi
                        return "{\"notes\":" + notes + "],\"describe\":" + quoted (example.describe()) + "}";
                    })
                  + "}");
+}
+
+namespace
+{
+    /** A parsed chart, handed back the way the page wants it. */
+    const char* holdChart (const ChartParseResult& result)
+    {
+        if (! result.ok())
+            return hold (jsonError (result.error));
+
+        return hold ("{\"ok\":true,\"title\":" + quoted (result.chart->title)
+                     + ",\"composer\":" + quoted (result.chart->composer)
+                     + ",\"style\":" + quoted (result.chart->style)
+                     + ",\"bars\":" + std::to_string (result.chart->measureCount())
+                     + ",\"unreadable\":" + jsonArray (result.unreadable, [] (const std::string& text)
+                       {
+                           return quoted (text);
+                       })
+                     + ",\"progression\":" + quoted (result.chart->toProgressionText()) + "}");
+    }
+}
+
+/** Reads an iReal Pro link, or anything that looks like one. */
+JAZZ_EXPORT const char* jazzImportIRealPro (const char* text)
+{
+    return holdChart (importIRealPro (text != nullptr ? text : ""));
+}
+
+/** Writes the chart as an iReal Pro link.
+
+    Composer and style travel with the chart so that reading a link and writing
+    it back does not quietly lose who wrote the tune.
+*/
+JAZZ_EXPORT const char* jazzExportIRealPro (const char* progressionText, const char* title,
+                                            const char* composer, const char* style)
+{
+    auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "",
+                                        title != nullptr ? title : "");
+
+    if (! parsed.ok())
+        return hold (jsonError (parsed.error));
+
+    if (composer != nullptr)
+        parsed.chart->composer = composer;
+
+    if (style != nullptr && *style != '\0')
+        parsed.chart->style = style;
+
+    return hold ("{\"ok\":true,\"link\":" + quoted (exportIRealPro (*parsed.chart)) + "}");
+}
+
+/** Rebuilds a chart from text pulled off a page.
+
+    The page sends one run of text per line as "x<tab>y<tab>text"; pulling that
+    text out of a PDF is the shell's job, and working out which of it is a chord
+    chart is the engine's.
+*/
+JAZZ_EXPORT const char* jazzChartFromPage (const char* tabSeparatedItems)
+{
+    std::vector<PlacedText> items;
+    const std::string input = tabSeparatedItems != nullptr ? tabSeparatedItems : "";
+
+    std::size_t lineStart = 0;
+
+    while (lineStart <= input.size())
+    {
+        const auto lineEnd = std::min (input.find ('\n', lineStart), input.size());
+        const auto line = input.substr (lineStart, lineEnd - lineStart);
+        lineStart = lineEnd + 1;
+
+        const auto firstTab = line.find ('\t');
+
+        if (firstTab == std::string::npos)
+            continue;
+
+        const auto secondTab = line.find ('\t', firstTab + 1);
+
+        if (secondTab == std::string::npos)
+            continue;
+
+        PlacedText item;
+
+        try
+        {
+            item.x = std::stod (line.substr (0, firstTab));
+            item.y = std::stod (line.substr (firstTab + 1, secondTab - firstTab - 1));
+        }
+        catch (...)
+        {
+            continue;   // a row we cannot read is a row we skip
+        }
+
+        // The width of the run is optional: a reader that knows it lets the
+        // engine split words on real gaps rather than on a guessed threshold.
+        const auto thirdTab = line.find ('\t', secondTab + 1);
+
+        if (thirdTab == std::string::npos)
+        {
+            item.text = line.substr (secondTab + 1);
+        }
+        else
+        {
+            item.text = line.substr (secondTab + 1, thirdTab - secondTab - 1);
+
+            try
+            {
+                item.width = std::stod (line.substr (thirdTab + 1));
+            }
+            catch (...)
+            {
+                item.width = 0.0;
+            }
+        }
+
+        if (! item.text.empty())
+            items.push_back (std::move (item));
+    }
+
+    return holdChart (chartFromPlacedText (std::move (items)));
 }
 
 /** Every whole-tune reharmonisation on offer, lightest touch first. */
