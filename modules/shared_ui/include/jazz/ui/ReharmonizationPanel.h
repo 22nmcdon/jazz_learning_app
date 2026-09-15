@@ -55,6 +55,7 @@ private:
     SubstitutionList list { *this };
     juce::Viewport viewport;
     juce::ToggleButton advancedToggle { "Include advanced" };
+    juce::ToggleButton riskyToggle { "Include risky" };
     InteractionMode interactionMode { InteractionMode::pointer };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ReharmonizationPanel)

@@ -134,11 +134,21 @@ that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
   left-hand, two-handed rootless, spread), checks it against the symbol, and explains what
   is missing, outside, clashing or muddy in the low register. A rootless voicing is not
   told off for having no root. Findings are ordered problems-first.
+- **Risky substitutions, judged bar by bar** — a third difficulty tier beyond safe and
+  advanced, for moves that work in the right instance and nowhere else: the tritone major
+  seventh (G7 → Dbmaj7), the diminished-cycle dominant, the plagal dominant, an
+  upper-structure triad over the root, the hexatonic pole, the tritone major seventh of a
+  tonic, Lydian displacement, a major 7th a semitone below a minor chord, the tritone
+  minor, and anticipating the next chord over this bass. Rather than warn in the abstract,
+  each arrives with a verdict on *this* bar: what the guide tones have to do to get in and
+  out of it, what it keeps from the chord it replaces, and which side of the bar is at
+  fault when it does not land.
 - **Whole-tune reharmonisation** — five named plans, lightest touch first: *Minimal touch*
   (colour on the bars that were only marking time), *Recommended* (safe moves, never two
   bars in a row), *Modal colour* (borrowed chords throughout), *Cycle of fifths* (ii-Vs and
   secondary dominants in front of everything that takes one) and *Adventurous* (mediants
-  and borrowings, every bar in play). Each bar is decided against the chart as it stands,
+  and borrowings, every bar in play) and *Out there* (risky moves, taken only in the bars
+  where the voice leading carries them, leaving the rest as written). Each bar is decided against the chart as it stands,
   so a bar sees what the bar before it became; the pass is deterministic, and it will not
   rewrite a bar into the bar before it.
 - **Naming a shape** — `ChordIdentifier` answers "what did I just play" with no chart and

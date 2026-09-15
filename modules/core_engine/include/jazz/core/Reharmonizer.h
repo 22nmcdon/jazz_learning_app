@@ -17,7 +17,8 @@ namespace jazz::core
 enum class SubstitutionDifficulty
 {
     safe,      ///< diatonic, common, hard to get wrong
-    advanced   ///< tritone subs, altered dominants, chromatic approaches
+    advanced,  ///< tritone subs, altered dominants, chromatic approaches
+    risky      ///< works in the right instance and nowhere else - see VoiceLeadingVerdict
 };
 
 std::string difficultyName (SubstitutionDifficulty difficulty);
@@ -33,6 +34,26 @@ enum class ReharmStyle
 };
 
 std::string styleName (ReharmStyle style);
+
+/** Whether a substitution actually works where it is being offered.
+
+    The adventurous substitutions are not wrong in general and right in general:
+    a chord a tritone away lands beautifully into one progression and falls flat
+    in the next. Rather than warn in the abstract, the engine measures this
+    instance - what the guide tones have to do to get in and out of the chord,
+    and what it keeps from the chord it replaces - and says whether it works
+    here.
+*/
+struct VoiceLeadingVerdict
+{
+    int approachCost {};        ///< guide-tone movement from the previous chord into this one
+    int departureCost {};       ///< ... and out of it into the next chord
+    int sharedWithOriginal {};  ///< notes in common with the chord being replaced
+    bool smoothHere {};         ///< the verdict for this instance
+    std::string note;           ///< why, naming the notes involved
+
+    int totalCost() const { return approachCost + departureCost; }
+};
 
 /** What kind of move a substitution is.
 
@@ -62,6 +83,11 @@ struct Substitution
     SubstitutionDifficulty difficulty { SubstitutionDifficulty::safe };
     ReharmStyle style { ReharmStyle::common };
     SubstitutionFamily family { SubstitutionFamily::extension };
+
+    /** How this substitution behaves in the bar it was offered for. Filled in
+        for every substitution; it is what makes a risky one usable.
+    */
+    VoiceLeadingVerdict voiceLeading {};
 
     /** Total guide-tone movement into the following chord, in semitones. Lower
         is smoother; used to rank substitutions and to drive the voice-leading
@@ -121,6 +147,11 @@ public:
     {
         bool includeAdvanced { true };
 
+        /** Offer the substitutions that only work in the right instance. They
+            arrive with a verdict on whether this is one of those instances.
+        */
+        bool includeRisky { false };
+
         /** When set to anything but `common`, only substitutions tagged with
             this style (or tagged `common`) are returned.
         */
@@ -148,7 +179,8 @@ enum class ReharmPlanKind
     recommended,     ///< safe moves, spaced out, the tune still recognisable
     adventurous,     ///< borrowed chords and mediants, every bar in play
     cycleOfFifths,   ///< ii-Vs and secondary dominants: keep it moving
-    modalColour      ///< borrow from the parallel minor throughout
+    modalColour,     ///< borrow from the parallel minor throughout
+    outThere         ///< risky moves, but only in the bars where they land
 };
 
 std::string planName (ReharmPlanKind kind);

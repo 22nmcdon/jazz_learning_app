@@ -87,7 +87,9 @@ TEST ("offers a backdoor ii-V only into a major chord a fourth above")
 
 TEST ("hides advanced substitutions when the learner asks for safe ones only")
 {
-    const Reharmonizer safeOnly { Reharmonizer::Options { false, ReharmStyle::common } };
+    Reharmonizer::Options safeOptions;
+    safeOptions.includeAdvanced = false;
+    const Reharmonizer safeOnly { safeOptions };
     const auto chart = chartFrom ("| G7 | Cmaj7 |");
 
     for (const auto& substitution : safeOnly.substitutionsFor (chart, 0))
@@ -96,7 +98,9 @@ TEST ("hides advanced substitutions when the learner asks for safe ones only")
 
 TEST ("filters by style preset")
 {
-    const Reharmonizer modal { Reharmonizer::Options { true, ReharmStyle::modal } };
+    Reharmonizer::Options modalOptions;
+    modalOptions.style = ReharmStyle::modal;
+    const Reharmonizer modal { modalOptions };
     const auto chart = chartFrom ("| G7 | Cmaj7 |");
     const auto substitutions = modal.substitutionsFor (chart, 0);
 
@@ -352,7 +356,9 @@ TEST ("a chord not in the common vocabulary still gets options")
 
 TEST ("the modal style preset keeps the borrowed chords")
 {
-    const Reharmonizer modal { Reharmonizer::Options { true, ReharmStyle::modal } };
+    Reharmonizer::Options modalOptions;
+    modalOptions.style = ReharmStyle::modal;
+    const Reharmonizer modal { modalOptions };
     const auto substitutions = modal.substitutionsFor (chartFrom ("| Cmaj7 | Dm7 |"), 0);
 
     CHECK (find (substitutions, "bVI major seventh") != nullptr);
@@ -440,7 +446,8 @@ TEST ("when two substitutions spell the same notes, the nearer one is named")
 
 TEST ("keeps quiet about advanced substitutions when the learner asked for safe ones")
 {
-    const Reharmonizer::Options safeOnly { false, ReharmStyle::common };
+    Reharmonizer::Options safeOnly;
+    safeOnly.includeAdvanced = false;
 
     CHECK (recognise ("| Cmaj7 | Dm7 |", 0, { 56, 60, 63, 67 }).has_value());
     CHECK (! recognise ("| Cmaj7 | Dm7 |", 0, { 56, 60, 63, 67 }, safeOnly).has_value());
@@ -498,9 +505,10 @@ TEST ("the plans are offered lightest touch first")
 {
     const auto plans = reharmPlansFor (chartFrom (practiceChart));
 
-    CHECK_EQ (plans.size(), std::size_t (5));
+    CHECK_EQ (plans.size(), std::size_t (6));
     CHECK_EQ (plans.front().name, std::string ("Minimal touch"));
-    CHECK (plans.front().barsChanged() < plans.back().barsChanged());
+    CHECK_EQ (plans.back().name, std::string ("Out there"));
+    CHECK (plans[0].barsChanged() < plans[4].barsChanged());   // minimal vs adventurous
 }
 
 TEST ("the minimal plan only rewrites bars that were repeating the one before")
@@ -628,4 +636,179 @@ TEST ("the modal plan borrows rather than re-routes")
         CHECK (move.family == SubstitutionFamily::modalInterchange
                || move.family == SubstitutionFamily::chromaticMediant
                || move.family == SubstitutionFamily::extension);
+}
+
+//==============================================================================
+// The substitutions that only work sometimes, and the verdict that says when.
+
+namespace
+{
+    Reharmonizer riskyReharmonizer()
+    {
+        Reharmonizer::Options options;
+        options.includeRisky = true;
+        return Reharmonizer { options };
+    }
+}
+
+TEST ("risky substitutions are off unless asked for")
+{
+    const Reharmonizer standard;
+    const auto chart = chartFrom ("| Dm7 | G7 | Cmaj7 |");
+
+    for (const auto& substitution : standard.substitutionsFor (chart, 1))
+        CHECK (substitution.difficulty != SubstitutionDifficulty::risky);
+
+    auto foundRisky = false;
+
+    for (const auto& substitution : riskyReharmonizer().substitutionsFor (chart, 1))
+        foundRisky = foundRisky || substitution.difficulty == SubstitutionDifficulty::risky;
+
+    CHECK (foundRisky);
+}
+
+TEST ("the tritone major seventh is offered for a dominant")
+{
+    const auto chart = chartFrom ("| Dm7 | G7 | Cmaj7 |");
+    const auto substitutions = riskyReharmonizer().substitutionsFor (chart, 1);
+    const auto* tritoneMajor = find (substitutions, "Tritone major seventh");
+
+    CHECK (tritoneMajor != nullptr);
+    CHECK_EQ (tritoneMajor->replacementText(), std::string ("Dbmaj7"));
+    CHECK (tritoneMajor->difficulty == SubstitutionDifficulty::risky);
+}
+
+TEST ("G7 to Dbmaj7 is judged to work in a ii-V-I")
+{
+    // The guide tones of Dm7 are already the guide tones of Dbmaj7, and they
+    // fall a semitone each into Cmaj7 - which is the whole reason it works.
+    const auto substitutions = riskyReharmonizer().substitutionsFor (chartFrom ("| Dm7 | G7 | Cmaj7 |"), 1);
+    const auto& verdict = find (substitutions, "Tritone major seventh")->voiceLeading;
+
+    CHECK (verdict.smoothHere);
+    CHECK_EQ (verdict.approachCost, 0);
+    CHECK_EQ (verdict.departureCost, 2);
+    CHECK (verdict.note.find ("Works here") != std::string::npos);
+    CHECK (verdict.note.find ("Cmaj7") != std::string::npos);
+}
+
+TEST ("the same substitution is judged on the bar it is offered for")
+{
+    // Nothing about Dbmaj7 changes; what changes is what is on either side.
+    const auto smooth = riskyReharmonizer().substitutionsFor (chartFrom ("| Dm7 | G7 | Cmaj7 |"), 1);
+    const auto rough = riskyReharmonizer().substitutionsFor (chartFrom ("| Ebmaj7 | G7 | F#m7 |"), 1);
+
+    CHECK (find (smooth, "Tritone major seventh")->voiceLeading.smoothHere);
+    CHECK (! find (rough, "Tritone major seventh")->voiceLeading.smoothHere);
+}
+
+TEST ("a verdict blames the side of the bar that is actually at fault")
+{
+    // Ab/G leaves for Cmaj7 cleanly but is a scramble to arrive at from Dm7.
+    const auto substitutions = riskyReharmonizer().substitutionsFor (chartFrom ("| Dm7 | G7 | Cmaj7 |"), 1);
+    const auto& verdict = find (substitutions, "Upper-structure triad")->voiceLeading;
+
+    CHECK (! verdict.smoothHere);
+    CHECK (verdict.approachCost > verdict.departureCost);
+    CHECK (verdict.note.find ("getting into it from Dm7") != std::string::npos);
+}
+
+TEST ("every risky substitution arrives with a verdict")
+{
+    for (const auto& text : { "| Dm7 | G7 | Cmaj7 |", "| Cmaj7 | Am7 |", "| Fm7 | Bb7 | Ebmaj7 |" })
+    {
+        const auto chart = chartFrom (text);
+
+        for (auto measure = 0; measure < chart.measureCount(); ++measure)
+            for (const auto& substitution : riskyReharmonizer().substitutionsFor (chart, measure))
+                if (substitution.difficulty == SubstitutionDifficulty::risky)
+                {
+                    CHECK (! substitution.voiceLeading.note.empty());
+                    CHECK (substitution.voiceLeading.note.find ("here") != std::string::npos);
+                }
+    }
+}
+
+TEST ("the hexatonic pole shares nothing with the triad, and only the 7th with the seventh chord")
+{
+    const auto substitutions = riskyReharmonizer().substitutionsFor (chartFrom ("| Cmaj7 | Am7 |"), 0);
+    const auto* pole = find (substitutions, "Hexatonic pole");
+
+    CHECK (pole != nullptr);
+    CHECK_EQ (pole->replacementText(), std::string ("Abm"));
+
+    const auto triad = *ChordSymbol::parse ("C");
+    const auto poleChord = *ChordSymbol::parse ("Abm");
+
+    // Against the plain triad the two chords have nothing in common at all.
+    for (auto pitchClass = 0; pitchClass < 12; ++pitchClass)
+        CHECK (! (triad.containsPitchClass (pitchClass) && poleChord.containsPitchClass (pitchClass)));
+
+    // Against Cmaj7 they share exactly one note - the major 7th, spelled Cb in
+    // Ab minor, which is the pivot that makes the move followable.
+    CHECK_EQ (pole->voiceLeading.sharedWithOriginal, 1);
+    CHECK (poleChord.containsPitchClass (11));
+}
+
+TEST ("risky substitutions are listed after the advanced ones in their family")
+{
+    const auto substitutions = riskyReharmonizer().substitutionsFor (chartFrom ("| Dm7 | G7 | Cmaj7 |"), 1);
+
+    for (std::size_t i = 1; i < substitutions.size(); ++i)
+    {
+        if (substitutions[i].family != substitutions[i - 1].family)
+            continue;
+
+        if (substitutions[i - 1].difficulty == SubstitutionDifficulty::risky)
+            CHECK (substitutions[i].difficulty == SubstitutionDifficulty::risky);
+    }
+}
+
+TEST ("every risky substitution can still be read back as a chord")
+{
+    const auto chart = chartFrom ("| Dm7 | G7 | Cmaj7 | Am7b5 | D7alt | Gm6 |");
+
+    for (auto measure = 0; measure < chart.measureCount(); ++measure)
+        for (const auto& substitution : riskyReharmonizer().substitutionsFor (chart, measure))
+            for (const auto& replacement : substitution.replacement)
+            {
+                const auto reparsed = ChordSymbol::parse (replacement.toString());
+                CHECK (reparsed.has_value());
+                CHECK (*reparsed == replacement);
+            }
+}
+
+TEST ("the out-there plan only takes risks that land")
+{
+    const auto chart = chartFrom (practiceChart);
+    const auto plan = makeReharmPlan (chart, ReharmPlanKind::outThere);
+
+    CHECK (plan.barsChanged() > 0);
+    CHECK (plan.barsChanged() < chart.measureCount());   // some bars have nothing that works
+
+    const auto reharmonizer = riskyReharmonizer();
+
+    for (const auto& move : plan.moves)
+    {
+        // Whatever it chose for a bar was a risky move the engine judged smooth.
+        const auto options = reharmonizer.substitutionsFor (chart, move.measureIndex);
+        const auto* chosen = find (options, move.substitution);
+
+        if (chosen != nullptr)
+            CHECK (chosen->difficulty == SubstitutionDifficulty::risky);
+    }
+}
+
+TEST ("the out-there plan leaves a bar alone rather than forcing a risk")
+{
+    // A single bar with nothing after it: no risk can be judged to land.
+    const auto plan = makeReharmPlan (chartFrom ("| Cmaj7 |"), ReharmPlanKind::outThere);
+    CHECK_EQ (plan.barsChanged(), 0);
+}
+
+TEST ("difficulty names cover the risky tier")
+{
+    CHECK_EQ (difficultyName (SubstitutionDifficulty::safe), std::string ("Safe"));
+    CHECK_EQ (difficultyName (SubstitutionDifficulty::advanced), std::string ("Advanced"));
+    CHECK_EQ (difficultyName (SubstitutionDifficulty::risky), std::string ("Risky"));
 }

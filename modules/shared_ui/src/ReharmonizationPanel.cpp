@@ -19,6 +19,12 @@ ReharmonizationPanel::ReharmonizationPanel()
     advancedToggle.setColour (ToggleButton::textColourId, theme::textDim);
     advancedToggle.setColour (ToggleButton::tickColourId, theme::accent);
     advancedToggle.onClick = [this] { refresh(); };
+
+    addAndMakeVisible (riskyToggle);
+    riskyToggle.setToggleState (false, dontSendNotification);
+    riskyToggle.setColour (ToggleButton::textColourId, theme::textDim);
+    riskyToggle.setColour (ToggleButton::tickColourId, theme::problem);
+    riskyToggle.onClick = [this] { refresh(); };
 }
 
 void ReharmonizationPanel::setChart (const core::Chart& newChart, int newMeasureIndex)
@@ -30,9 +36,11 @@ void ReharmonizationPanel::setChart (const core::Chart& newChart, int newMeasure
 
 void ReharmonizationPanel::refresh()
 {
-    const core::Reharmonizer reharmonizer {
-        core::Reharmonizer::Options { advancedToggle.getToggleState(), core::ReharmStyle::common }
-    };
+    core::Reharmonizer::Options options;
+    options.includeAdvanced = advancedToggle.getToggleState();
+    options.includeRisky = riskyToggle.getToggleState();
+
+    const core::Reharmonizer reharmonizer { options };
 
     substitutions = reharmonizer.substitutionsFor (chart, measureIndex);
 
@@ -58,7 +66,10 @@ void ReharmonizationPanel::resized()
     auto area = getLocalBounds().reduced (12);
 
     area.removeFromTop (22);  // heading, drawn in paint()
-    advancedToggle.setBounds (area.removeFromBottom (jmax (minimumTouchTarget(), 28)));
+
+    auto toggles = area.removeFromBottom (jmax (minimumTouchTarget(), 28));
+    advancedToggle.setBounds (toggles.removeFromLeft (toggles.getWidth() / 2));
+    riskyToggle.setBounds (toggles);
     area.removeFromBottom (4);
 
     viewport.setBounds (area);
@@ -113,6 +124,7 @@ void ReharmonizationPanel::SubstitutionList::paint (juce::Graphics& g)
             continue;
 
         const auto isSafe = substitution.difficulty == core::SubstitutionDifficulty::safe;
+        const auto isRisky = substitution.difficulty == core::SubstitutionDifficulty::risky;
 
         g.setColour (theme::surfaceRaised);
         g.fillRoundedRectangle (row.reduced (0, 3).toFloat(), 5.0f);
@@ -126,7 +138,7 @@ void ReharmonizationPanel::SubstitutionList::paint (juce::Graphics& g)
         g.setFont (Font (FontOptions (10.0f, Font::bold)));
 
         auto difficultyArea = tagArea.removeFromRight (74);
-        g.setColour (isSafe ? theme::good : theme::warning);
+        g.setColour (isRisky ? theme::problem : isSafe ? theme::good : theme::warning);
         g.drawText (String (core::difficultyName (substitution.difficulty)).toUpperCase(),
                     difficultyArea, Justification::centredRight);
 
@@ -141,7 +153,19 @@ void ReharmonizationPanel::SubstitutionList::paint (juce::Graphics& g)
 
         g.setColour (theme::textDim);
         g.setFont (Font (FontOptions (theme::bodyFontSize() - 2.0f)));
-        g.drawFittedText (String (substitution.explanation), content, Justification::topLeft, 2);
+
+        // A risky row leads with whether it works in this bar; the general
+        // explanation matters less than the instance.
+        if (isRisky)
+        {
+            g.setColour (substitution.voiceLeading.smoothHere ? theme::good : theme::problem);
+            g.drawFittedText (String (substitution.voiceLeading.note), content,
+                              Justification::topLeft, 2);
+        }
+        else
+        {
+            g.drawFittedText (String (substitution.explanation), content, Justification::topLeft, 2);
+        }
     }
 }
 

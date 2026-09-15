@@ -229,16 +229,19 @@ JAZZ_EXPORT const char* jazzScalesForChord (const char* symbol)
 }
 
 /** Reharmonisation options for one measure of a progression. */
-JAZZ_EXPORT const char* jazzReharmonise (const char* progressionText, int measureIndex, int includeAdvanced)
+JAZZ_EXPORT const char* jazzReharmonise (const char* progressionText, int measureIndex,
+                                         int includeAdvanced, int includeRisky)
 {
     auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
 
     if (! parsed.ok())
         return hold (jsonError (parsed.error));
 
-    const Reharmonizer reharmonizer {
-        Reharmonizer::Options { includeAdvanced != 0, ReharmStyle::common }
-    };
+    Reharmonizer::Options options;
+    options.includeAdvanced = includeAdvanced != 0;
+    options.includeRisky = includeRisky != 0;
+
+    const Reharmonizer reharmonizer { options };
 
     const auto substitutions = reharmonizer.substitutionsFor (*parsed.chart, measureIndex);
     const auto& chart = *parsed.chart;
@@ -253,6 +256,11 @@ JAZZ_EXPORT const char* jazzReharmonise (const char* progressionText, int measur
                             + ",\"explanation\":" + quoted (substitution.explanation)
                             + ",\"difficulty\":" + quoted (difficultyName (substitution.difficulty))
                             + ",\"family\":" + quoted (familyName (substitution.family))
+                            + ",\"risky\":"
+                            + (substitution.difficulty == SubstitutionDifficulty::risky ? "true" : "false")
+                            + ",\"worksHere\":"
+                            + (substitution.voiceLeading.smoothHere ? "true" : "false")
+                            + ",\"verdict\":" + quoted (substitution.voiceLeading.note)
                             + ",\"style\":" + quoted (styleName (substitution.style))
                             + ",\"voiceLeadingCost\":" + std::to_string (substitution.voiceLeadingCost)
                             + ",\"progression\":" + quoted (applied.toProgressionText()) + "}";
@@ -370,7 +378,8 @@ JAZZ_EXPORT const char* jazzRecogniseSubstitution (const char* progressionText,
         return hold (jsonError (parsed.error));
 
     const auto voicing = Voicing::fromNotes (parseNoteList (midiNotesCsv != nullptr ? midiNotesCsv : ""));
-    const Reharmonizer::Options options { includeAdvanced != 0, ReharmStyle::common };
+    Reharmonizer::Options options;
+    options.includeAdvanced = includeAdvanced != 0;
     const auto found = recogniseSubstitution (voicing, *parsed.chart, measureIndex, options);
 
     if (! found.has_value())

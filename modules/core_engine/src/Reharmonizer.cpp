@@ -10,7 +10,30 @@ namespace jazz::core
 
 std::string difficultyName (SubstitutionDifficulty difficulty)
 {
-    return difficulty == SubstitutionDifficulty::safe ? "Safe" : "Advanced";
+    switch (difficulty)
+    {
+        case SubstitutionDifficulty::safe:     return "Safe";
+        case SubstitutionDifficulty::advanced: return "Advanced";
+        case SubstitutionDifficulty::risky:    return "Risky";
+    }
+
+    return "Substitution";
+}
+
+namespace
+{
+    /** Ordering within a family: the further out, the further down. */
+    int difficultyRank (SubstitutionDifficulty difficulty)
+    {
+        switch (difficulty)
+        {
+            case SubstitutionDifficulty::safe:     return 0;
+            case SubstitutionDifficulty::advanced: return 1;
+            case SubstitutionDifficulty::risky:    return 2;
+        }
+
+        return 3;
+    }
 }
 
 std::string styleName (ReharmStyle style)
@@ -88,6 +111,11 @@ namespace
         return ChordSymbol::build (root, ChordQuality::major, SeventhType::none);
     }
 
+    ChordSymbol minorTriad (PitchClass root)
+    {
+        return ChordSymbol::build (root, ChordQuality::minor, SeventhType::none);
+    }
+
     ChordSymbol minorSixth (PitchClass root)
     {
         return ChordSymbol::build (root, ChordQuality::minor, SeventhType::none, { Extension::six });
@@ -139,6 +167,17 @@ namespace
         }
 
         return text;
+    }
+
+    int sharedToneCount (const ChordSymbol& first, const ChordSymbol& second)
+    {
+        auto count = 0;
+
+        for (PitchClass pitchClass = 0; pitchClass < semitonesPerOctave; ++pitchClass)
+            if (first.containsPitchClass (pitchClass) && second.containsPitchClass (pitchClass))
+                ++count;
+
+        return count;
     }
 
     /** "It keeps C and G from Cmaj7." - or nothing, when there is no overlap. */
@@ -210,6 +249,55 @@ int voiceLeadingCost (const ChordSymbol& from, const ChordSymbol& to)
         cost += std::abs (motion.semitones);
 
     return cost;
+}
+
+namespace
+{
+    /** Says, in plain language, whether this bar is one of the times the
+        substitution works - and names the movement that decides it.
+
+        Which side of the bar is at fault matters: a chord can leave cleanly and
+        still be a struggle to get into, and saying "rough" while reporting no
+        movement out of it would read as nonsense.
+    */
+    std::string verdictNote (const ChordSymbol& original,
+                             const Substitution& substitution,
+                             const ChordSymbol* previous,
+                             const ChordSymbol* next,
+                             const VoiceLeadingVerdict& verdict)
+    {
+        const auto shared = sharedTones (original, substitution.replacement.front());
+        const auto keeps = shared.empty()
+                               ? "It shares no notes with " + original.toString()
+                               : "It keeps " + shared + " from " + original.toString();
+
+        const auto semitones = [] (int count)
+        {
+            return std::to_string (count) + (count == 1 ? " semitone" : " semitones");
+        };
+
+        if (verdict.smoothHere)
+        {
+            if (next == nullptr)
+                return keeps + ", and there is nothing after this bar to argue with it.";
+
+            return "Works here: the guide tones move " + semitones (verdict.departureCost)
+                   + " into " + next->toString() + ". " + keeps + ".";
+        }
+
+        // Blame whichever side actually costs more.
+        if (previous != nullptr && verdict.approachCost > verdict.departureCost)
+            return "Rough here: getting into it from " + previous->toString() + " takes "
+                   + semitones (verdict.approachCost) + " of guide-tone movement, even though it "
+                   + (next != nullptr ? "leaves cleanly" : "sits still") + ". " + keeps + ".";
+
+        if (next == nullptr)
+            return "Rough here: there is no chord after this bar to carry it. " + keeps + ".";
+
+        return "Rough here: the guide tones have to move " + semitones (verdict.departureCost)
+               + " to reach " + next->toString() + ". " + keeps
+               + ". Save it for a bar where the melody sits on a note both chords contain.";
+    }
 }
 
 std::vector<Substitution> Reharmonizer::substitutionsFor (const Chart& chart, int measureIndex) const
@@ -474,6 +562,111 @@ std::vector<Substitution> Reharmonizer::substitutionsFor (const Chart& chart, in
         }
     }
 
+    //==========================================================================
+    // The ones that only work sometimes. Each is offered with a verdict on
+    // whether this bar is one of those times - see the voice-leading pass below.
+
+    if (isDominant (chord))
+    {
+        const auto tritoneMajor = majorSeventh (toPitchClass (chord.root() + 6));
+        add ({ "Tritone major seventh",
+               { tritoneMajor },
+               "The tritone root with a major 7th instead of a dominant. It gives up the tritone "
+               "that made the chord pull, keeps the b7, and slides down a semitone into whatever "
+               "follows. Wonderful into a target a semitone below its root; inert anywhere else.",
+               SubstitutionDifficulty::risky,
+               ReharmStyle::modal,
+               SubstitutionFamily::chromaticMediant });
+
+        add ({ "Diminished-cycle dominant",
+               { dominant (toPitchClass (chord.root() + 3), { Extension::flatNine }) },
+               "Four dominants a minor third apart share one diminished scale, so any of them can "
+               "stand in for the others. The ear follows it when the melody is on a note the two "
+               "chords have in common, and loses the thread when it is not.",
+               SubstitutionDifficulty::risky,
+               ReharmStyle::bebop,
+               SubstitutionFamily::dominantFunction });
+
+        add ({ "Plagal dominant",
+               { majorSeventh (toPitchClass (chord.root() + 10)) },
+               "Resolving without a leading tone: the IV of where this dominant was going, falling "
+               "into the target instead of pulling into it. Gospel lives here; bebop never goes.",
+               SubstitutionDifficulty::risky,
+               ReharmStyle::modal,
+               SubstitutionFamily::dominantFunction });
+
+        add ({ "Upper-structure triad",
+               { majorTriad (toPitchClass (chord.root() + 1)).overBass (chord.root()) },
+               "A major triad a semitone above the root, held over that root: b9, 11 and b13 in "
+               "one shape. The altered sound written as a slash chord - it needs a melody living "
+               "in those tensions rather than on the 3rd.",
+               SubstitutionDifficulty::risky,
+               ReharmStyle::modal,
+               SubstitutionFamily::bassMotion });
+    }
+
+    if (isMajorish (chord))
+    {
+        const auto pole = minorTriad (toPitchClass (chord.root() + 8));
+        add ({ "Hexatonic pole",
+               { pole },
+               "A minor triad a major third below. Against the plain triad it shares nothing at "
+               "all; against a major 7th it shares that 7th, and that one note is the pivot the "
+               "ear follows. Theory calls this the hexatonic pole; film composers reach for it "
+               "when something has just gone wrong.",
+               SubstitutionDifficulty::risky,
+               ReharmStyle::modal,
+               SubstitutionFamily::chromaticMediant });
+
+        add ({ "Tritone major seventh",
+               { majorSeventh (toPitchClass (chord.root() + 6)) },
+               "As far from the chord as a major 7th can get: the root a tritone away. Nothing is "
+               "held in common, so it stands or falls on the melody note being in both chords.",
+               SubstitutionDifficulty::risky,
+               ReharmStyle::modal,
+               SubstitutionFamily::chromaticMediant });
+
+        add ({ "Lydian displacement",
+               { majorSeventh (toPitchClass (chord.root() + 5), { Extension::sharpEleven }) },
+               "The IV chord with this chord's major 7th sitting inside it as a #11. Three notes "
+               "stay put while the floor moves - the tonic stops being the tonic without anything "
+               "resolving.",
+               SubstitutionDifficulty::risky,
+               ReharmStyle::modal,
+               SubstitutionFamily::modalInterchange });
+    }
+
+    if (chord.quality() == ChordQuality::minor)
+    {
+        add ({ "Semitone-below major seventh",
+               { majorSeventh (toPitchClass (chord.root() - 1)) },
+               "A major 7th a semitone under the minor chord it replaces, keeping its b7 and its "
+               "11th. It leans on the bar rather than sitting in it, and wants to slide back up.",
+               SubstitutionDifficulty::risky,
+               ReharmStyle::modal,
+               SubstitutionFamily::chromaticMediant });
+
+        add ({ "Tritone minor",
+               { minorSeventh (toPitchClass (chord.root() + 6)) },
+               "The ii chord moved a tritone, so a ii-V walks down chromatically into the target "
+               "instead of round the cycle. Everything depends on what comes after it.",
+               SubstitutionDifficulty::risky,
+               ReharmStyle::bebop,
+               SubstitutionFamily::dominantFunction });
+    }
+
+    if (next != nullptr && next->root() != chord.root())
+    {
+        add ({ "Anticipate the next chord",
+               { next->overBass (chord.root()) },
+               "The chord you are going to, held over the bass note you are on. A bar can feel "
+               "resolved before it resolves - and can feel like a mistake if the melody still "
+               "belongs to the chord you left.",
+               SubstitutionDifficulty::risky,
+               ReharmStyle::modal,
+               SubstitutionFamily::bassMotion });
+    }
+
     // Available whatever the quality: same harmony, different note underneath.
     add ({ "Third in the bass",
            { chord.overBass (toPitchClass (chord.root() + chord.thirdSemitones())) },
@@ -491,17 +684,41 @@ std::vector<Substitution> Reharmonizer::substitutionsFor (const Chart& chart, in
                                                  && substitution.difficulty == SubstitutionDifficulty::advanced)
                                                  return true;
 
+                                             if (! options.includeRisky
+                                                 && substitution.difficulty == SubstitutionDifficulty::risky)
+                                                 return true;
+
                                              return options.style != ReharmStyle::common
                                                     && substitution.style != options.style
                                                     && substitution.style != ReharmStyle::common;
                                          }),
                          substitutions.end());
 
-    // Rank by how smoothly the substitution leads into the following chord.
+    // Rank by how smoothly the substitution leads into the following chord, and
+    // work out whether it actually lands in this particular bar.
+    const auto* previous = chart.chordAt (measureIndex - 1);
+
     for (auto& substitution : substitutions)
-        substitution.voiceLeadingCost = next == nullptr || substitution.replacement.empty()
-                                            ? 0
-                                            : voiceLeadingCost (substitution.replacement.back(), *next);
+    {
+        if (substitution.replacement.empty())
+            continue;
+
+        const auto& arriving = substitution.replacement.front();
+        const auto& leaving = substitution.replacement.back();
+
+        substitution.voiceLeadingCost = next == nullptr ? 0 : voiceLeadingCost (leaving, *next);
+
+        auto& verdict = substitution.voiceLeading;
+        verdict.approachCost = previous == nullptr ? 0 : voiceLeadingCost (*previous, arriving);
+        verdict.departureCost = substitution.voiceLeadingCost;
+        verdict.sharedWithOriginal = sharedToneCount (chord, arriving);
+
+        // A chord that keeps nothing of the original has to earn its place with
+        // voice leading alone, so it is held to a tighter standard.
+        const auto budget = verdict.sharedWithOriginal > 0 ? 4 : 2;
+        verdict.smoothHere = verdict.totalCost() <= budget && verdict.departureCost <= 3;
+        verdict.note = verdictNote (chord, substitution, previous, next, verdict);
+    }
 
     // Grouped by family, nearest the original harmony first, so the list reads
     // as a path from safe ground outwards rather than a flat pile of options.
@@ -512,7 +729,7 @@ std::vector<Substitution> Reharmonizer::substitutionsFor (const Chart& chart, in
                               return static_cast<int> (a.family) < static_cast<int> (b.family);
 
                           if (a.difficulty != b.difficulty)
-                              return a.difficulty == SubstitutionDifficulty::safe;
+                              return difficultyRank (a.difficulty) < difficultyRank (b.difficulty);
 
                           return a.voiceLeadingCost < b.voiceLeadingCost;
                       });
@@ -530,6 +747,7 @@ std::string planName (ReharmPlanKind kind)
         case ReharmPlanKind::adventurous:   return "Adventurous";
         case ReharmPlanKind::cycleOfFifths: return "Cycle of fifths";
         case ReharmPlanKind::modalColour:   return "Modal colour";
+        case ReharmPlanKind::outThere:      return "Out there";
     }
 
     return "Reharmonisation";
@@ -551,6 +769,12 @@ namespace
         int barsBetweenChanges {};                 ///< 0 lets consecutive bars change
         bool onlyStaticBars {};                    ///< bars repeating the one before them
         bool keepFinalBar { true };                ///< the last bar is where the tune lands
+
+        /** Take only risky substitutions, and only where the voice leading in
+            that bar actually carries them. Bars with nothing that lands are
+            left as written.
+        */
+        bool riskyWhereTheyLand {};
     };
 
     PlanPolicy policyFor (ReharmPlanKind kind)
@@ -561,14 +785,14 @@ namespace
                 return { "Colour on the bars that were only marking time, and nothing else. "
                          "The tune comes back unchanged in shape.",
                          { SubstitutionFamily::extension, SubstitutionFamily::bassMotion },
-                         false, 1, true, true };
+                         false, 1, true, true, false };
 
             case ReharmPlanKind::recommended:
                 return { "Safe moves, spaced out so no two bars in a row change: ii-Vs where a "
                          "dominant was sitting still, diatonic substitutions, a little colour.",
                          { SubstitutionFamily::dominantFunction, SubstitutionFamily::diatonic,
                            SubstitutionFamily::extension },
-                         false, 1, false, true };
+                         false, 1, false, true, false };
 
             case ReharmPlanKind::adventurous:
                 return { "Borrowed chords and chromatic mediants wherever they fit, with the "
@@ -576,20 +800,27 @@ namespace
                          { SubstitutionFamily::modalInterchange, SubstitutionFamily::chromaticMediant,
                            SubstitutionFamily::dominantFunction, SubstitutionFamily::passingChord,
                            SubstitutionFamily::diatonic },
-                         true, 0, false, false };
+                         true, 0, false, false, false };
 
             case ReharmPlanKind::cycleOfFifths:
                 return { "Keep it moving: a ii-V or a secondary dominant in front of everything "
                          "that will take one, and passing chords between the rest.",
                          { SubstitutionFamily::dominantFunction, SubstitutionFamily::passingChord },
-                         true, 0, false, false };
+                         true, 0, false, false, false };
 
             case ReharmPlanKind::modalColour:
                 return { "Borrow from the parallel minor all the way through - bVI and bIII major "
                          "sevenths, minor plagal approaches, Dorian and melodic-minor colours.",
                          { SubstitutionFamily::modalInterchange, SubstitutionFamily::chromaticMediant,
                            SubstitutionFamily::extension },
-                         true, 1, false, true };
+                         true, 1, false, true, false };
+
+            case ReharmPlanKind::outThere:
+                return { "The substitutions that only work sometimes, used only in the bars where "
+                         "the voice leading carries them. Bars where nothing lands are left exactly "
+                         "as they were, so expect this one to touch fewer bars than it sounds like "
+                         "it should.",
+                         {}, true, 0, false, true, true };
         }
 
         return {};
@@ -627,9 +858,11 @@ ReharmPlan makeReharmPlan (const Chart& chart, ReharmPlanKind kind)
     plan.description = policy.description;
     plan.chart = chart;
 
-    const Reharmonizer reharmonizer {
-        Reharmonizer::Options { policy.allowAdvanced, ReharmStyle::common }
-    };
+    Reharmonizer::Options planOptions;
+    planOptions.includeAdvanced = policy.allowAdvanced;
+    planOptions.includeRisky = policy.riskyWhereTheyLand;
+
+    const Reharmonizer reharmonizer { planOptions };
 
     auto lastChanged = -1000;
 
@@ -662,8 +895,26 @@ ReharmPlan makeReharmPlan (const Chart& chart, ReharmPlanKind kind)
         const auto substitutions = reharmonizer.substitutionsFor (plan.chart, measureIndex);
         const Substitution* chosen = nullptr;
 
+        if (policy.riskyWhereTheyLand)
+        {
+            // The whole point of this plan: take the risk only when the bar
+            // says it works, and otherwise leave the bar alone.
+            for (const auto& substitution : substitutions)
+            {
+                if (substitution.difficulty != SubstitutionDifficulty::risky
+                    || ! substitution.voiceLeading.smoothHere)
+                    continue;
+
+                chosen = &substitution;
+                break;
+            }
+        }
+
         for (auto family : policy.families)
         {
+            if (chosen != nullptr)
+                break;
+
             for (const auto& substitution : substitutions)
             {
                 if (substitution.family != family)
@@ -712,7 +963,7 @@ std::vector<ReharmPlan> reharmPlansFor (const Chart& chart)
 
     for (auto kind : { ReharmPlanKind::minimalTouch, ReharmPlanKind::recommended,
                        ReharmPlanKind::modalColour, ReharmPlanKind::cycleOfFifths,
-                       ReharmPlanKind::adventurous })
+                       ReharmPlanKind::adventurous, ReharmPlanKind::outThere })
         plans.push_back (makeReharmPlan (chart, kind));
 
     return plans;

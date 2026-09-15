@@ -687,6 +687,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 }
 .option:hover { border-color: var(--blush); border-left-color: var(--blush-deep); }
 .option.advanced { border-left-color: var(--gold); }
+.option.risky { border-left-color: var(--rust); }
 .option-head { display: flex; align-items: baseline; gap: 12px; }
 .option-chords { font-family: var(--hand); font-weight: 700; font-size: 19px; color: var(--charcoal); }
 .option-name { font-size: 14px; color: var(--text-soft); }
@@ -699,6 +700,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   white-space: nowrap;
 }
 .option.advanced .option-tag { color: var(--gold); }
+.option.risky .option-tag { color: var(--rust); }
+
+/* A risky option leads with whether it lands in this bar rather than with the
+   general case, because the general case is "it depends". */
+.option-verdict {
+  font-size: 12.5px;
+  margin: 6px 0 0;
+  padding-left: 9px;
+  border-left: 2px solid var(--line);
+}
+.option-verdict.works { color: var(--sage); border-left-color: var(--sage); }
+.option-verdict.rough { color: var(--rust); border-left-color: var(--rust); }
+.option-tag .verdict-flag { font-weight: 600; }
 .option-why { font-size: 13.5px; color: var(--text-soft); margin: 5px 0 0; }
 
 .scale-rows { list-style: none; margin: 0; padding: 0; }
@@ -948,12 +962,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     <section class="tab-panel" id="panelReharm" role="tabpanel" aria-labelledby="tabReharm" hidden>
       <p class="voicing-note">
         Grouped from the closest to the original harmony outwards. Choosing one rewrites
-        this bar in the chart.
+        this bar in the chart. Risky ones are judged against this bar in particular - the
+        same substitution can work here and fall flat two bars later.
       </p>
       <div id="subs"></div>
       <label class="toggle-row" for="advanced">
         <input type="checkbox" id="advanced" checked>
         Include advanced substitutions
+      </label>
+      <label class="toggle-row" for="risky">
+        <input type="checkbox" id="risky">
+        Include risky ones, judged bar by bar
       </label>
     </section>
 
@@ -1000,7 +1019,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "parseError", "systems", "verdict", "played", "expecting", "findingRow", "meter",
    "meterFill", "keyboard", "clearKeys", "chordDialog", "dialogBar", "dialogChord",
    "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
-   "scaleRows", "subs", "advanced", "spotted", "spottedText", "useSpotted",
+   "scaleRows", "subs", "advanced", "risky", "spotted", "spottedText", "useSpotted",
    "menuButton", "menuPanel", "connectMidi", "midiStatus", "styleLabel",
    "showVoicing", "playChord", "nameChord", "named", "namedText",
    "planButton", "planDialog", "planClose", "planList"].forEach(function (id) {
@@ -1266,8 +1285,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function renderSubstitutions() {
     var result = call(
       "jazzReharmonise",
-      ["string", "number", "number"],
-      [state.progression, state.selected, el.advanced.checked ? 1 : 0]
+      ["string", "number", "number", "number"],
+      [state.progression, state.selected, el.advanced.checked ? 1 : 0, el.risky.checked ? 1 : 0]
     );
     if (result === null || !result.ok) return;
 
@@ -1323,7 +1342,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       var item = document.createElement("li");
       var button = document.createElement("button");
       button.type = "button";
-      button.className = "option" + (substitution.difficulty === "Advanced" ? " advanced" : "");
+      button.className = "option"
+        + (substitution.difficulty === "Advanced" ? " advanced" : "")
+        + (substitution.risky ? " risky" : "");
 
       var head = document.createElement("div");
       head.className = "option-head";
@@ -1341,14 +1362,30 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       var tag = document.createElement("span");
       tag.className = "option-tag";
       tag.textContent = substitution.difficulty;
-      head.appendChild(tag);
 
+      // The tag carries the instance verdict, so the list can be read down the
+      // right-hand column: which of these actually work in this bar.
+      if (substitution.risky) {
+        var flag = document.createElement("span");
+        flag.className = "verdict-flag";
+        flag.textContent = substitution.worksHere ? " - works here" : " - rough here";
+        tag.appendChild(flag);
+      }
+
+      head.appendChild(tag);
       button.appendChild(head);
 
       var why = document.createElement("p");
       why.className = "option-why";
       why.textContent = substitution.explanation;
       button.appendChild(why);
+
+      if (substitution.risky) {
+        var verdict = document.createElement("p");
+        verdict.className = "option-verdict " + (substitution.worksHere ? "works" : "rough");
+        verdict.textContent = substitution.verdict;
+        button.appendChild(verdict);
+      }
 
       button.addEventListener("click", function () {
         applyProgression(substitution.progression);
@@ -1361,6 +1398,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   el.advanced.addEventListener("change", renderSubstitutions);
+  el.risky.addEventListener("change", renderSubstitutions);
 
   function applyProgression(progression) {
     state.progression = progression;
