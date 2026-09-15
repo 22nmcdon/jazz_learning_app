@@ -283,3 +283,19 @@ TEST ("chords written with real accidentals are read")
     CHECK_EQ (parsed ("G7♯11").toString(), std::string ("G7#11"));
     CHECK_EQ (parsed ("E♭13sus4").toString(), std::string ("Eb13sus4"));
 }
+
+TEST ("a name never drops a note the chord is defined by")
+{
+    // Both of these used to print as something else: a diminished triad with a
+    // major 7th came out "Cdim", and a sus chord with a sixth came out "Csus4".
+    CHECK_EQ (parsed ("CdimMaj7").toString(), std::string ("CdimMaj7"));
+    CHECK_EQ (parsed ("C6sus4").toString(), std::string ("C6sus4"));
+    CHECK_EQ (parsed ("C6sus2").toString(), std::string ("C6sus2"));
+
+    // And the neighbours they were colliding with still print as themselves.
+    CHECK_EQ (parsed ("Cdim").toString(), std::string ("Cdim"));
+    CHECK_EQ (parsed ("Cdim7").toString(), std::string ("Cdim7"));
+    CHECK_EQ (parsed ("Csus4").toString(), std::string ("Csus4"));
+    CHECK_EQ (parsed ("C7sus4").toString(), std::string ("C7sus4"));
+    CHECK_EQ (parsed ("C13sus4").toString(), std::string ("C13sus4"));
+}

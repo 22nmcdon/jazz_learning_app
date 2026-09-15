@@ -607,7 +607,12 @@ std::string ChordSymbol::toString (Accidental accidental) const
             break;
 
         case ChordQuality::diminished:
-            result += seventhType == SeventhType::diminished ? "dim7" : "dim";
+            // A diminished triad carrying a major 7th is a chord in its own
+            // right; writing it "dim" would lose the note that defines it.
+            if (seventhType == SeventhType::major)
+                result += "dimMaj7";
+            else
+                result += seventhType == SeventhType::diminished ? "dim7" : "dim";
             break;
 
         case ChordQuality::augmented:
@@ -617,7 +622,16 @@ std::string ChordSymbol::toString (Accidental accidental) const
         case ChordQuality::suspended:
             if (seventhType != SeventhType::none)
                 result += highest;
+
             result += suspendedSecond ? "sus2" : "sus4";
+
+            // A sus chord with a sixth and no seventh keeps the sixth: "6sus4"
+            // is not "sus4", and a 6 cannot ride on the "highest" slot above
+            // because that slot belongs to the seventh.
+            if (seventhType == SeventhType::none && hasExtension (Extension::six))
+                result = pitchClassName (rootPitchClass, accidental) + "6"
+                       + (suspendedSecond ? "sus2" : "sus4");
+
             break;
     }
 

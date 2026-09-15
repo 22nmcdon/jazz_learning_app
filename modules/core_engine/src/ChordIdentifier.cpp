@@ -12,25 +12,55 @@ namespace
         Held as suffixes and parsed by the chord parser rather than built by
         hand, so the identifier can only ever name chords the rest of the engine
         also understands.
+
+        The dominant tensions are generated rather than listed. A hand-written
+        list kept missing real chords - a 7b9#9b13 is what an altered dominant
+        is when the player leaves the #11 out, which is most of the time - and
+        the reason is that the family is combinatorial: a ninth, a sharp
+        eleventh and a thirteenth, each with its own choices. Thirty of them
+        written out by hand will always be missing the thirty-first.
     */
     const std::vector<std::string>& templateSuffixes()
     {
-        static const std::vector<std::string> suffixes {
-            // Triads first: the simplest name that explains the notes should win.
-            "", "m", "dim", "+", "sus4", "sus2",
-            "6", "m6", "6/9", "add9", "madd9",
-            "maj7", "maj9", "maj13", "maj7#11", "maj9#11",
-            "m7", "m9", "m11", "m13",
-            "mMaj7",
-            "7", "9", "13", "7b5",
-            "7b9", "7#9", "7#11", "7b13", "7#5", "9#11", "13#11",
-            "7b9b13", "7#9b13", "13b9", "alt",
-            // The sus family goes all the way up: a 13sus4 is a sound in its own
-            // right, not a 9sus4 with a note left over.
-            "7sus4", "9sus4", "13sus4", "7sus4b9",
-            "maj7#5", "m6/9", "mMaj9",
-            "m7b5", "m9b5", "dim7"
-        };
+        static const std::vector<std::string> suffixes = []
+        {
+            std::vector<std::string> built {
+                // Triads first: the simplest name that explains the notes should win.
+                "", "m", "dim", "+", "sus4", "sus2",
+                "6", "m6", "6/9", "add9", "madd9",
+                "maj7", "maj9", "maj11", "maj13", "maj7#11", "maj9#11", "maj13#11",
+                "maj7#5",
+                "m7", "m9", "m11", "m13",
+                "mMaj7", "mMaj9", "mMaj11",
+                "m7b5", "m9b5", "m11b5", "dim7", "dimMaj7", "m6/9",
+                // The sus family goes all the way up: a 13sus4 is a sound in its own
+                // right, not a 9sus4 with a note left over.
+                "7sus4", "9sus4", "13sus4", "7sus4b9",
+                // An eleventh chord keeps its natural 11, which the generated
+                // tensions below never use.
+                "11"
+            };
+
+            // Every dominant the tensions can spell: the ninth in each of its
+            // forms, with or without the sharp eleventh, with or without a
+            // thirteenth. "7b9#9#11b13" comes back out of the parser as "alt".
+            for (const auto* ninth : { "", "9", "b9", "#9", "b9#9" })
+                for (const auto* eleventh : { "", "#11" })
+                    for (const auto* thirteenth : { "", "13", "b13" })
+                        built.push_back (std::string ("7") + ninth + eleventh + thirteenth);
+
+            // A moved fifth is its own chord, but only the plain forms earn a
+            // place: every name in here competes with every other, and one that
+            // nobody writes still wins whenever it happens to account for all
+            // the notes. A complete Asus4b9 beat a rootless C13 to the answer
+            // while this list was being written, which is the whole argument
+            // for keeping the vocabulary to chords players actually put on
+            // charts rather than to everything the parser will accept.
+            built.push_back ("7b5");
+            built.push_back ("7#5");
+
+            return built;
+        }();
 
         return suffixes;
     }
@@ -41,11 +71,33 @@ namespace
         static const std::vector<ChordSymbol> templates = []
         {
             std::vector<ChordSymbol> built;
+            std::vector<std::string> seen;
 
+            // Different suffixes can spell the same chord - "7#11 13" and
+            // "79#11 13" are both a 13#11 - and a name offered twice reads as
+            // two different answers to the same question.
             for (PitchClass root = 0; root < semitonesPerOctave; ++root)
+            {
                 for (const auto& suffix : templateSuffixes())
-                    if (auto chord = ChordSymbol::parse (pitchClassName (root) + suffix))
-                        built.push_back (*chord);
+                {
+                    const auto chord = ChordSymbol::parse (pitchClassName (root) + suffix);
+
+                    if (! chord.has_value())
+                        continue;
+
+                    // Keyed on the notes as well as the name: two spellings are
+                    // the same template only when they sound the same, so a name
+                    // that failed to say everything about its chord can never
+                    // quietly drop a different chord from the vocabulary.
+                    const auto key = chord->toString() + "/" + std::to_string (chord->pitchClassMask());
+
+                    if (std::find (seen.begin(), seen.end(), key) != seen.end())
+                        continue;
+
+                    seen.push_back (key);
+                    built.push_back (*chord);
+                }
+            }
 
             return built;
         }();

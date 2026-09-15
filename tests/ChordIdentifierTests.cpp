@@ -207,3 +207,87 @@ TEST ("names the chords added alongside the suspended thirteenth")
     CHECK_EQ (nameOf ({ 60, 64, 66, 70 }), std::string ("C7b5"));
     CHECK_EQ (nameOf ({ 60, 65, 67, 70, 73 }), std::string ("C7sus4b9"));
 }
+
+//==============================================================================
+TEST ("an altered dominant with no sharp eleventh still has a name")
+{
+    // D F# C F Bb Eb - what "alt" is when the player leaves the #11 out, which
+    // is most of the time. This was unnameable until the dominant tensions were
+    // generated rather than listed.
+    CHECK_EQ (nameOf ({ 38, 42, 48, 53, 58, 63 }), std::string ("D7b9#9b13"));
+}
+
+TEST ("every dominant the tensions can spell can be named")
+{
+    // The ninth in each of its forms, with or without the sharp eleventh, with
+    // or without a thirteenth: the whole family, not a list of the ones someone
+    // remembered. Each is built from its own chord tones and read back.
+    for (const auto* ninth : { "", "9", "b9", "#9", "b9#9" })
+    {
+        for (const auto* eleventh : { "", "#11" })
+        {
+            for (const auto* thirteenth : { "", "13", "b13" })
+            {
+                const auto symbol = std::string ("C7") + ninth + eleventh + thirteenth;
+                const auto chord = ChordSymbol::parse (symbol);
+
+                CHECK (chord.has_value());
+
+                if (! chord.has_value())
+                    continue;
+
+                std::vector<int> notes;
+
+                for (const auto& tone : chord->chordTones())
+                    notes.push_back (48 + toPitchClass (static_cast<int> (chord->root()) + tone.semitones));
+
+                const auto readings = readingsOf (notes);
+
+                CHECK (! readings.empty());
+
+                // Named on C, whatever spelling of the alterations wins.
+                const auto namedOnC = std::any_of (readings.begin(), readings.end(),
+                                                   [] (const std::string& name)
+                                                   { return name.rfind ("C", 0) == 0; });
+
+                if (! namedOnC)
+                    CHECK_EQ (symbol + " was named", readings.front());
+
+                CHECK (namedOnC);
+            }
+        }
+    }
+}
+
+TEST ("no reading is offered twice")
+{
+    // Several suffixes spell the same chord - "7#11 13" and "79#11 13" are both
+    // a 13#11 - and the same name twice reads as two answers to one question.
+    const std::vector<std::vector<int>> voicings {
+        { 48, 52, 55, 58, 62 }, { 38, 42, 48, 53, 58, 63 }, { 60, 64, 71 },
+        { 52, 58, 62, 69 }, { 48, 51, 54, 58 }
+    };
+
+    for (const auto& notes : voicings)
+    {
+        auto names = readingsOf (notes);
+        const auto before = names.size();
+
+        std::sort (names.begin(), names.end());
+        names.erase (std::unique (names.begin(), names.end()), names.end());
+
+        CHECK_EQ (names.size(), before);
+    }
+}
+
+TEST ("a rootless thirteenth still beats a complete name nobody writes")
+{
+    // E Bb D A is a rootless C13. Widening the vocabulary once put an Asus4b9
+    // above it, because a name that accounts for every note outranks one that
+    // leaves the root to the bass player - which is why the vocabulary holds
+    // chords players write rather than everything the parser accepts.
+    const auto readings = readingsOf ({ 52, 58, 62, 69 });
+
+    CHECK (offers (readings, "C13/E"));
+    CHECK (! offers (readings, "Asus4b9/E"));
+}

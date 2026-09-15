@@ -17,7 +17,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/core_engine` | Chord parsing, scale suggestion, reharmonisation, voicing analysis, note-input abstraction. Pure C++17. | nothing |
 | `modules/shared_ui` | Chart view, on-screen keyboard, scale panel, reharm panel, feedback panel, responsive `MainComponent`. | core engine, JUCE |
 | `app` | Platform shell: MIDI devices, window and app lifecycle. | shared UI, JUCE |
-| `tests` | Engine unit tests (202), no JUCE, no third-party framework. | core engine |
+| `tests` | Engine unit tests (207), no JUCE, no third-party framework. | core engine |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -186,6 +186,14 @@ that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
   no expected chord. Every note has to be accounted for, so a chromatic cluster returns
   nothing rather than the least bad guess, and a name that leaves out more than it explains
   is not offered: E G B D reads as Em7, then G6/E, with the rootless Cmaj9 further down.
+  The dominant tensions it knows are generated rather than listed - a ninth in each of its
+  forms, with or without a sharp eleventh, with or without a thirteenth - because that
+  family is combinatorial and a hand-written list of it kept missing real chords: a
+  7b9#9b13 is what an altered dominant is when the player leaves the #11 out, which is
+  most of the time. Everything else in the vocabulary is curated, and deliberately so:
+  every name competes with every other, and one that nobody writes still wins whenever it
+  happens to account for all the notes, so adding chords the parser accepts but players
+  do not use makes the common answers worse rather than better.
 - **Spotting a reharmonisation by ear** — a played voicing is read back against every
   substitution available for that bar, so playing Ab C Eb G over a Cmaj7 bar is reported as
   "that is Abmaj7, the bVI major seventh substitution" rather than as a broken Cmaj7. When
