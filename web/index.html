@@ -927,7 +927,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       </div>
 
       <div class="sheet-tools">
-        <p class="sheet-hint">Click any bar for its scales, reharmonisations and voicings.</p>
+        <p class="sheet-hint">Click a bar to work on it - arrow keys move along. Click it again for
+          its scales and reharmonisations.</p>
         <div class="tools-right">
           <button class="link-btn" type="button" id="planButton">Reharmonise the tune</button>
           <button class="link-btn" type="button" id="editToggle">Edit chart</button>
@@ -1271,6 +1272,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
         if (measure) {
           if (state.reharmonised[index]) bar.classList.add("reharmonised");
+          bar.dataset.index = String(index);
           bar.setAttribute("aria-label", "Bar " + (index + 1) + ", " + measure.chords.map(function (c) { return c.symbol; }).join(" "));
           placeChords(bar, measure);
           bar.addEventListener("click", makeBarHandler(index));
@@ -1315,14 +1317,31 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.sheetCredit.textContent = composer || "chord chart";
   }
 
+  /** Moves to a bar without saying anything about it. */
+  function selectBar(index) {
+    if (index < 0 || index >= state.measures.length) return;
+
+    state.selected = index;
+    renderSheet();
+    updateExpecting();
+    analyseVoicing();
+  }
+
   function makeBarHandler(index) {
     return function () {
-      state.selected = index;
-      renderSheet();
-      updateExpecting();
-      analyseVoicing();
-      openDialog();
+      // A bar you are already on is one you want to know more about; a bar you
+      // are not is one you are moving to. Stepping through the chart to check
+      // voicings then never puts a dialog in front of the keyboard.
+      var openIt = index === state.selected;
+      selectBar(index);
+      if (openIt) openDialog();
     };
+  }
+
+  /** Keeps the arrow keys working after the sheet is redrawn. */
+  function focusSelectedBar() {
+    var bars = el.systems.querySelectorAll(".bar:not([disabled])");
+    if (bars[state.selected]) bars[state.selected].focus();
   }
 
   function selectedChord() {
@@ -2344,6 +2363,29 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   });
 
   // Space plays the chord too, as long as nothing else has the keyboard.
+  // Stepping along the chart with the hands still on the keys.
+  document.addEventListener("keydown", function (event) {
+    if (el.chordDialog.open || el.planDialog.open || el.ioDialog.open) return;
+    if (event.target !== document.body && !event.target.classList.contains("bar")) return;
+
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      event.preventDefault();
+
+      // Step from the bar the keyboard is on. Tabbing to a bar moves the focus
+      // without choosing it, and an arrow from there should go to the bar next
+      // to that one rather than jumping back to wherever the last click was.
+      var from = event.target.dataset && event.target.dataset.index !== undefined
+        ? Number(event.target.dataset.index)
+        : state.selected;
+
+      selectBar(from + (event.key === "ArrowRight" ? 1 : -1));
+      focusSelectedBar();
+    }
+
+    // Enter needs no handler: a bar is a button, so it activates on Enter and
+    // goes through the same select-then-open as a click.
+  });
+
   document.addEventListener("keydown", function (event) {
     if (event.code !== "Space" || event.target !== document.body) return;
     if (midi.connected || state.heldNotes.length === 0) return;

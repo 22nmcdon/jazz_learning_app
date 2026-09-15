@@ -80,6 +80,11 @@ is connected and doing the playing. Connecting a MIDI keyboard widens the drawn 
 and anything played outside that widens it further, so a two-handed voicing is never partly
 off the end. The desktop app widens its keyboard the same way, but makes no sound yet.
 
+Clicking a bar moves to it; clicking the bar you are already on opens its scales and
+reharmonisations. Stepping along the chart to check one voicing after another therefore
+never puts a dialog in front of the keyboard, and the arrow keys move between bars without
+taking a hand off the keys.
+
 **Import / export**, in the Practice menu on the browser page, opens a chart that came
 from somewhere else and writes the one on screen back out. It reads an iReal Pro link, the `.html` file iReal Pro
 sends when you share a song, a PDF lead sheet (iReal Pro exports one, and so does this
