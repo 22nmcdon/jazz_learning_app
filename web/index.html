@@ -890,7 +890,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <label class="menu-option"><input type="radio" name="voicingStyle" value="shell"> Shell <span class="hint">root, 3rd, 7th</span></label>
             <label class="menu-option"><input type="radio" name="voicingStyle" value="rootless"> Rootless, left hand</label>
             <label class="menu-option"><input type="radio" name="voicingStyle" value="twohanded"> Two-handed rootless</label>
+            <label class="menu-option"><input type="radio" name="voicingStyle" value="solo"> Solo <span class="hint">root in the left hand</span></label>
             <p class="menu-note">Everything you play is checked against this shape, on every bar.</p>
+          </div>
+
+          <div class="menu-group" role="radiogroup" aria-label="How much colour">
+            <span class="menu-title">Show me</span>
+            <label class="menu-option"><input type="radio" name="voicingColour" value="plain" checked> The base shape</label>
+            <label class="menu-option"><input type="radio" name="voicingColour" value="rich"> With the tensions</label>
+            <p class="menu-note">Show me one keeps going: press it again for the next shape.</p>
           </div>
 
           <div class="menu-group" role="radiogroup" aria-label="Sound">
@@ -993,7 +1001,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
 <div class="wrap">
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 192 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 202 unit tests, no JUCE.</span>
     <span>Bindings: <code>web/src/JazzWebBindings.cpp</code>.</span>
     <span>Built with <code>em++ -O2</code>.</span>
   </footer>
@@ -1132,6 +1140,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     progression: DEFAULT_PROGRESSION,
     composer: "",
     chartStyle: "",   // the feel written on the chart, not the reharm style below
+    colour: "plain",  // how much tension the suggested voicings carry
+    shownFor: "",     // which chord and shape the walk through the voicings is on
+    shownIndex: 0,
     measures: [],
     selected: 0,
     reharmonised: {},
@@ -1180,7 +1191,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     root: "root position",
     shell: "shell voicings",
     rootless: "rootless left hand",
-    twohanded: "two-handed rootless"
+    twohanded: "two-handed rootless",
+    solo: "solo voicings"
   };
 
   // --- engine --------------------------------------------------------------
@@ -2072,6 +2084,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   function applyStyle(style) {
     state.style = style;
+    state.shownFor = "";
     el.styleLabel.textContent = STYLE_NAMES[style] || style;
     rememberStyle(style);
     analyseVoicing();
@@ -2083,22 +2096,43 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     });
   });
 
+  Array.prototype.forEach.call(document.querySelectorAll("input[name=voicingColour]"), function (radio) {
+    radio.addEventListener("change", function () {
+      if (!radio.checked) return;
+      state.colour = radio.value;
+      state.shownFor = "";   // start the walk again at the first shape
+    });
+  });
+
   /** Puts an idiomatic voicing of the chosen shape on the keyboard - the
       "sentence starter" for a chord the player does not have under their hands. */
   el.showVoicing.addEventListener("click", function () {
     var chord = selectedChord();
     if (!chord) return;
 
-    var result = call("jazzIdiomaticVoicings", ["string", "number", "string"],
-                      [chord, 53, state.style === "any" ? "" : state.style]);
+    // Anchor 0 means "wherever this shape belongs": a solo left hand sits an
+    // octave and a half below a rootless one, and the engine knows where.
+    var result = call("jazzIdiomaticVoicings", ["string", "number", "string", "number"],
+                      [chord, 0, state.style === "any" ? "" : state.style,
+                       state.colour === "rich" ? 1 : 0]);
 
     if (result === null || !result.ok || !result.voicings.length) return;
 
-    var group = result.voicings[0];
-    if (!group.options.length) return;
+    // Every shape on offer, flattened, so pressing the button again moves on to
+    // the next one rather than showing the same voicing over and over.
+    var options = [];
+    result.voicings.forEach(function (group) {
+      group.options.forEach(function (option) { options.push(option); });
+    });
+
+    if (!options.length) return;
+
+    var key = chord + "/" + state.style + "/" + state.colour;
+    state.shownIndex = state.shownFor === key ? (state.shownIndex + 1) % options.length : 0;
+    state.shownFor = key;
 
     stopAllNotes();
-    state.heldNotes = group.options[0].notes.slice().sort(function (a, b) { return a - b; });
+    state.heldNotes = options[state.shownIndex].notes.slice().sort(function (a, b) { return a - b; });
     ensureNotesVisible(state.heldNotes);
     playChord(state.heldNotes);
     paintKeyboard();

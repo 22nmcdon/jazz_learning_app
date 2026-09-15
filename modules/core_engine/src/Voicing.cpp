@@ -89,6 +89,7 @@ std::string voicingTypeName (VoicingType type)
         case VoicingType::rootPosition:      return "root-position voicing";
         case VoicingType::rootlessLeftHand:  return "rootless left-hand voicing";
         case VoicingType::twoHandedRootless: return "two-handed rootless voicing";
+        case VoicingType::solo:              return "solo voicing";
         case VoicingType::spread:            return "spread voicing";
         case VoicingType::unknown:           break;
     }
@@ -112,14 +113,32 @@ namespace
         return 2;
     }
 
-    /** What sits in the 5th/13th slot of a rootless voicing. */
-    int upperFifthOf (const ChordSymbol& chord)
+    /** The chord's fifth, wherever the symbol has moved it to. */
+    int fifthOf (const ChordSymbol& chord)
+    {
+        if (has (chord, Extension::sharpFive) || chord.quality() == ChordQuality::augmented) return 8;
+        if (has (chord, Extension::flatFive) || chord.quality() == ChordQuality::diminished
+            || chord.quality() == ChordQuality::halfDiminished)                              return 6;
+        return 7;
+    }
+
+    /** The chord's thirteenth - the tension a sixth above the root.
+
+        A chord built on a flat fifth has no natural thirteenth to take, so it
+        takes the flat thirteenth that its scale does have.
+    */
+    int thirteenthOf (const ChordSymbol& chord)
     {
         if (has (chord, Extension::flatThirteen) || has (chord, Extension::sharpFive)) return 8;
         if (has (chord, Extension::thirteen) || has (chord, Extension::six))           return 9;
-        if (has (chord, Extension::flatFive) || chord.quality() == ChordQuality::diminished
-            || chord.quality() == ChordQuality::halfDiminished)                        return 6;
-        return 7;
+
+        if (chord.quality() == ChordQuality::halfDiminished
+            || chord.quality() == ChordQuality::diminished
+            || chord.quality() == ChordQuality::augmented
+            || has (chord, Extension::flatFive))
+            return 8;
+
+        return 9;
     }
 
     int thirdOf (const ChordSymbol& chord)
@@ -163,43 +182,247 @@ namespace
 
         return Voicing::fromNotes (std::move (notes));
     }
+
+    /** Drops offsets that would sound a note the voicing already has.
+
+        A 6th chord is why: its "seventh" slot and its thirteenth are the same
+        note, so a shape asking for both would stack one on top of the other.
+        Where that leaves a shape short, @p filler tops it back up.
+    */
+    std::vector<int> distinctOffsets (std::vector<int> offsets, int filler, std::size_t wanted)
+    {
+        std::vector<int> kept;
+
+        const auto alreadyThere = [&kept] (int offset)
+        {
+            return std::any_of (kept.begin(), kept.end(), [offset] (int existing)
+                                { return toPitchClass (existing) == toPitchClass (offset); });
+        };
+
+        for (auto offset : offsets)
+            if (! alreadyThere (offset))
+                kept.push_back (offset);
+
+        if (kept.size() < wanted && ! alreadyThere (filler))
+            kept.push_back (filler);
+
+        return kept;
+    }
+
+    /** Where the chord's root falls at or above @p floorNote. */
+    int rootAtOrAbove (const ChordSymbol& chord, int floorNote)
+    {
+        return floorNote + toPitchClass (chord.root() - toPitchClass (floorNote));
+    }
+
+    /** Two hands: the left plays @p leftHand, the right takes the nearest notes
+        above it. Starting the right hand any higher than that pushes a colour
+        tone sitting just above the left hand up a whole octave.
+    */
+    Voicing twoHanded (const ChordSymbol& chord, const std::vector<int>& leftHand,
+                       const std::vector<int>& rightHand, int anchorNote)
+    {
+        const auto left = stack (chord, leftHand, anchorNote);
+        const auto right = stack (chord, rightHand, left.highestNote() + 2);
+
+        auto notes = left.midiNotes;
+        notes.insert (notes.end(), right.midiNotes.begin(), right.midiNotes.end());
+
+        return Voicing::fromNotes (std::move (notes));
+    }
+
+    /** The root low, a partner the register can carry above it, and the colour
+        in the right hand.
+    */
+    Voicing solo (const ChordSymbol& chord, int partner,
+                  const std::vector<int>& rightHand, int anchorNote)
+    {
+        const auto root = rootAtOrAbove (chord, anchorNote);
+        const auto left = root + partner;
+        const auto right = stack (chord, rightHand, left + 2);
+
+        std::vector<int> notes { root, left };
+        notes.insert (notes.end(), right.midiNotes.begin(), right.midiNotes.end());
+
+        return Voicing::fromNotes (std::move (notes));
+    }
+
+    /** One hand per octave: the root alone at the bottom, the rest well above
+        it, which is what makes a voicing read as open rather than as a block.
+    */
+    Voicing spreadVoicing (const ChordSymbol& chord, const std::vector<int>& upper, int anchorNote)
+    {
+        const auto root = rootAtOrAbove (chord, anchorNote);
+        const auto above = stack (chord, upper, root + semitonesPerOctave + 2);
+
+        std::vector<int> notes { root };
+        notes.insert (notes.end(), above.midiNotes.begin(), above.midiNotes.end());
+
+        return Voicing::fromNotes (std::move (notes));
+    }
 }
 
-std::vector<Voicing> idiomaticVoicings (const ChordSymbol& chord, VoicingType type, int anchorNote)
+int naturalAnchorFor (VoicingType type)
+{
+    switch (type)
+    {
+        case VoicingType::solo:
+        case VoicingType::spread:            return 40;   // E2: the left hand holds the bass
+        case VoicingType::shell:
+        case VoicingType::rootPosition:
+        case VoicingType::twoHandedRootless: return 48;   // C3: the root or the guide tones
+        case VoicingType::rootlessLeftHand:
+        case VoicingType::singleNote:
+        case VoicingType::unknown:           break;
+    }
+
+    return 53;   // F3: where a rootless left hand sits under a soloist
+}
+
+int soloLeftHandPartner (const ChordSymbol& chord, int rootNote)
+{
+    // A root and a seventh say the whole chord by themselves, so they are the
+    // first choice - but the pair turns to mud low down, where the ear wants a
+    // plain consonance instead. The interval opens out as the root descends.
+    if (rootNote >= 48)                     // C3 and above: the seventh sounds
+        return seventhOf (chord);
+
+    if (rootNote >= 40)                     // E2 to B2: the fifth is still clear
+        return fifthOf (chord);
+
+    return semitonesPerOctave;              // below that, only the octave
+}
+
+std::vector<Voicing> idiomaticVoicings (const ChordSymbol& chord, VoicingType type,
+                                        int anchorNote, VoicingDensity density)
 {
     const auto third = thirdOf (chord);
     const auto seventh = seventhOf (chord);
     const auto ninth = ninthOf (chord);
-    const auto fifth = upperFifthOf (chord);
+    const auto fifth = fifthOf (chord);
+    const auto thirteenth = thirteenthOf (chord);
+    const auto rich = density == VoicingDensity::rich;
 
     std::vector<Voicing> voicings;
+
+    // A 6th chord's seventh slot and its thirteenth are the same note, so the
+    // shapes that ask for both fall back on the ninth for the colour.
+    const auto rootless = [&] (std::vector<int> offsets, std::size_t wanted)
+    {
+        return stack (chord, distinctOffsets (std::move (offsets), ninth, wanted), anchorNote);
+    };
 
     switch (type)
     {
         case VoicingType::shell:
+            // A shell is the root and the two guide tones. There is no third
+            // note to add without it stopping being a shell, and no tension to
+            // swap in without losing one of the two notes that make it work, so
+            // this is the one shape with no richer form: asking for colour here
+            // gets the same two shells back.
             voicings.push_back (stack (chord, { 0, third, seventh }, anchorNote));
             voicings.push_back (stack (chord, { 0, seventh, third }, anchorNote));
             break;
 
         case VoicingType::rootPosition:
-        case VoicingType::spread:
+            if (rich)
+            {
+                // Still the root in the bass with the chord above it, but the
+                // tensions take the places the plain tones were holding.
+                voicings.push_back (stack (chord, distinctOffsets ({ 0, third, seventh, ninth }, fifth, 4), anchorNote));
+                voicings.push_back (stack (chord, { 0, fifth, seventh, third }, anchorNote));
+                break;
+            }
+
             voicings.push_back (stack (chord, { 0, third, fifth, seventh }, anchorNote));
-            voicings.push_back (stack (chord, { 0, seventh, third, fifth, ninth }, anchorNote));
+            voicings.push_back (stack (chord, { 0, third, fifth, seventh, ninth }, anchorNote));
+            break;
+
+        case VoicingType::spread:
+            if (rich)
+            {
+                voicings.push_back (spreadVoicing (chord, distinctOffsets ({ seventh, third, thirteenth, ninth }, fifth, 4), anchorNote));
+                voicings.push_back (spreadVoicing (chord, { third, seventh, ninth, fifth }, anchorNote));
+                break;
+            }
+
+            voicings.push_back (spreadVoicing (chord, { seventh, third, fifth }, anchorNote));
+            voicings.push_back (spreadVoicing (chord, { third, seventh, ninth }, anchorNote));
             break;
 
         case VoicingType::rootlessLeftHand:
         case VoicingType::unknown:
         case VoicingType::singleNote:
-            // The two standard rootless shapes: "A form" from the 3rd, "B form"
-            // from the 7th.
-            voicings.push_back (stack (chord, { third, fifth, seventh, ninth }, anchorNote));
-            voicings.push_back (stack (chord, { seventh, ninth, third, fifth }, anchorNote));
+            if (rich)
+            {
+                // A fourth note of colour, placed so the whole shape still sits
+                // under one hand: the thirteenth goes below the seventh rather
+                // than on top of the ninth, where it would put the voicing out
+                // of reach.
+                voicings.push_back (rootless ({ third, thirteenth, seventh, ninth }, 4));
+                voicings.push_back (rootless ({ seventh, ninth, third, thirteenth }, 4));
+                break;
+            }
+
+            // The two shapes every other rootless voicing is built from: the A
+            // form up from the 3rd, the B form up from the 7th.
+            voicings.push_back (rootless ({ third, seventh, ninth }, 3));
+            voicings.push_back (rootless ({ seventh, third, thirteenth }, 3));
             break;
 
         case VoicingType::twoHandedRootless:
-            voicings.push_back (stack (chord, { third, seventh, ninth, fifth }, anchorNote));
-            voicings.push_back (stack (chord, { seventh, third, fifth, ninth }, anchorNote));
+            // Guide tones in the left hand, colour in the right.
+            if (rich)
+            {
+                voicings.push_back (twoHanded (chord, { third, seventh }, distinctOffsets ({ ninth, third, thirteenth }, fifth, 3), anchorNote));
+                voicings.push_back (twoHanded (chord, { seventh, third }, distinctOffsets ({ thirteenth, ninth, fifth }, third, 3), anchorNote));
+                break;
+            }
+
+            voicings.push_back (twoHanded (chord, { third, seventh }, distinctOffsets ({ ninth, thirteenth }, fifth, 2), anchorNote));
+            voicings.push_back (twoHanded (chord, { seventh, third }, distinctOffsets ({ thirteenth, ninth }, fifth, 2), anchorNote));
             break;
+
+        case VoicingType::solo:
+        {
+            // Playing alone, nobody else is holding the root down, so the left
+            // hand has to - with a partner the register can carry. Then the
+            // right hand says what the left could not: the guide tone it is
+            // missing first, and the colour above that.
+            const auto rootNote = rootAtOrAbove (chord, anchorNote);
+            const auto partner = soloLeftHandPartner (chord, rootNote);
+            const auto leftHandSaidTheSeventh = toPitchClass (partner) == toPitchClass (seventh);
+
+            const auto colour = leftHandSaidTheSeventh
+                              ? distinctOffsets ({ third, thirteenth, ninth }, fifth, 3)
+                              : distinctOffsets ({ third, seventh, ninth }, fifth, 3);
+
+            // The other way round: the left hand states the root as a bare
+            // octave, which is safe in any register, and hands the seventh over
+            // to the right along with the rest of the colour.
+            const auto octaveColour = distinctOffsets ({ third, seventh, ninth }, fifth, 3);
+
+            if (rich)
+            {
+                // The 3rd is the note worth doubling here: it lands a tone or
+                // so above the ninth, where the right hand can still reach it,
+                // and doubling it is how a solo player fills the space the
+                // missing bass player leaves.
+                auto fuller = colour;
+                fuller.push_back (third);
+
+                auto fullerOctave = octaveColour;
+                fullerOctave.push_back (third);
+
+                voicings.push_back (solo (chord, partner, fuller, anchorNote));
+                voicings.push_back (solo (chord, semitonesPerOctave, fullerOctave, anchorNote));
+                break;
+            }
+
+            voicings.push_back (solo (chord, partner, colour, anchorNote));
+            voicings.push_back (solo (chord, semitonesPerOctave, octaveColour, anchorNote));
+            break;
+        }
     }
 
     return voicings;

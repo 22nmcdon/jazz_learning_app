@@ -52,18 +52,52 @@ enum class VoicingType
     rootPosition,       ///< root in the bass, chord stacked above
     rootlessLeftHand,   ///< no root, one hand, below middle C
     twoHandedRootless,  ///< no root, spread across both hands
+    solo,               ///< root and a partner in the left hand, colour in the right
     spread              ///< wide open voicing, root present
 };
 
 std::string voicingTypeName (VoicingType type);
 
+/** How much colour a suggested voicing carries.
+
+    The base shape of each type is the one it is defined by - a rootless left
+    hand is 3-7-9 and 7-3-13, a two-handed voicing is 3-7 under 9-13. Asking for
+    a rich voicing keeps that shape and opens it out with the tensions the symbol
+    allows, which is where the alterations of a chord like G7alt actually sound.
+*/
+enum class VoicingDensity
+{
+    plain,
+    rich
+};
+
 /** Builds idiomatic voicings for a chord - the "sentence starters" in the design
     doc, used both as suggestions and as the reference the analyser compares to.
 
-    @param anchorNote  the lowest note the voicing may use
+    @param anchorNote  the lowest note the voicing may use. For a solo voicing
+                       this is where the left hand starts, and it decides what
+                       the left hand can safely play: see soloLeftHandPartner.
 */
 std::vector<Voicing> idiomaticVoicings (const ChordSymbol& chord,
                                         VoicingType type,
-                                        int anchorNote = 53 /* F3 */);
+                                        int anchorNote = 53 /* F3 */,
+                                        VoicingDensity density = VoicingDensity::plain);
+
+/** The register a shape belongs in - the lowest note it should reach for.
+
+    A solo left hand lives an octave and a half below a rootless one, so handing
+    every type the same anchor puts half of them in the wrong part of the
+    keyboard. Callers that have no register in mind should ask for this one.
+*/
+int naturalAnchorFor (VoicingType type);
+
+/** What the left hand plays above the root in a solo voicing, in semitones.
+
+    Playing the root and the 7th together states the harmony on its own, which is
+    why it is the first choice - but low down those two notes turn to mud, so the
+    interval opens out as the root descends: the 7th down to about C3, the 5th
+    below that, and nothing but the octave in the bottom register.
+*/
+int soloLeftHandPartner (const ChordSymbol& chord, int rootNote);
 
 } // namespace jazz::core

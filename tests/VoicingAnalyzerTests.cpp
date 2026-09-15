@@ -316,3 +316,176 @@ TEST ("the summary names the shape that was missed")
 
     CHECK (analysis.summary.find ("rootless left-hand voicing") != std::string::npos);
 }
+
+//==============================================================================
+// The shapes each voicing type is built from. These are the structures a player
+// learns by name, so they are pinned here rather than left to the builder.
+namespace
+{
+    /** The voicing's notes as semitones above the chord's root, in order:
+        "4 11 2" is a third, a seventh and a ninth.
+    */
+    std::string degreesOf (const Voicing& voicing, const ChordSymbol& chord)
+    {
+        std::string degrees;
+
+        for (auto note : voicing.midiNotes)
+            degrees += (degrees.empty() ? "" : " ")
+                     + std::to_string (toPitchClass (note - static_cast<int> (chord.root())));
+
+        return degrees;
+    }
+
+    Voicing suggestion (const std::string& symbol, VoicingType type, std::size_t index,
+                        int anchor = 53, VoicingDensity density = VoicingDensity::plain)
+    {
+        const auto voicings = idiomaticVoicings (chordFrom (symbol), type, anchor, density);
+        CHECK (voicings.size() > index);
+        return voicings.size() > index ? voicings[index] : Voicing {};
+    }
+}
+
+TEST ("a rootless left hand is 3-7-9 and 7-3-13")
+{
+    // Cmaj7: E B D, then B E A.
+    CHECK_EQ (degreesOf (suggestion ("Cmaj7", VoicingType::rootlessLeftHand, 0), chordFrom ("Cmaj7")),
+              std::string ("4 11 2"));
+    CHECK_EQ (degreesOf (suggestion ("Cmaj7", VoicingType::rootlessLeftHand, 1), chordFrom ("Cmaj7")),
+              std::string ("11 4 9"));
+}
+
+TEST ("the left-hand shapes take the alterations the symbol names")
+{
+    // G7alt: 3-7-b9 and 7-3-b13, which is where an altered chord lives.
+    CHECK_EQ (degreesOf (suggestion ("G7alt", VoicingType::rootlessLeftHand, 0), chordFrom ("G7alt")),
+              std::string ("4 10 1"));
+    CHECK_EQ (degreesOf (suggestion ("G7alt", VoicingType::rootlessLeftHand, 1), chordFrom ("G7alt")),
+              std::string ("10 4 8"));
+}
+
+TEST ("a two-handed voicing is 3-7 under 9-13")
+{
+    const auto chord = chordFrom ("Cmaj7");
+    const auto voicing = suggestion ("Cmaj7", VoicingType::twoHandedRootless, 0);
+
+    CHECK_EQ (degreesOf (voicing, chord), std::string ("4 11 2 9"));
+
+    // The left hand takes the lower two, the right hand the upper two.
+    CHECK (voicing.midiNotes[1] - voicing.midiNotes[0] <= 12);
+    CHECK (voicing.midiNotes[3] - voicing.midiNotes[2] <= 12);
+}
+
+TEST ("a solo voicing holds its own root")
+{
+    const auto chord = chordFrom ("Cmaj7");
+    const auto voicing = suggestion ("Cmaj7", VoicingType::solo, 0, 40);
+
+    // Root and seventh in the left hand, then 3-13-9 in the right.
+    CHECK_EQ (degreesOf (voicing, chord), std::string ("0 11 4 9 2"));
+    CHECK_EQ (toPitchClass (voicing.lowestNote()), static_cast<int> (chord.root()));
+}
+
+TEST ("the left hand of a solo voicing opens out as it goes down")
+{
+    const auto chord = chordFrom ("Cmaj7");
+
+    CHECK_EQ (soloLeftHandPartner (chord, 60), 11);   // C4: the seventh
+    CHECK_EQ (soloLeftHandPartner (chord, 48), 11);   // C3: still the seventh
+    CHECK_EQ (soloLeftHandPartner (chord, 43), 7);    // G2: the fifth
+    CHECK_EQ (soloLeftHandPartner (chord, 36), 12);   // C2: only the octave
+}
+
+TEST ("a solo voicing keeps the root out of the right hand")
+{
+    for (const auto* symbol : { "Cmaj7", "Dm7", "G7alt", "Bbm6", "Cm7b5" })
+    {
+        const auto chord = chordFrom (symbol);
+
+        for (auto index : { std::size_t (0), std::size_t (1) })
+        {
+            const auto voicing = suggestion (symbol, VoicingType::solo, index, 40);
+
+            for (std::size_t i = 2; i < voicing.midiNotes.size(); ++i)
+                CHECK (toPitchClass (voicing.midiNotes[i]) != static_cast<int> (chord.root()));
+        }
+    }
+}
+
+TEST ("a rich voicing says more than the plain one it is built on")
+{
+    const auto chord = chordFrom ("Cmaj7");
+    const auto plain = suggestion ("Cmaj7", VoicingType::rootlessLeftHand, 0);
+    const auto rich = suggestion ("Cmaj7", VoicingType::rootlessLeftHand, 0, 53, VoicingDensity::rich);
+
+    CHECK (rich.size() > plain.size());
+
+    // The base shape is still in there: 3, 7 and 9, with the 13th added.
+    for (auto degree : { 4, 11, 2, 9 })
+        CHECK (rich.containsPitchClass (toPitchClass (static_cast<int> (chord.root()) + degree)));
+}
+
+TEST ("a shell has no richer form, because a fourth note would stop it being one")
+{
+    const auto plain = idiomaticVoicings (chordFrom ("Cmaj7"), VoicingType::shell, 53);
+    const auto rich = idiomaticVoicings (chordFrom ("Cmaj7"), VoicingType::shell, 53,
+                                         VoicingDensity::rich);
+
+    CHECK_EQ (rich.size(), plain.size());
+
+    for (std::size_t i = 0; i < rich.size(); ++i)
+        CHECK_EQ (rich[i].describe(), plain[i].describe());
+}
+
+TEST ("every voicing offered for a shape is read back as that shape")
+{
+    // Otherwise "show me one" hands the player a voicing the analyser then marks
+    // as the wrong shape.
+    const char* symbols[] = { "Cmaj7", "Dm7", "G7", "G7alt", "Cm7b5", "C7sus4",
+                              "Ebmaj7", "Am7", "F#7b9", "Bbm6", "CmMaj7", "Adim7" };
+
+    const std::pair<VoicingType, int> types[] = {
+        { VoicingType::shell,             48 },
+        { VoicingType::rootPosition,      48 },
+        { VoicingType::rootlessLeftHand,  53 },
+        { VoicingType::twoHandedRootless, 48 },
+        { VoicingType::solo,              40 },
+        { VoicingType::spread,            40 }
+    };
+
+    for (const auto* symbol : symbols)
+    {
+        const auto chord = chordFrom (symbol);
+
+        for (const auto& entry : types)
+            for (auto density : { VoicingDensity::plain, VoicingDensity::rich })
+                for (const auto& voicing : idiomaticVoicings (chord, entry.first, entry.second, density))
+                    CHECK_EQ (voicingTypeName (VoicingAnalyzer::classify (voicing, chord)),
+                              voicingTypeName (entry.first));
+    }
+}
+
+TEST ("no suggested voicing asks for a stretch no hand has")
+{
+    // Both of these shapes put two notes in the left hand - 3-7, or the root and
+    // its partner - and the rest in the right, so that is where they split. Each
+    // side has to fall under one hand: an octave and a little, no more.
+    const char* symbols[] = { "Cmaj7", "Dm7", "G7alt", "Cm7b5", "C7sus4", "Bbm6" };
+
+    for (const auto* symbol : symbols)
+    {
+        const auto chord = chordFrom (symbol);
+
+        for (auto type : { VoicingType::twoHandedRootless, VoicingType::solo })
+            for (auto density : { VoicingDensity::plain, VoicingDensity::rich })
+                for (const auto& voicing : idiomaticVoicings (chord, type, type == VoicingType::solo ? 40 : 48, density))
+                {
+                    CHECK (voicing.size() >= 4);
+
+                    if (voicing.size() < 4)
+                        continue;
+
+                    CHECK (voicing.midiNotes[1] - voicing.midiNotes[0] <= 14);
+                    CHECK (voicing.highestNote() - voicing.midiNotes[2] <= 14);
+                }
+    }
+}

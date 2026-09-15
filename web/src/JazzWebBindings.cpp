@@ -160,6 +160,7 @@ namespace
         if (name == "root")       return VoicingType::rootPosition;
         if (name == "rootless")   return VoicingType::rootlessLeftHand;
         if (name == "twohanded")  return VoicingType::twoHandedRootless;
+        if (name == "solo")       return VoicingType::solo;
 
         return std::nullopt;  // "any": read the chart, do not drill a shape
     }
@@ -518,9 +519,14 @@ JAZZ_EXPORT const char* jazzRecogniseSubstitution (const char* progressionText,
                  + ",\"score\":" + std::to_string (found->score) + "}");
 }
 
-/** Idiomatic "sentence starter" voicings for a chord. */
+/** Idiomatic "sentence starter" voicings for a chord.
+
+    Each shape has a register it belongs in - a solo left hand lives an octave
+    and a half below a rootless one - so the anchor comes from the type rather
+    than from the caller unless the caller asks for a particular one.
+*/
 JAZZ_EXPORT const char* jazzIdiomaticVoicings (const char* symbol, int anchorNote,
-                                               const char* practiseStyle)
+                                               const char* practiseStyle, int rich)
 {
     const auto chord = ChordSymbol::parse (symbol != nullptr ? symbol : "");
 
@@ -531,8 +537,11 @@ JAZZ_EXPORT const char* jazzIdiomaticVoicings (const char* symbol, int anchorNot
         { "Shell",              VoicingType::shell },
         { "Rootless left hand", VoicingType::rootlessLeftHand },
         { "Two-handed",         VoicingType::twoHandedRootless },
+        { "Solo",               VoicingType::solo },
         { "Root position",      VoicingType::rootPosition }
     };
+
+    const auto density = rich != 0 ? VoicingDensity::rich : VoicingDensity::plain;
 
     // With a shape being practised, only that shape is worth showing.
     const auto wanted = practiseTypeFor (practiseStyle);
@@ -543,9 +552,10 @@ JAZZ_EXPORT const char* jazzIdiomaticVoicings (const char* symbol, int anchorNot
             types.push_back (entry);
 
     return hold ("{\"ok\":true,\"voicings\":"
-                 + jsonArray (types, [&chord, anchorNote] (const std::pair<std::string, VoicingType>& entry)
+                 + jsonArray (types, [&chord, anchorNote, density] (const std::pair<std::string, VoicingType>& entry)
                    {
-                       const auto voicings = idiomaticVoicings (*chord, entry.second, anchorNote);
+                       const auto anchor = anchorNote > 0 ? anchorNote : naturalAnchorFor (entry.second);
+                       const auto voicings = idiomaticVoicings (*chord, entry.second, anchor, density);
 
                        return "{\"type\":" + quoted (entry.first) + ",\"options\":"
                             + jsonArray (voicings, [] (const Voicing& voicing)

@@ -37,7 +37,7 @@ namespace
 bool VoicingAnalyzer::expectsRoot (VoicingType type)
 {
     return type == VoicingType::shell || type == VoicingType::rootPosition
-           || type == VoicingType::spread;
+           || type == VoicingType::spread || type == VoicingType::solo;
 }
 
 VoicingType VoicingAnalyzer::classify (const Voicing& voicing, const ChordSymbol& chord)
@@ -61,7 +61,7 @@ VoicingType VoicingAnalyzer::classify (const Voicing& voicing, const ChordSymbol
         for (std::size_t i = 1; i < voicing.midiNotes.size(); ++i)
             widestGap = std::max (widestGap, voicing.midiNotes[i] - voicing.midiNotes[i - 1]);
 
-        if (voicing.size() >= 4 && (widestGap >= 7 || voicing.spanInSemitones() > 16))
+        if (voicing.size() >= 4 && (widestGap >= 7 || voicing.spanInSemitones() > 14))
             return VoicingType::twoHandedRootless;
 
         return VoicingType::rootlessLeftHand;
@@ -79,6 +79,19 @@ VoicingType VoicingAnalyzer::classify (const Voicing& voicing, const ChordSymbol
 
         if (isGuide (voicing.midiNotes[1]) && isGuide (voicing.midiNotes[2]))
             return VoicingType::shell;
+    }
+
+    // A solo voicing is the one shape that holds its own root: a left-hand pair
+    // low down - the root with its fifth, seventh or octave - then a leap, then
+    // the colour in the right hand. The leap is what tells it from a voicing
+    // that merely happens to be wide.
+    if (bassIsRoot && voicing.size() >= 4 && voicing.spanInSemitones() > 19)
+    {
+        const auto leftHand = voicing.midiNotes[1] - voicing.midiNotes[0];
+        const auto toTheRightHand = voicing.midiNotes[2] - voicing.midiNotes[1];
+
+        if (leftHand >= 5 && leftHand <= semitonesPerOctave && toTheRightHand >= 3)
+            return VoicingType::solo;
     }
 
     if (voicing.spanInSemitones() > 19)
@@ -318,10 +331,15 @@ VoicingAnalysis VoicingAnalyzer::analyse (const Voicing& voicing, const ChordSym
 
     if (options.includeExamples && (analysis.score < 85 || ! analysis.matchesStyle))
     {
-        const auto anchor = voicing.lowestNote() > 0 ? voicing.lowestNote() : 53;
+        // Show the shape being practised, not the one that was played by mistake -
+        // and show it where that shape belongs, which for a solo voicing is well
+        // below wherever the player's hand happened to be.
+        const auto wanted = options.practiseType.value_or (analysis.type);
+        const auto natural = naturalAnchorFor (wanted);
+        const auto anchor = voicing.lowestNote() > 0 && wanted != VoicingType::solo
+                          ? voicing.lowestNote() : natural;
 
-        // Show the shape being practised, not the one that was played by mistake.
-        analysis.examples = idiomaticVoicings (chord, options.practiseType.value_or (analysis.type), anchor);
+        analysis.examples = idiomaticVoicings (chord, wanted, anchor);
 
         for (const auto& example : analysis.examples)
             analysis.suggestions.push_back ("Try: " + example.describe());

@@ -17,7 +17,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/core_engine` | Chord parsing, scale suggestion, reharmonisation, voicing analysis, note-input abstraction. Pure C++17. | nothing |
 | `modules/shared_ui` | Chart view, on-screen keyboard, scale panel, reharm panel, feedback panel, responsive `MainComponent`. | core engine, JUCE |
 | `app` | Platform shell: MIDI devices, window and app lifecycle. | shared UI, JUCE |
-| `tests` | Engine unit tests (192), no JUCE, no third-party framework. | core engine |
+| `tests` | Engine unit tests (202), no JUCE, no third-party framework. | core engine |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -60,9 +60,12 @@ builds a chord; on touch, latch is off and several fingers register as one voici
 MIDI keyboard found at startup — or plugged in or paired later — is opened automatically.
 
 The **Practice** menu at the top of the browser page sets a voicing shape for the whole
-session - root position, shell, rootless left hand, two-handed rootless - and every voicing
-you play is then checked against it, so a rootless voicing played during a root-position
-exercise is reported even though the notes spell the chord. The desktop app has the same
+session - root position, shell, rootless left hand, two-handed rootless, solo - and every
+voicing you play is then checked against it, so a rootless voicing played during a
+root-position exercise is reported even though the notes spell the chord. The same menu
+says how much colour **Show me one** should put in what it plays: the base shape, or the
+same shape with the tensions. Pressing the button again walks on to the next shape rather
+than repeating the last one. The desktop app has the same
 control in its header. The menu also connects a MIDI keyboard through the Web MIDI API;
 that needs Chrome or Edge, and an embedded page may not be allowed to ask for permission
 at all, in which case use the page in its own tab or the desktop app, which talks to MIDI
@@ -144,9 +147,19 @@ that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
   guide-tone voice leading into the next chord, and an explanation that names the notes the
   substitution keeps from the original chord.
 - **Voicing analysis** — classifies what was played (shell, root position, rootless
-  left-hand, two-handed rootless, spread), checks it against the symbol, and explains what
-  is missing, outside, clashing or muddy in the low register. A rootless voicing is not
+  left-hand, two-handed rootless, solo, spread), checks it against the symbol, and explains
+  what is missing, outside, clashing or muddy in the low register. A rootless voicing is not
   told off for having no root. Findings are ordered problems-first.
+- **The shapes themselves** — each voicing type is built from the structure a player learns
+  it by, not from a stack of thirds. A rootless left hand is 3-7-9 and 7-3-13; a two-handed
+  voicing is 3-7 under 9-13; a solo voicing holds its own root, the left hand playing the
+  root with the 7th, the 5th or the octave depending on how low it sits - the 7th turns to
+  mud down there - while the right hand says whatever the left could not. Asking for a rich
+  voicing keeps the shape and opens it out with the tensions the symbol names, which is
+  where a chord like G7alt actually sounds: 3-7-b9 rather than a plain stack. Every shape
+  is offered in the register it belongs in, fits under the hands that have to play it, and
+  is read back by the analyser as the shape it was offered for - the last of those is a
+  test, because otherwise the app hands you a voicing and then marks it wrong.
 - **Risky substitutions, judged bar by bar** — a third difficulty tier beyond safe and
   advanced, for moves that work in the right instance and nowhere else: the tritone major
   seventh (G7 → Dbmaj7), the diminished-cycle dominant, the plagal dominant, an
