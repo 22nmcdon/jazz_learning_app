@@ -122,36 +122,55 @@ with Emscripten (`web/build.sh`) for a browser demo of the engine. It exists as 
 check that the engine stays portable - if a change makes `web/build.sh` fail, something
 platform-specific has leaked into the Core Engine. Like `app/`, it must contain no theory.
 
+`.github/workflows/ci.yml` enforces the first of those rules on every push: one job
+configures with `-DJAZZ_BUILD_APP=OFF` on a runner with no GUI packages installed at all,
+the other installs the JUCE dependencies and builds the app. That first job failing means
+the layering broke, not that the runner is short a package — read it that way before
+reaching for an `apt-get`. The Emscripten build is *not* in CI, so run `web/build.sh`
+yourself after touching the engine; it is the check that nothing platform-specific crept
+in, and nothing else will catch that for you.
+
 Android is the exception to CMake-everywhere: JUCE's CMake support does not cover Android,
 so that target needs the Projucer/Gradle exporter over the same source tree. Nothing in
 the source layout assumes either build system.
 
-## Feature Modules (Reference)
+## Feature Modules — What Is Built
 
-### Reharmonization Assistant
-- Create progression manually or import (iReal Pro; MusicXML/MuseScore as stretch goal).
-- Tap/click a measure → panel with suggested scale + dropdown/bottom-sheet of all valid
-  alternate scales.
-- Planned additions: voice-leading visualizer, style presets (bebop / modal / quartal /
-  Brazilian), difficulty tagging (safe vs. advanced substitutions), export back to iReal
-  Pro or PDF lead sheet.
+`README.md` describes the behaviour in detail; this is the map from feature to code, and
+the line between what exists and what does not. Do not re-plan something in the first list.
 
-### Real-Time Chord/Voicing Analyzer
-- Analyzes a played chord against the expected chord symbol, accounting for voicing type
-  (root-position solo piano, two-handed no-root, left-hand-only no-root, etc.), with
-  improvement suggestions.
-- Planned additions: solo/improv feedback layer (flag notes outside the target scale,
-  framed constructively), personal voicing library builder, idiomatic voicing "sentence
-  starters" for weak chord types.
+### Reharmonization Assistant — built
+- Build a progression by hand or import one. `ChartFormats` reads both iReal Pro link
+  formats, the `.html` iReal Pro shares, and the text of a PDF lead sheet; it writes an
+  iReal Pro link back, and the browser shell prints a lead sheet.
+- Click a measure → suggested scale plus every valid alternate, each with a rationale
+  (`ScaleSuggester`, over a 29-shape catalogue in `Scale.cpp`).
+- Substitutions grouped by family, each carrying a difficulty tag (safe / advanced /
+  risky), a style tag, and a ranking by guide-tone voice leading (`Reharmonizer`).
+- Whole-tune reharmonisation in six named plans, each bar decided against the chart as it
+  stands.
 
-### Supporting Modules (Round Out Practice Loop)
-- Ear training tied to the loaded chart
-- Metronome / practice-loop mode integrated with the analyzer
-- Progress tracking (voicing accuracy, weakest chord types, reharm styles explored)
+### Real-Time Chord/Voicing Analyzer — built
+- Classifies what was played against the symbol, allowing for voicing type, and explains
+  what is missing, outside, clashing or muddy (`VoicingAnalyzer`).
+- Offers idiomatic voicings to play — the "sentence starters" — built from the structures
+  players actually learn (`Voicing.cpp`), in plain and tension-rich forms.
+- Names a voicing with no chart and no expected chord (`ChordIdentifier`).
+- Reads a played voicing back as a *substitution* when it spells one, rather than as a
+  broken version of the written chord.
+
+### Not built — still genuinely open
+- Voice-leading visualiser. `guideToneMotion()` is the primitive it would draw.
+- Solo/improv feedback layer; personal voicing library; ear training; metronome /
+  practice-loop; progress tracking. The analyser's per-voicing score and the feedback
+  panel's session average are the hook the last of those would build on.
+- MusicXML / MuseScore import. The page reader is format-agnostic enough to feed it.
+- Import/export wired into the JUCE shell. The codecs are in the engine already — the
+  browser shell is the only one that currently has a UI for them.
 
 ## Open Questions (Don't Assume — Ask)
 
-- Is iReal Pro import sufficient for the POC, or is MusicXML/MuseScore import needed now?
+- iReal Pro and PDF import both ship now. Is MusicXML/MuseScore import needed as well?
 - How much of the reharm suggestion engine should be rule-based vs. data/ML-informed?
 - Is the solo/improv feedback layer in POC scope or a post-POC addition?
 - Is a future dense, DAW-style desktop layout worth designing for now, or deferred?
@@ -167,3 +186,22 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
 - Match existing JUCE idioms in the codebase (Projucer-generated project structure,
   `juce::Component` lifecycle, `resized()`/`paint()` conventions) rather than introducing
   new patterns.
+- **A wider chord vocabulary is not a better one.** `ChordIdentifier` scores every name it
+  knows against the notes, so each one added competes with all the rest — and a name no
+  player writes still wins whenever it happens to account for every note. Adding the
+  parser's full range once made the common answers worse: a complete `Asus4b9` beat the
+  obvious rootless `C13`. The dominant tensions are *generated*, because that family is
+  combinatorial and any hand-written list of it will be missing a real chord. Everything
+  else is curated on purpose. Before adding a name, check what it costs the chords that
+  already work — the test "a rootless thirteenth still beats a complete name nobody
+  writes" is that trap nailed down, and a wider vocabulary that breaks it is a worse one.
+- **A suggestion the analyser would reject is a bug, not a near miss.** Two invariants in
+  `VoicingAnalyzerTests` hold the two halves of the app together: every voicing
+  `idiomaticVoicings` offers must classify as the type it was offered for, and none may
+  exceed what one hand can reach. Without the first, the app hands you a voicing and then
+  marks it wrong; without the second, it hands you one nobody can play. Changing a shape
+  table means re-running those, not just the tests for the shape you touched.
+- **A failing test is a question, not a chore.** Several here encoded bugs rather than
+  behaviour — two asserted a chord printed a name that silently dropped a note, one
+  asserted `F#maj9` should normalise to `Gb`. Work out whether the engine or the
+  expectation is wrong before changing either.

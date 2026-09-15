@@ -17,6 +17,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/core_engine` | Chord parsing, scale suggestion, reharmonisation, voicing analysis, note-input abstraction. Pure C++17. | nothing |
 | `modules/shared_ui` | Chart view, on-screen keyboard, scale panel, reharm panel, feedback panel, responsive `MainComponent`. | core engine, JUCE |
 | `app` | Platform shell: MIDI devices, window and app lifecycle. | shared UI, JUCE |
+| `web` | Another platform shell: the engine compiled to WebAssembly behind a browser front end. No theory, same as `app`. | core engine, Emscripten |
 | `tests` | Engine unit tests (207), no JUCE, no third-party framework. | core engine |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
@@ -38,6 +39,10 @@ cmake -S . -B build-core -DJAZZ_BUILD_APP=OFF
 cmake --build build-core
 ./build-core/tests/jazz_core_tests     # or: ctest --test-dir build-core
 ```
+
+Both configurations run in CI on every push (`.github/workflows/ci.yml`): the engine job
+deliberately runs on a machine with no JUCE and no GUI packages, so if it fails the module
+boundary has been crossed rather than the runner being short a dependency.
 
 On Linux the app target needs the usual JUCE packages (`libasound2-dev`, `libx11-dev`,
 `libxcomposite-dev`, `libxcursor-dev`, `libxext-dev`, `libxinerama-dev`, `libxrandr-dev`,
@@ -85,6 +90,12 @@ reharmonisations. Stepping along the chart to check one voicing after another th
 never puts a dialog in front of the keyboard, and the arrow keys move between bars without
 taking a hand off the keys.
 
+**Name it** asks the other question — not "is this the right chord for the bar" but "what
+did I just play", with no chart involved. **Edit chart** types chords into bars directly,
+**Reharmonise the tune** applies a plan to the whole chart at once, and when a voicing you
+play turns out to spell a substitution rather than the written chord, **Write it into the
+bar** keeps it.
+
 **Import / export**, in the Practice menu on the browser page, opens a chart that came
 from somewhere else and writes the one on screen back out. It reads an iReal Pro link, the `.html` file iReal Pro
 sends when you share a song, a PDF lead sheet (iReal Pro exports one, and so does this
@@ -118,13 +129,13 @@ The JUCE interface cannot run on the web - JUCE has no supported WebAssembly tar
 
 ```bash
 sudo apt install emscripten   # or install the emsdk
-./web/build.sh                # -> web/dist/jazz-engine.js, wasm included, 387 KB
+./web/build.sh                # -> web/dist/jazz-engine.js, wasm included, 415 KB
 python3 -m http.server -d web 8000
 ```
 
 Then open <http://localhost:8000>. A published copy of that page is at
-<https://claude.ai/code/artifact/bb45867f-890b-46e3-bd96-c9c2a2618713> (private until
-shared from the page's share menu).
+<https://claude.ai/artifact/Q8FpFGkQheyCSXdYSthL3c> (private until shared from the
+page's share menu).
 
 `web/src/JazzWebBindings.cpp` marshals engine results to JSON; it holds no theory, the same
 way `app/` holds none. What the page cannot tell you is whether the JUCE UI works - for
@@ -174,14 +185,14 @@ that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
   each arrives with a verdict on *this* bar: what the guide tones have to do to get in and
   out of it, what it keeps from the chord it replaces, and which side of the bar is at
   fault when it does not land.
-- **Whole-tune reharmonisation** — five named plans, lightest touch first: *Minimal touch*
+- **Whole-tune reharmonisation** — six named plans, lightest touch first: *Minimal touch*
   (colour on the bars that were only marking time), *Recommended* (safe moves, never two
   bars in a row), *Modal colour* (borrowed chords throughout), *Cycle of fifths* (ii-Vs and
-  secondary dominants in front of everything that takes one) and *Adventurous* (mediants
+  secondary dominants in front of everything that takes one), *Adventurous* (mediants
   and borrowings, every bar in play) and *Out there* (risky moves, taken only in the bars
-  where the voice leading carries them, leaving the rest as written). Each bar is decided against the chart as it stands,
-  so a bar sees what the bar before it became; the pass is deterministic, and it will not
-  rewrite a bar into the bar before it.
+  where the voice leading carries them, leaving the rest as written). Each bar is decided
+  against the chart as it stands, so a bar sees what the bar before it became; the pass is
+  deterministic, and it will not rewrite a bar into the bar before it.
 - **Naming a shape** — `ChordIdentifier` answers "what did I just play" with no chart and
   no expected chord. Every note has to be accounted for, so a chromatic cluster returns
   nothing rather than the least bad guess, and a name that leaves out more than it explains
