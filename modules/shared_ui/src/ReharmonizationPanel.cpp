@@ -12,7 +12,7 @@ ReharmonizationPanel::ReharmonizationPanel()
     addAndMakeVisible (viewport);
     viewport.setViewedComponent (&list, false);
     viewport.setScrollBarsShown (true, false);
-    viewport.setColour (ScrollBar::thumbColourId, theme::outline);
+    styleViewport (viewport);
 
     addAndMakeVisible (advancedToggle);
     advancedToggle.setToggleState (true, dontSendNotification);

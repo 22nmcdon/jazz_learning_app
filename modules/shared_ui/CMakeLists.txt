@@ -4,7 +4,12 @@
 
 add_library(jazz_shared_ui STATIC
     src/SizeClass.cpp
+    src/Overlay.cpp
     src/ChartView.cpp
+    src/ChordDialog.cpp
+    src/PlanDialog.cpp
+    src/PracticeMenu.cpp
+    src/ImportExportDialog.cpp
     src/OnScreenKeyboard.cpp
     src/ScaleSuggestionPanel.cpp
     src/ReharmonizationPanel.cpp

@@ -66,6 +66,24 @@ void OnScreenKeyboard::clearHeldNotes()
     repaint();
 }
 
+void OnScreenKeyboard::holdNotes (const std::vector<int>& midiNotes)
+{
+    clearHeldNotes();
+
+    // One timestamp for the lot, so the collector groups them as a chord rather
+    // than a run of single notes.
+    const auto timestamp = now();
+
+    for (auto note : midiNotes)
+    {
+        latchedNotes.push_back (note);
+        broadcast ({ note, 0.8f, true, core::NoteSource::onScreenKeyboard, timestamp });
+    }
+
+    ensureNotesVisible (midiNotes);
+    repaint();
+}
+
 void OnScreenKeyboard::toggleLatchedNote (int midiNote)
 {
     const auto existing = std::find (latchedNotes.begin(), latchedNotes.end(), midiNote);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "jazz/ui/SizeClass.h"
+#include "jazz/ui/Overlay.h"
 #include "jazz/core/Reharmonizer.h"
 #include "jazz/core/VoicingAnalyzer.h"
 
@@ -37,11 +37,21 @@ public:
     float sessionAccuracy() const;
     int voicingsAnalysed() const noexcept { return analysedCount; }
 
+    /** Offered when the voicing played spells one of this bar's substitutions,
+        so a reharmonisation found by ear can be kept.
+    */
+    std::function<void (const core::RecognisedSubstitution&)> onWriteSpottedIntoBar;
+
     void paint (juce::Graphics& g) override;
     void resized() override;
 
 private:
     void paintScoreMeter (juce::Graphics& g, juce::Rectangle<int> area);
+
+    /** The spotted row's bounds, shared by the painter and the button. */
+    juce::Rectangle<int> spottedRow() const;
+
+    LinkButton writeSpottedButton { "Write it into the bar" };
 
     core::VoicingAnalysis analysis;
     std::optional<core::RecognisedSubstitution> spotted;

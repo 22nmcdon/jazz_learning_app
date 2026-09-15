@@ -159,14 +159,24 @@ the line between what exists and what does not. Do not re-plan something in the 
 - Reads a played voicing back as a *substitution* when it spells one, rather than as a
   broken version of the written chord.
 
+### Both shells, and why they look alike
+The JUCE app and the browser page carry the same features and very nearly the same
+screen: one palette in `theme`, one lead sheet in `ChartView`, one practice menu, one
+dock. Where they differ, it is because a shell cannot do the thing, not because someone
+styled it differently — so a change to how the app *looks* usually belongs in
+`modules/shared_ui`, where both would get it, and never in `app/`.
+
+Two things are the page's alone, both for want of a library rather than a decision:
+reading a PDF, and printing one. The engine's chart reader is shared; what the JUCE shell
+lacks is a way to get text out of a PDF. If you add one, the reader is already there.
+
 ### Not built — still genuinely open
 - Voice-leading visualiser. `guideToneMotion()` is the primitive it would draw.
 - Solo/improv feedback layer; personal voicing library; ear training; metronome /
   practice-loop; progress tracking. The analyser's per-voicing score and the feedback
   panel's session average are the hook the last of those would build on.
 - MusicXML / MuseScore import. The page reader is format-agnostic enough to feed it.
-- Import/export wired into the JUCE shell. The codecs are in the engine already — the
-  browser shell is the only one that currently has a UI for them.
+- Reading and printing a PDF in the JUCE app, as above.
 
 ## Open Questions (Don't Assume — Ask)
 
@@ -201,6 +211,15 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
   exceed what one hand can reach. Without the first, the app hands you a voicing and then
   marks it wrong; without the second, it hands you one nobody can play. Changing a shape
   table means re-running those, not just the tests for the shape you touched.
+- **Paint and layout must not each do the arithmetic.** Several components here draw
+  headings and lay out buttons down the same column, and when `paint` and `resized` each
+  counted the heights themselves they drifted apart the first time a row changed size.
+  Each of those now works its positions out once — `PracticeMenu::layout`,
+  `MainComponent::frame` and the rest — and both read the result.
+- **Check the narrow window before calling a layout done.** Everything that overlapped on
+  a phone-sized window looked perfect on a desktop one: the sheet head, the chart tools
+  and the dock's buttons all collided at 420px while being fine at 1200px.
+  `JAZZ_UI_SIZE=420x860 JAZZ_UI_TOUCH=1` is two seconds of work and catches all of it.
 - **A failing test is a question, not a chore.** Several here encoded bugs rather than
   behaviour — two asserted a chord printed a name that silently dropped a note, one
   asserted `F#maj9` should normalise to `Gb`. Work out whether the engine or the

@@ -46,6 +46,15 @@ public:
     /** Releases every latched note. */
     void clearHeldNotes();
 
+    /** Puts @p midiNotes under the hands as though they had just been played.
+
+        A voicing the app offers has to arrive the way a played one does - as
+        note events - or everything downstream would need a second path: the
+        analyser would not see it, it would not sound, and "Name it" would have
+        nothing to name.
+    */
+    void holdNotes (const std::vector<int>& midiNotes);
+
     /** Highlights notes coming from elsewhere - hardware MIDI, or a suggested
         voicing the user is being shown.
     */

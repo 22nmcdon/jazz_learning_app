@@ -26,6 +26,7 @@ juce_add_gui_app(JazzLearningApp
 
 target_sources(JazzLearningApp PRIVATE
     src/Main.cpp
+    src/ElectricPiano.cpp
     src/MidiDeviceInput.cpp)
 
 target_include_directories(JazzLearningApp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

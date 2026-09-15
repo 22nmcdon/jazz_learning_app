@@ -51,24 +51,52 @@ void clearInteractionModeOverride();
 /** Minimum comfortable tap target for the current interaction mode. */
 int minimumTouchTarget();
 
-/** Shared palette, kept in one place so components stay visually consistent. */
+/** Shared palette, kept in one place so components stay visually consistent.
+
+    These are the lead-sheet colours the browser shell uses: warm paper rather
+    than a dark editor, because the thing on screen is a chart, not a DAW.
+*/
 namespace theme
 {
-    inline const juce::Colour background     { 0xff16161a };
-    inline const juce::Colour surface        { 0xff21212a };
-    inline const juce::Colour surfaceRaised  { 0xff2c2c38 };
-    inline const juce::Colour outline        { 0xff3a3a48 };
-    inline const juce::Colour text           { 0xfff2f2f7 };
-    inline const juce::Colour textDim        { 0xff9a9aa8 };
-    inline const juce::Colour accent         { 0xff4dd0c0 };
-    inline const juce::Colour accentMuted    { 0xff2f6f68 };
-    inline const juce::Colour warning        { 0xffe8a13a };
-    inline const juce::Colour problem        { 0xffe5605f };
-    inline const juce::Colour good           { 0xff6fcf7f };
+    inline const juce::Colour cream          { 0xfffaf6f0 };
+    inline const juce::Colour creamDeep      { 0xfff2ebe1 };
+    inline const juce::Colour paper          { 0xfffffcf7 };
+    inline const juce::Colour charcoal       { 0xff241f1d };
+    inline const juce::Colour blush          { 0xffd9a6a0 };
+    inline const juce::Colour blushDeep      { 0xffc07f79 };
+    inline const juce::Colour gold           { 0xffb08d57 };
+    inline const juce::Colour line           { 0xffe4d9cc };
+    inline const juce::Colour text           { 0xff3a332f };
+    inline const juce::Colour textSoft       { 0xff6b615a };
+    inline const juce::Colour sage           { 0xff6f7f63 };
+    inline const juce::Colour rust           { 0xffa4553f };
+
+    /** The older names the panels were written against, kept so one palette
+        change does not mean rewriting every component's colour choices.
+    */
+    inline const juce::Colour background     = cream;
+    inline const juce::Colour surface        = paper;
+    inline const juce::Colour surfaceRaised  = creamDeep;
+    inline const juce::Colour outline        = line;
+    inline const juce::Colour textDim        = textSoft;
+    inline const juce::Colour accent         = blushDeep;
+    inline const juce::Colour accentMuted    = blush;
+    inline const juce::Colour warning        = gold;
+    inline const juce::Colour problem        = rust;
+    inline const juce::Colour good           = sage;
 
     /** Font sizes scale up a little on touch, where the screen is nearer. */
     float bodyFontSize();
     float headingFontSize();
+
+    /** The page asks for web fonts by name and lets the browser fall back.
+        JUCE has no such chain, so these resolve a preference list against the
+        families actually installed and remember the answer.
+    */
+    juce::Font serif (float height, bool bold = false, bool italic = false);
+    juce::Font sans (float height, bool bold = false);
+    juce::Font hand (float height);
+    juce::Font mono (float height);
 }
 
 } // namespace jazz::ui

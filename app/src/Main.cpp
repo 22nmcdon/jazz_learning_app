@@ -1,3 +1,4 @@
+#include "ElectricPiano.h"
 #include "MidiDeviceInput.h"
 
 #include "jazz/ui/MainComponent.h"
@@ -26,12 +27,14 @@ public:
             jazz::ui::setInteractionModeOverride (jazz::ui::InteractionMode::touch);
 
         midiInput = std::make_unique<MidiDeviceInput>();
-        mainWindow = std::make_unique<MainWindow> (getApplicationName(), *midiInput);
+        piano = std::make_unique<ElectricPiano>();
+        mainWindow = std::make_unique<MainWindow> (getApplicationName(), *midiInput, *piano);
     }
 
     void shutdown() override
     {
         mainWindow.reset();
+        piano.reset();
         midiInput.reset();
     }
 
@@ -41,9 +44,9 @@ private:
     class MainWindow : public juce::DocumentWindow
     {
     public:
-        MainWindow (const juce::String& name, MidiDeviceInput& midiInput)
+        MainWindow (const juce::String& name, MidiDeviceInput& midiInput, ElectricPiano& piano)
             : DocumentWindow (name,
-                              jazz::ui::theme::background,
+                              jazz::ui::theme::cream,
                               DocumentWindow::allButtons)
         {
             auto content = std::make_unique<jazz::ui::MainComponent>();
@@ -66,6 +69,31 @@ private:
             };
 
             contentComponent->setMidiStatus (describeDevices (midiInput));
+
+            // Sound. The UI says which notes; the device is entirely ours.
+            const auto sounding = piano.start();
+            contentComponent->setSoundAvailable (sounding, piano.statusMessage());
+
+            contentComponent->onSoundNote = [&piano] (int midiNote, bool isOn)
+            {
+                if (isOn)
+                    piano.noteOn (midiNote, 0.8f);
+                else
+                    piano.noteOff (midiNote);
+            };
+
+            contentComponent->onSoundChord = [&piano] (const std::vector<int>& midiNotes)
+            {
+                piano.allNotesOff();
+
+                for (auto note : midiNotes)
+                    piano.noteOn (note, 0.8f);
+            };
+
+            contentComponent->onSilenceRequested = [&piano] { piano.allNotesOff(); };
+
+            // Reading a file is the shell's job - the UI is handed text.
+            contentComponent->onOpenChartFileRequested = [this] { openChartFile(); };
 
             setUsingNativeTitleBar (true);
             setContentOwned (content.release(), true);
@@ -97,6 +125,52 @@ private:
         }
 
     private:
+        /** Picks a chart file and hands its text to the UI.
+
+            iReal Pro links and the HTML it shares are both text, so the reader
+            in the engine takes them as they are. A PDF is not: pulling text out
+            of one needs a PDF library, which this shell does not have, so a PDF
+            is refused by name rather than read as gibberish.
+        */
+        void openChartFile()
+        {
+            chooser = std::make_unique<juce::FileChooser> (
+                "Open a chart",
+                juce::File::getSpecialLocation (juce::File::userHomeDirectory),
+                "*.html;*.htm;*.txt;*.irealb;*.irealbook;*.pdf");
+
+            const auto browserFlags = juce::FileBrowserComponent::openMode
+                                    | juce::FileBrowserComponent::canSelectFiles;
+
+            chooser->launchAsync (browserFlags, [this] (const juce::FileChooser& picked)
+            {
+                const auto file = picked.getResult();
+
+                if (file == juce::File() || contentComponent == nullptr)
+                    return;
+
+                if (file.hasFileExtension ("pdf"))
+                {
+                    contentComponent->chartFileCouldNotBeRead (
+                        "This app cannot read a PDF yet - it has no PDF library. "
+                        "Export the tune as an iReal Pro link, or share it as HTML, "
+                        "and paste that instead.");
+                    return;
+                }
+
+                const auto text = file.loadFileAsString();
+
+                if (text.isEmpty())
+                {
+                    contentComponent->chartFileCouldNotBeRead (
+                        "That file is empty, or could not be opened.");
+                    return;
+                }
+
+                contentComponent->chartFileWasRead (text);
+            });
+        }
+
         static juce::String describeDevices (const MidiDeviceInput& midiInput)
         {
             const auto names = midiInput.openDeviceNames();
@@ -108,11 +182,13 @@ private:
         }
 
         jazz::ui::MainComponent* contentComponent { nullptr };
+        std::unique_ptr<juce::FileChooser> chooser;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainWindow)
     };
 
     std::unique_ptr<MidiDeviceInput> midiInput;
+    std::unique_ptr<ElectricPiano> piano;
     std::unique_ptr<MainWindow> mainWindow;
 };
 

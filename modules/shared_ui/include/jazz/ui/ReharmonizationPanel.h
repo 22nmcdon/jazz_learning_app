@@ -1,6 +1,6 @@
 #pragma once
 
-#include "jazz/ui/SizeClass.h"
+#include "jazz/ui/Overlay.h"
 #include "jazz/core/Reharmonizer.h"
 
 #include <functional>

@@ -15,8 +15,8 @@ responsive UI and one UI-agnostic theory engine.
 | Directory | Layer | Depends on |
 |---|---|---|
 | `modules/core_engine` | Chord parsing, scale suggestion, reharmonisation, voicing analysis, note-input abstraction. Pure C++17. | nothing |
-| `modules/shared_ui` | Chart view, on-screen keyboard, scale panel, reharm panel, feedback panel, responsive `MainComponent`. | core engine, JUCE |
-| `app` | Platform shell: MIDI devices, window and app lifecycle. | shared UI, JUCE |
+| `modules/shared_ui` | Lead sheet, on-screen keyboard, scale and reharm panels, feedback panel, practice menu, the dialogs, responsive `MainComponent`. | core engine, JUCE |
+| `app` | Platform shell: MIDI devices, the audio device and its electric piano, file reading, window and app lifecycle. | shared UI, JUCE |
 | `web` | Another platform shell: the engine compiled to WebAssembly behind a browser front end. No theory, same as `app`. | core engine, Emscripten |
 | `tests` | Engine unit tests (207), no JUCE, no third-party framework. | core engine |
 
@@ -56,34 +56,42 @@ where MIDI bugs show up first (see the platform notes in `CLAUDE.md`).
 
 ## Trying it
 
-The app opens on a built-in practice chart. Click a measure to see its scale and
-reharmonisation options; play the chord on a MIDI keyboard or the on-screen keyboard to
-get feedback on the voicing.
+The app opens on a built-in practice chart, drawn as a lead sheet: systems of four bars
+divided by barlines, the feel written top left, the title in the middle and the composer
+on the right. Click a bar to move to it; click the bar you are already on for its scales
+and reharmonisations. Play the chord on a MIDI keyboard or the on-screen keyboard to get
+feedback on the voicing.
+
+The desktop app and the browser page are the same UI, near enough that a screenshot of
+one passes for the other - the same palette, the same lead sheet, the same practice menu
+and the same dock under it. That is deliberate: they share a component library, and the
+page exists to prove the engine is portable, not to be a second product.
 
 With a mouse the keyboard defaults to **Hold** (latch) mode, so clicking several keys
 builds a chord; on touch, latch is off and several fingers register as one voicing. Any
 MIDI keyboard found at startup — or plugged in or paired later — is opened automatically.
 
-The **Practice** menu at the top of the browser page sets a voicing shape for the whole
+The **Practice** menu at the top right sets a voicing shape for the whole
 session - root position, shell, rootless left hand, two-handed rootless, solo - and every
 voicing you play is then checked against it, so a rootless voicing played during a
 root-position exercise is reported even though the notes spell the chord. The same menu
 says how much colour **Show me one** should put in what it plays: the base shape, or the
 same shape with the tensions. Pressing the button again walks on to the next shape rather
-than repeating the last one. The desktop app has the same
-control in its header. The menu also connects a MIDI keyboard through the Web MIDI API;
-that needs Chrome or Edge, and an embedded page may not be allowed to ask for permission
-at all, in which case use the page in its own tab or the desktop app, which talks to MIDI
-devices directly.
+than repeating the last one. What it shows goes under your hands rather than merely onto
+the screen, so it sounds, is analysed, and can be named - the same path a played chord
+takes. On the browser page the menu also connects a MIDI keyboard through the Web MIDI
+API; that needs Chrome or Edge, and an embedded page may not be allowed to ask for
+permission at all, in which case use the page in its own tab or the desktop app, which
+talks to MIDI devices directly.
 
-The menu also carries the sound bank: an **electric piano** synthesised with Web Audio (a
-sine ringing another, with the modulation dying away fast so the attack barks), or silent.
-Banks are a registry in the page - adding an organ or an acoustic piano later is one entry
-and one radio button. A mouse can only press one key at a time, so **Play chord** (or the
-space bar) sounds every key currently down at once; it retires itself once a MIDI keyboard
-is connected and doing the playing. Connecting a MIDI keyboard widens the drawn keyboard to four octaves,
-and anything played outside that widens it further, so a two-handed voicing is never partly
-off the end. The desktop app widens its keyboard the same way, but makes no sound yet.
+The menu also carries the sound bank: an **electric piano**, or silent. Both shells
+synthesise the same voice rather than sampling it - one sine ringing another, with the
+modulation dying away faster than the note, so the attack barks and the tail settles - the
+page through Web Audio and the app through its own audio device. A mouse can only press
+one key at a time, so **Play chord** (or the space bar) sounds every key currently down at
+once. Connecting a MIDI keyboard widens the drawn keyboard to four octaves, and anything
+played outside that widens it further, so a two-handed voicing is never partly off the
+end; both shells do this.
 
 Clicking a bar moves to it; clicking the bar you are already on opens its scales and
 reharmonisations. Stepping along the chart to check one voicing after another therefore
@@ -96,12 +104,19 @@ did I just play", with no chart involved. **Edit chart** types chords into bars 
 play turns out to spell a substitution rather than the written chord, **Write it into the
 bar** keeps it.
 
-**Import / export**, in the Practice menu on the browser page, opens a chart that came
-from somewhere else and writes the one on screen back out. It reads an iReal Pro link, the `.html` file iReal Pro
-sends when you share a song, a PDF lead sheet (iReal Pro exports one, and so does this
-page), or a progression typed as `| Dm7 | G7 | Cmaj7 |`, pasted in or picked as a file. Going the other way, **Print or save as PDF** prints the
-lead sheet alone - menus, keyboard and feedback are left off the page - and **Copy iReal
-Pro link** puts an `irealbook://` link on the clipboard that iReal Pro opens directly.
+**Import / export**, in the Practice menu, opens a chart that came from somewhere else and
+writes the one on screen back out. Both shells read an iReal Pro link, the `.html` file
+iReal Pro sends when you share a song, or a progression typed as `| Dm7 | G7 | Cmaj7 |`,
+pasted in or picked as a file, and both put an `irealbook://` link back on the clipboard
+that iReal Pro opens directly.
+
+Two things are the browser page's alone, and both for the same reason - they need
+something the JUCE shell has no library for. The page reads a **PDF lead sheet** (iReal
+Pro exports one, and so does the page) using pdf.js; the app says so and points you at the
+link instead of reading a PDF as gibberish. And **Print or save as PDF** prints the lead
+sheet alone, menus and keyboard left off the page, which is the browser's print pipeline
+doing the work. The chart reader itself is in the engine either way: what the app is
+missing is a way to get text out of a PDF, not a way to understand one.
 A chart that arrives with a chord the engine cannot read says so and names it rather than
 quietly dropping it, and the title, composer and style survive a round trip - they are
 written around the music the way a lead sheet writes them, feel top left and composer top
@@ -239,8 +254,8 @@ that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
   panel keeps a session average, which is the hook progress tracking would build on.
 - **The voice-leading visualiser** — though `guideToneMotion()` in the engine is the
   primitive it needs.
-- **Import and export in the desktop app.** The codecs live in the engine, so the JUCE
-  shell can pick them up; the browser demo is where they are wired to a UI today.
+- **Reading a PDF, and printing one, in the desktop app.** Both need a PDF library the
+  JUCE shell does not have; the engine's reader is shared, so only the bytes are missing.
 
 ## Open questions carried over from the design doc
 
