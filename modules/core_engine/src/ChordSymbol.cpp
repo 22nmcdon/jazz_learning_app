@@ -221,6 +221,11 @@ std::optional<ChordSymbol> ChordSymbol::parse (std::string_view text)
 
     chord.rootPitchClass = root->pitchClass;
 
+    // A chart that writes F#maj9 should not come back as Gbmaj9: how the root was
+    // spelled is the writer's choice, and re-rendering keeps it.
+    if (root->charactersConsumed > 1 && body[1] == '#')
+        chord.preferredAccidental = Accidental::sharps;
+
     Scanner scanner { body.substr (root->charactersConsumed), 0 };
     bool majorSeventhIntent = false;
 

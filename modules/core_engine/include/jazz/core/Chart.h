@@ -71,7 +71,7 @@ struct ChartParseResult
         but it is missing those chords, so an importer should say so rather than
         hand back a chart that looks complete and is not.
     */
-    std::vector<std::string> unreadable;
+    std::vector<std::string> unreadable {};
 
     bool ok() const { return chart.has_value(); }
 };

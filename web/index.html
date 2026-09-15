@@ -347,6 +347,9 @@ button { font-family: inherit; cursor: pointer; }
 }
 .chord .ext { font-size: 0.74em; vertical-align: 0.42em; }
 
+.bar.shared .chord { font-size: clamp(14px, 1.7vw, 19px); padding-left: 8px; }
+.bar.shared .chord:last-of-type { padding-left: 4px; }
+
 /* --- dock: feedback above, keyboard below, always in reach --------------- */
 .dock {
   position: sticky;
@@ -981,7 +984,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
 <div class="wrap">
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 181 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 192 unit tests, no JUCE.</span>
     <span>Bindings: <code>web/src/JazzWebBindings.cpp</code>.</span>
     <span>Built with <code>em++ -O2</code>.</span>
   </footer>
@@ -999,18 +1002,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   <div class="tab-body">
     <h3 class="io-heading">Bring a chart in</h3>
     <p class="voicing-note">
-      A PDF lead sheet - including one exported from iReal Pro - an iReal Pro link, or
-      chords typed as text. Whatever arrives, only the chord symbols are kept.
+      A PDF lead sheet - including one exported from iReal Pro - the .html file iReal
+      Pro sends when you share a song, an iReal Pro link, or chords typed as text.
+      Whatever arrives, only the chord symbols are kept.
     </p>
 
     <div class="io-row">
-      <label class="file-btn" for="chartFile">Choose a PDF<input type="file" id="chartFile" accept="application/pdf,.pdf,.txt,text/plain"></label>
+      <label class="file-btn" for="chartFile">Choose a file<input type="file" id="chartFile" accept="application/pdf,.pdf,.html,.htm,text/html,.txt,text/plain"></label>
       <span class="io-status" id="importStatus"></span>
     </div>
 
     <label class="eyebrow" for="pasteBox" style="display:block;margin-top:18px">Or paste a link or chords</label>
     <textarea id="pasteBox" rows="3" spellcheck="false"
-              placeholder="irealbook://My Tune=...    or    | Dm7 | G7 | Cmaj7 |"></textarea>
+              placeholder="irealb://My Tune=...    or    | Dm7 | G7 | Cmaj7 |"></textarea>
     <button class="play-btn" type="button" id="readPaste" style="margin-top:10px">Read it</button>
 
     <h3 class="io-heading">Take this chart away</h3>
@@ -1253,6 +1257,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function placeChords(bar, measure) {
     var totalBeats = measure.chords.reduce(function (sum, chord) { return sum + chord.beats; }, 0) || 4;
     var beatsSoFar = 0;
+
+    // Two chords have to share a bar's width, so they are written smaller -
+    // as they are on a real chart, and as they must be for "Amaj7 F#maj9/B"
+    // not to run into the bar after it.
+    if (measure.chords.length > 1) bar.classList.add("shared");
 
     measure.chords.forEach(function (chord) {
       var symbol = document.createElement("span");
@@ -1793,15 +1802,20 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var file = el.chartFile.files && el.chartFile.files[0];
     if (!file) return;
 
-    if (file.type === "text/plain" || /\.txt$/i.test(file.name)) {
-      file.text().then(function (text) {
-        el.pasteBox.value = text;
-        el.readPaste.click();
-      });
+    // Anything that is not a PDF is read as text and handed to the engine, which
+    // is what an iReal Pro export needs: sharing a song from the app sends an
+    // .html file with the link inside it, not a .txt.
+    if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
+      readPdf(file);
       return;
     }
 
-    readPdf(file);
+    file.text().then(function (text) {
+      el.pasteBox.value = text;
+      el.readPaste.click();
+    }, function () {
+      setImportStatus("That file could not be opened.", "bad");
+    });
   });
 
   /** Pulls the text off every page of a PDF and hands it to the engine. */

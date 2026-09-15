@@ -177,7 +177,7 @@ TEST ("round-trips symbols through toString")
     CHECK_EQ (parsed ("G7").toString(), std::string ("G7"));
     CHECK_EQ (parsed ("Bb13").toString(), std::string ("Bb13"));
     CHECK_EQ (parsed ("Bm7b5").toString(), std::string ("Bm7b5"));
-    CHECK_EQ (parsed ("F#dim7").toString(), std::string ("Gbdim7"));
+    CHECK_EQ (parsed ("F#dim7").toString(), std::string ("F#dim7"));
     CHECK_EQ (parsed ("G7sus4").toString(), std::string ("G7sus4"));
     CHECK_EQ (parsed ("Am7/D").toString(), std::string ("Am7/D"));
 
@@ -279,7 +279,7 @@ TEST ("chords written with real accidentals are read")
     // What a printed chart contains, and what a PDF hands back.
     CHECK_EQ (parsed ("B♭maj7").toString(), std::string ("Bbmaj7"));
     CHECK_EQ (parsed ("Am7♭5").toString(), std::string ("Am7b5"));
-    CHECK_EQ (parsed ("F♯m7").toString(), std::string ("Gbm7"));
+    CHECK_EQ (parsed ("F♯m7").toString(), std::string ("F#m7"));
     CHECK_EQ (parsed ("G7♯11").toString(), std::string ("G7#11"));
     CHECK_EQ (parsed ("E♭13sus4").toString(), std::string ("Eb13sus4"));
 }

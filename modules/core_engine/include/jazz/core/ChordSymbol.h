@@ -128,6 +128,9 @@ public:
     /** Re-renders with a specific accidental, ignoring the chord's preference. */
     std::string toString (Accidental accidental) const;
 
+    /** How this chord spells itself: how it was written, when it was parsed. */
+    Accidental accidental() const noexcept             { return preferredAccidental; }
+
     /** Returns a copy that spells itself with @p accidental. Chromatic chords
         that rise into the next chord read better sharp (C#dim7 between Cmaj7
         and Dm7); everything else in jazz is conventionally flat.

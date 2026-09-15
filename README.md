@@ -17,7 +17,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/core_engine` | Chord parsing, scale suggestion, reharmonisation, voicing analysis, note-input abstraction. Pure C++17. | nothing |
 | `modules/shared_ui` | Chart view, on-screen keyboard, scale panel, reharm panel, feedback panel, responsive `MainComponent`. | core engine, JUCE |
 | `app` | Platform shell: MIDI devices, window and app lifecycle. | shared UI, JUCE |
-| `tests` | Engine unit tests (181), no JUCE, no third-party framework. | core engine |
+| `tests` | Engine unit tests (192), no JUCE, no third-party framework. | core engine |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -78,9 +78,9 @@ and anything played outside that widens it further, so a two-handed voicing is n
 off the end. The desktop app widens its keyboard the same way, but makes no sound yet.
 
 **Import / export** on the browser page opens a chart that came from somewhere else and
-writes the one on screen back out. It reads an iReal Pro link, a PDF lead sheet (iReal Pro
-exports one, and so does this page), or a progression typed as `| Dm7 | G7 | Cmaj7 |`,
-pasted in or picked as a file. Going the other way, **Print or save as PDF** prints the
+writes the one on screen back out. It reads an iReal Pro link, the `.html` file iReal Pro
+sends when you share a song, a PDF lead sheet (iReal Pro exports one, and so does this
+page), or a progression typed as `| Dm7 | G7 | Cmaj7 |`, pasted in or picked as a file. Going the other way, **Print or save as PDF** prints the
 lead sheet alone - menus, keyboard and feedback are left off the page - and **Copy iReal
 Pro link** puts an `irealbook://` link on the clipboard that iReal Pro opens directly.
 A chart that arrives with a chord the engine cannot read says so and names it rather than
@@ -168,15 +168,21 @@ that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
   substitution available for that bar, so playing Ab C Eb G over a Cmaj7 bar is reported as
   "that is Abmaj7, the bVI major seventh substitution" rather than as a broken Cmaj7. When
   two substitutions spell the same notes, the reading closest to the written chord wins.
-- **Reading and writing charts** — `ChartFormats` reads an iReal Pro link (`irealbook://`,
-  URL-encoded or not) and writes one back, keeping the title, composer, style and time
-  signature; a chart that leaves the engine and comes back is the chart that left.
-  It also rebuilds a chart from the text of a page: hand it every run of text with its
-  position and it stitches the runs back into symbols, groups them into lines, works out
-  where the barlines were from the spacing, and reads past the tempo marking, the bar
-  numbers and the rest of the page furniture to find the title. Pulling text out of a PDF
-  needs a PDF library and belongs to the shell; deciding which of that text is a chord
-  chart needs none and belongs here. Either reader reports the chord symbols it could not
+- **Reading and writing charts** — `ChartFormats` reads both iReal Pro link formats: the
+  plain `irealbook://`, and the `irealb://` link the app itself shares, whose body is
+  shuffled in 50-character blocks and has to be put back in order first. It writes a link
+  back, keeping the title, composer, style, time signature and the way each chord was
+  spelled, so a chart that leaves the engine and comes back is the chart that left.
+  It also rebuilds a chart from the text of a page, and a page comes in two kinds. An
+  engraved lead sheet gives the chord symbols themselves: the reader stitches the runs
+  back into symbols, groups them into lines, works out where the barlines were from the
+  spacing, and reads past the tempo marking, the bar numbers and the rest of the page
+  furniture to find the title. A page from iReal Pro gives none — it draws its symbols —
+  but attaches a spoken description to each ("Bar 12, d Flat Major  7"), which names the
+  bar as well as the chord, so that page is read from its own descriptions and does not
+  depend on where anything sits or which way the coordinates run. Pulling text out of a
+  PDF needs a PDF library and belongs to the shell; deciding which of that text is a chord
+  chart needs none and belongs here. Every reader reports the chord symbols it could not
   understand instead of handing back a chart that looks complete and is not.
 - **Input abstraction** — hardware MIDI and the on-screen keyboard emit identical events;
   `VoicingCollector` groups notes that arrive together into one voicing, so a rolled chord

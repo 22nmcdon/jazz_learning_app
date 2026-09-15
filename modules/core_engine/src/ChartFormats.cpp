@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <map>
 #include <string>
 #include <utility>
 
@@ -52,7 +53,9 @@ namespace
 
 std::string toIRealProSymbol (const ChordSymbol& chord)
 {
-    auto text = pitchClassName (chord.root());
+    // Spell it the way the chord spells itself, so a chart that came in writing
+    // F#maj9 goes back out writing F#maj9.
+    auto text = pitchClassName (chord.root(), chord.accidental());
 
     const auto seventh = chord.seventh();
     const auto highest = highestNatural (chord);
@@ -114,7 +117,7 @@ std::string toIRealProSymbol (const ChordSymbol& chord)
     appendAlterations (chord, text);
 
     if (chord.bass().has_value() && *chord.bass() != chord.root())
-        text += "/" + pitchClassName (*chord.bass());
+        text += "/" + pitchClassName (*chord.bass(), chord.accidental());
 
     return text;
 }
@@ -188,11 +191,87 @@ namespace
         return c == '|' || c == '[' || c == ']' || c == '{' || c == '}' || c == 'Z';
     }
 
-    /** Characters that end a chord token: anything that is not part of a symbol. */
-    bool endsChordToken (char c)
+    /** Can this character be part of a chord symbol?
+
+        Saying what belongs in a chord is safer than listing what ends one. iReal
+        Pro packs padding and marks in against the chords - "Db^7XyQ|", "F#^9/BLZ" -
+        and the list of those grows with the format, while the spelling of a chord
+        does not. Anything not spelled here ends the token.
+    */
+    bool canAppearInChordToken (char c)
     {
-        return std::isspace (static_cast<unsigned char> (c)) || isBarDelimiter (c)
-               || c == ',' || c == '(' || c == ')' || c == '<' || c == '>' || c == '*';
+        if (c >= 'A' && c <= 'G')                             // roots and bass notes
+            return true;
+
+        if (std::isdigit (static_cast<unsigned char> (c)))
+            return true;
+
+        // The letters chord qualities are spelled with: add, alt, aug, dim, h, maj,
+        // min, o, sus - and 'b' for a flat.
+        return std::string_view ("abdghijlmnostu").find (c) != std::string_view::npos
+               || c == '#' || c == '^' || c == '-' || c == '+' || c == '/';
+    }
+
+    /** Undoes the shuffling iReal Pro applies to an irealb:// body.
+
+        The body is cut into 50-character blocks; in each one the first five
+        characters swap with the last five, and characters 10 to 23 swap with the
+        24 to 39 facing them. A block shorter than that, and a trailing remainder,
+        are left alone. The same shuffle undoes itself, which is why iReal Pro can
+        use one routine for both directions.
+    */
+    std::string unscrambleIRealPro (std::string_view body)
+    {
+        const auto unshuffle = [] (std::string block)
+        {
+            for (std::size_t i = 0; i < 5; ++i)
+                std::swap (block[i], block[49 - i]);
+
+            for (std::size_t i = 10; i < 24; ++i)
+                std::swap (block[i], block[49 - i]);
+
+            return block;
+        };
+
+        std::string out;
+
+        while (body.size() > 50)
+        {
+            const auto block = std::string (body.substr (0, 50));
+            body.remove_prefix (50);
+
+            // A block with almost nothing after it was never shuffled.
+            out += body.size() < 2 ? block : unshuffle (block);
+        }
+
+        return out + std::string (body);
+    }
+
+    /** Divides each bar's beats between the chords written in it. */
+    void shareBeatsAcrossBars (Chart& chart)
+    {
+        for (auto& bar : chart.measures)
+        {
+            const auto beats = chart.timeSignature.numerator;
+            const auto perChord = std::max (1, beats / static_cast<int> (bar.slots.size()));
+
+            for (auto& slot : bar.slots)
+                slot.beats = perChord;
+
+            bar.slots.back().beats
+                = std::max (1, beats - perChord * (static_cast<int> (bar.slots.size()) - 1));
+        }
+    }
+
+    /** iReal Pro files a composer under "Last First" and shows "First Last". */
+    std::string composerAsWritten (const std::string& stored)
+    {
+        const auto space = stored.find (' ');
+
+        if (space == std::string::npos || stored.find (' ', space + 1) != std::string::npos)
+            return stored;
+
+        return stored.substr (space + 1) + " " + stored.substr (0, space);
     }
 }
 
@@ -200,26 +279,24 @@ ChartParseResult importIRealPro (std::string_view text)
 {
     auto decoded = urlDecoded (text);
 
-    if (decoded.find ("irealb://") != std::string::npos
-        && decoded.find ("irealbook://") == std::string::npos)
-    {
-        return { std::nullopt,
-                 "That is an irealb:// link, whose chords are scrambled by iReal Pro. Export the "
-                 "song again as an irealbook:// link, or paste the chords as text." };
-    }
-
     if (const auto prefix = decoded.find ("irealbook://"); prefix != std::string::npos)
         decoded = decoded.substr (prefix + std::string ("irealbook://").size());
+    else if (const auto shortPrefix = decoded.find ("irealb://"); shortPrefix != std::string::npos)
+        decoded = decoded.substr (shortPrefix + std::string ("irealb://").size());
 
     Chart chart;
 
-    // Title=Composer=Style=Key=transpose=body, and the body is everything left.
+    // The two formats lay their fields out differently, so split the lot and work
+    // out which is which from the marker iReal Pro puts in front of a shuffled
+    // body:
+    //   irealbook://Title=Composer=Style=Key=n=chords
+    //   irealb://Title=Composer==Style=Key==1r34LbKcu7<shuffled chords>==0=0
     std::vector<std::string> fields;
     std::string current;
 
     for (auto c : decoded)
     {
-        if (c == '=' && fields.size() < 5)
+        if (c == '=')
         {
             fields.push_back (std::exchange (current, std::string {}));
             continue;
@@ -230,34 +307,70 @@ ChartParseResult importIRealPro (std::string_view text)
 
     fields.push_back (current);
 
-    if (fields.size() < 6)
-        return { std::nullopt, "This does not look like an iReal Pro link: expected "
-                               "Title=Composer=Style=Key=n=chords." };
+    static const std::string marker = "1r34LbKcu7";
+
+    auto bodyField = fields.size();
+    auto scrambled = false;
+
+    for (std::size_t i = 0; i < fields.size(); ++i)
+    {
+        if (fields[i].find (marker) != std::string::npos)
+        {
+            bodyField = i;
+            scrambled = true;
+            break;
+        }
+    }
+
+    std::string body;
+
+    if (scrambled)
+    {
+        if (bodyField < 4)
+            return { std::nullopt, "This iReal Pro link is missing the song's details." };
+
+        chart.style = fields[3];
+        chart.composer = composerAsWritten (fields[1]);
+
+        const auto& raw = fields[bodyField];
+        body = unscrambleIRealPro (raw.substr (raw.find (marker) + marker.size()));
+    }
+    else
+    {
+        // Everything after the fifth "=" is body, including any "=" in it.
+        if (fields.size() < 6)
+            return { std::nullopt, "This does not look like an iReal Pro link: expected "
+                                   "Title=Composer=Style=Key=n=chords." };
+
+        chart.style = fields[2];
+        chart.composer = fields[1];
+
+        body = fields[5];
+
+        for (std::size_t i = 6; i < fields.size(); ++i)
+            body += "=" + fields[i];
+    }
 
     chart.title = fields[0].empty() ? "Imported chart" : fields[0];
-    chart.composer = fields[1];
-    chart.style = fields[2];
-
-    const auto& body = fields[5];
 
     Measure measure;
     auto sawAnyChord = false;
+    auto sawTimeSignature = false;
     std::vector<std::string> unreadable;
 
-    // "|   |" is a bar that holds the chord before it; "]Z" is two closing
-    // marks with nothing between them. The space is what tells them apart.
-    auto sawSpaceInBar = false;
-
-    const auto closeMeasure = [&chart, &measure, &sawSpaceInBar] (bool blankBarSustains)
+    // "|   |" is a bar that holds the chord before it. "]Z" is two closing marks
+    // with nothing between them, and "|XyQ  {" is the padding iReal Pro uses to
+    // fill out a row - neither is a bar. What separates the three is the mark the
+    // bar closes on: only a plain barline closes a bar that was really there.
+    const auto closeMeasure = [&chart, &measure] (char closedBy)
     {
-        if (measure.slots.empty() && blankBarSustains && sawSpaceInBar && ! chart.measures.empty())
+        if (measure.slots.empty() && closedBy == '|' && ! chart.measures.empty())
             measure = chart.measures.back();
 
         if (! measure.slots.empty())
             chart.appendMeasure (measure);
 
         measure = Measure {};
-        sawSpaceInBar = false;
     };
 
     for (std::size_t i = 0; i < body.size(); ++i)
@@ -266,15 +379,12 @@ ChartParseResult importIRealPro (std::string_view text)
 
         if (isBarDelimiter (c))
         {
-            closeMeasure (true);
+            closeMeasure (c);
             continue;
         }
 
         if (std::isspace (static_cast<unsigned char> (c)))
-        {
-            sawSpaceInBar = true;
             continue;
-        }
 
         if (c == '<')   // an annotation: skip to its end
         {
@@ -294,8 +404,15 @@ ChartParseResult importIRealPro (std::string_view text)
         {
             if (i + 2 < body.size() && std::isdigit (static_cast<unsigned char> (body[i + 1])))
             {
-                chart.timeSignature.numerator = body[i + 1] - '0';
-                chart.timeSignature.denominator = body[i + 2] - '0';
+                // A tune that changes metre writes several of these. A Chart holds
+                // one, so it holds the one the tune opens in.
+                if (! sawTimeSignature)
+                {
+                    chart.timeSignature.numerator = body[i + 1] - '0';
+                    chart.timeSignature.denominator = body[i + 2] - '0';
+                    sawTimeSignature = true;
+                }
+
                 i += 2;
             }
 
@@ -315,7 +432,7 @@ ChartParseResult importIRealPro (std::string_view text)
 
         auto end = i;
 
-        while (end < body.size() && ! endsChordToken (body[end]))
+        while (end < body.size() && canAppearInChordToken (body[end]))
             ++end;
 
         const auto token = body.substr (i, end - i);
@@ -334,22 +451,12 @@ ChartParseResult importIRealPro (std::string_view text)
         }
     }
 
-    closeMeasure (false);   // whatever is left over is not a sustained bar
+    closeMeasure ('\0');   // whatever is left over is not a sustained bar
 
     if (! sawAnyChord)
         return { std::nullopt, "No chords found in that iReal Pro link." };
 
-    // Share each bar out between the chords written in it.
-    for (auto& bar : chart.measures)
-    {
-        const auto beats = chart.timeSignature.numerator;
-        const auto perChord = std::max (1, beats / static_cast<int> (bar.slots.size()));
-
-        for (auto& slot : bar.slots)
-            slot.beats = perChord;
-
-        bar.slots.back().beats = std::max (1, beats - perChord * (static_cast<int> (bar.slots.size()) - 1));
-    }
+    shareBeatsAcrossBars (chart);
 
     return { std::move (chart), {}, std::move (unreadable) };
 }
@@ -488,11 +595,334 @@ namespace
     }
 }
 
+namespace
+{
+    //==========================================================================
+    // iReal Pro does not write its chord symbols as text: it draws them, and
+    // attaches a spoken description to each - "Bar 1, d Flat Major  7". Pull the
+    // text off one of its PDFs and the chords are not in it; these descriptions
+    // are. Being spelled out in words they are less ambiguous than the symbols
+    // would have been, and they carry the bar numbers with them, so this reader
+    // never has to guess where a barline was.
+
+    std::vector<std::string> spokenWords (const std::string& text)
+    {
+        std::vector<std::string> words;
+
+        for (std::size_t i = 0; i < text.size();)
+        {
+            const auto c = static_cast<unsigned char> (text[i]);
+
+            // Runs of letters and runs of digits are separate words even when
+            // nothing separates them: "7Flat" is a flattened seventh.
+            const auto isLetter = std::isalpha (c) != 0;
+            const auto isDigit = std::isdigit (c) != 0;
+
+            if (! isLetter && ! isDigit)
+            {
+                ++i;
+                continue;
+            }
+
+            auto end = i;
+
+            while (end < text.size()
+                   && (isLetter ? std::isalpha (static_cast<unsigned char> (text[end])) != 0
+                                : std::isdigit (static_cast<unsigned char> (text[end])) != 0))
+                ++end;
+
+            auto word = text.substr (i, end - i);
+
+            for (auto& character : word)
+                character = static_cast<char> (std::tolower (static_cast<unsigned char> (character)));
+
+            words.push_back (std::move (word));
+            i = end;
+        }
+
+        return words;
+    }
+
+    /** Turns "f Sharp Major  9 Over b" into "F#maj9/B", which the chord parser
+        already reads. Returns nothing when a word is not in the vocabulary,
+        rather than dropping it and returning a chord that is nearly right.
+    */
+    std::optional<std::string> spokenChordSymbol (const std::string& text)
+    {
+        const auto words = spokenWords (text);
+
+        if (words.empty())
+            return std::nullopt;
+
+        std::string symbol;
+
+        // A word of one letter is always a note: the root, or the bass after
+        // "over". Every other word in the vocabulary is longer than that.
+        const auto takeNote = [&symbol] (const std::string& word)
+        {
+            if (word.size() != 1 || word[0] < 'a' || word[0] > 'g')
+                return false;
+
+            symbol += static_cast<char> (std::toupper (static_cast<unsigned char> (word[0])));
+            return true;
+        };
+
+        if (! takeNote (words.front()))
+            return std::nullopt;
+
+        for (std::size_t i = 1; i < words.size(); ++i)
+        {
+            const auto& word = words[i];
+
+            if (std::isdigit (static_cast<unsigned char> (word[0])) != 0)
+            {
+                symbol += word;
+                continue;
+            }
+
+            if (takeNote (word))
+                continue;
+
+            // "Half Diminished" is the only two-word quality.
+            if (word == "half" && i + 1 < words.size() && words[i + 1] == "diminished")
+            {
+                symbol += "m7b5";
+                ++i;
+                continue;
+            }
+
+            static const std::vector<std::pair<std::string, std::string>> vocabulary {
+                { "flat", "b" },      { "sharp", "#" },     { "major", "maj" },
+                { "minor", "m" },     { "diminished", "dim" }, { "augmented", "+" },
+                { "aug", "+" },       { "suspended", "sus" },  { "sus", "sus" },
+                { "altered", "alt" }, { "alt", "alt" },     { "add", "add" },
+                { "over", "/" }
+            };
+
+            const auto found = std::find_if (vocabulary.begin(), vocabulary.end(),
+                                             [&word] (const auto& entry) { return entry.first == word; });
+
+            if (found == vocabulary.end())
+                return std::nullopt;
+
+            symbol += found->second;
+        }
+
+        return symbol;
+    }
+
+    bool containsIgnoringCase (const std::string& haystack, const std::string& needle)
+    {
+        const auto found = std::search (haystack.begin(), haystack.end(),
+                                        needle.begin(), needle.end(),
+                                        [] (char a, char b)
+                                        {
+                                            return std::tolower (static_cast<unsigned char> (a))
+                                                   == std::tolower (static_cast<unsigned char> (b));
+                                        });
+
+        return found != haystack.end();
+    }
+
+    /** The marks iReal Pro describes between the chords. They are not chords, and
+        several of them start on a note name, so they are ruled out by name.
+    */
+    bool isSpokenPageMark (const std::string& text)
+    {
+        static const char* const marks[] = {
+            "bar line", "ending", "repeat", "segno", "coda", "fine", "fermata",
+            "made with", "title:", "composer:", "style:", "time signature", "measure"
+        };
+
+        return std::any_of (std::begin (marks), std::end (marks),
+                            [&text] (const char* mark) { return containsIgnoringCase (text, mark); });
+    }
+
+    std::string trimmed (std::string text)
+    {
+        const auto notSpace = [] (unsigned char c) { return std::isspace (c) == 0; };
+
+        text.erase (text.begin(), std::find_if (text.begin(), text.end(), notSpace));
+        text.erase (std::find_if (text.rbegin(), text.rend(), notSpace).base(), text.end());
+
+        // iReal Pro writes its style in brackets: "(Medium Swing)".
+        if (text.size() > 1 && text.front() == '(' && text.back() == ')')
+            return text.substr (1, text.size() - 2);
+
+        return text;
+    }
+
+    /** Reads "Bar 12, c Minor 7" - the number, and the description after it. */
+    bool readBarLabel (const std::string& text, int& number, std::string& description)
+    {
+        if (text.rfind ("Bar ", 0) != 0)
+            return false;
+
+        std::size_t i = 4;
+        auto digits = 0;
+        number = 0;
+
+        while (i < text.size() && std::isdigit (static_cast<unsigned char> (text[i])) != 0)
+        {
+            number = number * 10 + (text[i] - '0');
+            ++i;
+            ++digits;
+        }
+
+        if (digits == 0 || i >= text.size() || text[i] != ',')
+            return false;
+
+        description = trimmed (text.substr (i + 1));
+        return true;
+    }
+
+    bool looksLikeIRealProPage (const std::vector<PlacedText>& items)
+    {
+        auto number = 0;
+        std::string description;
+
+        return std::any_of (items.begin(), items.end(), [&] (const PlacedText& item)
+                            { return readBarLabel (item.text, number, description); });
+    }
+
+    ChartParseResult chartFromSpokenPage (const std::vector<PlacedText>& items,
+                                          const PageReadingOptions& options)
+    {
+        struct SpokenBar
+        {
+            double x {};
+            double y {};
+            std::vector<ChordSymbol> chords;
+        };
+
+        Chart chart;
+        std::map<int, SpokenBar> bars;      // keyed by bar number: order and gaps sort themselves out
+        std::vector<std::string> unreadable;
+        auto sawTimeSignature = false;
+
+        const auto readChord = [&unreadable] (const std::string& description) -> std::optional<ChordSymbol>
+        {
+            if (const auto symbol = spokenChordSymbol (description))
+                if (const auto chord = ChordSymbol::parse (*symbol))
+                    return chord;
+
+            unreadable.push_back (description);
+            return std::nullopt;
+        };
+
+        // First pass: the bars themselves, and what iReal Pro says about the song.
+        for (const auto& item : items)
+        {
+            auto number = 0;
+            std::string description;
+
+            if (readBarLabel (item.text, number, description))
+            {
+                auto& bar = bars[number];
+                bar.x = item.x;
+                bar.y = item.y;
+
+                if (const auto chord = readChord (description))
+                    bar.chords.push_back (*chord);
+
+                continue;
+            }
+
+            if (item.text.rfind ("Title:", 0) == 0)
+                chart.title = trimmed (item.text.substr (6));
+            else if (item.text.rfind ("Composer:", 0) == 0)
+                chart.composer = trimmed (item.text.substr (9));
+            else if (item.text.rfind ("Style:", 0) == 0)
+                chart.style = trimmed (item.text.substr (6));
+            else if (item.text.rfind ("Time Signature:", 0) == 0 && ! sawTimeSignature)
+            {
+                // "Time Signature: 6, 4", and a tune that changes metre says so
+                // more than once; a Chart keeps the one it opens in.
+                const auto numbers = spokenWords (item.text.substr (15));
+
+                if (numbers.size() >= 2)
+                {
+                    chart.timeSignature.numerator = std::stoi (numbers[0]);
+                    chart.timeSignature.denominator = std::stoi (numbers[1]);
+                    sawTimeSignature = true;
+                }
+            }
+        }
+
+        if (bars.empty())
+            return { std::nullopt, "That page is from iReal Pro, but no bars were described on it." };
+
+        // Second pass: a bar can hold more than one chord, and the second one is
+        // described on its own. It belongs to the nearest bar to its left on the
+        // same line - which holds however the reader chose to order the page.
+        for (const auto& item : items)
+        {
+            auto number = 0;
+            std::string description;
+
+            if (readBarLabel (item.text, number, description) || isSpokenPageMark (item.text))
+                continue;
+
+            if (! spokenChordSymbol (item.text).has_value())
+                continue;   // the song title and the composer's name, printed on the page
+
+            auto owner = bars.end();
+
+            for (auto entry = bars.begin(); entry != bars.end(); ++entry)
+            {
+                if (std::abs (entry->second.y - item.y) > options.lineTolerance)
+                    continue;
+
+                if (entry->second.x > item.x)
+                    continue;
+
+                if (owner == bars.end() || entry->second.x > owner->second.x)
+                    owner = entry;
+            }
+
+            if (owner == bars.end())
+                continue;
+
+            if (const auto chord = readChord (item.text))
+                owner->second.chords.push_back (*chord);
+        }
+
+        for (auto& entry : bars)
+        {
+            if (entry.second.chords.empty())
+                continue;
+
+            Measure measure;
+
+            for (const auto& chord : entry.second.chords)
+                measure.slots.push_back ({ chord, 0 });
+
+            chart.appendMeasure (measure);
+        }
+
+        if (chart.measures.empty())
+            return { std::nullopt, "That page is from iReal Pro, but none of its chords could be read." };
+
+        if (chart.title.empty())
+            chart.title = "Imported chart";
+
+        shareBeatsAcrossBars (chart);
+
+        return { std::move (chart), {}, std::move (unreadable) };
+    }
+}
+
 //==============================================================================
 ChartParseResult chartFromPlacedText (std::vector<PlacedText> items, PageReadingOptions options)
 {
     if (items.empty())
         return { std::nullopt, "There is no text on that page." };
+
+    // A page from iReal Pro carries its chords as spoken descriptions rather than
+    // as symbols, and says which bar each one is in, so it is read on its own
+    // terms rather than by where the text sits.
+    if (looksLikeIRealProPage (items))
+        return chartFromSpokenPage (items, options);
 
     // Top of the page first, then left to right: reading order.
     std::stable_sort (items.begin(), items.end(), [] (const PlacedText& a, const PlacedText& b)

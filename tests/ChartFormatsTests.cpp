@@ -114,12 +114,54 @@ TEST ("url-encoded links are decoded before reading")
     CHECK_EQ (result.chart->toProgressionText(), std::string ("| Cmaj7 | Dm7 |"));
 }
 
-TEST ("a scrambled irealb link says so rather than guessing")
-{
-    const auto result = importIRealPro ("irealb://1r34LbKcu7CFQyX...=Some Tune=Swing");
+// The link iReal Pro 2026 writes when a song is shared, url-encoded exactly as it
+// arrives in the exported .html file.
+static const char* sharedLink =
+    "irealb://Tbd3=McDonald%20Noah==Medium%20Swing=Db==1r34LbKcu7%7CQyX7b%5E7Xy43T%7CQ"
+    "yX9b7F%7CQy7X%2DC%7CQyX9%239b7G%7CQN1Db%5ED44T%5ByX%7CQy9XyQ%7CQyX7%5EbD1N43T%7DQ"
+    "Xy%2CB%2F9%5E%23F%7CQyX7%2DC%7CB%5E7X%239b7G%5EAZLQ%20%7BT64QyX%7D%207bAQyX7%5EAN"
+    "1ZLB%2F9%5E%23FQyX7%5EAXyQXy%20QyXQ7%20%20Ab7%20LZT44Db%5E7XyQ%5D%20==0=0";
 
-    CHECK (! result.ok());
-    CHECK (result.error.find ("scrambled") != std::string::npos);
+TEST ("a shared irealb link is unscrambled and read")
+{
+    const auto result = importIRealPro (sharedLink);
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->title, std::string ("Tbd3"));
+    CHECK_EQ (result.chart->style, std::string ("Medium Swing"));
+    CHECK_EQ (result.chart->measureCount(), 14);
+    CHECK (result.unreadable.empty());
+    CHECK_EQ (result.chart->toProgressionText(),
+              std::string ("| Dbmaj7 | G7b9#9 | Cm7 | F7b9 | Dbmaj7 | G7b9#9 | Cm7 | F#maj9/B "
+                           "| Dbmaj7 | Bmaj7 | Amaj7 F#maj9/B | Amaj7 Ab7 | Amaj7 Ab7 | Dbmaj7 |"));
+}
+
+TEST ("iReal Pro files a composer surname first and shows it the other way round")
+{
+    const auto result = importIRealPro (sharedLink);
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->composer, std::string ("Noah McDonald"));
+}
+
+TEST ("the metre a tune opens in is the one the chart keeps")
+{
+    // Tbd3 goes 4/4, 3/4, 6/4, 4/4; a Chart holds one time signature.
+    const auto result = importIRealPro (sharedLink);
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->timeSignature.numerator, 4);
+    CHECK_EQ (result.chart->timeSignature.denominator, 4);
+}
+
+TEST ("padding cells at the end of a row are not bars")
+{
+    // iReal Pro fills a row out to four cells; "XyQ" is its spacing, and the
+    // empty cells after the last bar of a section are not bars of music.
+    const auto result = importIRealPro ("irealbook://T=C=S=C=n=[T44C^7XyQ|D-7XyQ|XyQXyQ  {G7XyQ ]Z");
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->toProgressionText(), std::string ("| Cmaj7 | Dm7 | G7 |"));
 }
 
 TEST ("recognises iReal Pro text without being handed a whole link")
@@ -333,11 +375,11 @@ TEST ("a metronome mark is furniture too")
 
 TEST ("a chord the reader cannot understand is reported, not dropped in silence")
 {
-    const auto result = importIRealPro ("irealbook://Test===C=n=*A[T44C^7 |G7zzz9 |C^7 |C^7 ]Z");
+    const auto result = importIRealPro ("irealbook://Test===C=n=*A[T44C^7 |G13b |C^7 |C^7 ]Z");
 
     CHECK (result.ok());
     CHECK_EQ (result.unreadable.size(), std::size_t (1));
-    CHECK_EQ (result.unreadable.front(), std::string ("G7zzz9"));
+    CHECK_EQ (result.unreadable.front(), std::string ("G13b"));
 }
 
 TEST ("a chart that reads cleanly reports nothing unreadable")
@@ -375,4 +417,149 @@ TEST ("page text beside the music is not reported as an unreadable chord")
 
     CHECK (result.ok());
     CHECK (result.unreadable.empty());
+}
+
+//==============================================================================
+// iReal Pro's own PDF export. It draws its chord symbols rather than writing
+// them, so the only chords on the page are the spoken descriptions it attaches
+// for a screen reader. These items are taken from a real export.
+static std::vector<PlacedText> iRealProPage()
+{
+    return {
+        { 292.5,  31.2, "Tbd3" },
+        { 6.0,    52.2, "(Medium Swing)" },
+        { 476.3,  52.2, "Noah McDonald" },
+        { 0.0,     0.0, "Made with iReal Pro" },
+        { 241.3, 728.9, "Title: Tbd3" },
+        { 5.0,   711.7, "Style: (Medium Swing)" },
+        { 370.8, 711.7, "Composer: Noah McDonald" },
+        { 19.8,  633.6, "Opening double bar line" },
+        { 2.5,   638.0, "Time Signature: 4, 4" },
+        { 18.1,  633.6, "Bar 1, d Flat Major  7" },
+        { 143.6, 633.6, "Bar Line" },
+        { 143.6, 633.6, "Bar 2, g 7Flat  9Sharp 9" },
+        { 268.9, 633.6, "Bar 3, c Minor 7" },
+        { 394.4, 633.6, "Bar 4, f 7Flat  9" },
+        { 2.5,   478.6, "Time Signature: 3, 4" },
+        { 19.8,  532.0, "First Ending" },
+        { 18.1,  474.2, "Bar 5, b Major  7" },
+        { 18.1,  394.5, "Bar 6, 'A' Major  7" },
+        { 143.6, 394.5, "f Sharp Major  9 Over b" },
+        { 206.2, 394.5, "Bar 7, 'A' Major  7" },
+        { 331.6, 394.5, "'A' Flat 7" },
+        { 370.8, 388.7, "Closing repeat bar line" }
+    };
+}
+
+TEST ("an iReal Pro page is read from the descriptions it attaches to its chords")
+{
+    const auto result = chartFromPlacedText (iRealProPage());
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->title, std::string ("Tbd3"));
+    CHECK_EQ (result.chart->composer, std::string ("Noah McDonald"));
+    CHECK_EQ (result.chart->style, std::string ("Medium Swing"));
+    CHECK (result.unreadable.empty());
+    CHECK_EQ (result.chart->toProgressionText(),
+              std::string ("| Dbmaj7 | G7b9#9 | Cm7 | F7b9 | Bmaj7 | Amaj7 F#maj9/B | Amaj7 Ab7 |"));
+}
+
+TEST ("the metre the page opens in is the one the chart keeps")
+{
+    const auto result = chartFromPlacedText (iRealProPage());
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->timeSignature.numerator, 4);
+    CHECK_EQ (result.chart->timeSignature.denominator, 4);
+}
+
+TEST ("a page read upside down gives the same chart")
+{
+    // The reader orders bars by the numbers iReal Pro gives them, so which way
+    // the page coordinates run does not matter.
+    auto items = iRealProPage();
+
+    for (auto& item : items)
+        item.y = 1000.0 - item.y;
+
+    std::reverse (items.begin(), items.end());
+
+    const auto result = chartFromPlacedText (std::move (items));
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->toProgressionText(),
+              std::string ("| Dbmaj7 | G7b9#9 | Cm7 | F7b9 | Bmaj7 | Amaj7 F#maj9/B | Amaj7 Ab7 |"));
+}
+
+TEST ("a second chord goes in the bar to its left, not the nearest one")
+{
+    // Two bars share a line: the loose chord at x=331 belongs to bar 7 at x=206,
+    // not to bar 6 at x=18.
+    const auto result = chartFromPlacedText (iRealProPage());
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->measures[6].slots.size(), std::size_t (2));
+    CHECK_EQ (result.chart->measures[6].slots[1].chord.toString(), std::string ("Ab7"));
+}
+
+TEST ("marks that start on a note name are not read as chords")
+{
+    // "Bar Line", "First Ending" and the composer's name all begin on B, F or N.
+    const auto result = chartFromPlacedText (iRealProPage());
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->measureCount(), 7);
+}
+
+TEST ("a chord description outside the vocabulary is reported")
+{
+    std::vector<PlacedText> items {
+        { 18.1, 633.6, "Bar 1, d Flat Major  7" },
+        { 143.6, 633.6, "Bar 2, g Peculiar 7" }
+    };
+
+    const auto result = chartFromPlacedText (std::move (items));
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->measureCount(), 1);
+    CHECK_EQ (result.unreadable.size(), std::size_t (1));
+    CHECK_EQ (result.unreadable.front(), std::string ("g Peculiar 7"));
+}
+
+TEST ("spoken chord descriptions carry the same chords as the symbols")
+{
+    struct Case { const char* spoken; const char* symbol; };
+
+    const Case cases[] = {
+        { "Bar 1, d Flat Major  7",       "Dbmaj7" },
+        { "Bar 1, g 7Flat  9Sharp 9",     "G7b9#9" },
+        { "Bar 1, c Minor 7",             "Cm7" },
+        { "Bar 1, f Sharp Major  9 Over b", "F#maj9/B" },
+        { "Bar 1, 'A' Flat 7",            "Ab7" },
+        { "Bar 1, b Half Diminished 7",   "Bm7b5" },
+        { "Bar 1, e Diminished 7",        "Edim7" },
+        { "Bar 1, g 7 Suspended 4",       "G7sus4" }
+    };
+
+    for (const auto& one : cases)
+    {
+        const auto result = chartFromPlacedText ({ { 18.0, 100.0, one.spoken } });
+
+        CHECK (result.ok());
+
+        if (result.ok())
+            CHECK_EQ (result.chart->measures[0].slots[0].chord.toString(), std::string (one.symbol));
+    }
+}
+
+TEST ("a chart written with sharps goes back out written with sharps")
+{
+    const auto result = importIRealPro (sharedLink);
+
+    CHECK (result.ok());
+
+    const auto link = exportIRealPro (*result.chart);
+
+    CHECK (link.find ("F#^9/B") != std::string::npos);
+    CHECK (link.find ("Gb") == std::string::npos);
 }

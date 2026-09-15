@@ -47,6 +47,12 @@ Rules of thumb when writing or reviewing code:
   chart, and turning chords into an iReal Pro link or back, is the engine's, and it does it
   without knowing what a file is: `ChartFormats` takes positioned text in and gives a
   `Chart` out. A new format should add a reader to the shell, not theory to it.
+- **Read a format against a real export, not a fixture you wrote.** Every bug in the
+  import path so far was one no invented fixture would have had: chord symbols arriving
+  one letter per text run, page coordinates running the other way, real flat signs
+  instead of "b", and iReal Pro PDFs that contain no chord text at all because the
+  symbols are drawn and only a spoken description is left behind. Get a file out of the
+  app in question and read that.
 - Keeping Core Engine UI-agnostic is what makes a future AUv3/VST3 plugin target
   (sharing the same engine) possible without a rewrite. Don't take shortcuts that couple
   engine logic to the standalone app shell.
