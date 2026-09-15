@@ -22,9 +22,13 @@ namespace
             "maj7", "maj9", "maj13", "maj7#11", "maj9#11",
             "m7", "m9", "m11", "m13",
             "mMaj7",
-            "7", "9", "13", "7sus4", "9sus4",
+            "7", "9", "13", "7b5",
             "7b9", "7#9", "7#11", "7b13", "7#5", "9#11", "13#11",
             "7b9b13", "7#9b13", "13b9", "alt",
+            // The sus family goes all the way up: a 13sus4 is a sound in its own
+            // right, not a 9sus4 with a note left over.
+            "7sus4", "9sus4", "13sus4", "7sus4b9",
+            "maj7#5", "m6/9", "mMaj9",
             "m7b5", "m9b5", "dim7"
         };
 

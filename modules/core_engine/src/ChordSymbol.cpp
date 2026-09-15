@@ -101,6 +101,19 @@ namespace
             return std::any_of (tokens.begin(), tokens.end(),
                                 [this] (std::string_view t) { return take (t); });
         }
+
+        /** Matches only when the token is not the start of a longer word, so
+            "ma" reads as major in "Cma9" but leaves "Cmadd9" to the minor rule.
+        */
+        bool takeUnlessLetterFollows (std::string_view token)
+        {
+            const auto after = pos + token.size();
+
+            if (after < text.size() && std::isalpha (static_cast<unsigned char> (text[after])))
+                return false;
+
+            return take (token);
+        }
     };
 }
 
@@ -180,11 +193,20 @@ std::optional<ChordSymbol> ChordSymbol::parse (std::string_view text)
     {
         // Minor-major sevenths first: they start with the same letters as both
         // the minor and the major tokens.
-        if (scanner.takeAny ({ "mMaj7", "mMaj9", "mmaj7", "minMaj7", "min(maj7)",
+        if (scanner.takeAny ({ "mMaj7", "mmaj7", "minMaj7", "min(maj7)",
                                "m(maj7)", "-Maj7", "-maj7", "mM7" }))
         {
             chord.chordQuality = ChordQuality::minorMajor;
             chord.seventhType = SeventhType::major;
+            majorSeventhIntent = true;
+            continue;
+        }
+
+        // Without a 7 of its own - CmMaj9 - the extension that follows brings
+        // the seventh with it.
+        if (scanner.takeAny ({ "mMaj", "mmaj", "minMaj", "mM", "-Maj", "-maj" }))
+        {
+            chord.chordQuality = ChordQuality::minorMajor;
             majorSeventhIntent = true;
             continue;
         }
@@ -241,7 +263,7 @@ std::optional<ChordSymbol> ChordSymbol::parse (std::string_view text)
             continue;
         }
 
-        if (scanner.takeAny ({ "maj", "Maj", "ma", "M", "^" }))
+        if (scanner.takeAny ({ "maj", "Maj", "M", "^" }) || scanner.takeUnlessLetterFollows ("ma"))
         {
             majorSeventhIntent = true;
             continue;
@@ -485,6 +507,19 @@ std::string ChordSymbol::toString (Accidental accidental) const
     const auto hasEleven = hasExtension (Extension::eleven);
     const auto hasThirteen = hasExtension (Extension::thirteen);
 
+    /** A triad with a colour tone added and no seventh under it: "add9". */
+    const auto addedTone = [&]() -> std::string
+    {
+        if (hasExtension (Extension::six))
+            return hasNine ? "6/9" : "6";
+
+        if (hasNine)     return "add9";
+        if (hasEleven)   return "add11";
+        if (hasThirteen) return "add13";
+
+        return {};
+    };
+
     // The highest natural extension stands in for the seventh: C7 + 13 -> C13.
     const std::string highest = hasThirteen ? "13" : hasEleven ? "11" : hasNine ? "9" : "7";
 
@@ -493,16 +528,16 @@ std::string ChordSymbol::toString (Accidental accidental) const
         case ChordQuality::major:
             if (seventhType == SeventhType::major)
                 result += "maj" + highest;
-            else if (hasExtension (Extension::six))
-                result += hasNine ? "6/9" : "6";
+            else
+                result += addedTone();
             break;
 
         case ChordQuality::minor:
             result += "m";
             if (seventhType == SeventhType::minor)
                 result += highest;
-            else if (hasExtension (Extension::six))
-                result += "6";
+            else
+                result += addedTone();   // a minor 6/9 or madd9 keeps its 9th
             break;
 
         case ChordQuality::minorMajor:

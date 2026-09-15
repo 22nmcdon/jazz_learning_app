@@ -92,9 +92,13 @@ TEST ("a name that promises colour it did not get ranks below one that does not"
     const ChordIdentifier identifier;
     const auto candidates = identifier.identify (Voicing::fromNotes ({ 60, 64, 71 }));
 
-    // Cmaj7 without its 5th beats Cmaj9 without its 5th and its 9th.
+    // Cmaj7 without its 5th beats Cmaj9 without its 5th and its 9th; further
+    // readings exist (C E B is also a rootless Am add9) but rank below both.
     CHECK_EQ (candidates.front().chord.toString(), std::string ("Cmaj7"));
-    CHECK (candidates.size() < std::size_t (3));
+    CHECK_EQ (candidates[1].chord.toString(), std::string ("Cmaj9"));
+
+    for (std::size_t i = 1; i < candidates.size(); ++i)
+        CHECK (candidates[i].omittedTones.size() >= candidates.front().omittedTones.size());
 }
 
 TEST ("puts the bass note in the name when it is not the root")
@@ -177,4 +181,29 @@ TEST ("rootless readings can be turned off")
 
     for (const auto& candidate : identifier.identify (Voicing::fromNotes ({ 52, 55, 59, 62 })))
         CHECK (candidate.rootPlayed);
+}
+
+TEST ("names a suspended thirteenth")
+{
+    // Eb Bb C Db F Ab - a sus chord with the 9th and 13th in it, which is a
+    // sound in its own right rather than a 9sus4 with a note left over.
+    CHECK_EQ (nameOf ({ 51, 58, 60, 61, 65, 68 }), std::string ("Eb13sus4"));
+}
+
+TEST ("the slash readings of a sus13 are still offered, just not first")
+{
+    const auto readings = readingsOf ({ 51, 58, 60, 61, 65, 68 });
+
+    CHECK_EQ (readings.front(), std::string ("Eb13sus4"));
+    CHECK (offers (readings, "Dbmaj13/Eb"));
+    CHECK (offers (readings, "Bbm11/Eb"));
+}
+
+TEST ("names the chords added alongside the suspended thirteenth")
+{
+    CHECK_EQ (nameOf ({ 60, 64, 68, 71 }), std::string ("Cmaj7#5"));
+    CHECK_EQ (nameOf ({ 60, 63, 67, 69, 74 }), std::string ("Cm6/9"));
+    CHECK_EQ (nameOf ({ 60, 63, 67, 71, 74 }), std::string ("CmMaj9"));
+    CHECK_EQ (nameOf ({ 60, 64, 66, 70 }), std::string ("C7b5"));
+    CHECK_EQ (nameOf ({ 60, 65, 67, 70, 73 }), std::string ("C7sus4b9"));
 }

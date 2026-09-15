@@ -206,3 +206,58 @@ TEST ("an eleventh implies the ninth beneath it")
     CHECK (built == eleventh);
     CHECK_EQ (built.pitchClassMask(), eleventh.pitchClassMask());
 }
+
+TEST ("a suspended chord carries extensions all the way up")
+{
+    // Ebsus13, voiced Eb Bb C Db F Ab: root, 5th, 13th, b7, 9th and the sus 4th.
+    const auto sus13 = parsed ("Ebsus13");
+
+    CHECK (sus13.quality() == ChordQuality::suspended);
+    CHECK (sus13.seventh() == SeventhType::minor);
+
+    CHECK (hasEssentialTone (sus13, 5));    // the 4th, standing in for the 3rd
+    CHECK (hasEssentialTone (sus13, 10));   // b7
+    CHECK (hasTone (sus13, 2));             // 9th, implied under the 13th
+    CHECK (hasTone (sus13, 7));             // 5th
+    CHECK (hasTone (sus13, 9));             // 13th
+    CHECK (! hasTone (sus13, 4));           // and no 3rd anywhere
+}
+
+TEST ("the spellings of a suspended thirteenth all mean the same chord")
+{
+    // Written any of these ways, read back the way a chart would print it.
+    for (const auto& text : { "Ebsus13", "Eb13sus4", "Eb13sus" })
+    {
+        const auto chord = parsed (text);
+        CHECK_EQ (chord.toString(), std::string ("Eb13sus4"));
+        CHECK (chord == parsed ("Ebsus13"));
+    }
+}
+
+TEST ("every chord the engine can name prints as itself")
+{
+    // A printed name that loses a note is a name for a different chord. This
+    // sweeps the vocabulary the identifier draws on, because a hole here is
+    // invisible until something is named wrongly.
+    for (const auto& text : { "C", "Cm", "Cdim", "C+", "Csus4", "Csus2",
+                              "C6", "Cm6", "C6/9", "Cm6/9", "Cadd9", "Cmadd9",
+                              "Cmaj7", "Cmaj9", "Cmaj13", "Cmaj7#11", "Cmaj9#11", "Cmaj7#5",
+                              "Cm7", "Cm9", "Cm11", "Cm13", "CmMaj7", "CmMaj9",
+                              "C7", "C9", "C13", "C7b5", "C7b9", "C7#9", "C7#11", "C7b13",
+                              "C7#5", "C9#11", "C13#11", "C7b9b13", "C7#9b13", "C13b9", "C7alt",
+                              "C7sus4", "C9sus4", "C13sus4", "C7sus4b9",
+                              "Cm7b5", "Cm9b5", "Cdim7" })
+    {
+        const auto chord = parsed (text);
+        const auto printed = chord.toString();
+        const auto reparsed = ChordSymbol::parse (printed);
+
+        CHECK (reparsed.has_value());
+
+        if (reparsed.has_value())
+        {
+            CHECK (*reparsed == chord);
+            CHECK_EQ (reparsed->pitchClassMask(), chord.pitchClassMask());
+        }
+    }
+}
