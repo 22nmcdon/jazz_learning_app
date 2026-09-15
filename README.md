@@ -77,14 +77,18 @@ is connected and doing the playing. Connecting a MIDI keyboard widens the drawn 
 and anything played outside that widens it further, so a two-handed voicing is never partly
 off the end. The desktop app widens its keyboard the same way, but makes no sound yet.
 
-**Import / export** on the browser page opens a chart that came from somewhere else and
-writes the one on screen back out. It reads an iReal Pro link, the `.html` file iReal Pro
+**Import / export**, in the Practice menu on the browser page, opens a chart that came
+from somewhere else and writes the one on screen back out. It reads an iReal Pro link, the `.html` file iReal Pro
 sends when you share a song, a PDF lead sheet (iReal Pro exports one, and so does this
 page), or a progression typed as `| Dm7 | G7 | Cmaj7 |`, pasted in or picked as a file. Going the other way, **Print or save as PDF** prints the
 lead sheet alone - menus, keyboard and feedback are left off the page - and **Copy iReal
 Pro link** puts an `irealbook://` link on the clipboard that iReal Pro opens directly.
 A chart that arrives with a chord the engine cannot read says so and names it rather than
-quietly dropping it, and the title, composer and style survive a round trip.
+quietly dropping it, and the title, composer and style survive a round trip - they are
+written around the music the way a lead sheet writes them, feel top left and composer top
+right. An imported chart becomes the chart, so **Restore original** takes back the
+reharmonisations you have tried and returns the tune you brought in, not the one the page
+happened to open with.
 
 Two environment variables help check the responsive layout without a device:
 

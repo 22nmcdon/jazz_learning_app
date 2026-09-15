@@ -154,6 +154,10 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: 0 16px 40px rgba(36, 31, 29, 0.16);
   padding: 18px 20px 16px;
   text-align: left;
+
+  /* The menu is taller than a laptop window once the chart group is in it. */
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
 }
 .menu-panel[hidden] { display: none; }
 .menu-group + .menu-group { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
@@ -873,6 +877,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         </button>
 
         <div class="menu-panel" id="menuPanel" hidden>
+          <div class="menu-group">
+            <span class="menu-title">Chart</span>
+            <button class="link-btn" type="button" id="ioButton">Import / export</button>
+            <p class="menu-note">Open a chart from iReal Pro or a PDF, or take this one away.</p>
+          </div>
+
           <div class="menu-group" role="radiogroup" aria-label="Voicing style">
             <span class="menu-title">Voicing style</span>
             <label class="menu-option"><input type="radio" name="voicingStyle" value="any" checked> Any shape</label>
@@ -903,15 +913,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   <section class="sheet-section">
     <div class="sheet">
       <div class="sheet-head">
-        <span class="style-mark">Medium Swing</span>
+        <span class="style-mark" id="sheetStyle">Medium Swing</span>
         <h2 class="sheet-title" id="sheetTitle">Practice Chart</h2>
-        <span class="sheet-credit">chord chart</span>
+        <span class="sheet-credit" id="sheetCredit">chord chart</span>
       </div>
 
       <div class="sheet-tools">
         <p class="sheet-hint">Click any bar for its scales, reharmonisations and voicings.</p>
         <div class="tools-right">
-          <button class="link-btn" type="button" id="ioButton">Import / export</button>
           <button class="link-btn" type="button" id="planButton">Reharmonise the tune</button>
           <button class="link-btn" type="button" id="editToggle">Edit chart</button>
           <button class="link-btn" type="button" id="restoreChart">Restore original</button>
@@ -1107,6 +1116,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   var SHARP = "\u266F";  // MUSIC SHARP SIGN
   var DEFAULT_PROGRESSION = document.getElementById("progression").value;
 
+  /** The chart as it arrived, before any reharmonisation or editing. Importing
+      replaces it, so "Restore original" takes you back to the chart you brought
+      in rather than to the one the page shipped with.
+  */
+  var original = {
+    progression: DEFAULT_PROGRESSION,
+    title: document.getElementById("sheetTitle").textContent,
+    style: document.getElementById("sheetStyle").textContent,
+    composer: ""
+  };
+
   var engine = null;
   var state = {
     progression: DEFAULT_PROGRESSION,
@@ -1136,7 +1156,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   var el = {};
-  ["engineStatus", "sheetTitle", "editToggle", "restoreChart", "editor", "progression",
+  ["engineStatus", "sheetTitle", "sheetStyle", "sheetCredit", "editToggle", "restoreChart",
+   "editor", "progression",
    "parseError", "systems", "verdict", "played", "expecting", "findingRow", "meter",
    "meterFill", "keyboard", "clearKeys", "chordDialog", "dialogBar", "dialogChord",
    "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
@@ -1271,6 +1292,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       bar.appendChild(symbol);
       beatsSoFar += chord.beats;
     });
+  }
+
+  /** Writes what a lead sheet puts around the music: the feel top left, the
+      title in the middle, who wrote it on the right.
+  */
+  function showChartHead(title, style, composer) {
+    el.sheetTitle.textContent = title;
+    el.sheetStyle.textContent = style || "Medium Swing";
+    el.sheetCredit.textContent = composer || "chord chart";
   }
 
   function makeBarHandler(index) {
@@ -1737,12 +1767,21 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       return;
     }
 
-    if (result.title) el.sheetTitle.textContent = result.title;
-
     // Who wrote it and how it is played belong to the chart, not to the link
     // it arrived in, so they survive being written back out.
     state.composer = result.composer || "";
     state.chartStyle = result.style || "";
+
+    showChartHead(result.title || el.sheetTitle.textContent, state.chartStyle, state.composer);
+
+    // This is the chart now. Restoring should come back here, not to the one
+    // that happened to be on screen when the page loaded.
+    original = {
+      progression: result.progression,
+      title: el.sheetTitle.textContent,
+      style: state.chartStyle,
+      composer: state.composer
+    };
 
     analyseVoicing();
     updateVoicingControls();
@@ -1768,6 +1807,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   el.ioButton.addEventListener("click", function () {
+    setMenuOpen(false);   // the dialog takes over from the menu that opened it
     refreshExport();
     if (!el.ioDialog.open) el.ioDialog.showModal();
   });
@@ -2396,9 +2436,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   });
 
   el.restoreChart.addEventListener("click", function () {
-    state.progression = DEFAULT_PROGRESSION;
-    el.progression.value = DEFAULT_PROGRESSION;
+    state.progression = original.progression;
+    el.progression.value = original.progression;
+    state.composer = original.composer;
+    state.chartStyle = original.style;
     state.reharmonised = {};
+    showChartHead(original.title, original.style, original.composer);
     parseChart();
     analyseVoicing();
   });
