@@ -250,6 +250,25 @@ try {
     await page.locator("#scaleRows li button").nth(1).click();
     const chosen = (await page.locator("#scaleName").innerText()).trim();
     check(`choosing a scale takes (${chosen})`, chosen !== scale);
+
+    await page.locator("#dialogClose").click();
+
+    // The dock names what the engine is holding you to, the way chord practice
+    // names the chord it expects - so it has to be the scale just chosen, not
+    // the engine's own first answer.
+    await page.waitForFunction(
+      (want) => document.querySelector("#soloScale").textContent.trim() === want,
+      chosen, { timeout: 10000 }).catch(() => {});
+    check(`the dock names the scale being read against (${await page.locator("#soloScale").innerText()})`,
+          (await page.locator("#soloScale").innerText()).trim() === chosen);
+
+    // Reopening the bar must not quietly reset that choice: the engine would
+    // still be reading against it while the panel highlighted another.
+    await page.locator("#systems .bar").first().click();
+    await page.waitForSelector("#chordDialog[open]", { timeout: 10000 });
+    check("reopening the bar keeps the scale that was chosen",
+          (await page.locator("#scaleName").innerText()).trim() === chosen
+          && (await page.locator("#soloScale").innerText()).trim() === chosen);
   }
 
   await page.locator("#dialogClose").click();

@@ -203,6 +203,15 @@ the line between what exists and what does not. Do not re-plan something in the 
   which bar went wrong is a glance down the chart rather than a read of a panel. The page
   keeps those numbers itself, from the bar stats every `soloPlayNote` already returns, and
   replaces the lot with the engine's breakdown on `soloEndTake` so a long take cannot drift.
+- **The dock names the scale, and derives it the way it derives what it sends.** Solo
+  practice writes `Expecting D Dorian` where chord practice writes `Expecting Dm7`, and
+  the name comes from `state.scales[state.chosenScale]` - the same expression that feeds
+  `soloChosenScale()` and so the same answer `LineAnalyzer` will reach, fallbacks
+  included. Asking the engine for it separately would be a second path to the same fact
+  and a second thing to go stale; guessing it would be theory in the page. It also made a
+  quiet bug loud: reopening a bar used to reset the chosen scale to the top of the list
+  while the engine kept reading against the old one, which nothing on screen could
+  contradict until something on screen named it.
 - **The bar dialog belongs to whichever mode is on.** Scales in solo practice,
   substitutions in chord practice, never both: they answer different questions - what to
   play over this bar, and what this bar should be - and showing both meant every visit

@@ -154,7 +154,11 @@ would be changing the meaning rather than the light.
 In solo mode the keys do not latch, because a line is played rather than held: each note
 sounds, is read back - **E4 - the 9th, scale tone, in D Dorian** - and lets go. Every note
 is read on its own, so a rolled double-stop is two notes each read where it sits rather
-than one chord.
+than one chord. The dock says it in the same voice chord practice uses, in the same place,
+and where that mode writes **Expecting Dm7** this one writes **Expecting D Dorian** - the
+scale you are actually being held to, which until now you had to press *Which scale?* to
+find out. Choosing a different one out of the bar rewrites it, and it survives the bar
+being opened again.
 
 **Start a take** to be counted. While a take runs the dock carries a red line and the
 button a pulsing dot, because a take counting on quietly is the one thing here that would

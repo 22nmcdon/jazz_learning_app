@@ -273,7 +273,10 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 
 .solo { margin-bottom: 12px; }
 .solo-live { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
-.solo-note { font-size: 16px; color: var(--charcoal); }
+/* Set like `.verdict`, because it is the same line doing the same job one mode
+   over: the dock's answer to what you just played. They had drifted to
+   different faces and sizes, which made the two modes look like two pages. */
+.solo-note { font-family: var(--serif); font-size: 17px; color: var(--charcoal); }
 .solo-note b { font-family: var(--hand); font-size: 20px; }
 .solo-note[data-colour="chordTone"] b { color: var(--sage); }
 .solo-note[data-colour="scaleTone"] b { color: var(--gold); }
@@ -1306,6 +1309,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <div class="solo-live">
         <span class="solo-note" id="soloNote">Play a note over the bar you are on.</span>
         <span class="solo-against" id="soloAgainst"></span>
+        <!-- The chord mode's "Expecting Dm7" says what this bar asks for. The
+             scale is the answer to the same question here - it is what every
+             note is read against - so it is written in the same place, in the
+             same hand. -->
+        <span class="expecting" id="soloExpecting">Expecting <b id="soloScale">-</b></span>
       </div>
 
       <div class="solo-tallies" id="soloTallies" hidden>
@@ -1718,7 +1726,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "shareRow", "copyShare", "shareStatus", "shareLink",
    "helpButton", "helpDialog", "helpClose",
    "colophonEngine", "colophonFraming", "colophonBuild",
-   "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloTallies",
+   "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloScale", "soloTallies",
    "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
    "armTake", "armLabel", "practising",
    "scaleStyle", "scaleStyleNote", "chordTabs"].forEach(function (id) {
@@ -2045,9 +2053,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var result = await call("jazzScalesForChord", ["string", "string"], [chord, soloStyle()]);
     if (result === null || !result.ok) return;
 
+    // Reopening a bar must not quietly forget the scale chosen last time. The
+    // engine is still reading against it, so resetting to the top of the list
+    // would leave the panel highlighting one scale while every note was read
+    // against another - and now that the dock names the scale, saying so.
+    var keep = state.mode === "solo" ? soloChosenScale() : "";
+
     state.scales = result.scales;
     state.scalesFor = chord;
     state.chosenScale = 0;
+
+    result.scales.forEach(function (scale, index) {
+      if (keep && scale.name === keep) state.chosenScale = index;
+    });
 
     // A style can have nothing for a bar - bebop over a diminished chord - and
     // the engine says so rather than handing back an empty panel.
@@ -2056,14 +2074,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       : result.scales.length === 1
           ? "One scale in this style fits this chord"
           : result.scales.length + " scales fit this chord";
-    showScale(0);
+    showScale(state.chosenScale);
 
     el.scaleRows.textContent = "";
     result.scales.forEach(function (scale, index) {
       var item = document.createElement("li");
       var button = document.createElement("button");
       button.type = "button";
-      button.setAttribute("aria-pressed", index === 0 ? "true" : "false");
+      button.setAttribute("aria-pressed", index === state.chosenScale ? "true" : "false");
 
       var name = document.createElement("span");
       name.textContent = scale.name;
@@ -2723,7 +2741,20 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     if (solo.armed) rememberBarStats(result.bar);
 
+    updateSoloExpecting();
     drawTallies();
+  }
+
+  /** The scale this bar is being read against, named in the dock.
+
+      Worked out the same way the value sent to the engine is - the chosen
+      scale, or the engine's own first answer when there is no choice - so the
+      two cannot say different things. Both fall back to the whole catalogue
+      when the style has nothing for the chord, so that case agrees too. */
+  function updateSoloExpecting() {
+    var scale = state.scales[state.chosenScale] || state.scales[0];
+
+    el.soloScale.textContent = scale ? scale.name : "-";
   }
 
   async function startTake() {
