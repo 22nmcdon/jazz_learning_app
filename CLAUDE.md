@@ -206,7 +206,19 @@ the line between what exists and what does not. Do not re-plan something in the 
 - **The bar dialog belongs to whichever mode is on.** Scales in solo practice,
   substitutions in chord practice, never both: they answer different questions - what to
   play over this bar, and what this bar should be - and showing both meant every visit
-  opened with a choice nobody asked for.
+  opened with a choice nobody asked for. Everything else that swaps with the mode swaps
+  the same way: `data-mode` on the element and `applyMode` hides the other one. The
+  cheat sheet, the hint above the chart and the Practice menu's groups are all that one
+  mechanism, so adding a mode-specific anything is a markup attribute rather than code.
+- **The mode changes the light, not the meaning.** `body.soloing` redefines the palette
+  tokens - paper down a stop and cooler, the rose accent to slate - and every rule in the
+  sheet already reads those, so the whole page restyles without a single component being
+  named. Two things are deliberately fixed. Sage, gold and rust mean chord tone, scale
+  tone and outside in both modes, so they do not move and the mode accent is picked to
+  stay clear of all three. And the keys are left out of the fade: they answer a finger,
+  and a key that took 280ms to look pressed would be worse at the job it does every
+  second. A colour written as `rgba(...)` rather than a token is a colour that will not
+  follow the mode - that is what `--wash` exists for.
 
 ### How the app and the page share one interface
 `app/src/WebUi.cpp` is the whole of it. The page is written to a file at startup and

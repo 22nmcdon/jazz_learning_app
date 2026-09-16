@@ -38,6 +38,12 @@
   --sage: #6f7f63;
   --rust: #a4553f;
 
+  /* The accent washed over a bar, under the pointer and under the selection.
+     A token rather than the blush's own rgb spelled out, because the chart is
+     the one thing both practice modes share and solo mode moves the accent. */
+  --wash:        rgba(217, 166, 160, 0.16);
+  --wash-strong: rgba(217, 166, 160, 0.26);
+
   --serif: "Playfair Display", Georgia, "Times New Roman", serif;
   --script: "Cormorant Garamond", Georgia, serif;
   --sans: "Jost", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -152,6 +158,46 @@ button { font-family: inherit; cursor: pointer; }
 body.in-app .masthead > div:first-child { display: none; }
 body.in-app .masthead { padding-block: 10px 6px; justify-content: flex-end; }
 /* --- practice mode ------------------------------------------------------- */
+
+/* Solo practice turns the light down and the accent cool.
+
+   The two modes are one page - nothing is torn down, nothing moves - so the
+   difference has to be felt rather than read. The paper goes down a stop and
+   the rose accent becomes slate; the type, the layout and the hand-lettered
+   chart are untouched, which is what keeps it the same room in a different
+   light rather than a second app.
+
+   What deliberately does not move is sage / gold / rust. Those three mean
+   chord tone, scale tone and outside, and a mode that recoloured them would
+   be changing the meaning rather than the light - so the solo accent is
+   chosen to stay clear of all three as well.
+
+   Tokens only. Every rule below already reads them, so this restyles the
+   whole page without naming a single component; anything added later is
+   themed by having used the palette in the first place. */
+body.soloing {
+  --cream:      #eeedea;
+  --cream-2:    #e1e0da;
+  --paper:      #fafaf7;
+  --charcoal:   #20202a;
+  --line:       #d7d5cd;
+  --text:       #343139;
+  --text-soft:  #656069;
+  --blush:      #99a1bb;
+  --blush-deep: #5c6488;
+
+  --wash:        rgba(92, 100, 136, 0.15);
+  --wash-strong: rgba(92, 100, 136, 0.24);
+}
+
+/* The flip is a change of light, so it reads as one: the surfaces carrying the
+   palette fade instead of snapping. The keys are left out on purpose - they
+   answer a finger, and a key that took 280ms to look pressed would be worse
+   at the job it does every second. Reduced motion turns all of it off. */
+body, .sheet, .dock, .masthead, .menu-panel, .colophon {
+  transition: background-color 280ms ease, border-color 280ms ease, color 280ms ease;
+}
+
 .mode-switch {
   display: flex;
   border: 1px solid var(--line);
@@ -496,8 +542,8 @@ body.in-app .masthead { padding-block: 10px 6px; justify-content: flex-end; }
    selection, and the selection is already drawn as a filled bar. A bar reached
    by Tab alone is neither selected nor hovered, so that one keeps its ring -
    without it there would be nothing on the page saying where the keyboard is. */
-.bar:hover { background: rgba(217, 166, 160, 0.16); box-shadow: inset 0 0 0 2px var(--blush-deep); }
-.bar[aria-pressed="true"] { background: rgba(217, 166, 160, 0.26); }
+.bar:hover { background: var(--wash); box-shadow: inset 0 0 0 2px var(--blush-deep); }
+.bar[aria-pressed="true"] { background: var(--wash-strong); }
 .bar:focus-visible { outline: none; }
 .bar:not([aria-pressed="true"]):focus-visible { outline: 2px solid var(--blush-deep); outline-offset: -2px; }
 .bar.reharmonised::after {
@@ -1155,8 +1201,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       </div>
 
       <div class="sheet-tools">
-        <p class="sheet-hint">Click a bar to work on it - arrow keys move along. Click it again for
-          its scales and reharmonisations.</p>
+        <!-- What the second click opens depends on the mode, so the line saying
+             so does too. It described both at once until the bar dialog stopped
+             showing both. -->
+        <p class="sheet-hint" data-mode="chords">Click a bar to work on it - arrow keys move along.
+          Click it again for the substitutions that could stand in its place.</p>
+        <p class="sheet-hint" data-mode="solo">Click a bar to solo over it - arrow keys move along.
+          Click it again for the scales that fit it.</p>
         <div class="tools-right">
           <button class="link-btn" type="button" id="planButton">Reharmonise the tune</button>
           <button class="link-btn" type="button" id="editToggle">Edit chart</button>
@@ -1318,27 +1369,32 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   </div>
 </dialog>
 
-<!-- Three things here cannot be guessed from looking: that a bar is clicked
-     twice, that the keys latch rather than sound once, and where MIDI comes
-     from. The first visit opens this by itself; after that the "?" does. -->
+<!-- Things here that cannot be guessed from looking: that a bar is clicked
+     twice, that the keys latch in one mode and let go in the other, that a
+     take has to be armed, and where MIDI comes from. Two modes, so two
+     readings of the same page - the mode showing is the one explained, and
+     `data-mode` puts that in the hands of `applyMode` along with everything
+     else that swaps. The first visit to each opens it by itself; after that
+     the "?" does. -->
 <dialog id="helpDialog">
   <div class="dialog-head">
     <div>
-      <div class="bar-label">Before you start</div>
+      <div class="bar-label" data-mode="chords">Chord practice</div>
+      <div class="bar-label" data-mode="solo">Solo practice</div>
       <div class="plan-title">How this works</div>
     </div>
     <button class="close-btn" type="button" id="helpClose" aria-label="Close">&times;</button>
   </div>
 
   <div class="tab-body">
-    <ul class="help-list">
+    <ul class="help-list" data-mode="chords">
       <li>
         <b>Click a bar to work on it.</b> Everything you play is checked against that
         bar - it is the one named beside <i>Expecting</i>. Arrow keys move along the chart.
       </li>
       <li>
-        <b>Click the same bar again</b> for the scales that fit it and the substitutions
-        you could put in its place. Choosing one rewrites the bar.
+        <b>Click the same bar again</b> for the substitutions you could put in its place.
+        Choosing one rewrites the bar.
       </li>
       <li>
         <b>The keys below stay down.</b> Click them one at a time to build a chord - they
@@ -1349,7 +1405,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         <b>Show me one</b> puts a voicing that works under your hands. Press it again for
         the next one, and again after that.
       </li>
-      <li id="helpMidi">
+      <li class="help-midi">
         <b>A MIDI keyboard</b> is better than clicking. Connect one under <i>Practice</i>.
       </li>
       <li>
@@ -1358,16 +1414,57 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       </li>
       <li>
         <b>Solo</b>, at the top, asks a different question of the same notes: not whether a
-        voicing fits the bar, but where each note you play sits against it. Start a take and
-        it keeps count, across as many bars as you walk through, until you stop it - and each
-        bar of the chart carries a strip showing how it went, so the bar that got away is
-        one you can see rather than one you have to read about.
+        voicing fits the bar, but where each note you play sits against it. The page turns
+        its light down when you go, so you always know which one you are in.
       </li>
     </ul>
 
-    <p class="voicing-note" style="margin-top:20px">
+    <ul class="help-list" data-mode="solo">
+      <li>
+        <b>Click a bar to solo over it.</b> Every note you play is read against that bar's
+        chord - a <i>chord tone</i>, a <i>scale tone</i>, or <i>outside</i> - and the key
+        lights in that colour as it sounds. Arrow keys move along the chart.
+      </li>
+      <li>
+        <b>Click the same bar again</b> for the scales that fit it. Picking one is the
+        point: the engine stops holding you to its own first answer and holds you to the
+        scale you chose instead.
+      </li>
+      <li>
+        <b>Start a take</b> to make it keep count. It runs until you stop it, across as
+        many bars as you walk through, and stopping freezes the summary rather than
+        clearing it.
+      </li>
+      <li>
+        <b>Every bar keeps its own score.</b> A bar you have played over carries a strip in
+        those same three colours, so the bar that got away is one you can see down the
+        chart rather than one you have to read about.
+      </li>
+      <li>
+        <b>The keys do not stay down here.</b> A line is played, not held: each note sounds
+        and lets go, which is the opposite of chord practice and the same keyboard.
+      </li>
+      <li>
+        <b>Which scale?</b> names the scale this bar is being read against and puts it on
+        the keyboard, so the target is in front of you before a note is played.
+      </li>
+      <li class="help-midi">
+        <b>A MIDI keyboard</b> is better than clicking. Connect one under <i>Practice</i>.
+      </li>
+      <li>
+        <b>Chords</b>, at the top, asks the other question of the same notes: not where a
+        note sits against the bar, but whether a whole voicing says what the symbol says.
+      </li>
+    </ul>
+
+    <p class="voicing-note" data-mode="chords" style="margin-top:20px">
       The <i>Practice</i> menu decides which shape you are working on - shell, rootless,
       two-handed - and everything you play is judged against that.
+    </p>
+
+    <p class="voicing-note" data-mode="solo" style="margin-top:20px">
+      The <i>Practice</i> menu decides the vocabulary you are working out of - the modes,
+      melodic minor, bebop, the pentatonics - and every bar is read against a scale from it.
     </p>
   </div>
 </dialog>
@@ -1550,17 +1647,26 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     try { return window.localStorage.getItem("jazzVoicingStyle"); } catch (e) { return null; }
   }
 
-  /** Whether the cheat sheet has been seen before.
+  /** Whether the cheat sheet for a mode has been seen before.
+
+      One flag each, because they explain different pages: arriving at solo
+      practice for the first time is a first visit, whatever the chord side
+      has already told you. The chords flag keeps its original name so that
+      anyone who has been here before is not shown that half again.
 
       Failing open is the right way round: a private window forgets every time
       and shows it again, which is a small annoyance, where guessing "seen"
       would hide the one thing a first visitor needs. */
-  function cheatSheetSeen() {
-    try { return window.localStorage.getItem("jazzCheatSheetSeen") === "yes"; } catch (e) { return false; }
+  function cheatSheetKey(mode) {
+    return mode === "solo" ? "jazzSoloSheetSeen" : "jazzCheatSheetSeen";
   }
 
-  function rememberCheatSheetSeen() {
-    try { window.localStorage.setItem("jazzCheatSheetSeen", "yes"); } catch (e) { /* private window */ }
+  function cheatSheetSeen(mode) {
+    try { return window.localStorage.getItem(cheatSheetKey(mode)) === "yes"; } catch (e) { return false; }
+  }
+
+  function rememberCheatSheetSeen(mode) {
+    try { window.localStorage.setItem(cheatSheetKey(mode), "yes"); } catch (e) { /* private window */ }
   }
 
   var el = {};
@@ -1576,7 +1682,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "ioButton", "ioDialog", "ioClose", "chartFile", "importStatus", "pasteBox",
    "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink",
    "shareRow", "copyShare", "shareStatus", "shareLink",
-   "helpButton", "helpDialog", "helpClose", "helpMidi",
+   "helpButton", "helpDialog", "helpClose",
    "colophonEngine", "colophonFraming", "colophonBuild",
    "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloTallies",
    "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
@@ -2483,6 +2589,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.modeSolo.setAttribute("aria-checked", mode === "solo" ? "true" : "false");
 
     applyMode();
+
+    // Arriving somewhere for the first time is a first visit. Solo practice
+    // has more that cannot be guessed than the chord side does - a take has
+    // to be armed, and the keys stop latching - so the same sheet that
+    // greeted a new visitor greets them again here, once, and never after.
+    if (!cheatSheetSeen(mode) && !document.querySelector("dialog[open]")) openCheatSheet();
   }
 
   /** Shows whichever half of the dock and the menu this mode uses.
@@ -2493,7 +2605,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function applyMode() {
     var soloing = state.mode === "solo";
 
+    // One class, and the palette follows it: the stylesheet moves the tokens,
+    // not the components. Nothing below this line knows the page changed
+    // colour.
     document.body.classList.toggle("soloing", soloing);
+
+    // The "?" opens the sheet for the mode showing, so it says which that is
+    // before it is pressed rather than after.
+    var helpFor = soloing ? "How solo practice works" : "How chord practice works";
+    el.helpButton.setAttribute("aria-label", helpFor);
+    el.helpButton.title = helpFor;
 
     el.feedback.hidden = soloing;
     el.meter.hidden = soloing || el.meter.hidden;
@@ -3050,10 +3171,21 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   });
 
   // --- practice menu -------------------------------------------------------
+
+  /** Where MIDI stands, written into whichever mode's list is on screen.
+
+      Both lists carry the line, so both are rewritten: the message is about
+      the machine, not about what is being practised on it. */
+  function setHelpMidi(html) {
+    Array.prototype.forEach.call(document.querySelectorAll(".help-midi"), function (item) {
+      item.innerHTML = html;
+    });
+  }
+
   function openCheatSheet() {
     setMenuOpen(false);
     if (!el.helpDialog.open) el.helpDialog.showModal();
-    rememberCheatSheetSeen();
+    rememberCheatSheetSeen(state.mode);
   }
 
   el.helpButton.addEventListener("click", openCheatSheet);
@@ -3519,9 +3651,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // so a browser that cannot do MIDI says so there too rather than sending
     // them to a menu that will only disappoint them.
     if (!support.ok) {
-      el.helpMidi.innerHTML = "<b>A MIDI keyboard</b> will not work in this browser. "
-                            + "Chrome or Edge on a computer can do it; everything else here "
-                            + "works as it is.";
+      setHelpMidi("<b>A MIDI keyboard</b> will not work in this browser. "
+                + "Chrome or Edge on a computer can do it; everything else here "
+                + "works as it is.");
     }
 
     // Left enabled when it cannot work: pressing it is how someone confirms
@@ -3759,8 +3891,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // Connecting is the shell's job here; there is no permission to ask for.
     el.connectMidi.textContent = "Rescan";
     setMidiStatus("Looking for a keyboard...");
-    el.helpMidi.innerHTML = "<b>A MIDI keyboard</b> is better than clicking. Plug one in and "
-                          + "the app finds it - there is nothing to allow.";
+    setHelpMidi("<b>A MIDI keyboard</b> is better than clicking. Plug one in and "
+              + "the app finds it - there is nothing to allow.");
   }
 
   /** Opens whatever tune the address asked for.
@@ -3824,7 +3956,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // Last, and only if nothing else is already in front of the reader: a
     // chart that arrived in the link and could not be read has its own thing
     // to say, and two dialogs at once says neither.
-    if (!cheatSheetSeen() && !document.querySelector("dialog[open]")) openCheatSheet();
+    if (!cheatSheetSeen(state.mode) && !document.querySelector("dialog[open]")) openCheatSheet();
 
     // Light the keyboard with the opening chord's scale, so the page shows what
     // it does before anything is clicked.

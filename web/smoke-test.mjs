@@ -160,7 +160,28 @@ try {
   const soloKey = (note) => page.locator(`#keyboard .key[data-note="${note}"]`);
   const readout = () => page.locator("#soloNote").innerText();
 
+  const chordsPaper = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const chordsHelp = await page.locator("#helpButton").getAttribute("aria-label");
+
   await page.locator("#modeSolo").click();
+
+  // Arriving at solo practice for the first time is a first visit of its own,
+  // and what opens is the solo half of the sheet - the chord half explains a
+  // page that is not on screen.
+  await page.waitForSelector("#helpDialog[open]", { timeout: 10000 });
+  check("the first visit to solo practice gets its own cheat sheet",
+        (await page.locator(".help-list[data-mode='solo']").isVisible())
+        && (await page.locator(".help-list[data-mode='chords']").isHidden()));
+  check(`the ? says which mode it explains (${chordsHelp} / `
+        + `${await page.locator("#helpButton").getAttribute("aria-label")})`,
+        chordsHelp === "How chord practice works"
+        && (await page.locator("#helpButton").getAttribute("aria-label")) === "How solo practice works");
+  await page.locator("#helpClose").click();
+
+  // The light changes with the mode. Read after the dialog is out of the way,
+  // so the 280ms fade has long finished and this is the settled colour.
+  check("the page changes colour with the mode",
+        (await page.evaluate(() => getComputedStyle(document.body).backgroundColor)) !== chordsPaper);
 
   // Start from bar one rather than wherever the last section left off. Clicking
   // a bar you are already on opens it, so which bar is selected decides whether
@@ -341,6 +362,10 @@ try {
 
   for (const mode of ["modeChords", "modeSolo"]) {
     await narrow.locator(`#${mode}`).click();
+
+    // A first arrival opens the sheet, which would otherwise be measured
+    // instead of the masthead underneath it.
+    if (await narrow.locator("#helpDialog[open]").count()) await narrow.locator("#helpClose").click();
 
     const spill = await narrow.evaluate(() => {
       const offscreen = [];

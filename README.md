@@ -69,9 +69,10 @@ where MIDI bugs show up first (see the platform notes in `CLAUDE.md`).
 
 The app opens on a built-in practice chart, drawn as a lead sheet: systems of four bars
 divided by barlines, the feel written top left, the title in the middle and the composer
-on the right. Click a bar to move to it; click the bar you are already on for its scales
-and reharmonisations. Play the chord on a MIDI keyboard or the on-screen keyboard to get
-feedback on the voicing.
+on the right. Click a bar to move to it; click the bar you are already on for the question
+the mode you are in is about - its substitutions in chord practice, its scales in solo
+practice. Play the chord on a MIDI keyboard or the on-screen keyboard to get feedback on
+the voicing.
 
 The desktop app and the browser page are not merely alike: they are the same page. A
 screenshot of one is a screenshot of the other, because there is one file. What differs is
@@ -84,9 +85,13 @@ playing. Clicking a key again, or **Clear keys**, lets go. On touch several fing
 register as one voicing the same way. Any MIDI keyboard found at startup — or plugged in
 or paired later — is opened automatically.
 
-A first visit opens a short cheat sheet covering the three things that cannot be guessed
-from looking - that a bar is clicked twice, that the keys latch, and where MIDI comes
-from. It appears once; the **?** beside the Practice menu brings it back.
+A first visit opens a short cheat sheet covering the things that cannot be guessed from
+looking - that a bar is clicked twice, that the keys latch, and where MIDI comes from.
+There is one for each mode, because they explain different pages: arriving at solo
+practice for the first time opens the solo half, which has more that cannot be guessed
+(a take has to be armed, and the keys stop latching). Each appears once; the **?** beside
+the Practice menu brings back the one for the mode you are in, and says so when you hover
+it.
 
 A **sustain pedal** works, on both shells and in both senses: the notes keep sounding
 after the keys lift, and they keep counting as part of the chord. A voicing spread out
@@ -134,6 +139,13 @@ chart. Chord practice asks whether the voicing you played says what the bar says
 practice asks a different question of the same notes: where does each one sit. It is a
 mode, not a second screen - the chart, the keyboard, your MIDI connection and the sound
 all stay exactly where they were, and the bar you are on is the same bar in both.
+
+What does change is the light. Solo practice turns the paper down a stop and cools it, and
+the rose accent becomes slate, so which mode you are in is something you can feel without
+reading the toggle. Nothing moves and nothing is rebuilt - it is the same room under a
+different lamp. The three colours that mean something stay exactly as they are: sage,
+gold and rust say chord tone, scale tone and outside in both modes, and recolouring those
+would be changing the meaning rather than the light.
 
 In solo mode the keys do not latch, because a line is played rather than held: each note
 sounds, is read back - **E4 - the 9th, scale tone, in D Dorian** - and lets go. Every note
