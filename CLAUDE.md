@@ -126,18 +126,28 @@ Two rules the build itself enforces:
   `modules/core_engine`; `tests/` links only against it and uses the small harness in
   `tests/TestFramework.h` (no third-party test dependency).
 
-There is a third platform shell besides `app/`: `web/` compiles the engine to WebAssembly
-with Emscripten (`web/build.sh`) for a browser demo of the engine. It exists as a standing
-check that the engine stays portable - if a change makes `web/build.sh` fail, something
-platform-specific has leaked into the Core Engine. Like `app/`, it must contain no theory.
+`web/` is two things at once, and it helps to keep them apart. It holds **the UI** - the
+one page both shells show - and it holds a **second transport to the engine**: Emscripten
+compiles the engine to WebAssembly (`web/build.sh`) so a browser can reach it without the
+native build. The second of those is also a standing check that the engine stays portable
+- if a change makes `web/build.sh` fail, something platform-specific has leaked into the
+Core Engine. Like `app/`, neither half may contain any theory.
 
 `.github/workflows/ci.yml` enforces the first of those rules on every push: one job
 configures with `-DJAZZ_BUILD_APP=OFF` on a runner with no GUI packages installed at all,
 the other installs the JUCE dependencies and builds the app. That first job failing means
 the layering broke, not that the runner is short a package — read it that way before
-reaching for an `apt-get`. The Emscripten build is *not* in CI, so run `web/build.sh`
-yourself after touching the engine; it is the check that nothing platform-specific crept
-in, and nothing else will catch that for you.
+reaching for an `apt-get`. It also asks the suite how many tests it has and checks that
+against the number quoted in `README.md` and in the page's colophon, because that number
+had gone stale twice by the time anyone noticed.
+
+`.github/workflows/pages.yml` is where the Emscripten build actually runs, so a change
+that breaks the engine's portability fails there rather than nowhere. It builds the wasm,
+then drives the built page in a real browser (`web/smoke-test.mjs`) before the deploy
+step, so a page that does not boot fails the job instead of reaching the site. Run the
+smoke test yourself after touching the page - `./web/build.sh out && cp web/index.html
+web/sw.js out && node web/smoke-test.mjs out` - because a build that passes has never been
+the thing that goes wrong here.
 
 Android is the exception to CMake-everywhere: JUCE's CMake support does not cover Android,
 so that target needs the Projucer/Gradle exporter over the same source tree. Nothing in
@@ -241,7 +251,10 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
 - **Check the narrow window before calling a layout done.** Everything that overlapped on
   a phone-sized window looked perfect on a desktop one: the sheet head, the chart tools
   and the dock's buttons all collided at 420px while being fine at 1200px.
-  `JAZZ_UI_SIZE=420x860 JAZZ_UI_TOUCH=1` is two seconds of work and catches all of it.
+  `JAZZ_UI_SIZE=430x860` on the app, or a 430px viewport in a browser, is two seconds of
+  work and catches all of it. The narrow layout is the page's own CSS - below 760px the
+  sheet head centres and every dialog becomes a bottom sheet - so checking either shell
+  checks both.
 - **Web MIDI can be tested without a MIDI keyboard.** Stub
   `navigator.requestMIDIAccess` in a copy of `web/index.html` before the page's own
   script tag, hand it a fake input whose `onmidimessage` you keep a reference to, and
@@ -250,6 +263,14 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
   sustain pedal was verified on the page — including the control case of the same broken
   chord without the pedal, which is what proves the pedal is doing the work. Keep the
   harness a generated copy, so the code under test is the shipped file unmodified.
+- **One page, two hosts: anything that suits only one has to say so.** The served page
+  and the app are the same file, so a feature added for the browser lands in the app too,
+  where it may be wrong or may hang. `onTheWeb` is the one test that separates them, and
+  four things already sit behind it: the webfonts, the offline worker, the shareable link
+  (a link to a file in the app's temp directory opens on nobody else's machine) and the
+  "this browser has no MIDI" message (the app has real devices and pushes their real
+  status). Before adding a fifth, ask which host it is for - and if the answer is both,
+  check that the app's answer is not merely the browser's answer failing quietly.
 - **The app's UI must never wait on the network.** The page is the interface, and a
   webview with no route out does not degrade gracefully: a render-blocking stylesheet
   that never arrives leaves the whole interface *invisible* - backgrounds paint, no text

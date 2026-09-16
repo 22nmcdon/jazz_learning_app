@@ -6,6 +6,9 @@ _deps/
 web/dist/
 web/jazz-engine.js
 
+# The browser the smoke test drives, installed by CI and by hand
+node_modules/
+
 # JUCE checkouts placed beside or inside the repo
 /JUCE/
 

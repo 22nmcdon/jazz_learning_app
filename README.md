@@ -16,7 +16,7 @@ responsive UI and one UI-agnostic theory engine.
 |---|---|---|
 | `modules/core_engine` | Chord parsing, scale suggestion, reharmonisation, voicing analysis, note-input abstraction. Pure C++17. | nothing |
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
-| `web` | **The user interface.** One page, served on the web and hosted by the app. | engine API (as JSON) |
+| `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
 | `tests` | Engine unit tests (225), no JUCE, no third-party framework. | core engine, engine API |
 
@@ -73,14 +73,20 @@ on the right. Click a bar to move to it; click the bar you are already on for it
 and reharmonisations. Play the chord on a MIDI keyboard or the on-screen keyboard to get
 feedback on the voicing.
 
-The desktop app and the browser page are the same UI, near enough that a screenshot of
-one passes for the other - the same palette, the same lead sheet, the same practice menu
-and the same dock under it. That is deliberate: they share a component library, and the
-page exists to prove the engine is portable, not to be a second product.
+The desktop app and the browser page are not merely alike: they are the same page. A
+screenshot of one is a screenshot of the other, because there is one file. What differs is
+what is behind it - native C++ in the app, WebAssembly in the browser - and which of the
+two is answering is written in the colophon at the foot of the page.
 
-With a mouse the keyboard defaults to **Hold** (latch) mode, so clicking several keys
-builds a chord; on touch, latch is off and several fingers register as one voicing. Any
-MIDI keyboard found at startup — or plugged in or paired later — is opened automatically.
+The keys on the on-screen keyboard **stay down** when clicked, so a chord is built one
+note at a time and held: they are a voicing you are holding rather than a piano you are
+playing. Clicking a key again, or **Clear keys**, lets go. On touch several fingers
+register as one voicing the same way. Any MIDI keyboard found at startup — or plugged in
+or paired later — is opened automatically.
+
+A first visit opens a short cheat sheet covering the three things that cannot be guessed
+from looking - that a bar is clicked twice, that the keys latch, and where MIDI comes
+from. It appears once; the **?** beside the Practice menu brings it back.
 
 A **sustain pedal** works, on both shells and in both senses: the notes keep sounding
 after the keys lift, and they keep counting as part of the chord. A voicing spread out
@@ -143,23 +149,25 @@ right. An imported chart becomes the chart, so **Restore original** takes back t
 reharmonisations you have tried and returns the tune you brought in, not the one the page
 happened to open with.
 
-Two environment variables help check the responsive layout without a device:
+`JAZZ_UI_SIZE` opens the app's window at a given size, which is how the narrow layout
+gets checked without a device:
 
 ```bash
-JAZZ_UI_SIZE=400x820 JAZZ_UI_TOUCH=1 ./build/app/JazzLearningApp_artefacts/Debug/"Jazz Learning App"
+JAZZ_UI_SIZE=430x860 ./build/app/JazzLearningApp_artefacts/Debug/"Jazz Learning App"
 ```
 
 <img src="docs/screenshot-compact.png" width="320" alt="Compact layout">
 
-Below 600px wide the panes collapse into tabs and the keyboard drops to two octaves;
-`JAZZ_UI_TOUCH=1` switches the scale picker from a popup menu to a bottom sheet and grows
-every tap target. Same components either way — there is no second UI.
+Below 760px the page lays itself out narrow: the sheet head centres, the bars grow, and
+every dialog becomes a bottom sheet rather than a floating panel. That is the page's own
+CSS doing it, so the browser at the same width does the same thing - there is no second
+layout to keep in step.
 
 ## Trying the engine in a browser
 
-The JUCE interface cannot run on the web - JUCE has no supported WebAssembly target. The
-**engine** can, because it links no JUCE, so `web/` is a third platform shell alongside
-`app/`: the same C++ behind a browser front end.
+The interface is a web page already; what changes in a browser is the engine behind it.
+JUCE has no supported WebAssembly target, but the engine links no JUCE, so it compiles to
+wasm and the same page runs against it.
 
 ```bash
 sudo apt install emscripten   # or install the emsdk
@@ -171,19 +179,41 @@ Then open <http://localhost:8000>. The published copy lives on GitHub Pages:
 
 **<https://22nmcdon.github.io/jazz_learning_app/>**
 
-`.github/workflows/pages.yml` builds the WebAssembly engine and deploys `web/` there on
-every push. Pages has to be switched on once by hand, in **Settings → Pages → Build and
-deployment → Source: GitHub Actions**; until that is done the workflow runs and the
-deploy step fails, which is the only signal that the setting is still off.
+`.github/workflows/pages.yml` builds the WebAssembly engine, drives the built page in a
+browser to check it actually boots, and deploys `web/` on every push. Pages has to be
+switched on once by hand, in **Settings → Pages → Build and deployment → Source: GitHub
+Actions**; until that is done the workflow runs and the deploy step fails, which is the
+only signal that the setting is still off.
 
 Pages rather than an embedded page, because of **Web MIDI**. Connecting a keyboard needs a
 permission that an embedded frame is usually not allowed even to ask for, so a MIDI
 keyboard that works on a served page does nothing inside one. A page served from its own
 origin can ask.
 
-`web/src/JazzWebBindings.cpp` marshals engine results to JSON; it holds no theory, the same
-way `app/` holds none. What the page cannot tell you is whether the JUCE UI works - for
-that, build the app and run it, or use `JAZZ_UI_SIZE` / `JAZZ_UI_TOUCH` above.
+`modules/engine_api` turns the engine's answers into JSON, and both shells read that one
+wire format; `web/src/JazzWebBindings.cpp` adds nothing but C linkage on top of it, the
+same way `app/` adds nothing but a webview. What the served page cannot tell you is
+whether the webview in the app is behaving - for that, build the app and run it.
+
+Three things belong to the served page alone, because they have no meaning in a webview
+pointed at a local file:
+
+- **A link carries a tune.** *Copy a link that opens this chart*, in the import dialog,
+  wraps the current chart - reharmonisations and all - into the page's own address as
+  `?chart=`. Opening that link loads the tune.
+- **It works offline.** `web/sw.js` is a network-first service worker: online the network
+  always wins, so a deploy is never held back by a cache, and offline the last copy of the
+  page and its engine are served from one. Nothing else is needed - there is no server
+  behind this page once it has loaded.
+- **It says when the browser cannot do MIDI**, before a keyboard is plugged in rather than
+  after. Safari and Firefox have no Web MIDI at all, an insecure origin cannot use it, and
+  an embedded frame is usually not allowed to ask.
+
+`node web/smoke-test.mjs <directory>` drives a built copy of the page in a real browser -
+engine up, chart drawn, a bar clicked, a voicing judged, and the offline cache serving the
+page with the network cut. The Pages workflow runs it between building and deploying, so
+a page that does not boot is a failed job rather than a broken site. It needs `playwright`
+(`npm install --no-save playwright && npx playwright install chromium`).
 
 ## What the engine does today
 

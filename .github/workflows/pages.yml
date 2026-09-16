@@ -43,7 +43,7 @@ jobs:
         run: |
           mkdir -p _site
           ./web/build.sh "$GITHUB_WORKSPACE/_site"
-          cp web/index.html _site/
+          cp web/index.html web/sw.js _site/
           # Pages runs Jekyll over the upload unless told not to, and Jekyll
           # would drop any file whose name begins with an underscore.
           touch _site/.nojekyll
@@ -52,7 +52,21 @@ jobs:
         run: |
           test -s _site/index.html
           test -s _site/jazz-engine.js
+          test -s _site/sw.js
           ls -lh _site
+
+      # A build that passes has never been the thing that goes wrong here. The
+      # page has broken twice after a clean build - once on a stylesheet that
+      # never arrived, once on a script that never ran - and both times it was a
+      # visitor who found out. This drives the built page in a real browser and
+      # fails the job instead, before anything is published.
+      - name: Install a browser to test with
+        run: |
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Check the built page boots
+        run: node web/smoke-test.mjs "$GITHUB_WORKSPACE/_site"
 
       - uses: actions/upload-pages-artifact@v3
         with:

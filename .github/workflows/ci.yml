@@ -24,6 +24,20 @@ jobs:
       - name: Test
         run: ctest --test-dir build-core --output-on-failure
 
+      # The number of tests is quoted in two places a reader looks, and it has
+      # gone stale twice already because nothing was checking it. The suite
+      # itself is the only thing that knows the answer, so it is asked here.
+      - name: The quoted test count is the real one
+        run: |
+          count=$(./build-core/tests/jazz_core_tests | sed -n 's|^\([0-9]*\)/[0-9]* tests passed$|\1|p')
+          test -n "$count"
+          echo "the suite reports $count tests"
+
+          for file in README.md web/index.html; do
+            grep -q "$count unit tests\|unit tests ($count)" "$file" \
+              || { echo "::error file=$file::says a test count that is not $count"; exit 1; }
+          done
+
   app:
     name: Standalone app
     runs-on: ubuntu-latest
