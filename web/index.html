@@ -1,11 +1,17 @@
-<title>Jazz Engine Workbench</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Jost:wght@300;400;500;600&family=Kalam:wght@700&display=swap">
+<title>Jazz Learning App</title>
+<!-- The webfonts are requested by script rather than written here with an href,
+     and only when this page is served over the web. The desktop app runs it in a
+     webview that may have no route to the internet, and a webview waiting on a
+     font it will never receive paints no text at all - an invisible interface is
+     far worse than one in the fallback faces. Every family has a real fallback
+     in the stack below, which is what the app uses. -->
+<link id="webfonts"
+      data-href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Jost:wght@300;400;500;600&family=Kalam:wght@700&display=swap">
 
 <style>
 /* ---------------------------------------------------------------------------
-   Jazz Engine Workbench - the C++ core engine compiled to WebAssembly.
+   The Jazz Learning App - one interface, served here and hosted by the desktop
+   app in a webview. The theory engine is the same C++ either way.
 
    Palette and type follow the Milo McDonald portfolio: cream paper, charcoal
    ink, blush and gold accents, Playfair / Cormorant / Jost. The chord chart
@@ -118,6 +124,11 @@ button { font-family: inherit; cursor: pointer; }
 
 /* --- practice menu -------------------------------------------------------- */
 .masthead-controls { display: flex; align-items: center; gap: 14px; }
+
+/* Hosted by the desktop app: the window's own title bar already names this, so
+   the masthead stands down and gives the chart the height instead. */
+body.in-app .masthead > div:first-child { display: none; }
+body.in-app .masthead { padding-block: 10px 6px; justify-content: flex-end; }
 .menu-wrap { position: relative; }
 .menu-button {
   display: flex;
@@ -873,11 +884,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 <div class="wrap">
   <header class="masthead">
     <div>
-      <p class="eyebrow">Core engine &middot; WebAssembly build</p>
-      <h1>Jazz Engine <em>Workbench</em></h1>
+      <p class="eyebrow">Chords &middot; scales &middot; voicings</p>
+      <h1>Jazz <em>Learning App</em></h1>
       <p class="lede">
-        The jazz app's C++ theory engine, running in your browser - chord parsing, scale
-        suggestion, reharmonisation and voicing analysis. Not the JUCE interface.
+        Build and reharmonise a chart, see which scales fit each chord, and get feedback on
+        the voicings you play - on a MIDI keyboard or the one below.
       </p>
     </div>
     <div class="masthead-controls">
@@ -1131,7 +1142,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
      and its positions off the page, and the engine works out which of it is a
      chord chart. If the library is blocked, the paste box still works. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="jazz-engine.js"></script>
 <script>
 (function () {
   "use strict";
@@ -1152,6 +1162,33 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   };
 
   var engine = null;
+
+
+  if (!window.__JUCE__) {
+    // rel is set with the href, never before: a <link rel="stylesheet"> with no
+    // href counts as a stylesheet still on its way, and a pending stylesheet
+    // stops every script after it from running.
+    var webfonts = document.getElementById("webfonts");
+
+    if (webfonts) {
+      webfonts.href = webfonts.dataset.href;
+      webfonts.rel = "stylesheet";
+    }
+  }
+
+  // A shipped app has no console, so an error in here would otherwise be
+  // invisible - the interface would just stop responding. Report it to whoever
+  // is hosting the page.
+  if (window.__JUCE__ && window.__JUCE__.backend) {
+    window.addEventListener("error", function (e) {
+      window.__JUCE__.backend.emitEvent("jazz.log",
+        { message: String(e.message), line: String(e.lineno) + ":" + String(e.colno) });
+    });
+    window.addEventListener("unhandledrejection", function (e) {
+      window.__JUCE__.backend.emitEvent("jazz.log",
+        { message: "unhandled: " + String(e.reason), line: "-" });
+    });
+  }
   var state = {
     progression: DEFAULT_PROGRESSION,
     composer: "",
@@ -1212,8 +1249,61 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   };
 
   // --- engine --------------------------------------------------------------
+  /* --- reaching the engine -------------------------------------------------
+
+     There is one engine and two ways to reach it. In a browser it is this
+     page's WebAssembly build. Inside the desktop app the same page runs in a
+     webview, and the engine is the native C++ already in that process - which
+     is why the app needs no Emscripten to build.
+
+     Every engine call in this page goes through call(), and every caller
+     awaits it. The browser answers immediately and the app answers over the
+     bridge; awaiting a plain value costs nothing, so one shape serves both.
+     Keep it that way: an engine call made around this funnel works in the
+     browser and fails silently in the app. */
+
+  var native = null;
+
+  function startNativeBridge() {
+    if (!window.__JUCE__ || !window.__JUCE__.backend) return null;
+
+    var backend = window.__JUCE__.backend;
+    var pending = {};
+    var nextId = 1;
+
+    backend.addEventListener("jazz.engine.reply", function (reply) {
+      var settle = pending[reply.id];
+      if (!settle) return;
+      delete pending[reply.id];
+      settle(reply.json);
+    });
+
+    return {
+      ask: function (name, args) {
+        var id = nextId++;
+        return new Promise(function (resolve) {
+          pending[id] = resolve;
+          backend.emitEvent("jazz.engine.call", { id: id, name: name, args: args });
+        });
+      },
+      send: function (event, payload) { backend.emitEvent(event, payload); },
+      on: function (event, handler) { backend.addEventListener(event, handler); }
+    };
+  }
+
+  function readAnswer(json) {
+    try {
+      return JSON.parse(json);
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
+  }
+
   function call(name, types, args) {
+    if (native !== null) return native.ask(name, args).then(readAnswer);
+
     if (engine === null) return null;
+
     try {
       return JSON.parse(engine.ccall(name, "string", types, args));
     } catch (error) {
@@ -1364,8 +1454,18 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     return measure && measure.chords.length ? measure.chords[0].symbol : null;
   }
 
-  function parseChart() {
-    var result = call("jazzParseChart", ["string"], [state.progression]);
+  /** Re-reads the chart, then re-reads what is under the hands against it.
+
+      The two are sequenced rather than fired together: the analysis is against
+      the chart the parse just made, and over the app's bridge a parse takes a
+      moment to come back. */
+  async function refreshChart() {
+    await parseChart();
+    await analyseVoicing();
+  }
+
+  async function parseChart() {
+    var result = await call("jazzParseChart", ["string"], [state.progression]);
     if (result === null) return false;
 
     if (!result.ok) {
@@ -1399,7 +1499,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     tab.button.addEventListener("click", function () { showTab(index); });
   });
 
-  function openDialog() {
+  async function openDialog() {
     var chord = selectedChord();
     if (!chord) return;
 
@@ -1420,9 +1520,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   });
 
   // --- scales --------------------------------------------------------------
-  function renderScales() {
+  async function renderScales() {
     var chord = selectedChord();
-    var result = call("jazzScalesForChord", ["string"], [chord]);
+    var result = await call("jazzScalesForChord", ["string"], [chord]);
     if (result === null || !result.ok) return;
 
     state.scales = result.scales;
@@ -1608,8 +1708,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     state.progression = progression;
     el.progression.value = progression;
     state.reharmonised[state.selected] = true;
-    parseChart();
-    analyseVoicing();
+    refreshChart();
   }
 
   // --- keyboard ------------------------------------------------------------
@@ -1736,7 +1835,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   });
 
   // --- voicing feedback ----------------------------------------------------
-  function analyseVoicing() {
+  async function analyseVoicing() {
     var chord = selectedChord();
     el.findingRow.textContent = "";
 
@@ -1748,7 +1847,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       return;
     }
 
-    var result = call("jazzAnalyseVoicing", ["string", "string", "string"],
+    var result = await call("jazzAnalyseVoicing", ["string", "string", "string"],
                       [chord, state.heldNotes.join(","), state.style === "any" ? "" : state.style]);
     if (result === null || !result.ok) return;
 
@@ -1813,7 +1912,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   /** Loads a chart the engine has just read from somewhere. */
-  function adoptChart(result, source) {
+  async function adoptChart(result, source) {
     if (result === null) return;
 
     if (!result.ok) {
@@ -1826,7 +1925,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     state.reharmonised = {};
     state.selected = 0;
 
-    if (!parseChart()) {
+    if (!(await parseChart())) {
       setImportStatus("The chart came through but could not be laid out.", "bad");
       return;
     }
@@ -1852,7 +1951,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     // The export side of the dialog is open in front of the reader, so it has
     // to describe the chart that just arrived, not the one it replaced.
-    refreshExport();
+    await refreshExport();
 
     var message = "Read " + result.bars + " bars from " + source + ".";
     var missed = result.unreadable || [];
@@ -1881,6 +1980,22 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (event.target === el.ioDialog) el.ioDialog.close();
   });
 
+  /** Reads a chart out of whatever text arrived - pasted here, or read off a
+      disk by the app - and adopts it. */
+  async function readChartText(text, source) {
+    // An iReal Pro link and a line of chords are told apart by the engine.
+    var result = text.indexOf("ireal") !== -1 || text.indexOf("=n=") !== -1
+      ? await call("jazzImportIRealPro", ["string"], [text])
+      : await call("jazzParseChart", ["string"], [text]);
+
+    if (result !== null && result.ok && result.progression === undefined) {
+      // jazzParseChart answers with measures rather than a progression.
+      result = { ok: true, progression: text, bars: result.measures.length, title: "" };
+    }
+
+    await adoptChart(result, source);
+  }
+
   el.readPaste.addEventListener("click", function () {
     var text = el.pasteBox.value.trim();
 
@@ -1889,17 +2004,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       return;
     }
 
-    // An iReal Pro link and a line of chords are told apart by the engine.
-    var result = text.indexOf("ireal") !== -1 || text.indexOf("=n=") !== -1
-      ? call("jazzImportIRealPro", ["string"], [text])
-      : call("jazzParseChart", ["string"], [text]);
+    readChartText(text, "what you pasted");
+  });
 
-    if (result !== null && result.ok && result.progression === undefined) {
-      // jazzParseChart answers with measures rather than a progression.
-      result = { ok: true, progression: text, bars: result.measures.length, title: "" };
-    }
+  // A webview cannot always raise a file picker, and the shell has a proper
+  // native one - so in the app the same control asks it instead.
+  el.chartFile.addEventListener("click", function (event) {
+    if (native === null) return;
 
-    adoptChart(result, "what you pasted");
+    event.preventDefault();
+    native.send("jazz.file.open", {});
   });
 
   el.chartFile.addEventListener("change", function () {
@@ -1947,7 +2061,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
       // Pages are read in order and stacked, so a chart that runs over a page
       // break stays one chart.
-      function readPage(number) {
+      async function readPage(number) {
         return pdf.getPage(number).then(function (page) {
           var height = page.getViewport({ scale: 1 }).height;
 
@@ -1970,8 +2084,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         });
       }
 
-      return readPage(1).then(function () {
-        adoptChart(call("jazzChartFromPage", ["string"], [rows.join("\n")]), file.name);
+      return readPage(1).then(async function () {
+        await adoptChart(await call("jazzChartFromPage", ["string"], [rows.join("\n")]), file.name);
       });
     }).catch(function (error) {
       setImportStatus("Could not read that PDF: " + (error && error.message ? error.message : error),
@@ -1979,8 +2093,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     });
   }
 
-  function refreshExport() {
-    var result = call("jazzExportIRealPro", ["string", "string", "string", "string"],
+  async function refreshExport() {
+    var result = await call("jazzExportIRealPro", ["string", "string", "string", "string"],
                       [state.progression, el.sheetTitle.textContent,
                        state.composer || "", state.chartStyle || ""]);
 
@@ -2012,8 +2126,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   });
 
   // --- whole-tune reharmonisation ------------------------------------------
-  el.planButton.addEventListener("click", function () {
-    var result = call("jazzReharmPlans", ["string"], [state.progression]);
+  el.planButton.addEventListener("click", async function () {
+    var result = await call("jazzReharmPlans", ["string"], [state.progression]);
     if (result === null || !result.ok) return;
 
     el.planList.textContent = "";
@@ -2094,8 +2208,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
           plan.moves.forEach(function (move) { state.reharmonised[move.index] = true; });
 
-          parseChart();
-          analyseVoicing();
+          refreshChart();
           updateVoicingControls();
           el.planDialog.close();
         });
@@ -2134,7 +2247,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     }
   });
 
-  function applyStyle(style) {
+  async function applyStyle(style) {
     state.style = style;
     state.shownFor = "";
     el.styleLabel.textContent = STYLE_NAMES[style] || style;
@@ -2158,13 +2271,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   /** Puts an idiomatic voicing of the chosen shape on the keyboard - the
       "sentence starter" for a chord the player does not have under their hands. */
-  el.showVoicing.addEventListener("click", function () {
+  el.showVoicing.addEventListener("click", async function () {
     var chord = selectedChord();
     if (!chord) return;
 
     // Anchor 0 means "wherever this shape belongs": a solo left hand sits an
     // octave and a half below a rootless one, and the engine knows where.
-    var result = call("jazzIdiomaticVoicings", ["string", "number", "string", "number"],
+    var result = await call("jazzIdiomaticVoicings", ["string", "number", "string", "number"],
                       [chord, 0, state.style === "any" ? "" : state.style,
                        state.colour === "rich" ? 1 : 0]);
 
@@ -2271,6 +2384,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var bank = SOUND_BANKS[audio.bank];
     if (!bank || bank.buildVoice === null) return;
 
+    // In the app the piano is native, next to the MIDI devices - the same
+    // instrument whether the note came from a key, a chord button or a pedal.
+    if (native !== null) {
+      native.send("jazz.sound", { what: "note", note: midiNote, on: true,
+                                  velocity: velocity || 0.8 });
+      return;
+    }
+
     var ctx = audioContext();
     if (ctx === null) return;
 
@@ -2290,6 +2411,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   function stopNote(midiNote, release) {
+    if (native !== null) {
+      native.send("jazz.sound", { what: "note", note: midiNote, on: false });
+      return;
+    }
+
     var voice = audio.voices[midiNote];
     if (!voice) return;
 
@@ -2305,10 +2431,24 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   function stopAllNotes() {
+    if (native !== null) {
+      native.send("jazz.sound", { what: "silence" });
+      return;
+    }
+
     Object.keys(audio.voices).forEach(function (note) { stopNote(Number(note)); });
   }
 
   function playChord(notes) {
+    var bank = SOUND_BANKS[audio.bank];
+    if (!bank || bank.buildVoice === null) return;
+
+    // One message rather than one per note, so the app sounds them together.
+    if (native !== null) {
+      native.send("jazz.sound", { what: "chord", notes: notes });
+      return;
+    }
+
     notes.forEach(function (note) { playNote(note, 0.8); });
   }
 
@@ -2338,8 +2478,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   /** Names the notes held down, on demand - the question a player asks about a
       shape they found rather than one the chart asked for. */
-  el.nameChord.addEventListener("click", function () {
-    var result = call("jazzIdentifyChord", ["string"], [state.heldNotes.join(",")]);
+  el.nameChord.addEventListener("click", async function () {
+    var result = await call("jazzIdentifyChord", ["string"], [state.heldNotes.join(",")]);
     if (result === null || !result.ok) return;
 
     el.namedText.textContent = "";
@@ -2458,6 +2598,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     pedal.down = isDown;
     el.sustainPedal.setAttribute("aria-pressed", isDown ? "true" : "false");
+
+    if (native !== null) native.send("jazz.sound", { what: "sustain", down: isDown });
 
     if (isDown) return;
 
@@ -2592,15 +2734,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     state.chartStyle = original.style;
     state.reharmonised = {};
     showChartHead(original.title, original.style, original.composer);
-    parseChart();
-    analyseVoicing();
+    refreshChart();
   });
 
   el.progression.addEventListener("input", function () {
     state.progression = el.progression.value;
     state.reharmonised = {};
-    parseChart();
-    analyseVoicing();
+    refreshChart();
   });
 
   // --- boot ----------------------------------------------------------------
@@ -2615,26 +2755,97 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.styleLabel.textContent = STYLE_NAMES[savedStyle];
   }
 
-  createJazzEngine().then(function (module) {
-    engine = module;
+  /** Starts whichever engine this page is running against.
+
+      In the app the bridge is already there when the page loads, so there is
+      nothing to wait for. In a browser the WebAssembly module has to arrive
+      first. Either way the rest of the page sees one engine behind call(). */
+  async function startEngine() {
+    native = startNativeBridge();
+
+    if (native !== null) {
+      document.body.classList.add("in-app");
+      listenToNativeDevices();
+      return "native";
+    }
+
+    // Loaded here rather than as a tag in the document, so the app never asks
+    // for it: in the app the engine is native, and a webview that requests a
+    // sub-resource while the page itself is still arriving can stall.
+    await new Promise(function (resolve, reject) {
+      var script = document.createElement("script");
+      script.src = "jazz-engine.js";
+      script.onload = resolve;
+      script.onerror = function () { reject(new Error("could not load jazz-engine.js")); };
+      document.head.appendChild(script);
+    });
+
+    engine = await createJazzEngine();
+    return "WebAssembly";
+  }
+
+  /** The app owns the devices, so it is the app that reports them. */
+  function listenToNativeDevices() {
+    // Hardware notes arrive as note events, exactly as the on-screen keys do,
+    // and go through the same handlers - so the pedal, the chord window and
+    // the analysis all behave identically to the browser.
+    native.on("jazz.midi", function (event) {
+      if (event.on) {
+        midi.velocities[event.note] = event.velocity || 0.8;
+        midiNoteOn(event.note);
+      } else {
+        midiNoteOff(event.note);
+      }
+    });
+
+    native.on("jazz.sustain", function (event) { setSustain(!!event.down); });
+
+    native.on("jazz.status", function (status) {
+      midi.connected = !!status.midiConnected;
+      setMidiStatus(status.midi, status.midiConnected ? "good" : "");
+      el.soundNote.textContent = status.sound;
+      audio.nativeAvailable = !!status.soundAvailable;
+      updateVoicingControls();
+
+      if (status.midiConnected) ensureNotesVisible([MIDI_RANGE.low, MIDI_RANGE.high]);
+    });
+
+    native.on("jazz.file.read", function (result) {
+      if (result.error) {
+        setImportStatus(result.error, "bad");
+        return;
+      }
+
+      readChartText(result.text, "that file");
+    });
+
+    // Connecting is the shell's job here; there is no permission to ask for.
+    el.connectMidi.textContent = "Rescan";
+    setMidiStatus("Looking for a keyboard...");
+  }
+
+  startEngine().then(async function (kind) {
     el.engineStatus.dataset.state = "ready";
     el.engineStatus.textContent = "engine ready";
-    parseChart();
+    await parseChart();
 
     // Light the keyboard with the opening chord's scale, so the page shows what
     // it does before anything is clicked.
-    var opening = call("jazzScalesForChord", ["string"], [selectedChord()]);
+    var opening = await call("jazzScalesForChord", ["string"], [selectedChord()]);
     if (opening && opening.ok && opening.scales.length) {
       state.scales = opening.scales;
       state.scalePitchClasses = opening.scales[0].pitchClasses;
       state.avoidPitchClasses = opening.scales[0].avoidPitchClasses;
       paintKeyboard();
     }
+
+    return kind;
   }).catch(function (error) {
     el.engineStatus.dataset.state = "failed";
     el.engineStatus.textContent = "engine failed";
-    el.parseError.textContent = "The WebAssembly engine did not start: " + error;
+    el.parseError.textContent = "The engine did not start: " + error;
     el.editor.hidden = false;
   });
+
 })();
 </script>

@@ -12,7 +12,9 @@ mkdir -p "$out"
 
 em++ -O2 -std=c++17 \
   -I"$here/../modules/core_engine/include" \
+  -I"$here/../modules/engine_api/include" \
   "$here/src/JazzWebBindings.cpp" \
+  "$here"/../modules/engine_api/src/*.cpp \
   "$here"/../modules/core_engine/src/*.cpp \
   -o "$out/jazz-engine.js" \
   --no-entry \

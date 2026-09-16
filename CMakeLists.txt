@@ -20,10 +20,10 @@ option(JAZZ_BUILD_TESTS "Build the core engine unit tests" ON)
 # including on a machine that has no JUCE and no GUI toolkit installed. That is
 # the architectural boundary the design doc asks for, enforced by the build.
 add_subdirectory(modules/core_engine)
+add_subdirectory(modules/engine_api)
 
 if(JAZZ_BUILD_APP)
     include(cmake/GetJUCE.cmake)
-    add_subdirectory(modules/shared_ui)
     add_subdirectory(app)
 endif()
 

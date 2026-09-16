@@ -15,13 +15,20 @@ responsive UI and one UI-agnostic theory engine.
 | Directory | Layer | Depends on |
 |---|---|---|
 | `modules/core_engine` | Chord parsing, scale suggestion, reharmonisation, voicing analysis, note-input abstraction. Pure C++17. | nothing |
-| `modules/shared_ui` | Lead sheet, on-screen keyboard, scale and reharm panels, feedback panel, practice menu, the dialogs, responsive `MainComponent`. | core engine, JUCE |
-| `app` | Platform shell: MIDI devices, the audio device and its electric piano, file reading, window and app lifecycle. | shared UI, JUCE |
-| `web` | Another platform shell: the engine compiled to WebAssembly behind a browser front end. No theory, same as `app`. | core engine, Emscripten |
-| `tests` | Engine unit tests (207), no JUCE, no third-party framework. | core engine |
+| `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
+| `web` | **The user interface.** One page, served on the web and hosted by the app. | engine API (as JSON) |
+| `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
+| `tests` | Engine unit tests (225), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
+
+**There is one user interface, and it is the web page.** The desktop app shows that same
+page in a webview and keeps for itself only what a page cannot do: opening MIDI devices,
+owning an audio device, reading a file off a disk. The engine it talks to is the native
+C++ already in the process - the app needs no Emscripten to build, and the WebAssembly
+build exists only for the browser. Before this, the two shells were separate
+implementations of the same screen, and keeping them in step cost more than it bought.
 
 ## Building
 
@@ -44,7 +51,11 @@ Both configurations run in CI on every push (`.github/workflows/ci.yml`): the en
 deliberately runs on a machine with no JUCE and no GUI packages, so if it fails the module
 boundary has been crossed rather than the runner being short a dependency.
 
-On Linux the app target needs the usual JUCE packages (`libasound2-dev`, `libx11-dev`,
+On Linux the app additionally needs WebKitGTK for its webview
+(`libgtk-3-dev`, `libwebkit2gtk-4.1-dev`; 4.0 also works). macOS and Windows need nothing
+extra - WKWebView is part of the system and WebView2 comes in through JUCE.
+
+On Linux the app target also needs the usual JUCE packages (`libasound2-dev`, `libx11-dev`,
 `libxcomposite-dev`, `libxcursor-dev`, `libxext-dev`, `libxinerama-dev`, `libxrandr-dev`,
 `libxrender-dev`, `libfreetype6-dev`, `libfontconfig1-dev`, `libglu1-mesa-dev`,
 `mesa-common-dev`). macOS and Windows need no extra packages.

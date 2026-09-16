@@ -1,7 +1,6 @@
 #include "ElectricPiano.h"
 #include "MidiDeviceInput.h"
-
-#include "jazz/ui/MainComponent.h"
+#include "WebUi.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -23,9 +22,6 @@ public:
 
     void initialise (const juce::String&) override
     {
-        if (juce::SystemStats::getEnvironmentVariable ("JAZZ_UI_TOUCH", {}).getIntValue() == 1)
-            jazz::ui::setInteractionModeOverride (jazz::ui::InteractionMode::touch);
-
         midiInput = std::make_unique<MidiDeviceInput>();
         piano = std::make_unique<ElectricPiano>();
         mainWindow = std::make_unique<MainWindow> (getApplicationName(), *midiInput, *piano);
@@ -46,55 +42,20 @@ private:
     public:
         MainWindow (const juce::String& name, MidiDeviceInput& midiInput, ElectricPiano& piano)
             : DocumentWindow (name,
-                              jazz::ui::theme::cream,
+                              juce::Colour (0xfffaf6f0),
                               DocumentWindow::allButtons)
         {
-            auto content = std::make_unique<jazz::ui::MainComponent>();
+            // Sound first: the page asks whether it has any as soon as it loads.
+            piano.start();
 
-            // Hand the shell's MIDI input to the UI as a plain note source: the
-            // UI never learns that devices, drivers or Bluetooth exist.
-            content->attachInputSource (midiInput);
+            auto content = std::make_unique<WebUi> (midiInput, piano);
             contentComponent = content.get();
 
-            midiInput.onDevicesChanged = [this, &midiInput]
+            midiInput.onDevicesChanged = [this]
             {
                 if (contentComponent != nullptr)
-                    contentComponent->setMidiStatus (describeDevices (midiInput));
+                    contentComponent->midiDevicesChanged();
             };
-
-            contentComponent->onConnectMidiRequested = [this, &midiInput]
-            {
-                MidiDeviceInput::showBluetoothPairingDialog (contentComponent);
-                contentComponent->setMidiStatus (describeDevices (midiInput));
-            };
-
-            contentComponent->setMidiStatus (describeDevices (midiInput));
-
-            // Sound. The UI says which notes; the device is entirely ours.
-            const auto sounding = piano.start();
-            contentComponent->setSoundAvailable (sounding, piano.statusMessage());
-
-            contentComponent->onSoundNote = [&piano] (int midiNote, bool isOn)
-            {
-                if (isOn)
-                    piano.noteOn (midiNote, 0.8f);
-                else
-                    piano.noteOff (midiNote);
-            };
-
-            contentComponent->onSoundChord = [&piano] (const std::vector<int>& midiNotes)
-            {
-                piano.allNotesOff();
-
-                for (auto note : midiNotes)
-                    piano.noteOn (note, 0.8f);
-            };
-
-            contentComponent->onSilenceRequested = [&piano] { piano.allNotesOff(); };
-            contentComponent->onSustainChanged = [&piano] (bool isDown) { piano.setSustain (isDown); };
-
-            // Reading a file is the shell's job - the UI is handed text.
-            contentComponent->onOpenChartFileRequested = [this] { openChartFile(); };
 
             setUsingNativeTitleBar (true);
             setContentOwned (content.release(), true);
@@ -106,8 +67,8 @@ private:
             setResizeLimits (360, 480, 4000, 3000);
 
             // JAZZ_UI_SIZE=380x800 opens the window at a phone size, so the
-            // compact layout can be checked without a device. JAZZ_UI_TOUCH=1
-            // forces the touch presentation (bottom sheets, larger targets).
+            // page's narrow layout can be checked without a device - the page
+            // responds to the window the way it responds to a browser window.
             const auto requested = juce::SystemStats::getEnvironmentVariable ("JAZZ_UI_SIZE", {});
             const auto dimensions = juce::StringArray::fromTokens (requested, "x", {});
 
@@ -126,64 +87,7 @@ private:
         }
 
     private:
-        /** Picks a chart file and hands its text to the UI.
-
-            iReal Pro links and the HTML it shares are both text, so the reader
-            in the engine takes them as they are. A PDF is not: pulling text out
-            of one needs a PDF library, which this shell does not have, so a PDF
-            is refused by name rather than read as gibberish.
-        */
-        void openChartFile()
-        {
-            chooser = std::make_unique<juce::FileChooser> (
-                "Open a chart",
-                juce::File::getSpecialLocation (juce::File::userHomeDirectory),
-                "*.html;*.htm;*.txt;*.irealb;*.irealbook;*.pdf");
-
-            const auto browserFlags = juce::FileBrowserComponent::openMode
-                                    | juce::FileBrowserComponent::canSelectFiles;
-
-            chooser->launchAsync (browserFlags, [this] (const juce::FileChooser& picked)
-            {
-                const auto file = picked.getResult();
-
-                if (file == juce::File() || contentComponent == nullptr)
-                    return;
-
-                if (file.hasFileExtension ("pdf"))
-                {
-                    contentComponent->chartFileCouldNotBeRead (
-                        "This app cannot read a PDF yet - it has no PDF library. "
-                        "Export the tune as an iReal Pro link, or share it as HTML, "
-                        "and paste that instead.");
-                    return;
-                }
-
-                const auto text = file.loadFileAsString();
-
-                if (text.isEmpty())
-                {
-                    contentComponent->chartFileCouldNotBeRead (
-                        "That file is empty, or could not be opened.");
-                    return;
-                }
-
-                contentComponent->chartFileWasRead (text);
-            });
-        }
-
-        static juce::String describeDevices (const MidiDeviceInput& midiInput)
-        {
-            const auto names = midiInput.openDeviceNames();
-
-            if (names.isEmpty())
-                return "No MIDI device - use the on-screen keyboard";
-
-            return names.joinIntoString (", ");
-        }
-
-        jazz::ui::MainComponent* contentComponent { nullptr };
-        std::unique_ptr<juce::FileChooser> chooser;
+        WebUi* contentComponent { nullptr };
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainWindow)
     };

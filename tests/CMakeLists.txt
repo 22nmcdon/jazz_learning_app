@@ -1,5 +1,5 @@
-# Engine tests. These link only against jazz_core_engine, so they build and run
-# on a headless machine with no JUCE present - configure with
+# Engine tests. These link only against the engine and its JSON layer, so they
+# build and run on a headless machine with no JUCE present - configure with
 # -DJAZZ_BUILD_APP=OFF to do exactly that.
 
 add_executable(jazz_core_tests
@@ -11,9 +11,10 @@ add_executable(jazz_core_tests
     ReharmonizerTests.cpp
     ChartTests.cpp
     ChartFormatsTests.cpp
-    NoteInputTests.cpp)
+    NoteInputTests.cpp
+    EngineApiTests.cpp)
 
-target_link_libraries(jazz_core_tests PRIVATE jazz::core_engine)
+target_link_libraries(jazz_core_tests PRIVATE jazz::core_engine jazz::engine_api)
 target_include_directories(jazz_core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(MSVC)

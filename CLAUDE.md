@@ -29,8 +29,13 @@ intentional and load-bearing — do not blur it.
 | Layer | Responsibility | May depend on |
 |---|---|---|
 | **Core Engine** | Chord parsing, reharmonization logic, scale suggestion, voicing analysis. Pure C++, no JUCE GUI classes. | Nothing platform-specific |
-| **Shared UI Component Library** | Chart view, on-screen keyboard widget, scale-suggestion panel, voicing feedback panel — each size-class–aware. | Core Engine (data only) |
-| **Platform Shell** | MIDI I/O per platform, file import/export (iReal Pro, MusicXML), app lifecycle. | JUCE platform APIs |
+| **Engine API** (`modules/engine_api`) | The engine's answers as JSON - one wire format for every shell. Pure C++, no JUCE, no Emscripten. | Core Engine |
+| **User Interface** (`web/`) | The single interface: lead sheet, keyboard, panels, dialogs. Served on the web, hosted by the app. | Engine API, as JSON |
+| **Platform Shell** (`app/`) | A webview showing `web/`, plus MIDI I/O, the audio device, file reading, app lifecycle. | JUCE platform APIs |
+
+**There is one UI and it is the web page.** The JUCE component UI was removed once the
+webview carried everything; do not reintroduce a second implementation of a screen. A
+change to how the app looks belongs in `web/index.html`, where the website gets it too.
 
 Rules of thumb when writing or reviewing code:
 
@@ -163,12 +168,17 @@ the line between what exists and what does not. Do not re-plan something in the 
 - Reads a played voicing back as a *substitution* when it spells one, rather than as a
   broken version of the written chord.
 
-### Both shells, and why they look alike
-The JUCE app and the browser page carry the same features and very nearly the same
-screen: one palette in `theme`, one lead sheet in `ChartView`, one practice menu, one
-dock. Where they differ, it is because a shell cannot do the thing, not because someone
-styled it differently — so a change to how the app *looks* usually belongs in
-`modules/shared_ui`, where both would get it, and never in `app/`.
+### How the app and the page share one interface
+`app/src/WebUi.cpp` is the whole of it. The page is written to a file at startup and
+loaded into a `WebBrowserComponent`; two event channels carry everything else. The page
+asks for the engine, for sound and for a file; the shell pushes MIDI notes, the sustain
+pedal and device status back. Nothing else may cross that bridge - a rule on one side and
+a drawing on the other is how the two shells drifted apart last time.
+
+Engine calls are **asynchronous** in the app and synchronous on the web, which is why
+every call site awaits `call()`. Awaiting a plain value costs nothing, so one shape
+serves both; an engine call made around that funnel works in the browser and fails
+silently in the app.
 
 Two things are the page's alone, both for want of a library rather than a decision:
 reading a PDF, and printing one. The engine's chart reader is shared; what the JUCE shell
@@ -240,6 +250,19 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
   sustain pedal was verified on the page — including the control case of the same broken
   chord without the pedal, which is what proves the pedal is doing the work. Keep the
   harness a generated copy, so the code under test is the shipped file unmodified.
+- **The app's UI must never wait on the network.** The page is the interface, and a
+  webview with no route out does not degrade gracefully: a render-blocking stylesheet
+  that never arrives leaves the whole interface *invisible* - backgrounds paint, no text
+  ever does. The webfonts are therefore requested by script and only when the page is
+  served over the web. A `<link rel="stylesheet">` with no `href` is not a safe parking
+  spot either; it counts as a stylesheet still on its way, and a pending stylesheet stops
+  every script after it from running.
+- **The page is loaded from a file, not JUCE's resource provider.** The provider is the
+  tidier mechanism and it does not reliably deliver a document this size on Linux - the
+  page arrives, its CSS paints, and its script never runs, perhaps one time in ten. The
+  same page loads perfectly from a URL, so `WebUi` writes it into the temp directory each
+  launch and points the webview there. If you try the provider again, verify it ten times,
+  not once.
 - **A failing test is a question, not a chore.** Several here encoded bugs rather than
   behaviour — two asserted a chord printed a name that silently dropped a note, one
   asserted `F#maj9` should normalise to `Gb`. Work out whether the engine or the

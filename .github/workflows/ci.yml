@@ -30,13 +30,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The app's UI is a web page in a webview, so the Linux build needs
+      # WebKitGTK on top of the usual JUCE packages.
       - name: Install JUCE build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libasound2-dev libx11-dev libxcomposite-dev \
             libxcursor-dev libxext-dev libxinerama-dev libxrandr-dev \
             libxrender-dev libfreetype6-dev libfontconfig1-dev \
-            libglu1-mesa-dev mesa-common-dev
+            libglu1-mesa-dev mesa-common-dev \
+            libgtk-3-dev libwebkit2gtk-4.1-dev
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
