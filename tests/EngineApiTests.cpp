@@ -48,7 +48,7 @@ TEST ("a chart that cannot be read says so rather than coming back empty")
 
 TEST ("scales for a chord name the primary suggestion")
 {
-    const auto json = scalesForChord ("Dm7");
+    const auto json = scalesForChord ("Dm7", "");
 
     CHECK (contains (json, "\"ok\":true"));
     CHECK (contains (json, "Dorian"));
@@ -56,7 +56,7 @@ TEST ("scales for a chord name the primary suggestion")
 
 TEST ("an unreadable chord symbol is an error object, not a crash")
 {
-    const auto json = scalesForChord ("not a chord");
+    const auto json = scalesForChord ("not a chord", "");
 
     CHECK (contains (json, "\"ok\":false"));
     CHECK (contains (json, "\"error\":"));
@@ -139,7 +139,7 @@ TEST ("asking for a shape returns voicings in it")
 
 TEST ("arming a take clears whatever the last one left")
 {
-    soloSetBar (0, "Dm7", "");
+    soloSetBar (0, "Dm7", "", "");
     soloStartTake();
     soloPlayNote (62);
     soloPlayNote (65);
@@ -153,7 +153,7 @@ TEST ("arming a take clears whatever the last one left")
 TEST ("a played note comes back with its colour, its degree and the running count")
 {
     soloStartTake();
-    soloSetBar (0, "Dm7", "");
+    soloSetBar (0, "Dm7", "", "");
 
     const auto json = soloPlayNote (62);   // D - the root
 
@@ -168,7 +168,7 @@ TEST ("a played note comes back with its colour, its degree and the running coun
 TEST ("a note outside the scale says so on the wire, and still names its degree")
 {
     soloStartTake();
-    soloSetBar (0, "Cmaj7", "");
+    soloSetBar (0, "Cmaj7", "", "");
 
     const auto json = soloPlayNote (61);   // Db over Cmaj7
 
@@ -180,15 +180,15 @@ TEST ("the bar a player moves to answers with what they have done on it")
 {
     soloStartTake();
 
-    soloSetBar (0, "Dm7", "");
+    soloSetBar (0, "Dm7", "", "");
     soloPlayNote (62);
     soloPlayNote (65);
 
-    soloSetBar (1, "G7", "");
+    soloSetBar (1, "G7", "", "");
     soloPlayNote (67);
 
     // Back to the first bar: its own two notes, not the take's three.
-    const auto json = soloSetBar (0, "Dm7", "");
+    const auto json = soloSetBar (0, "Dm7", "", "");
 
     CHECK (contains (json, "\"bar\":{\"index\":0"));
     CHECK (contains (json, "\"chordTones\":2"));
@@ -200,16 +200,16 @@ TEST ("the scale a bar is read against comes across with it")
     soloStartTake();
 
     // Bb over Dm7: outside D Dorian, inside D Aeolian.
-    soloSetBar (0, "Dm7", "");
+    soloSetBar (0, "Dm7", "", "");
     CHECK (contains (soloPlayNote (70), "\"colour\":\"outside\""));
 
-    soloSetBar (0, "Dm7", "D Aeolian");
+    soloSetBar (0, "Dm7", "D Aeolian", "");
     CHECK (contains (soloPlayNote (70), "\"colour\":\"scaleTone\""));
 }
 
 TEST ("a bar that is not a chord is an error rather than a silent no-op")
 {
-    const auto json = soloSetBar (0, "not a chord", "");
+    const auto json = soloSetBar (0, "not a chord", "", "");
 
     CHECK (contains (json, "\"ok\":false"));
     CHECK (contains (json, "\"error\":"));
@@ -219,11 +219,11 @@ TEST ("ending a take hands back the whole thing, bar by bar")
 {
     soloStartTake();
 
-    soloSetBar (0, "Dm7", "");
+    soloSetBar (0, "Dm7", "", "");
     soloPlayNote (62);
     soloPlayNote (65);
 
-    soloSetBar (1, "G7", "");
+    soloSetBar (1, "G7", "", "");
     soloPlayNote (67);
 
     const auto json = soloEndTake();
@@ -245,4 +245,47 @@ TEST ("a take with nothing in it says so rather than reporting zero per cent")
     CHECK (contains (json, "\"ok\":true"));
     CHECK (contains (json, "Nothing played"));
     CHECK (contains (json, "\"observations\":[]"));
+}
+
+TEST ("the styles come across with a key, a name and a line to read")
+{
+    const auto json = scaleStyles();
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"key\":\"modes\""));
+    CHECK (contains (json, "\"key\":\"everything\""));
+    CHECK (contains (json, "\"name\":\"The modes\""));
+    CHECK (contains (json, "\"summary\":"));
+}
+
+TEST ("a style narrows the scales offered for a chord")
+{
+    const auto everything = scalesForChord ("Dm7", "everything");
+    const auto pentatonics = scalesForChord ("Dm7", "pentatonic");
+
+    CHECK (contains (everything, "Dorian"));
+    CHECK (! contains (pentatonics, "Dorian"));
+    CHECK (contains (pentatonics, "Pentatonic"));
+    CHECK (contains (pentatonics, "\"styleHasNothing\":false"));
+}
+
+TEST ("a style with nothing for a chord shows the rest and says so")
+{
+    const auto json = scalesForChord ("Cdim7", "bebop");
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"styleHasNothing\":true"));
+    CHECK (contains (json, "\"scales\":[{"));
+}
+
+TEST ("the bar is read against the style it was given")
+{
+    soloStartTake();
+
+    // E over Dm7 is the 9th: in D Dorian, not in D minor pentatonic.
+    soloSetBar (0, "Dm7", "", "modes");
+    CHECK (contains (soloPlayNote (64), "\"colour\":\"scaleTone\""));
+
+    soloSetBar (0, "Dm7", "", "pentatonic");
+    CHECK (contains (soloPlayNote (64), "\"colour\":\"outside\""));
 }

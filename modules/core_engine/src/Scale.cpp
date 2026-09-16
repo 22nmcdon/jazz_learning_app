@@ -201,6 +201,72 @@ const std::vector<ScaleDefinition>& scaleCatalogue()
     return catalogue;
 }
 
+//==============================================================================
+bool ScaleStyle::includes (ScaleFamily family) const
+{
+    // No families named means the whole catalogue, which is what "Everything"
+    // is - rather than a list that has to be kept in step with the catalogue.
+    return families.empty()
+        || std::find (families.begin(), families.end(), family) != families.end();
+}
+
+const std::vector<ScaleStyle>& scaleStyles()
+{
+    /* Ordered the way a player meets them rather than the way the catalogue is
+       laid out: the seven modes first, because that is where everyone starts
+       and it is the one vocabulary that covers a whole tune on its own.
+
+       The summaries name scales, not categories. "Melodic minor" means nothing
+       to someone who has not met it; "Lydian dominant and altered" is the same
+       thing said in sounds they have heard. */
+    static const std::vector<ScaleStyle> styles = {
+        { "modes", "The modes",
+          "Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian - one parent "
+          "scale, seven ways in. Where most players start.",
+          { ScaleFamily::major } },
+
+        { "melodicminor", "Melodic minor",
+          "Lydian dominant, altered and the rest of that family - the sound of a dominant "
+          "chord going somewhere.",
+          { ScaleFamily::melodicMinor } },
+
+        { "harmonicminor", "Harmonic minor",
+          "Phrygian dominant and its relatives: the minor-key sound, and the flavour a "
+          "V7 takes resolving to one.",
+          { ScaleFamily::harmonicMinor } },
+
+        { "bebop", "Bebop",
+          "The eight-note scales, with the passing tone that puts chord tones back on the "
+          "beat. Built for running a line, not for holding one.",
+          { ScaleFamily::bebop } },
+
+        { "pentatonic", "Pentatonics and blues",
+          "Five notes and the blues scale. Nothing to avoid, which is why they carry so "
+          "far from the chord they started on.",
+          { ScaleFamily::pentatonic } },
+
+        { "symmetric", "Whole tone and diminished",
+          "Scales with no home note: they repeat, so a shape learned once transposes all "
+          "over the keyboard.",
+          { ScaleFamily::symmetric } },
+
+        { "everything", "Everything",
+          "Every scale the engine knows, all 29 of them, best fit first.",
+          {} }
+    };
+
+    return styles;
+}
+
+const ScaleStyle* findScaleStyle (std::string_view key)
+{
+    const auto& styles = scaleStyles();
+    const auto found = std::find_if (styles.begin(), styles.end(),
+                                     [key] (const ScaleStyle& style) { return style.key == key; });
+
+    return found == styles.end() ? nullptr : &*found;
+}
+
 const ScaleDefinition* findScaleDefinition (std::string_view name)
 {
     const auto& catalogue = scaleCatalogue();

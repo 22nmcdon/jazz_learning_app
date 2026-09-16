@@ -111,8 +111,8 @@ TEST ("offers alternatives beyond the primary suggestion")
 
 TEST ("pentatonics rooted away from the chord can be offered or suppressed")
 {
-    const ScaleSuggester withPentatonics { ScaleSuggester::Options { true, 40 } };
-    const ScaleSuggester rootedOnly { ScaleSuggester::Options { false, 40 } };
+    const ScaleSuggester withPentatonics { ScaleSuggester::with (true, 40) };
+    const ScaleSuggester rootedOnly { ScaleSuggester::with (false, 40) };
 
     const auto chord = chordFrom ("Cm7");
 

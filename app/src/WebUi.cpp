@@ -56,7 +56,8 @@ namespace
         const auto number = [&args] (int i) { return argInt (args, i); };
 
         if (name == "jazzParseChart")        return api::parseChart (text (0).c_str());
-        if (name == "jazzScalesForChord")    return api::scalesForChord (text (0).c_str());
+        if (name == "jazzScalesForChord")    return api::scalesForChord (text (0).c_str(), text (1).c_str());
+        if (name == "jazzScaleStyles")       return api::scaleStyles();
         if (name == "jazzImportIRealPro")    return api::importIRealPro (text (0).c_str());
         if (name == "jazzChartFromPage")     return api::chartFromPage (text (0).c_str());
         if (name == "jazzReharmPlans")       return api::reharmPlans (text (0).c_str());
@@ -87,7 +88,7 @@ namespace
         if (name == "jazzSoloPlayNote")      return api::soloPlayNote (number (0));
 
         if (name == "jazzSoloSetBar")
-            return api::soloSetBar (number (0), text (1).c_str(), text (2).c_str());
+            return api::soloSetBar (number (0), text (1).c_str(), text (2).c_str(), text (3).c_str());
 
         return "{\"ok\":false,\"error\":\"No engine call named "
                + name.toStdString() + "\"}";

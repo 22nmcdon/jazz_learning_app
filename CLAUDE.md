@@ -192,6 +192,16 @@ the line between what exists and what does not. Do not re-plan something in the 
   every note played so far, which puts the take in the UI.
 - Static, with no clock. A tempo-driven version would drive `setTarget()` from one and
   need nothing else from the engine.
+- **Scale styles** (`ScaleStyle` in `Scale.h`) are the soloing vocabularies the Practice
+  menu offers - the modes, melodic minor, harmonic minor, bebop, pentatonics and blues,
+  whole tone and diminished, everything. They are built out of `ScaleFamily` rather than
+  lists of scale names, so a shape added to the catalogue joins its style by itself. A
+  style with nothing for a chord falls back to the whole catalogue and says so; an
+  unknown key widens rather than empties, so a key stored by another version is harmless.
+- **The bar dialog belongs to whichever mode is on.** Scales in solo practice,
+  substitutions in chord practice, never both: they answer different questions - what to
+  play over this bar, and what this bar should be - and showing both meant every visit
+  opened with a choice nobody asked for.
 
 ### How the app and the page share one interface
 `app/src/WebUi.cpp` is the whole of it. The page is written to a file at startup and
@@ -256,6 +266,10 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
   else is curated on purpose. Before adding a name, check what it costs the chords that
   already work — the test "a rootless thirteenth still beats a complete name nobody
   writes" is that trap nailed down, and a wider vocabulary that breaks it is a worse one.
+- **Which scales belong together is theory, so the engine holds the list.** The soloing
+  styles the menu offers come from `scaleStyles()` over the wire, not from options
+  written into the page. A second copy of that list in a shell is a second copy to go
+  stale the first time a scale is added to the catalogue.
 - **Forgiving is not the same as accepting everything.** Solo mode was specified to read
   a note against *every* scale that fits the chord, on the grounds that a player who
   chose a different valid scale has not made a mistake. Counted, that leaves **nothing

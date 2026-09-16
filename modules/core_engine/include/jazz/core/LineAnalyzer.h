@@ -155,6 +155,17 @@ public:
             accepted anyway.
         */
         std::string chosenScale;
+
+        /** The soloing vocabulary in play, by `ScaleStyle::key`.
+
+            Empty, or a key this version does not know, means every scale -
+            which is the right way round for a key stored by an older or newer
+            build: an unfamiliar style widens the answer rather than emptying
+            it. A style that has nothing to offer for a chord falls back the
+            same way, because a bar nothing can be read against is worse than
+            a bar read against the wrong vocabulary for one chord.
+        */
+        std::string style;
     };
 
     LineAnalyzer() = default;

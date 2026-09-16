@@ -242,6 +242,29 @@ body.in-app .masthead { padding-block: 10px 6px; justify-content: flex-end; }
 .key.sounded[data-colour="scaleTone"] { background: var(--gold); }
 .key.sounded[data-colour="outside"] { background: var(--rust); }
 
+.menu-select {
+  width: 100%;
+  margin-top: 4px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 1px;
+  padding: 6px 8px;
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--charcoal);
+}
+.menu-select:focus { outline: 1px solid var(--blush-deep); }
+
+/* Named for a screen reader, drawn by the title above it. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .help-button {
   width: 30px;
   height: 30px;
@@ -1054,6 +1077,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <p class="menu-note">Open a chart from iReal Pro or a PDF, or take this one away.</p>
           </div>
 
+          <div class="menu-group" data-mode="solo">
+            <span class="menu-title">Scale style</span>
+            <label class="sr-only" for="scaleStyle">Scale style</label>
+            <select class="menu-select" id="scaleStyle"></select>
+            <p class="menu-note" id="scaleStyleNote"></p>
+          </div>
+
           <div class="menu-group" role="radiogroup" aria-label="Voicing style" data-mode="chords">
             <span class="menu-title">Voicing style</span>
             <label class="menu-option"><input type="radio" name="voicingStyle" value="any" checked> Any shape</label>
@@ -1203,7 +1233,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 263 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 277 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -1341,7 +1371,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     <button class="close-btn" type="button" id="dialogClose" aria-label="Close">&times;</button>
   </div>
 
-  <div class="tabs" role="tablist">
+  <div class="tabs" role="tablist" id="chordTabs">
     <button class="tab" type="button" role="tab" id="tabScales" aria-selected="true" aria-controls="panelScales">Scales</button>
     <button class="tab" type="button" role="tab" id="tabReharm" aria-selected="false" aria-controls="panelReharm">Reharmonise</button>
   </div>
@@ -1465,6 +1495,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     avoidPitchClasses: [],
     scales: [],
     scalesFor: "",      // the chord state.scales was fetched for
+    scaleStyle: "modes",  // the soloing vocabulary; the engine names them
     chosenScale: 0,
     mode: "chords",     // "chords" or "solo" - a state, never a route
     openFamily: null,
@@ -1512,7 +1543,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "colophonEngine", "colophonFraming", "colophonBuild",
    "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloTallies",
    "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
-   "soloBars", "armTake", "armLabel", "practising"].forEach(function (id) {
+   "soloBars", "armTake", "armLabel", "practising",
+   "scaleStyle", "scaleStyleNote", "chordTabs"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
 
@@ -1789,16 +1821,27 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     tab.button.addEventListener("click", function () { showTab(index); });
   });
 
+  /** Opens the bar, showing whichever half of it this mode is about.
+
+      The two halves answer different questions and each belongs to one mode.
+      Scales are what you need when you are playing a line over a bar;
+      substitutions are what you need when you are deciding what the bar should
+      be. Showing both everywhere meant every visit started with a choice
+      nobody had asked for, so the mode makes it. */
   async function openDialog() {
     var chord = selectedChord();
     if (!chord) return;
 
-    el.dialogBar.textContent = "Bar " + (state.selected + 1);
+    var soloing = state.mode === "solo";
+
+    el.dialogBar.textContent = "Bar " + (state.selected + 1) + (soloing ? " - scales" : " - reharmonise");
     writeChord(el.dialogChord, chord);
 
-    renderScales();
-    renderSubstitutions();
-    showTab(0);
+    // One panel, so the strip that switches between them has nothing to do.
+    el.chordTabs.hidden = true;
+    showTab(soloing ? 0 : 1);
+
+    if (soloing) await renderScales(); else renderSubstitutions();
 
     if (!el.chordDialog.open) el.chordDialog.showModal();
   }
@@ -1812,13 +1855,20 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // --- scales --------------------------------------------------------------
   async function renderScales() {
     var chord = selectedChord();
-    var result = await call("jazzScalesForChord", ["string"], [chord]);
+    var result = await call("jazzScalesForChord", ["string", "string"], [chord, soloStyle()]);
     if (result === null || !result.ok) return;
 
     state.scales = result.scales;
     state.scalesFor = chord;
     state.chosenScale = 0;
-    el.scaleCount.textContent = result.scales.length + " scales fit this chord";
+
+    // A style can have nothing for a bar - bebop over a diminished chord - and
+    // the engine says so rather than handing back an empty panel.
+    el.scaleCount.textContent = result.styleHasNothing
+      ? "Nothing in this style fits " + chord + " - here is everything that does"
+      : result.scales.length === 1
+          ? "One scale in this style fits this chord"
+          : result.scales.length + " scales fit this chord";
     showScale(0);
 
     el.scaleRows.textContent = "";
@@ -1842,6 +1892,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       button.addEventListener("click", function () {
         state.chosenScale = index;
         showScale(index);
+
+        // In solo mode this is not just a thing to look at: it is the scale the
+        // bar is read against from here on.
+        if (state.mode === "solo") soloMoveToBar();
+
         Array.prototype.forEach.call(el.scaleRows.querySelectorAll("button"), function (other, i) {
           other.setAttribute("aria-pressed", i === index ? "true" : "false");
         });
@@ -2228,6 +2283,70 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   /** The scale the current bar is read against: the one the player picked out
       of the Scales panel, when that panel was showing this chord. Empty lets
       the engine use its own first suggestion. */
+  /** The soloing vocabulary in play.
+
+      Only in solo mode. Chord practice has no business being narrowed by it -
+      a voicing is judged against the chord, not against a scale - so the
+      engine is asked for everything there, which is what it did before styles
+      existed. */
+  function soloStyle() {
+    return state.mode === "solo" ? state.scaleStyle : "everything";
+  }
+
+  function rememberStyleChoice(key) {
+    try { window.localStorage.setItem("jazzScaleStyle", key); } catch (e) { /* private window */ }
+  }
+
+  function recallStyleChoice() {
+    try { return window.localStorage.getItem("jazzScaleStyle"); } catch (e) { return null; }
+  }
+
+  /** Fills the style menu from the engine's own list.
+
+      Not written into the markup, because which scales belong together is
+      theory and the page holds none - a second copy of that list here is a
+      second copy to go stale when a scale is added. */
+  async function loadScaleStyles() {
+    var result = await call("jazzScaleStyles", [], []);
+
+    if (result === null || !result.ok) return;
+
+    var remembered = recallStyleChoice();
+    var known = result.styles.some(function (style) { return style.key === remembered; });
+
+    if (known) state.scaleStyle = remembered;
+
+    el.scaleStyle.textContent = "";
+    result.styles.forEach(function (style) {
+      var option = document.createElement("option");
+      option.value = style.key;
+      option.textContent = style.name;
+      option.dataset.summary = style.summary;
+      el.scaleStyle.appendChild(option);
+    });
+
+    el.scaleStyle.value = state.scaleStyle;
+    showStyleSummary();
+  }
+
+  function showStyleSummary() {
+    var option = el.scaleStyle.selectedOptions[0];
+    el.scaleStyleNote.textContent = option ? option.dataset.summary : "";
+  }
+
+  el.scaleStyle.addEventListener("change", async function () {
+    state.scaleStyle = el.scaleStyle.value;
+    rememberStyleChoice(state.scaleStyle);
+    showStyleSummary();
+
+    // A scale picked out of the old style is not in the new one, and keeping it
+    // would mean choosing a style and watching nothing happen.
+    state.chosenScale = 0;
+    state.scalesFor = "";
+
+    await soloMoveToBar();
+  });
+
   function soloChosenScale() {
     if (state.scalesFor !== selectedChord()) return "";
 
@@ -2299,7 +2418,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // Light the keyboard with the scale this bar is read against, so the target
     // is on screen before a note is played rather than only after one.
     if (state.scalesFor !== chord) {
-      var scales = await call("jazzScalesForChord", ["string"], [chord]);
+      var scales = await call("jazzScalesForChord", ["string", "string"], [chord, soloStyle()]);
 
       if (scales !== null && scales.ok && scales.scales.length) {
         state.scales = scales.scales;
@@ -2311,8 +2430,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       }
     }
 
-    var result = await call("jazzSoloSetBar", ["number", "string", "string"],
-                            [state.selected, chord, soloChosenScale()]);
+    var result = await call("jazzSoloSetBar", ["number", "string", "string", "string"],
+                            [state.selected, chord, soloChosenScale(), soloStyle()]);
 
     if (result === null || !result.ok) return;
 
@@ -3563,8 +3682,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     await parseChart();
     await openChartFromUrl();
 
-    // Chords to begin with, but the mode groups have to be put in the state
-    // they describe rather than the state the markup happened to ship in.
+    // The style menu is the engine's list, so it cannot be filled until there
+    // is an engine; and the mode groups have to be put into the state they
+    // describe rather than the state the markup happened to ship in.
+    await loadScaleStyles();
     applyMode();
 
     // Last, and only if nothing else is already in front of the reader: a
@@ -3574,7 +3695,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     // Light the keyboard with the opening chord's scale, so the page shows what
     // it does before anything is clicked.
-    var opening = await call("jazzScalesForChord", ["string"], [selectedChord()]);
+    var opening = await call("jazzScalesForChord", ["string", "string"], [selectedChord(), soloStyle()]);
     if (opening && opening.ok && opening.scales.length) {
       state.scales = opening.scales;
       state.scalePitchClasses = opening.scales[0].pitchClasses;

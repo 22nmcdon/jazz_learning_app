@@ -4,6 +4,7 @@
 #include "jazz/core/Scale.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace jazz::core
@@ -40,10 +41,34 @@ public:
 
         /** Cap on how many alternatives are returned, primary included. */
         int maxSuggestions { 12 };
+
+        /** Only offer scales from these families; empty offers every one.
+
+            This is how a soloing style narrows the answer - see `ScaleStyle`,
+            which is the curated way to fill it in. A filter that excludes every
+            scale fitting the chord returns nothing rather than quietly widening
+            itself: the caller is the one who knows whether "no scale in this
+            style fits this chord" is worth saying out loud.
+        */
+        std::vector<ScaleFamily> families;
     };
 
     ScaleSuggester() = default;
-    explicit ScaleSuggester (Options optionsToUse) : options (optionsToUse) {}
+    explicit ScaleSuggester (Options optionsToUse) : options (std::move (optionsToUse)) {}
+
+    /** Options by name rather than by position.
+
+        `Options { false, 1 }` compiled until a third field was added, and then
+        it still compiled - it just stopped saying what the caller meant. Every
+        construction site here goes through this instead.
+    */
+    static Options with (bool includeNonRootedPentatonics, int maxSuggestions)
+    {
+        Options options;
+        options.includeNonRootedPentatonics = includeNonRootedPentatonics;
+        options.maxSuggestions = maxSuggestions;
+        return options;
+    }
 
     /** Returns suggestions ordered best-first; the first is marked primary. */
     std::vector<ScaleSuggestion> suggestionsFor (const ChordSymbol& chord) const;

@@ -86,7 +86,7 @@ public:
 
 private:
     Options options;
-    ScaleSuggester suggester { ScaleSuggester::Options { false, 1 } };
+    ScaleSuggester suggester { ScaleSuggester::with (false, 1) };
 };
 
 } // namespace jazz::core

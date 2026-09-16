@@ -60,6 +60,35 @@ struct Scale
     bool contains (PitchClass pitchClass) const;
 };
 
+/** A named vocabulary to solo out of: which families of scale are in play.
+
+    The catalogue holds 29 shapes and a player working on one thing does not
+    want all of them. A style is how that choice is offered - "the modes",
+    "bebop" - and it is curated here rather than in a UI, because which scales
+    belong together is theory and the shells hold none.
+
+    Styles are built out of `ScaleFamily` rather than listing scales by name, so
+    a shape added to the catalogue joins the style it belongs to by itself and
+    cannot be forgotten.
+*/
+struct ScaleStyle
+{
+    std::string key;       ///< stable across versions; what a shell stores
+    std::string name;      ///< "The modes"
+    std::string summary;   ///< one line, for the menu
+    std::vector<ScaleFamily> families;  ///< empty means every family
+
+    bool includes (ScaleFamily family) const;
+};
+
+/** Every style, in the order a menu should offer them: the plainest first. */
+const std::vector<ScaleStyle>& scaleStyles();
+
+/** Looks a style up by key. Null for an unknown one - which a caller should
+    read as "no style", not as an error: a stored key from an older version
+    should widen the choice, never empty it. */
+const ScaleStyle* findScaleStyle (std::string_view key);
+
 /** Every scale shape the engine knows about. */
 const std::vector<ScaleDefinition>& scaleCatalogue();
 

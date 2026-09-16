@@ -436,3 +436,125 @@ TEST ("a note played with no bar to read it against says so rather than guessing
     CHECK (note.colour == NoteColour::outside);
     CHECK (note.degree.empty());
 }
+
+//==============================================================================
+// Soloing styles: which vocabulary of scales a bar is read against.
+
+TEST ("every style is offered with a key, a name and something to read")
+{
+    CHECK (! scaleStyles().empty());
+
+    for (const auto& style : scaleStyles())
+    {
+        CHECK (! style.key.empty());
+        CHECK (! style.name.empty());
+        CHECK (! style.summary.empty());
+    }
+}
+
+TEST ("the modes are the plainest style, and come first")
+{
+    CHECK_EQ (scaleStyles().front().key, std::string ("modes"));
+}
+
+TEST ("every style but Everything names the families it is made of")
+{
+    for (const auto& style : scaleStyles())
+        CHECK_EQ (style.families.empty(), style.key == "everything");
+}
+
+TEST ("a style with no families named takes in the whole catalogue")
+{
+    const auto* everything = findScaleStyle ("everything");
+
+    CHECK (everything != nullptr);
+
+    if (everything == nullptr)
+        return;
+
+    for (const auto& definition : scaleCatalogue())
+        CHECK (everything->includes (definition.family));
+}
+
+TEST ("an unknown style widens the answer rather than emptying it")
+{
+    // A key stored by another version must not leave a player with no scales.
+    LineAnalyzer::Options fromTheFuture;
+    fromTheFuture.style = "hyperphrygian";
+
+    CHECK (LineAnalyzer::read (64, chordFrom ("Dm7"), fromTheFuture).colour
+             == LineAnalyzer::read (64, chordFrom ("Dm7")).colour);
+}
+
+TEST ("a style changes which scale a bar is read against")
+{
+    LineAnalyzer::Options modes;
+    modes.style = "modes";
+
+    LineAnalyzer::Options pentatonics;
+    pentatonics.style = "pentatonic";
+
+    // G over Dm7 is the 11th: in D Dorian, and in D minor pentatonic too - but
+    // the two styles must name different scales for it.
+    const auto inModes = LineAnalyzer::read (67, chordFrom ("Dm7"), modes);
+    const auto inPentatonics = LineAnalyzer::read (67, chordFrom ("Dm7"), pentatonics);
+
+    CHECK (inModes.colour == NoteColour::scaleTone);
+    CHECK (inPentatonics.colour == NoteColour::scaleTone);
+    CHECK (inModes.scaleName != inPentatonics.scaleName);
+}
+
+TEST ("a style narrows what counts as inside")
+{
+    // E over Dm7 is the 9th - squarely in D Dorian, and not in D minor
+    // pentatonic, which has only five notes and no 9th among them.
+    LineAnalyzer::Options pentatonics;
+    pentatonics.style = "pentatonic";
+
+    LineAnalyzer::Options modes;
+    modes.style = "modes";
+
+    CHECK (LineAnalyzer::read (64, chordFrom ("Dm7"), modes).colour == NoteColour::scaleTone);
+    CHECK (LineAnalyzer::read (64, chordFrom ("Dm7"), pentatonics).colour == NoteColour::outside);
+}
+
+TEST ("a style that has nothing for a chord falls back rather than calling everything outside")
+{
+    // A fully diminished chord has no bebop scale containing it. Working on
+    // bebop and reaching such a bar must not make every note you play outside.
+    LineAnalyzer::Options bebop;
+    bebop.style = "bebop";
+
+    auto outside = 0;
+
+    for (auto pitch = 0; pitch < 12; ++pitch)
+        if (LineAnalyzer::read (60 + pitch, chordFrom ("Cdim7"), bebop).colour == NoteColour::outside)
+            ++outside;
+
+    CHECK (outside < 12);
+}
+
+TEST ("a scale chosen from within the style is the one that is read against")
+{
+    LineAnalyzer::Options chosen;
+    chosen.style = "modes";
+    chosen.chosenScale = "D Aeolian";
+
+    // Bb over Dm7: outside Dorian, inside Aeolian, and both are modes.
+    CHECK (LineAnalyzer::read (70, chordFrom ("Dm7"), chosen).colour == NoteColour::scaleTone);
+}
+
+TEST ("changing the style overrides a scale left behind by the last one")
+{
+    /* The two can disagree - pick D Dorian under the modes, then switch to
+       pentatonics - and the style wins, deliberately. Changing the vocabulary
+       is the newer and more sweeping instruction of the two; a scale name left
+       over from before quietly overriding it would mean choosing a style and
+       watching nothing happen. (The page drops the stale choice when the style
+       changes, so this is the belt to that pair of braces.) */
+    LineAnalyzer::Options stale;
+    stale.style = "pentatonic";
+    stale.chosenScale = "D Dorian";
+
+    CHECK (LineAnalyzer::read (64, chordFrom ("Dm7"), stale).colour == NoteColour::outside);
+}

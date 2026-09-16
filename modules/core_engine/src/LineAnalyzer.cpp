@@ -117,8 +117,18 @@ namespace
     std::vector<ScaleSuggestion> scalesFor (const ChordSymbol& chord,
                                             const LineAnalyzer::Options& options)
     {
-        const ScaleSuggester suggester;
-        auto suggestions = suggester.suggestionsFor (chord);
+        ScaleSuggester::Options suggesterOptions;
+
+        if (const auto* style = findScaleStyle (options.style))
+            suggesterOptions.families = style->families;
+
+        auto suggestions = ScaleSuggester { suggesterOptions }.suggestionsFor (chord);
+
+        // Nothing in this style fits this chord - a diminished bar while working
+        // on bebop scales, say. Read it against the whole catalogue rather than
+        // against nothing, which would call every note outside.
+        if (suggestions.empty() && ! suggesterOptions.families.empty())
+            suggestions = ScaleSuggester {}.suggestionsFor (chord);
 
         if (options.acceptAnyValidScale || suggestions.empty())
             return suggestions;

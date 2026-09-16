@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (263), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (277), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -148,11 +148,22 @@ accumulating, which is most of what soloing over a chart is. **Stop the take** f
 summary: how the whole thing divided up, which bar pulled away from the rest, and a bar-by-bar
 line. A note outside the scale is *outside the scale*, never wrong.
 
-Which scale a bar is read against is the scale you chose for it in its Scales panel, or the
-engine's own first suggestion if you have not chosen. That is where the forgiveness in solo
-mode lives, and it is deliberate: reading against *every* scale that fits a chord sounds
-more generous and in fact leaves nothing outside anything - over Cmaj7, G7 or Bbmaj7 not one
-of the twelve notes comes back outside. **Which scale?** says which one you are being held to.
+**Scale style**, in the Practice menu, is the vocabulary you are working out of: the modes,
+melodic minor, harmonic minor, bebop, pentatonics and blues, whole tone and diminished, or
+everything. It decides which scales a bar is offered and which one it is read against, so
+practising the modes over a tune and practising bebop over the same tune are two different
+exercises. A style with nothing for a bar - bebop over a diminished chord - shows the whole
+catalogue instead and says so, rather than calling every note you play outside.
+
+Clicking a bar in solo mode opens **its scales**, narrowed to that style; choosing one is
+not just something to look at, it is what the bar is read against from there on. Clicking a
+bar in chord mode opens **its substitutions** instead. Each mode's dialog answers the one
+question that mode is about - what to play over this bar, or what this bar should be.
+
+Between the style and that choice is where the forgiveness in solo mode lives, and it is
+deliberate: reading against *every* scale that fits a chord sounds more generous and in fact
+leaves nothing outside anything - over Cmaj7, G7 or Bbmaj7 not one of the twelve notes comes
+back outside. **Which scale?** says which one you are being held to.
 
 **Import / export**, in the Practice menu, opens a chart that came from somewhere else and
 writes the one on screen back out. Both shells read an iReal Pro link, the `.html` file
@@ -324,6 +335,10 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   PDF needs a PDF library and belongs to the shell; deciding which of that text is a chord
   chart needs none and belongs here. Every reader reports the chord symbols it could not
   understand instead of handing back a chart that looks complete and is not.
+- **Soloing styles** — the scale catalogue grouped into the vocabularies a player actually
+  practises out of, built from scale families rather than lists of names so that a shape
+  added to the catalogue joins its style without anyone remembering to add it. The engine
+  owns the list and both shells build their menu from it.
 - **Reading a line** — `LineAnalyzer` takes notes one at a time rather than a chord at
   once, and reads each against the bar it landed in: a chord tone, a tone in the scale
   that bar is being read against, or outside both. Every note also names its degree

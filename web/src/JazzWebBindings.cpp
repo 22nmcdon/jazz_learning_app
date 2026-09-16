@@ -42,9 +42,14 @@ JAZZ_EXPORT const char* jazzParseChart (const char* progressionText)
     return hold (jazz::api::parseChart (orEmpty (progressionText)));
 }
 
-JAZZ_EXPORT const char* jazzScalesForChord (const char* symbol)
+JAZZ_EXPORT const char* jazzScalesForChord (const char* symbol, const char* style)
 {
-    return hold (jazz::api::scalesForChord (orEmpty (symbol)));
+    return hold (jazz::api::scalesForChord (orEmpty (symbol), orEmpty (style)));
+}
+
+JAZZ_EXPORT const char* jazzScaleStyles()
+{
+    return hold (jazz::api::scaleStyles());
 }
 
 JAZZ_EXPORT const char* jazzReharmonise (const char* progressionText, int measureIndex,
@@ -113,9 +118,11 @@ JAZZ_EXPORT const char* jazzSoloStartTake()
     return hold (jazz::api::soloStartTake());
 }
 
-JAZZ_EXPORT const char* jazzSoloSetBar (int measureIndex, const char* symbol, const char* chosenScale)
+JAZZ_EXPORT const char* jazzSoloSetBar (int measureIndex, const char* symbol,
+                                        const char* chosenScale, const char* style)
 {
-    return hold (jazz::api::soloSetBar (measureIndex, orEmpty (symbol), orEmpty (chosenScale)));
+    return hold (jazz::api::soloSetBar (measureIndex, orEmpty (symbol),
+                                        orEmpty (chosenScale), orEmpty (style)));
 }
 
 JAZZ_EXPORT const char* jazzSoloPlayNote (int midiNote)

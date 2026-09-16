@@ -146,6 +146,16 @@ namespace
              + ",\"primary\":" + (suggestion.isPrimary ? "true" : "false") + "}";
     }
 
+    /** The families a style key names, for the suggester. An unknown key means
+        every family, which is how a key from another version stays harmless. */
+    std::vector<ScaleFamily> familiesForStyle (const char* key)
+    {
+        if (const auto* style = findScaleStyle (key != nullptr ? key : ""))
+            return style->families;
+
+        return {};
+    }
+
     /** Maps the style key the page sends to the shape being practised. */
     std::optional<VoicingType> practiseTypeFor (const char* key)
     {
@@ -267,22 +277,46 @@ std::string parseChart (const char* progressionText)
 }
 
 /** Every scale that fits a chord, best first. */
-std::string scalesForChord (const char* symbol)
+std::string scalesForChord (const char* symbol, const char* style)
 {
     const auto chord = ChordSymbol::parse (symbol != nullptr ? symbol : "");
 
     if (! chord.has_value())
         return hold (jsonError (std::string ("Not a chord symbol: ") + (symbol != nullptr ? symbol : "")));
 
-    const ScaleSuggester suggester;
-    const auto suggestions = suggester.suggestionsFor (*chord);
+    ScaleSuggester::Options options;
+    options.families = familiesForStyle (style);
+
+    auto suggestions = ScaleSuggester { options }.suggestionsFor (*chord);
+
+    // A style with nothing for this chord - bebop over a diminished bar - shows
+    // the whole catalogue instead, and says so, so the panel is never empty and
+    // never silently pretends the style covered it.
+    const auto styleHasNothing = suggestions.empty() && ! options.families.empty();
+
+    if (styleHasNothing)
+        suggestions = ScaleSuggester {}.suggestionsFor (*chord);
+
     const auto tones = chord->chordTones();
 
     return hold ("{\"ok\":true,\"chord\":" + quoted (chord->toString())
                  + ",\"root\":" + std::to_string (chord->root())
+                 + ",\"styleHasNothing\":" + (styleHasNothing ? "true" : "false")
                  + ",\"tones\":" + jsonArray (tones, [&chord] (const ChordTone& tone)
                    { return chordToneJson (tone, chord->root()); })
                  + ",\"scales\":" + jsonArray (suggestions, scaleSuggestionJson) + "}");
+}
+
+std::string scaleStyles()
+{
+    return hold ("{\"ok\":true,\"styles\":"
+                 + jsonArray (core::scaleStyles(), [] (const ScaleStyle& style)
+                   {
+                       return "{\"key\":" + quoted (style.key)
+                            + ",\"name\":" + quoted (style.name)
+                            + ",\"summary\":" + quoted (style.summary) + "}";
+                   })
+                 + "}");
 }
 
 /** Reharmonisation options for one measure of a progression. */
@@ -637,7 +671,8 @@ std::string soloStartTake()
     return hold ("{\"ok\":true,\"taking\":true," + lineStatsJson (soloTake().stats()) + "}");
 }
 
-std::string soloSetBar (int measureIndex, const char* symbol, const char* chosenScale)
+std::string soloSetBar (int measureIndex, const char* symbol, const char* chosenScale,
+                        const char* style)
 {
     const auto chord = ChordSymbol::parse (symbol != nullptr ? symbol : "");
 
@@ -646,6 +681,7 @@ std::string soloSetBar (int measureIndex, const char* symbol, const char* chosen
 
     LineAnalyzer::Options options;
     options.chosenScale = chosenScale != nullptr ? chosenScale : "";
+    options.style = style != nullptr ? style : "";
 
     auto& analyzer = soloTake();
     analyzer.setOptions (options);

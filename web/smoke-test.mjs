@@ -107,22 +107,10 @@ try {
   await page.waitForSelector("#chordDialog[open]", { timeout: 10000 });
   check("clicking a bar twice opens it", true);
 
-  const scale = (await page.locator("#scaleName").innerText()).trim();
-  check(`a scale is named (${scale || "nothing"})`, scale.length > 0);
-
-  const degrees = await page.locator("#scaleNotes li").count();
-  check("the scale has its notes", degrees >= 7);
-
-  const alternatives = await page.locator("#scaleRows li").count();
-  check("alternative scales are offered", alternatives > 0);
-
-  // Switching tabs is hiding one panel and showing another, which the page does
-  // with the hidden attribute alone. Worth checking: a class that sets display
-  // quietly overrides it, and that is how the share row stayed visible in the
-  // app for a while.
-  await page.locator("#tabReharm").click();
-  check("the scales panel goes away", await page.locator("#panelScales").isHidden());
+  // Chord practice is about what the bar should be, so the bar opens on its
+  // substitutions - and not on scales, which belong to playing over it.
   check("substitutions are offered", (await page.locator("#subs details.family").count()) > 0);
+  check("and scales are not, in chord practice", await page.locator("#panelScales").isHidden());
 
   await page.locator("#dialogClose").click();
 
@@ -200,6 +188,48 @@ try {
 
   // Nothing is counted until a take is armed.
   check("nothing is counted before arming", await page.locator("#soloTallies").isHidden());
+
+  // The same bar, opened in solo mode, is about scales instead.
+  const soloBar = bars.first();
+  await soloBar.click();
+  await page.waitForSelector("#chordDialog[open]", { timeout: 10000 });
+
+  const scale = (await page.locator("#scaleName").innerText()).trim();
+  check(`a scale is named in solo mode (${scale || "nothing"})`, scale.length > 0);
+  check("the scale has its notes", (await page.locator("#scaleNotes li").count()) >= 5);
+  check("and reharmonisation is not offered here",
+        await page.locator("#panelReharm").isHidden());
+
+  const alternatives = await page.locator("#scaleRows li").count();
+  check(`alternative scales are offered (${alternatives})`, alternatives > 0);
+
+  // Choosing one re-aims the bar rather than only redrawing the panel.
+  if (alternatives > 1) {
+    await page.locator("#scaleRows li button").nth(1).click();
+    const chosen = (await page.locator("#scaleName").innerText()).trim();
+    check(`choosing a scale takes (${chosen})`, chosen !== scale);
+  }
+
+  await page.locator("#dialogClose").click();
+
+  // The style picker narrows the vocabulary, and its list comes from the engine.
+  await page.locator("#menuButton").click();
+  const styles = await page.locator("#scaleStyle option").count();
+  check(`the engine's styles fill the menu (${styles})`, styles >= 5);
+
+  await page.selectOption("#scaleStyle", "pentatonic");
+  await page.locator("#menuButton").click();
+  await bars.first().click();
+  await page.waitForSelector("#chordDialog[open]", { timeout: 10000 });
+
+  const narrowed = await page.locator("#scaleRows li").allInnerTexts();
+  check(`a style narrows the scales offered (${narrowed.length})`,
+        narrowed.length > 0 && narrowed.every((row) => /Pentatonic|Blues/.test(row)));
+
+  await page.locator("#dialogClose").click();
+  await page.locator("#menuButton").click();
+  await page.selectOption("#scaleStyle", "modes");
+  await page.locator("#menuButton").click();
 
   await page.locator("#armTake").click();
   await page.waitForSelector("#armTake[aria-pressed='true']", { timeout: 10000 });

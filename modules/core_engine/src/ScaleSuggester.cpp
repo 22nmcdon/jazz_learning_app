@@ -171,6 +171,11 @@ std::vector<ScaleSuggestion> ScaleSuggester::suggestionsFor (const ChordSymbol& 
 
     for (const auto& definition : scaleCatalogue())
     {
+        if (! options.families.empty()
+            && std::find (options.families.begin(), options.families.end(), definition.family)
+                 == options.families.end())
+            continue;
+
         const auto pentatonicFamily = definition.family == ScaleFamily::pentatonic;
 
         for (PitchClass tonic = 0; tonic < semitonesPerOctave; ++tonic)

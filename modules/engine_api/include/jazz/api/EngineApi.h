@@ -17,7 +17,7 @@ namespace jazz::api
     the browser, JUCE native functions for the app - never a rule.
 */
 std::string parseChart (const char* progressionText);
-std::string scalesForChord (const char* symbol);
+std::string scalesForChord (const char* symbol, const char* style);
 std::string reharmonise (const char* progressionText, int measureIndex, int includeAdvanced, int includeRisky);
 std::string analyseVoicing (const char* symbol, const char* midiNotesCsv, const char* practiseStyle);
 std::string importIRealPro (const char* text);
@@ -50,8 +50,16 @@ std::string idiomaticVoicings (const char* symbol, int anchorNote, const char* p
     A bar's own numbers come back from `soloSetBar`, because clicking a bar is
     how you ask for them.
 */
+/** Every soloing vocabulary the engine offers, in menu order.
+
+    The shells build their picker from this rather than holding a list of their
+    own: which scales belong together is theory, and a second copy of it in a
+    page is a second copy that goes stale.
+*/
+std::string scaleStyles();
+
 std::string soloStartTake();
-std::string soloSetBar (int measureIndex, const char* symbol, const char* chosenScale);
+std::string soloSetBar (int measureIndex, const char* symbol, const char* chosenScale, const char* style);
 std::string soloPlayNote (int midiNote);
 std::string soloEndTake();
 
