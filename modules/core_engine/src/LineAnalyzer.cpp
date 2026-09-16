@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <numeric>
 
 namespace jazz::core
@@ -11,6 +12,14 @@ namespace jazz::core
 
 namespace
 {
+    /*  The shape of `LineStats::score`, named rather than written into the
+        arithmetic - every one of these is a judgement someone may want to
+        argue with, and an argument is easier when the number has a name. */
+    constexpr double lowestComfortableChordShare  = 0.35;
+    constexpr double highestComfortableChordShare = 0.65;
+    constexpr double mostBalanceCanCost           = 0.15;
+    constexpr double notesBeforeBalanceCounts     = 4.0;
+
     /** Rounded percentages of @p counts that add up to exactly 100.
 
         Rounding each share on its own gives three numbers that make 99 or 101
@@ -166,6 +175,42 @@ int LineStats::percentScaleTones() const noexcept
 int LineStats::percentOutside() const noexcept
 {
     return sharesOfOneHundred ({ chordTones, scaleTones, outside })[2];
+}
+
+int LineStats::score() const noexcept
+{
+    const auto played = total();
+
+    if (played <= 0)
+        return 0;
+
+    const auto inside = chordTones + scaleTones;
+
+    // Everything inside, and a quarter of what was not.
+    const auto landed = 100.0 * (inside + 0.25 * outside) / played;
+
+    // Nothing inside is nothing to be one-sided about.
+    if (inside <= 0)
+        return static_cast<int> (std::lround (landed));
+
+    const auto chordShare = static_cast<double> (chordTones) / inside;
+
+    // How far outside the band a line wants to sit in. Zero within it, and at
+    // most the width of one side of it - which is what the allowance is scaled
+    // against, so leaning either way costs the same.
+    const auto off = std::max (0.0, lowestComfortableChordShare - chordShare)
+                   + std::max (0.0, chordShare - highestComfortableChordShare);
+
+    // Scaled against the furthest either edge of the band can be from an
+    // extreme, so the two sides cost the same and stay that way if the band
+    // is ever moved.
+    const auto worstLean = std::max (lowestComfortableChordShare,
+                                     1.0 - highestComfortableChordShare);
+
+    const auto lean = (off / worstLean)
+                    * std::min (1.0, inside / notesBeforeBalanceCounts);
+
+    return static_cast<int> (std::lround (landed * (1.0 - mostBalanceCanCost * lean)));
 }
 
 std::string noteColourName (NoteColour colour)

@@ -192,7 +192,8 @@ namespace
              + ",\"outside\":" + std::to_string (stats.outside)
              + ",\"percentChordTones\":" + std::to_string (stats.percentChordTones())
              + ",\"percentScaleTones\":" + std::to_string (stats.percentScaleTones())
-             + ",\"percentOutside\":" + std::to_string (stats.percentOutside());
+             + ",\"percentOutside\":" + std::to_string (stats.percentOutside())
+             + ",\"score\":" + std::to_string (stats.score());
     }
 
     std::string lineBarJson (int measureIndex, const std::string& symbol, const LineStats& stats)

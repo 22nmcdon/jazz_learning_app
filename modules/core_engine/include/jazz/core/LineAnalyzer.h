@@ -66,6 +66,30 @@ struct LineStats
     int percentChordTones() const noexcept;
     int percentScaleTones() const noexcept;
     int percentOutside() const noexcept;
+
+    /** How this stretch of line went, 0 to 100. Zero for nothing played.
+
+        The one number here that is a judgement rather than a count, so it is
+        worth being plain about what it judges.
+
+        Chord tones and scale tones both count as landing: the difference
+        between them is colour, not correctness. An outside note counts a
+        quarter rather than nothing, because with no clock a note passing
+        through from outside and a note stuck out there look identical from in
+        here - scoring it zero would be claiming to know which it was.
+
+        What is left is balance, and it costs fifteen points at the very most.
+        A line is chord tones anchoring it and scale tones colouring it, so a
+        bar that leans all the way onto the chord and one that never touches it
+        are both one-sided, and are marked the same. Anywhere from about a
+        third to about two thirds chord tones gives up nothing at all. And the
+        allowance fades in with the length of the bar, because two notes are
+        not unbalanced, they are two notes.
+
+        It is a reading of a bar, not a grade for a player. Nothing calls a
+        note wrong, here or anywhere else in this file.
+    */
+    int score() const noexcept;
 };
 
 /** The part of a take spent on one bar. */

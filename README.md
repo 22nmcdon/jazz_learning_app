@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (277), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (286), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -170,9 +170,32 @@ outside the scale is *outside the scale*, never wrong.
 
 Every bar you play over also carries its own verdict, **on the bar**: a slim three-part
 strip in the same colours the dock uses - chord tone, scale tone, outside - in proportion,
-with the numbers on the bar's tooltip. It fills in as you play and stays after you stop, so
-the bar that got away is one you can see at a glance down the chart rather than one you
-have to read about underneath it.
+and a **percentage** for how the bar went. It fills in as you play and stays after you stop,
+so the bar that got away is one you can see at a glance down the chart rather than one you
+have to read about underneath it. The exact counts are on the bar's tooltip, and in its
+name for a screen reader.
+
+The percentage is the one number in this app that is a judgement rather than a count, so it
+is worth saying what it judges. Chord tones and scale tones both count as landing - the
+difference between them is colour, not correctness. An outside note counts a quarter rather
+than nothing, because with no clock a note passing through from outside and a note stuck out
+there look identical from here, and scoring it zero would be claiming to know which. What is
+left is balance, worth fifteen points at the very most: a line is chord tones anchoring it
+and scale tones colouring it, so a bar that never leaves the chord and a bar that never
+touches it are both one-sided and are marked the same - and a bar of one or two notes is not
+unbalanced, it is short. It is a reading of a bar, not a mark for a player; nothing anywhere
+in here calls a note wrong.
+
+**Playing**, in the same menu, is **Static** or **In time**, and only the first of them
+exists. Static is what solo practice is: the bar you are on is the bar you chose, it stays
+there until you move, and nothing is counting time. Choosing *In time* opens a note saying
+so and puts the switch back, rather than doing something approximate - it is a door with
+nothing behind it yet, and it says what it would take: a clock behind the chart, a tempo and
+a count-in, and rhythm starting to count for something. That last part is why it is not a
+small addition. With no clock, *where* in the bar a note landed is invisible, which is why
+an avoid note is named here rather than marked down; with one, sitting on it and passing
+through it stop being the same thing. It is the same feature as the metronome and the
+practice loop, and should arrive with them.
 
 **Scale style**, in the Practice menu, is the vocabulary you are working out of: the modes,
 melodic minor, harmonic minor, bebop, pentatonics and blues, whole tone and diminished, or

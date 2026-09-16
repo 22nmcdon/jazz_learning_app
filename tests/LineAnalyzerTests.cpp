@@ -558,3 +558,101 @@ TEST ("changing the style overrides a scale left behind by the last one")
 
     CHECK (LineAnalyzer::read (64, chordFrom ("Dm7"), stale).colour == NoteColour::outside);
 }
+
+//==============================================================================
+// The score. It is the only judgement in this file, so it gets the most tests:
+// every constant in it is arguable, and a test is where the argument is held.
+
+namespace
+{
+    LineStats statsOf (int chordTones, int scaleTones, int outside)
+    {
+        LineStats stats;
+        stats.chordTones = chordTones;
+        stats.scaleTones = scaleTones;
+        stats.outside = outside;
+        return stats;
+    }
+}
+
+TEST ("nothing played scores nothing, rather than nothing out of nothing")
+{
+    CHECK (statsOf (0, 0, 0).score() == 0);
+}
+
+TEST ("chord tones anchoring and scale tones colouring is the top of the scale")
+{
+    CHECK (statsOf (2, 2, 0).score() == 100);
+    CHECK (statsOf (5, 4, 0).score() == 100);
+}
+
+TEST ("a bar that never leaves the chord does not reach the top")
+{
+    const auto plain = statsOf (6, 0, 0).score();
+
+    CHECK (plain < 100);
+    CHECK (plain >= 80);   // safe ground is still ground: this is not a failure
+}
+
+TEST ("leaning off the chord costs exactly what leaning onto it does")
+{
+    // A line that never touches a chord tone is as one-sided as one that never
+    // leaves them. Neither is wrong, and the reading says the same of both.
+    CHECK (statsOf (6, 0, 0).score() == statsOf (0, 6, 0).score());
+}
+
+TEST ("two notes are not unbalanced, they are two notes")
+{
+    // The same one-sidedness, in a bar too short for it to mean anything.
+    CHECK (statsOf (1, 0, 0).score() > statsOf (6, 0, 0).score());
+}
+
+TEST ("outside pulls a bar down, but never to nothing")
+{
+    const auto clean = statsOf (2, 2, 0).score();
+    const auto some  = statsOf (2, 2, 2).score();
+    const auto lots  = statsOf (1, 1, 6).score();
+
+    CHECK (some < clean);
+    CHECK (lots < some);
+    CHECK (lots > 0);   // an outside note is a choice, not a mistake
+}
+
+TEST ("a bar of nothing but outside still scores the quarter it is worth")
+{
+    const auto all = statsOf (0, 0, 8).score();
+
+    CHECK (all == 25);
+}
+
+TEST ("the score stays inside its own range, whatever it is given")
+{
+    for (int chordTones = 0; chordTones <= 8; ++chordTones)
+        for (int scaleTones = 0; scaleTones <= 8; ++scaleTones)
+            for (int outside = 0; outside <= 8; ++outside)
+            {
+                const auto score = statsOf (chordTones, scaleTones, outside).score();
+
+                CHECK (score >= 0);
+                CHECK (score <= 100);
+            }
+}
+
+TEST ("a take's bars are scored one by one, not all together")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+
+    // Bar one: the root and the ninth of Dm7 - anchored and coloured.
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.play (62);
+    analyzer.play (64);
+
+    // Bar two: two notes in neither the chord nor the scale.
+    analyzer.setTarget (1, chordFrom ("Cmaj7"));
+    analyzer.play (61);
+    analyzer.play (66);
+
+    CHECK (analyzer.statsForBar (0).score() > analyzer.statsForBar (1).score());
+    CHECK (analyzer.statsForBar (1).score() == 25);
+}

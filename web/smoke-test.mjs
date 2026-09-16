@@ -278,6 +278,18 @@ try {
   const styles = await page.locator("#scaleStyle option").count();
   check(`the engine's styles fill the menu (${styles})`, styles >= 5);
 
+  // In time is a door with nothing behind it. It has to say so, and it must
+  // not leave the switch claiming the chart is moving when it is not.
+  await page.locator("#playLive").click();
+  await page.waitForSelector("#liveDialog[open]", { timeout: 10000 });
+  check("asking to play in time says it is not built yet",
+        (await page.locator("#liveDialog").innerText()).toLowerCase().includes("not built yet"));
+  check("and the switch goes back to static",
+        (await page.locator("#playStatic").getAttribute("aria-checked")) === "true"
+        && (await page.locator("#playLive").getAttribute("aria-checked")) === "false");
+  await page.locator("#liveClose").click();
+
+  await page.locator("#menuButton").click();
   await page.selectOption("#scaleStyle", "pentatonic");
   await page.locator("#menuButton").click();
   await bars.first().click();
@@ -312,6 +324,13 @@ try {
 
   const marked = await page.locator("#systems .bar").first().getAttribute("data-take");
   check(`and the mark carries its numbers (${marked})`, /notes:.*chord.*scale.*outside/.test(marked));
+
+  // The score is the strip's one-number summary, and it comes from the engine
+  // rather than from arithmetic in the page.
+  const scored = (await page.locator("#systems .bar .bar-score").first().innerText()).trim();
+  check(`the bar carries a score (${scored})`, /^\d{1,3}%$/.test(scored));
+  check("and a screen reader is told it too",
+        (await page.locator("#systems .bar").first().getAttribute("aria-label")).includes(scored));
 
   // Walking to another bar during a take must not end it. Bar two is not the
   // bar we are on, so this moves rather than opening it.

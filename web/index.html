@@ -233,6 +233,9 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
   cursor: pointer;
 }
 .mode-option:hover { color: var(--blush-deep); }
+/* The menu's copy of the switch sits in a column of blocks, so it has to stop
+   being one. */
+.menu-group .mode-switch { display: inline-flex; }
 .mode-option[aria-checked="true"] { background: var(--charcoal); color: var(--cream); }
 
 /* Armed is a state you must never be in doubt about: a pedal can leave notes
@@ -617,13 +620,17 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 .bar-take .st { background: var(--gold); }
 .bar-take .out { background: var(--rust); }
 
-.bar-count {
+/* How the bar went, over the strip that shows what it was made of. Quiet on
+   purpose: it is a reading of a bar, not a mark out of ten, and a number in
+   the chart's own ink beside the chord would read as part of the tune. */
+.bar-score {
   position: absolute;
-  right: 8px;
-  bottom: 12px;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+  right: 6px;
+  bottom: 11px;
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   color: var(--text-soft);
 }
 
@@ -1185,6 +1192,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <p class="menu-note">Open a chart from iReal Pro or a PDF, or take this one away.</p>
           </div>
 
+          <!-- A switch rather than a checkbox, because it is the same kind of
+               choice the one at the top is - and because only one side of it
+               exists, which a switch says more honestly than a tick would. -->
+          <div class="menu-group" data-mode="solo">
+            <span class="menu-title">Playing</span>
+            <div class="mode-switch" role="radiogroup" aria-label="How the chart moves">
+              <button class="mode-option" type="button" id="playStatic" role="radio" aria-checked="true">Static</button>
+              <button class="mode-option" type="button" id="playLive" role="radio" aria-checked="false">In time</button>
+            </div>
+            <p class="menu-note">Static: the bar you are on is the bar you chose, and nothing is
+              counting time. In time is not built yet.</p>
+          </div>
+
           <div class="menu-group" data-mode="solo">
             <span class="menu-title">Scale style</span>
             <label class="sr-only" for="scaleStyle">Scale style</label>
@@ -1352,7 +1372,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 277 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 286 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -1479,8 +1499,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       </li>
       <li>
         <b>Every bar keeps its own score.</b> A bar you have played over carries a strip in
-        those same three colours, so the bar that got away is one you can see down the
-        chart rather than one you have to read about.
+        those same three colours and a percentage for how it went, so the bar that got away
+        is one you can see down the chart rather than one you have to read about. It is a
+        reading of the bar, not a mark: nothing here calls a note wrong.
       </li>
       <li>
         <b>The keys do not stay down here.</b> A line is played, not held: each note sounds
@@ -1507,6 +1528,50 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     <p class="voicing-note" data-mode="solo" style="margin-top:20px">
       The <i>Practice</i> menu decides the vocabulary you are working out of - the modes,
       melodic minor, bebop, the pentatonics - and every bar is read against a scale from it.
+    </p>
+  </div>
+</dialog>
+
+<!-- Half a feature is worse than none, so "In time" is a door with nothing
+     behind it yet and says so rather than doing something approximate. What it
+     says is what it would take, because a player who wants it is owed the real
+     answer and not "coming soon". -->
+<dialog id="liveDialog">
+  <div class="dialog-head">
+    <div>
+      <div class="bar-label">Not built yet</div>
+      <div class="plan-title">Playing in time</div>
+    </div>
+    <button class="close-btn" type="button" id="liveClose" aria-label="Close">&times;</button>
+  </div>
+
+  <div class="tab-body">
+    <p class="voicing-note">
+      Solo practice is <i>static</i> on purpose for now. The bar you are on is the bar you
+      chose, it stays there until you move, and nothing anywhere is counting time.
+    </p>
+
+    <ul class="help-list">
+      <li>
+        <b>In time</b> would put a clock behind the chart: a tempo, a count-in, and the bar
+        moving on its own underneath you while you play over it.
+      </li>
+      <li>
+        <b>Rhythm would start to count.</b> With no clock, <i>where</i> in the bar a note
+        landed is invisible from here - which is why an avoid note is named rather than
+        marked down. Sitting on one and passing through it look identical until something
+        knows what the beat was.
+      </li>
+      <li>
+        <b>It is the same feature as a metronome and a practice loop</b>, so it should
+        arrive with them rather than ahead of them.
+      </li>
+    </ul>
+
+    <p class="voicing-note" style="margin-top:18px">
+      The engine is already shaped for it: a take has no clock in it, and the bar it reads
+      against is set from outside. Driving that from a tempo is the part that is missing -
+      nothing already built would have to change.
     </p>
   </div>
 </dialog>
@@ -1725,6 +1790,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink",
    "shareRow", "copyShare", "shareStatus", "shareLink",
    "helpButton", "helpDialog", "helpClose",
+   "playStatic", "playLive", "liveDialog", "liveClose",
    "colophonEngine", "colophonFraming", "colophonBuild",
    "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloScale", "soloTallies",
    "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
@@ -1881,7 +1947,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         if (measure) {
           if (state.reharmonised[index]) bar.classList.add("reharmonised");
           bar.dataset.index = String(index);
-          bar.setAttribute("aria-label", "Bar " + (index + 1) + ", " + measure.chords.map(function (c) { return c.symbol; }).join(" "));
+
+          // Kept, because a take appends to it and the chart is not rebuilt
+          // between one note and the next.
+          bar.dataset.label = "Bar " + (index + 1) + ", "
+                            + measure.chords.map(function (c) { return c.symbol; }).join(" ");
+          bar.setAttribute("aria-label", bar.dataset.label);
           placeChords(bar, measure);
 
           // Where a take writes what it made of this bar. Always present, so
@@ -1890,6 +1961,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           mark.className = "bar-take";
           mark.hidden = true;
           bar.appendChild(mark);
+
+          var score = document.createElement("span");
+          score.className = "bar-score";
+          score.hidden = true;
+          bar.appendChild(score);
 
           bar.addEventListener("click", makeBarHandler(index));
         } else {
@@ -2499,6 +2575,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function paintTakeMarks() {
     Array.prototype.forEach.call(el.systems.querySelectorAll(".bar"), function (bar) {
       var mark = bar.querySelector(".bar-take");
+      var score = bar.querySelector(".bar-score");
 
       if (!mark) return;
 
@@ -2507,12 +2584,21 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       if (!stats || !stats.total) {
         mark.hidden = true;
         mark.textContent = "";
+        score.hidden = true;
+        score.textContent = "";
         bar.removeAttribute("data-take");
+        bar.setAttribute("aria-label", bar.dataset.label || "");
         return;
       }
 
       mark.hidden = false;
       mark.textContent = "";
+
+      // An engine older than this page has no score in its stats. Leave the
+      // number off rather than writing "undefined%" over the chart - the strip
+      // still says everything the score is a summary of.
+      score.hidden = typeof stats.score !== "number";
+      score.textContent = score.hidden ? "" : stats.score + "%";
 
       [["ct", stats.percentChordTones], ["st", stats.percentScaleTones],
        ["out", stats.percentOutside]].forEach(function (part) {
@@ -2526,9 +2612,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
       // The numbers themselves, for anyone who wants them and for a screen
       // reader, which cannot see three coloured strips.
-      bar.dataset.take = stats.total + " notes: " + stats.percentChordTones + "% chord, "
+      bar.dataset.take = (score.hidden ? "" : stats.score + "% - ")
+                       + stats.total + " notes: " + stats.percentChordTones + "% chord, "
                        + stats.percentScaleTones + "% scale, " + stats.percentOutside + "% outside";
       mark.title = bar.dataset.take;
+      score.title = bar.dataset.take;
+
+      // Three coloured strips and a small number say nothing to a screen
+      // reader, so the bar's own name carries them.
+      bar.setAttribute("aria-label", (bar.dataset.label || "") + ". " + bar.dataset.take);
     });
   }
 
@@ -3262,6 +3354,21 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (!el.helpDialog.open) el.helpDialog.showModal();
     rememberCheatSheetSeen(state.mode);
   }
+
+  // Nothing to switch to, so the switch does not move: it opens the door,
+  // shows what is behind it, and goes back to saying what is true.
+  el.playLive.addEventListener("click", function () {
+    setMenuOpen(false);
+    el.playLive.setAttribute("aria-checked", "false");
+    el.playStatic.setAttribute("aria-checked", "true");
+
+    if (!el.liveDialog.open) el.liveDialog.showModal();
+  });
+
+  el.liveClose.addEventListener("click", function () { el.liveDialog.close(); });
+  el.liveDialog.addEventListener("click", function (event) {
+    if (event.target === el.liveDialog) el.liveDialog.close();
+  });
 
   el.helpButton.addEventListener("click", openCheatSheet);
   el.helpClose.addEventListener("click", function () { el.helpDialog.close(); });

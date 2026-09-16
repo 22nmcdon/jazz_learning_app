@@ -212,6 +212,23 @@ the line between what exists and what does not. Do not re-plan something in the 
   quiet bug loud: reopening a bar used to reset the chosen scale to the top of the list
   while the engine kept reading against the old one, which nothing on screen could
   contradict until something on screen named it.
+- **The score is the only judgement in the engine, so every number in it is named.**
+  `LineStats::score()` reads a bar 0-100: chord tones and scale tones both land, an outside
+  note is worth a quarter (with no clock, passing through and being stuck look the same
+  from here), and what is left is balance, worth fifteen points at most and fading in with
+  the length of the bar. The constants live at the top of `LineAnalyzer.cpp` with names
+  rather than inside the arithmetic, because each is arguable - and the tests are where
+  the argument is held: that leaning off the chord costs what leaning onto it does, that
+  two notes are not unbalanced, that an outside bar still scores its quarter, and that the
+  result never leaves 0-100. This sits alongside a rule the rest of the file keeps: nothing
+  calls a note wrong. A reading of a bar is not a mark for a player, and the wording on the
+  page has to keep saying so.
+- **"In time" is a door with nothing behind it, and says so.** The Practice menu offers
+  Static or In time; choosing the second opens a note explaining what it would take and
+  puts the switch back. Half of a transport would be worse than none - the moment a clock
+  exists, rhythm starts to count, and the whole basis for naming an avoid note rather than
+  marking it down goes with it. Do not make that switch do something approximate; build
+  the transport with the metronome and the practice loop, or leave the door shut.
 - **The bar dialog belongs to whichever mode is on.** Scales in solo practice,
   substitutions in chord practice, never both: they answer different questions - what to
   play over this bar, and what this bar should be - and showing both meant every visit
@@ -268,7 +285,8 @@ build step passes, that setting is the first thing to check.
   *line* to play over a bar is a separate feature needing generated or curated patterns,
   rhythm and register - deliberately not started.
 - **A tempo-driven solo transport**, which is the same feature as the metronome /
-  practice loop and should arrive with it.
+  practice loop and should arrive with it. Solo practice's Practice menu already has the
+  switch for it, wired to a note saying it is not built.
 - MusicXML / MuseScore import. The page reader is format-agnostic enough to feed it.
 - Reading and printing a PDF in the JUCE app, as above.
 
