@@ -91,12 +91,22 @@ self.addEventListener("fetch", (event) => {
       // which is exactly what is wanted. A partial response is not.
       if (response.status !== 206) {
         const copy = response.clone();
-        caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
+
+        // Stored under the plain URL for the same reason: one entry per file,
+        // rather than one per build that has ever been fetched.
+        const key = request.url.startsWith(self.registration.scope)
+          ? request.url.split("?")[0]
+          : request;
+
+        caches.open(CACHE).then((cache) => cache.put(key, copy)).catch(() => {});
       }
 
       return response;
     } catch (offline) {
-      const cached = await caches.match(request);
+      // ignoreSearch, because the page asks for the engine at its own build -
+      // "jazz-engine.js?v=abc1234" - and what was stocked on install is the
+      // plain name. Without this the cache holds the file and misses it.
+      const cached = await caches.match(request, { ignoreSearch: true });
 
       if (cached) return cached;
 

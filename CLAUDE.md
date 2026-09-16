@@ -198,6 +198,11 @@ the line between what exists and what does not. Do not re-plan something in the 
   lists of scale names, so a shape added to the catalogue joins its style by itself. A
   style with nothing for a chord falls back to the whole catalogue and says so; an
   unknown key widens rather than empties, so a key stored by another version is harmless.
+- **A take marks the chart, not only the dock.** Every bar played over carries a three-part
+  strip in the dock's own colours, in proportion - chord tone, scale tone, outside - so
+  which bar went wrong is a glance down the chart rather than a read of a panel. The page
+  keeps those numbers itself, from the bar stats every `soloPlayNote` already returns, and
+  replaces the lot with the engine's breakdown on `soloEndTake` so a long take cannot drift.
 - **The bar dialog belongs to whichever mode is on.** Scales in solo practice,
   substitutions in chord practice, never both: they answer different questions - what to
   play over this bar, and what this bar should be - and showing both meant every visit
@@ -313,6 +318,15 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
   "this browser has no MIDI" message (the app has real devices and pushes their real
   status). Before adding a fifth, ask which host it is for - and if the answer is both,
   check that the app's answer is not merely the browser's answer failing quietly.
+- **The page and the engine are fetched at the same version, and must stay that way.**
+  `web/index.html` asks for `jazz-engine.js?v=<build stamp>`. Without it a browser holding
+  a cached engine from the last deploy pairs it with a fresh page, the page calls something
+  the old engine does not export, `ccall` throws, `call()` turns that into `{ok:false}` and
+  the feature is simply *absent* - an empty menu, with the engine chip still saying ready.
+  That shipped once. The worker matches and stores with `ignoreSearch` so the query does
+  not cost the offline copy, and `loadScaleStyles` says the engine is out of date rather
+  than showing nothing. When adding a call the engine did not have last release, remember
+  the failure mode is silence.
 - **The app's UI must never wait on the network.** The page is the interface, and a
   webview with no route out does not degrade gracefully: a render-blocking stylesheet
   that never arrives leaves the whole interface *invisible* - backgrounds paint, no text

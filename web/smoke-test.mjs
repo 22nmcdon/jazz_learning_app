@@ -242,6 +242,16 @@ try {
     () => document.querySelector("#soloTakeTally").innerText.includes("%"), null, { timeout: 10000 });
   check(`the take counts as it goes (${await page.locator("#soloTakeTally").innerText()})`, true);
 
+  // The chart carries what the take made of each bar, which is the thing a
+  // summary in the dock cannot do: say it where the player is looking.
+  await page.waitForFunction(
+    () => document.querySelectorAll("#systems .bar .bar-take:not([hidden])").length === 1,
+    null, { timeout: 10000 });
+  check("the bar being played over is marked on the chart", true);
+
+  const marked = await page.locator("#systems .bar").first().getAttribute("data-take");
+  check(`and the mark carries its numbers (${marked})`, /notes:.*chord.*scale.*outside/.test(marked));
+
   // Walking to another bar during a take must not end it. Bar two is not the
   // bar we are on, so this moves rather than opening it.
   await page.locator("#systems .bar").nth(1).click();
@@ -254,12 +264,18 @@ try {
   await page.locator("#armTake").click();
   await page.waitForSelector("#soloSummary:not([hidden])", { timeout: 10000 });
 
+  // Two bars played over, two bars marked - and the marks outlive the take,
+  // because that is when they are worth reading.
+  check("every bar played over keeps its mark",
+        (await page.locator("#systems .bar .bar-take:not([hidden])").count()) === 2);
+
   const takeSummary = (await page.locator("#soloSummaryHead").innerText()).trim();
   check(`the take is summarised (${takeSummary})`, takeSummary.includes("over 2 bars"));
-  check("and broken down by bar", (await page.locator("#soloBars li").count()) === 2);
 
   await page.locator("#modeChords").click();
   check("switching back restores chord practice", await page.locator("#feedback").isVisible());
+  check("and the chart stops carrying the take's marks",
+        (await page.locator("#systems .bar .bar-take:not([hidden])").count()) === 0);
 
   // The colophon names the build, which is how anyone looking at the site can
   // tell whether it is serving what was pushed. "development" is the right

@@ -145,8 +145,14 @@ button a pulsing dot, because a take counting on quietly is the one thing here t
 be annoying to find out about late. It reports the bar you are on and the take as a whole,
 and walking to another bar does not end it - the target moves and the notes keep
 accumulating, which is most of what soloing over a chart is. **Stop the take** freezes a
-summary: how the whole thing divided up, which bar pulled away from the rest, and a bar-by-bar
-line. A note outside the scale is *outside the scale*, never wrong.
+summary: how the whole thing divided up, and which bar pulled away from the rest. A note
+outside the scale is *outside the scale*, never wrong.
+
+Every bar you play over also carries its own verdict, **on the bar**: a slim three-part
+strip in the same colours the dock uses - chord tone, scale tone, outside - in proportion,
+with the numbers on the bar's tooltip. It fills in as you play and stays after you stop, so
+the bar that got away is one you can see at a glance down the chart rather than one you
+have to read about underneath it.
 
 **Scale style**, in the Practice menu, is the vocabulary you are working out of: the modes,
 melodic minor, harmonic minor, bebop, pentatonics and blues, whole tone and diminished, or

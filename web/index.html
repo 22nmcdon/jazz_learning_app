@@ -232,10 +232,6 @@ body.in-app .masthead { padding-block: 10px 6px; justify-content: flex-end; }
   max-width: 62ch;
   margin-bottom: 6px;
 }
-.solo-bars { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 10px 0 0; padding: 0; }
-.solo-bars li { font-size: 12.5px; color: var(--text-soft); }
-.solo-bars b { color: var(--charcoal); font-weight: 500; }
-
 /* The note just played, in the colour it read as. Momentary in solo mode -
    a line is played, not held, so nothing latches. */
 .key.sounded[data-colour="chordTone"] { background: var(--sage); }
@@ -534,6 +530,37 @@ body.in-app .masthead { padding-block: 10px 6px; justify-content: flex-end; }
   padding-inline: 0.02em;
 }
 .chord .ext { font-size: 0.74em; vertical-align: 0.42em; }
+
+/* What the take made of this bar, drawn on the bar itself.
+
+   Three spans in the three colours the dock uses, widths in proportion - so a
+   glance down the chart says which bar went where, which is the thing a take
+   summary in a panel cannot do. */
+.bar-take {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 5px;
+  display: flex;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--line);
+}
+.bar-take i { display: block; height: 100%; }
+.bar-take .ct { background: var(--sage); }
+.bar-take .st { background: var(--gold); }
+.bar-take .out { background: var(--rust); }
+
+.bar-count {
+  position: absolute;
+  right: 8px;
+  bottom: 12px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-soft);
+}
 
 .bar.shared .chord { font-size: clamp(14px, 1.7vw, 19px); padding-left: 8px; }
 .bar.shared .chord:last-of-type { padding-left: 4px; }
@@ -1204,7 +1231,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <div class="solo-summary" id="soloSummary" hidden>
         <span class="solo-summary-head" id="soloSummaryHead"></span>
         <ul class="solo-observations" id="soloObservations"></ul>
-        <ul class="solo-bars" id="soloBars"></ul>
       </div>
     </div>
 
@@ -1333,7 +1359,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <li>
         <b>Solo</b>, at the top, asks a different question of the same notes: not whether a
         voicing fits the bar, but where each note you play sits against it. Start a take and
-        it keeps count, across as many bars as you walk through, until you stop it.
+        it keeps count, across as many bars as you walk through, until you stop it - and each
+        bar of the chart carries a strip showing how it went, so the bar that got away is
+        one you can see rather than one you have to read about.
       </li>
     </ul>
 
@@ -1419,6 +1447,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   /** The query parameter that carries a tune in the page's own address. */
   var CHART_PARAM = "chart";
+
+  /** What the Pages workflow stamped into this copy, or "" for one that was
+      never deployed - run from a checkout, or hosted by the app. */
+  function buildStamp() {
+    var meta = document.querySelector('meta[name="jazz-build"]');
+    var stamp = meta ? meta.content : "";
+
+    return stamp.indexOf("__") === 0 ? "" : stamp;
+  }
   var DEFAULT_PROGRESSION = document.getElementById("progression").value;
 
   /** The chart as it arrived, before any reharmonisation or editing. Importing
@@ -1543,7 +1580,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "colophonEngine", "colophonFraming", "colophonBuild",
    "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloTallies",
    "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
-   "soloBars", "armTake", "armLabel", "practising",
+   "armTake", "armLabel", "practising",
    "scaleStyle", "scaleStyleNote", "chordTabs"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
@@ -1698,6 +1735,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           bar.dataset.index = String(index);
           bar.setAttribute("aria-label", "Bar " + (index + 1) + ", " + measure.chords.map(function (c) { return c.symbol; }).join(" "));
           placeChords(bar, measure);
+
+          // Where a take writes what it made of this bar. Always present, so
+          // painting the marks never has to rebuild the chart.
+          var mark = document.createElement("span");
+          mark.className = "bar-take";
+          mark.hidden = true;
+          bar.appendChild(mark);
+
           bar.addEventListener("click", makeBarHandler(index));
         } else {
           bar.disabled = true;   // pads the last system out to a full four bars
@@ -1709,6 +1754,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
       el.systems.appendChild(system);
     }
+
+    paintTakeMarks();
   }
 
   /** Chords sit where they fall in the bar: beat 1 at the barline, beat 3 halfway. */
@@ -2278,7 +2325,62 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
      the answers; it counts nothing, because counting is theory and theory does
      not live in the page. */
 
-  var solo = { armed: false, bar: null, take: null };
+  /* `bars` is what each bar of the chart has done in this take, by index.
+
+     Kept here rather than asked for, because every note already comes back
+     with its own bar's numbers: the engine is answering the question once and
+     the page is remembering the answers. Disarming replaces the lot with the
+     engine's own breakdown, so a long take cannot drift from it. */
+  var solo = { armed: false, bar: null, take: null, bars: {} };
+
+  /** Draws what the take made of each bar, on the bars.
+
+      A summary in the dock says which bar went wrong; the chart says it while
+      you are still looking at the chart, which is where a player's eyes are.
+      Nothing is drawn outside a take, and nothing for a bar not played over. */
+  function paintTakeMarks() {
+    Array.prototype.forEach.call(el.systems.querySelectorAll(".bar"), function (bar) {
+      var mark = bar.querySelector(".bar-take");
+
+      if (!mark) return;
+
+      var stats = state.mode === "solo" ? solo.bars[bar.dataset.index] : null;
+
+      if (!stats || !stats.total) {
+        mark.hidden = true;
+        mark.textContent = "";
+        bar.removeAttribute("data-take");
+        return;
+      }
+
+      mark.hidden = false;
+      mark.textContent = "";
+
+      [["ct", stats.percentChordTones], ["st", stats.percentScaleTones],
+       ["out", stats.percentOutside]].forEach(function (part) {
+        if (!part[1]) return;
+
+        var span = document.createElement("i");
+        span.className = part[0];
+        span.style.width = part[1] + "%";
+        mark.appendChild(span);
+      });
+
+      // The numbers themselves, for anyone who wants them and for a screen
+      // reader, which cannot see three coloured strips.
+      bar.dataset.take = stats.total + " notes: " + stats.percentChordTones + "% chord, "
+                       + stats.percentScaleTones + "% scale, " + stats.percentOutside + "% outside";
+      mark.title = bar.dataset.take;
+    });
+  }
+
+  /** Keeps one bar's numbers and redraws the chart's marks. */
+  function rememberBarStats(stats) {
+    if (!stats || stats.index === undefined) return;
+
+    solo.bars[stats.index] = stats;
+    paintTakeMarks();
+  }
 
   /** The scale the current bar is read against: the one the player picked out
       of the Scales panel, when that panel was showing this chord. Empty lets
@@ -2309,7 +2411,20 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   async function loadScaleStyles() {
     var result = await call("jazzScaleStyles", [], []);
 
-    if (result === null || !result.ok) return;
+    // An engine that cannot answer this is older than this page - which should
+    // now be impossible, since the two are fetched at the same version, but an
+    // empty menu with no explanation is how that looked last time and is not
+    // worth risking twice.
+    if (result === null || !result.ok) {
+      el.scaleStyle.disabled = true;
+      el.scaleStyleNote.textContent = "The engine this page loaded is older than the page. "
+                                    + "Reload to pick the styles up.";
+      el.scaleStyleNote.className = "menu-note warn";
+      return;
+    }
+
+    el.scaleStyle.disabled = false;
+    el.scaleStyleNote.className = "menu-note";
 
     var remembered = recallStyleChoice();
     var known = result.styles.some(function (style) { return style.key === remembered; });
@@ -2397,8 +2512,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     if (soloing) {
       soloMoveToBar();
+      paintTakeMarks();
     } else {
-      // Back to chords: whatever is under the hands is read as a voicing again.
+      // Back to chords: whatever is under the hands is read as a voicing again,
+      // and the chart stops carrying a solo take's marks.
+      paintTakeMarks();
       stopAllNotes();
       state.heldNotes = [];
       paintKeyboard();
@@ -2437,6 +2555,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     solo.bar = result.bar;
     solo.take = result.take;
+
+    if (solo.armed) rememberBarStats(result.bar);
+
     drawTallies();
   }
 
@@ -2447,6 +2568,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     solo.armed = true;
     solo.take = result;
     solo.bar = null;
+    solo.bars = {};
+    paintTakeMarks();
 
     el.armTake.setAttribute("aria-pressed", "true");
     el.armLabel.textContent = "Stop the take";
@@ -2470,6 +2593,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     if (result === null || !result.ok) return;
 
+    // The engine's own breakdown replaces what the page has been keeping, so a
+    // long take cannot end showing numbers that drifted from the real ones.
+    solo.bars = {};
+    (result.bars || []).forEach(function (bar) { solo.bars[bar.index] = bar; });
+    paintTakeMarks();
+
     drawSummary(result);
   }
 
@@ -2486,6 +2615,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var note = result.note;
     solo.bar = result.bar;
     solo.take = result.take;
+
+    if (solo.armed) rememberBarStats(result.bar);
 
     el.soloNote.textContent = "";
     el.soloNote.dataset.colour = note.colour;
@@ -2561,17 +2692,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       el.soloObservations.appendChild(item);
     });
 
-    el.soloBars.textContent = "";
-    (result.bars || []).forEach(function (bar) {
-      var item = document.createElement("li");
-      var label = document.createElement("b");
-      label.textContent = "Bar " + (bar.index + 1) + " " + bar.chord;
-      item.appendChild(label);
-      item.appendChild(document.createTextNode(
-        " " + bar.percentChordTones + "/" + bar.percentScaleTones + "/" + bar.percentOutside));
-      el.soloBars.appendChild(item);
-    });
-
+    // No bar-by-bar list here any more: the chart carries it, on the bars
+    // themselves, which is both where a player is looking and where "which bar
+    // went wrong" is a glance rather than a read. The exact numbers are on each
+    // bar's own title, for anyone who wants them.
     el.soloTallies.hidden = true;
   }
 
@@ -3576,9 +3700,18 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // Loaded here rather than as a tag in the document, so the app never asks
     // for it: in the app the engine is native, and a webview that requests a
     // sub-resource while the page itself is still arriving can stall.
+    /* Tagged with this page's build, so the two can never be a deploy apart.
+
+       They were once: a page asking for a function the engine beside it did not
+       have yet got a thrown call, an answer of ok:false, and a menu that was
+       simply empty - with the engine chip still saying ready. The page and the
+       engine ship together and change together, so they are fetched together
+       or not at all. Nothing to bust on a copy that was never deployed. */
+    var stamp = buildStamp();
+
     await new Promise(function (resolve, reject) {
       var script = document.createElement("script");
-      script.src = "jazz-engine.js";
+      script.src = "jazz-engine.js" + (stamp ? "?v=" + encodeURIComponent(stamp) : "");
       script.onload = resolve;
       script.onerror = function () { reject(new Error("could not load jazz-engine.js")); };
       document.head.appendChild(script);
