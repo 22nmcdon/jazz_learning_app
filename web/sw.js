@@ -19,9 +19,46 @@
 
 const CACHE = "jazz-learning-app";
 
+// What a visit needs and nothing else: the page, and the engine behind it.
+// Paths are relative, so they resolve against wherever this is served from -
+// a project site lives under a path, not at a domain root.
+const ESSENTIALS = ["./", "index.html", "jazz-engine.js"];
+
+/* Fetched on install rather than left to the fetch handler below, and that is
+   the whole difference between working offline and only seeming to.
+
+   A worker is registered once the page has loaded, which is already after the
+   page and the engine have been fetched - so those two requests never pass
+   through it and never reach the cache. A first visit would leave the cache
+   empty, and a visitor who went offline afterwards would get nothing. Worse,
+   it looks like it works: the browser's own HTTP cache will answer a reload
+   through the worker's fetch often enough to pass a test.
+
+   So the first thing this worker does is go and get them itself. */
+self.addEventListener("install", (event) => event.waitUntil((async () => {
+  const cache = await caches.open(CACHE);
+
+  // One at a time, and failures are survivable: a worker that refuses to
+  // install because one file was slow is worse than one that caches two of
+  // three now and the third on the next visit.
+  await Promise.all(ESSENTIALS.map(async (path) => {
+    try {
+      // The browser's own cache is allowed to answer these, and usually does:
+      // the page has this second ago fetched every one of them, and forcing a
+      // second trip to the network would download the 400-odd KB engine twice
+      // on a first visit to put a copy of it in a different cache. A slightly
+      // old fallback is no loss when the network always wins while it is there.
+      const response = await fetch(path);
+
+      if (response.ok) await cache.put(path, response);
+    } catch (unreachable) { /* the fetch handler will get it later */ }
+  }));
+
+  await self.skipWaiting();
+})()));
+
 // Claim the page on the first load rather than the second, so a visitor who
 // goes offline immediately after arriving is still covered.
-self.addEventListener("install", (event) => event.waitUntil(self.skipWaiting()));
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
 self.addEventListener("fetch", (event) => {

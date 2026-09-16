@@ -166,6 +166,71 @@ try {
 
   await page.locator("#ioClose").click();
 
+  // --- solo practice ------------------------------------------------------
+  // The other half of the app: the same notes, read one at a time against the
+  // bar they land in rather than together as a chord.
+  const soloKey = (note) => page.locator(`#keyboard .key[data-note="${note}"]`);
+  const readout = () => page.locator("#soloNote").innerText();
+
+  await page.locator("#modeSolo").click();
+
+  // Start from bar one rather than wherever the last section left off. Clicking
+  // a bar you are already on opens it, so which bar is selected decides whether
+  // these clicks move or open - the test has to know, not hope.
+  await page.locator("#systems .bar").first().click();
+  await page.waitForFunction(
+    () => document.querySelector("#soloBarTally, #soloNote") !== null, null, { timeout: 10000 });
+
+  check("solo mode shows its own panel", await page.locator("#soloPanel").isVisible());
+  check("and puts the chord feedback away", await page.locator("#feedback").isHidden());
+  check("the voicing shape has no say over a single note",
+        await page.locator("[data-mode='chords']").first().isHidden());
+
+  // Bar one is Dm7: D is its root, and Db is in neither the chord nor D Dorian.
+  await soloKey(62).click();
+  await page.waitForFunction(
+    () => document.querySelector("#soloNote").dataset.colour !== undefined, null, { timeout: 10000 });
+  check(`a note is read back (${(await readout()).replace(/\s+/g, " ")})`,
+        (await page.locator("#soloNote").getAttribute("data-colour")) === "chordTone");
+
+  await soloKey(61).click();
+  await page.waitForFunction(
+    () => document.querySelector("#soloNote").dataset.colour === "outside", null, { timeout: 10000 });
+  check("a note outside the scale is read as outside", true);
+
+  // Nothing is counted until a take is armed.
+  check("nothing is counted before arming", await page.locator("#soloTallies").isHidden());
+
+  await page.locator("#armTake").click();
+  await page.waitForSelector("#armTake[aria-pressed='true']", { timeout: 10000 });
+  check("arming is visible on the dock itself",
+        await page.locator(".dock.armed").count() === 1);
+
+  await soloKey(62).click();
+  await soloKey(65).click();
+  await page.waitForFunction(
+    () => document.querySelector("#soloTakeTally").innerText.includes("%"), null, { timeout: 10000 });
+  check(`the take counts as it goes (${await page.locator("#soloTakeTally").innerText()})`, true);
+
+  // Walking to another bar during a take must not end it. Bar two is not the
+  // bar we are on, so this moves rather than opening it.
+  await page.locator("#systems .bar").nth(1).click();
+  await soloKey(67).click();
+  await page.waitForFunction(
+    () => document.querySelector("#soloBarTally").innerText.includes("G7"), null, { timeout: 10000 });
+  check("moving bar re-targets without ending the take",
+        await page.locator("#armTake").getAttribute("aria-pressed") === "true");
+
+  await page.locator("#armTake").click();
+  await page.waitForSelector("#soloSummary:not([hidden])", { timeout: 10000 });
+
+  const takeSummary = (await page.locator("#soloSummaryHead").innerText()).trim();
+  check(`the take is summarised (${takeSummary})`, takeSummary.includes("over 2 bars"));
+  check("and broken down by bar", (await page.locator("#soloBars li").count()) === 2);
+
+  await page.locator("#modeChords").click();
+  check("switching back restores chord practice", await page.locator("#feedback").isVisible());
+
   // Offline: the worker has to be registered and awake, or the page is no
   // more use on a train than it was before.
   const worker = await page.evaluate(async () => {
@@ -174,17 +239,74 @@ try {
   });
   check(`the offline worker is running (${worker})`, worker === "activated");
 
-  // And it has to actually serve the page with the network gone. A worker
-  // that registers but caches nothing is the failure this catches.
+  // And it has to actually serve the page with the network gone. A worker that
+  // registers but caches nothing is the failure this catches - and it is a real
+  // one: a worker only starts intercepting after the page has loaded, so unless
+  // it goes and fetches the essentials itself on install, a first visit leaves
+  // the cache empty and offline only appears to work because the browser's own
+  // HTTP cache answers the reload.
   const offline = await browser.newContext();
   const revisit = await offline.newPage();
   await revisit.goto(`${origin}/index.html`, { waitUntil: "load" });
   await revisit.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+
+  // Polled from here rather than with waitForFunction: that takes the predicate's
+  // return value as-is, and an async predicate returns a promise, which is an
+  // object, which is truthy - so it would pass on the first tick every time.
+  const cached = async () => revisit.evaluate(async () => {
+    const names = await caches.keys();
+
+    if (names.length === 0) return [];
+
+    const cache = await caches.open(names[0]);
+    return (await cache.keys()).map((request) => new URL(request.url).pathname);
+  });
+
+  let inCache = [];
+
+  for (let tick = 0; tick < 80 && inCache.length < 3; tick++) {
+    inCache = await cached();
+    if (inCache.length < 3) await revisit.waitForTimeout(250);
+  }
+
+  check(`the worker stocks its cache on the first visit (${inCache.length} files)`,
+        inCache.length >= 3);
+
   await offline.setOffline(true);
   await revisit.reload({ waitUntil: "load" });
   await revisit.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
   check("the page still starts with the network gone", true);
   await offline.close();
+
+  // A phone-sized window, in both modes. Everything that has ever overlapped
+  // here looked perfect on a desktop one, and the masthead ran off the right
+  // edge the moment a fourth control was added to it.
+  const narrow = await browser.newPage({ viewport: { width: 390, height: 780 } });
+  await narrow.goto(`${origin}/index.html`, { waitUntil: "load" });
+  await narrow.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000, state: "attached" });
+  await narrow.locator("#helpClose").click();
+
+  for (const mode of ["modeChords", "modeSolo"]) {
+    await narrow.locator(`#${mode}`).click();
+
+    const spill = await narrow.evaluate(() => {
+      const offscreen = [];
+
+      for (const element of document.querySelectorAll(".masthead-controls > *, .dock-foot > *")) {
+        const box = element.getBoundingClientRect();
+
+        if (box.width > 0 && (box.right > window.innerWidth + 0.5 || box.left < -0.5))
+          offscreen.push(element.id || element.className);
+      }
+
+      return { page: document.documentElement.scrollWidth - window.innerWidth, offscreen };
+    });
+
+    check(`nothing runs off the side at 390px (${mode.replace("mode", "")})`,
+          spill.page <= 0 && spill.offscreen.length === 0);
+  }
+
+  await narrow.close();
 } catch (error) {
   check(`no exception (${error.message.split("\n")[0]})`, false);
 } finally {

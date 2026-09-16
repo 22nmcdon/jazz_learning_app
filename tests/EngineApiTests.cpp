@@ -132,3 +132,117 @@ TEST ("asking for a shape returns voicings in it")
     CHECK (contains (json, "\"ok\":true"));
     CHECK (contains (json, "\"notes\":"));
 }
+
+//==============================================================================
+// The solo calls are the one stateful corner of the API: there is one take in
+// the process, so each of these arms its own rather than leaning on the last.
+
+TEST ("arming a take clears whatever the last one left")
+{
+    soloSetBar (0, "Dm7", "");
+    soloStartTake();
+    soloPlayNote (62);
+    soloPlayNote (65);
+
+    const auto armed = soloStartTake();
+
+    CHECK (contains (armed, "\"taking\":true"));
+    CHECK (contains (armed, "\"total\":0"));
+}
+
+TEST ("a played note comes back with its colour, its degree and the running count")
+{
+    soloStartTake();
+    soloSetBar (0, "Dm7", "");
+
+    const auto json = soloPlayNote (62);   // D - the root
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"colour\":\"chordTone\""));
+    CHECK (contains (json, "\"degree\":\"R\""));
+    CHECK (contains (json, "\"name\":\"D4\""));
+    CHECK (contains (json, "\"chord\":\"Dm7\""));
+    CHECK (contains (json, "\"chordTones\":1"));
+}
+
+TEST ("a note outside the scale says so on the wire, and still names its degree")
+{
+    soloStartTake();
+    soloSetBar (0, "Cmaj7", "");
+
+    const auto json = soloPlayNote (61);   // Db over Cmaj7
+
+    CHECK (contains (json, "\"colour\":\"outside\""));
+    CHECK (contains (json, "\"degree\":\"b9\""));
+}
+
+TEST ("the bar a player moves to answers with what they have done on it")
+{
+    soloStartTake();
+
+    soloSetBar (0, "Dm7", "");
+    soloPlayNote (62);
+    soloPlayNote (65);
+
+    soloSetBar (1, "G7", "");
+    soloPlayNote (67);
+
+    // Back to the first bar: its own two notes, not the take's three.
+    const auto json = soloSetBar (0, "Dm7", "");
+
+    CHECK (contains (json, "\"bar\":{\"index\":0"));
+    CHECK (contains (json, "\"chordTones\":2"));
+    CHECK (contains (json, "\"take\":{\"total\":3"));
+}
+
+TEST ("the scale a bar is read against comes across with it")
+{
+    soloStartTake();
+
+    // Bb over Dm7: outside D Dorian, inside D Aeolian.
+    soloSetBar (0, "Dm7", "");
+    CHECK (contains (soloPlayNote (70), "\"colour\":\"outside\""));
+
+    soloSetBar (0, "Dm7", "D Aeolian");
+    CHECK (contains (soloPlayNote (70), "\"colour\":\"scaleTone\""));
+}
+
+TEST ("a bar that is not a chord is an error rather than a silent no-op")
+{
+    const auto json = soloSetBar (0, "not a chord", "");
+
+    CHECK (contains (json, "\"ok\":false"));
+    CHECK (contains (json, "\"error\":"));
+}
+
+TEST ("ending a take hands back the whole thing, bar by bar")
+{
+    soloStartTake();
+
+    soloSetBar (0, "Dm7", "");
+    soloPlayNote (62);
+    soloPlayNote (65);
+
+    soloSetBar (1, "G7", "");
+    soloPlayNote (67);
+
+    const auto json = soloEndTake();
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"taking\":false"));
+    CHECK (contains (json, "3 notes over 2 bars"));
+    CHECK (contains (json, "\"bars\":[{\"index\":0"));
+    CHECK (contains (json, "\"index\":1"));
+    CHECK (contains (json, "\"observations\":"));
+}
+
+TEST ("a take with nothing in it says so rather than reporting zero per cent")
+{
+    soloStartTake();
+
+    const auto json = soloEndTake();
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "Nothing played"));
+    CHECK (contains (json, "\"observations\":[]"));
+}

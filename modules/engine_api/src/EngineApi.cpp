@@ -12,6 +12,7 @@
 #include "jazz/core/Chart.h"
 #include "jazz/core/ChartFormats.h"
 #include "jazz/core/ChordIdentifier.h"
+#include "jazz/core/LineAnalyzer.h"
 #include "jazz/core/Reharmonizer.h"
 #include "jazz/core/ScaleSuggester.h"
 #include "jazz/core/VoicingAnalyzer.h"
@@ -157,6 +158,63 @@ namespace
         if (name == "solo")       return VoicingType::solo;
 
         return std::nullopt;  // "any": read the chart, do not drill a shape
+    }
+
+    std::string noteColourKey (NoteColour colour)
+    {
+        switch (colour)
+        {
+            case NoteColour::chordTone: return "chordTone";
+            case NoteColour::scaleTone: return "scaleTone";
+            case NoteColour::outside:   break;
+        }
+
+        return "outside";
+    }
+
+    /** Counts and percentages together: the page shows both, and working the
+        percentages out twice on two sides of a bridge is how they disagree. */
+    std::string lineStatsJson (const LineStats& stats)
+    {
+        return "\"total\":" + std::to_string (stats.total())
+             + ",\"chordTones\":" + std::to_string (stats.chordTones)
+             + ",\"scaleTones\":" + std::to_string (stats.scaleTones)
+             + ",\"outside\":" + std::to_string (stats.outside)
+             + ",\"percentChordTones\":" + std::to_string (stats.percentChordTones())
+             + ",\"percentScaleTones\":" + std::to_string (stats.percentScaleTones())
+             + ",\"percentOutside\":" + std::to_string (stats.percentOutside());
+    }
+
+    std::string lineBarJson (int measureIndex, const std::string& symbol, const LineStats& stats)
+    {
+        return "{\"index\":" + std::to_string (measureIndex)
+             + ",\"chord\":" + quoted (symbol)
+             + "," + lineStatsJson (stats) + "}";
+    }
+
+    std::string lineNoteJson (const LineNote& note)
+    {
+        return "{\"midi\":" + std::to_string (note.midiNote)
+             + ",\"name\":" + quoted (midiNoteName (note.midiNote))
+             + ",\"colour\":" + quoted (noteColourKey (note.colour))
+             + ",\"colourName\":" + quoted (noteColourName (note.colour))
+             + ",\"degree\":" + quoted (note.degree)
+             + ",\"scale\":" + quoted (note.scaleName)
+             + ",\"avoid\":" + (note.avoidNote ? "true" : "false")
+             + ",\"chord\":" + quoted (note.chordSymbol)
+             + ",\"bar\":" + std::to_string (note.measureIndex) + "}";
+    }
+
+    /** The one take this process has.
+
+        A take is a stream with a beginning and an end, so something has to
+        remember it between calls. There is one player and one page, so this is
+        one analyser - not a handle table pretending there might be more.
+    */
+    LineAnalyzer& soloTake()
+    {
+        static LineAnalyzer analyzer;
+        return analyzer;
     }
 
     std::string severityName (FindingSeverity severity)
@@ -568,6 +626,65 @@ std::string idiomaticVoicings (const char* symbol, int anchorNote,
                               })
                             + "}";
                    })
+                 + "}");
+}
+
+//==============================================================================
+std::string soloStartTake()
+{
+    soloTake().startTake();
+
+    return hold ("{\"ok\":true,\"taking\":true," + lineStatsJson (soloTake().stats()) + "}");
+}
+
+std::string soloSetBar (int measureIndex, const char* symbol, const char* chosenScale)
+{
+    const auto chord = ChordSymbol::parse (symbol != nullptr ? symbol : "");
+
+    if (! chord.has_value())
+        return hold (jsonError (std::string ("Not a chord symbol: ") + (symbol != nullptr ? symbol : "")));
+
+    LineAnalyzer::Options options;
+    options.chosenScale = chosenScale != nullptr ? chosenScale : "";
+
+    auto& analyzer = soloTake();
+    analyzer.setOptions (options);
+    analyzer.setTarget (measureIndex, *chord);
+
+    // Clicking a bar is how the player asks what they have done on it, so the
+    // answer comes back with the move rather than needing a call of its own.
+    return hold ("{\"ok\":true,\"taking\":" + std::string (analyzer.isTaking() ? "true" : "false")
+                 + ",\"bar\":" + lineBarJson (measureIndex, chord->toString(),
+                                              analyzer.statsForBar (measureIndex))
+                 + ",\"take\":{" + lineStatsJson (analyzer.stats()) + "}}");
+}
+
+std::string soloPlayNote (int midiNote)
+{
+    auto& analyzer = soloTake();
+    const auto note = analyzer.play (midiNote);
+
+    return hold ("{\"ok\":true,\"taking\":" + std::string (analyzer.isTaking() ? "true" : "false")
+                 + ",\"note\":" + lineNoteJson (note)
+                 + ",\"bar\":" + lineBarJson (note.measureIndex, note.chordSymbol,
+                                              analyzer.statsForBar (note.measureIndex))
+                 + ",\"take\":{" + lineStatsJson (analyzer.stats()) + "}}");
+}
+
+std::string soloEndTake()
+{
+    auto& analyzer = soloTake();
+    analyzer.endTake();
+
+    const auto take = analyzer.summary();
+
+    return hold ("{\"ok\":true,\"taking\":false"
+                 + std::string (",\"summary\":") + quoted (take.summary)
+                 + ",\"observations\":" + jsonArray (take.observations,
+                                                     [] (const std::string& line) { return quoted (line); })
+                 + ",\"take\":{" + lineStatsJson (take.overall) + "}"
+                 + ",\"bars\":" + jsonArray (take.bars, [] (const LineBar& bar)
+                   { return lineBarJson (bar.measureIndex, bar.chordSymbol, bar.stats); })
                  + "}");
 }
 

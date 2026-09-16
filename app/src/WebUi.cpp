@@ -45,7 +45,7 @@ namespace
         return 0;
     }
 
-    /** Answers one of the engine's eleven questions.
+    /** Answers one of the engine's questions.
 
         Named rather than dispatched by table so an unknown name is an answer
         the page can show, not a silent empty string.
@@ -79,6 +79,15 @@ namespace
         if (name == "jazzIdiomaticVoicings")
             return api::idiomaticVoicings (text (0).c_str(), number (1),
                                            text (2).c_str(), number (3));
+
+        // Solo practice. The take these drive lives in jazz::api, so the app and
+        // the browser behave the same way without this shell remembering a thing.
+        if (name == "jazzSoloStartTake")     return api::soloStartTake();
+        if (name == "jazzSoloEndTake")       return api::soloEndTake();
+        if (name == "jazzSoloPlayNote")      return api::soloPlayNote (number (0));
+
+        if (name == "jazzSoloSetBar")
+            return api::soloSetBar (number (0), text (1).c_str(), text (2).c_str());
 
         return "{\"ok\":false,\"error\":\"No engine call named "
                + name.toStdString() + "\"}";

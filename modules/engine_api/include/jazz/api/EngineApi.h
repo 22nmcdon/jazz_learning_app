@@ -28,4 +28,31 @@ std::string identifyChord (const char* midiNotesCsv);
 std::string recogniseSubstitution (const char* progressionText, int measureIndex, const char* midiNotesCsv, int includeAdvanced);
 std::string idiomaticVoicings (const char* symbol, int anchorNote, const char* practiseStyle, int rich);
 
+//==============================================================================
+/** Solo practice: reading a line rather than a chord.
+
+    These four are the one stateful corner of this API, and deliberately so. A
+    take is a stream with a beginning and an end, and the alternative - having
+    the shell send every note played so far on each new note - puts the take in
+    the UI, which is where theory is not allowed to live. So the engine holds
+    it: one `LineAnalyzer` for the one player this process has.
+
+    Between them they are the whole of the mode:
+
+      soloStartTake   arm. Anything from a previous take is dropped.
+      soloSetBar      the bar being soloed over, and the scale to read against.
+                      Called on arming and again on every move. Moving during a
+                      take does not end it.
+      soloPlayNote    one note. Read back whether a take is running or not;
+                      counted only when one is.
+      soloEndTake     disarm, and hand back the take to read.
+
+    A bar's own numbers come back from `soloSetBar`, because clicking a bar is
+    how you ask for them.
+*/
+std::string soloStartTake();
+std::string soloSetBar (int measureIndex, const char* symbol, const char* chosenScale);
+std::string soloPlayNote (int midiNote);
+std::string soloEndTake();
+
 } // namespace jazz::api

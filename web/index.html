@@ -130,12 +130,113 @@ button { font-family: inherit; cursor: pointer; }
 .status[data-state="failed"] { color: var(--rust); border-color: var(--rust); }
 
 /* --- practice menu -------------------------------------------------------- */
-.masthead-controls { display: flex; align-items: center; gap: 14px; }
+/* Four controls now, and at a phone width they do not fit on one line - the
+   Practice button used to run off the right edge and take the page's width
+   with it. They wrap instead, to the right, so the row grows downwards. */
+.masthead-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px 14px;
+  min-width: 0;
+}
 
 /* Hosted by the desktop app: the window's own title bar already names this, so
    the masthead stands down and gives the chart the height instead. */
 body.in-app .masthead > div:first-child { display: none; }
 body.in-app .masthead { padding-block: 10px 6px; justify-content: flex-end; }
+/* --- practice mode ------------------------------------------------------- */
+.mode-switch {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  overflow: hidden;
+}
+.mode-option {
+  background: none;
+  border: none;
+  padding: 7px 15px;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-weight: 500;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.mode-option:hover { color: var(--blush-deep); }
+.mode-option[aria-checked="true"] { background: var(--charcoal); color: var(--cream); }
+
+/* Armed is a state you must never be in doubt about: a pedal can leave notes
+   ringing long after the hands stopped, and a take counting on quietly is the
+   one thing here that would be genuinely annoying to discover late. */
+.arm-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  padding: 6px 15px;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 500;
+  color: var(--charcoal);
+  cursor: pointer;
+}
+.arm-btn .arm-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--text-soft);
+}
+.arm-btn[aria-pressed="true"] { border-color: var(--rust); color: var(--rust); }
+.arm-btn[aria-pressed="true"] .arm-dot { background: var(--rust); border-color: var(--rust); }
+@media (prefers-reduced-motion: no-preference) {
+  .arm-btn[aria-pressed="true"] .arm-dot { animation: armed 1.6s ease-in-out infinite; }
+}
+@keyframes armed { 50% { opacity: 0.25; } }
+
+/* The whole dock takes the armed colour too, so the state is readable from
+   across a room rather than only from the one button that set it. */
+.dock.armed { box-shadow: inset 0 3px 0 var(--rust); }
+
+.solo { margin-bottom: 12px; }
+.solo-live { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.solo-note { font-size: 16px; color: var(--charcoal); }
+.solo-note b { font-family: var(--hand); font-size: 20px; }
+.solo-note[data-colour="chordTone"] b { color: var(--sage); }
+.solo-note[data-colour="scaleTone"] b { color: var(--gold); }
+.solo-note[data-colour="outside"] b { color: var(--rust); }
+.solo-against { font-size: 13px; color: var(--text-soft); }
+
+.solo-tallies { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 8px; }
+.tally { font-size: 13px; color: var(--text-soft); }
+.tally b { color: var(--charcoal); font-weight: 500; }
+
+.solo-summary { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+.solo-summary-head { font-family: var(--serif); font-size: 16px; color: var(--charcoal); }
+.solo-observations { list-style: none; margin: 10px 0 0; padding: 0; }
+.solo-observations li {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-soft);
+  max-width: 62ch;
+  margin-bottom: 6px;
+}
+.solo-bars { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 10px 0 0; padding: 0; }
+.solo-bars li { font-size: 12.5px; color: var(--text-soft); }
+.solo-bars b { color: var(--charcoal); font-weight: 500; }
+
+/* The note just played, in the colour it read as. Momentary in solo mode -
+   a line is played, not held, so nothing latches. */
+.key.sounded[data-colour="chordTone"] { background: var(--sage); }
+.key.sounded[data-colour="scaleTone"] { background: var(--gold); }
+.key.sounded[data-colour="outside"] { background: var(--rust); }
+
 .help-button {
   width: 30px;
   height: 30px;
@@ -921,6 +1022,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       </p>
     </div>
     <div class="masthead-controls">
+      <!-- A toggle, not a link: nothing here is torn down and rebuilt when it
+           flips. The chart, the keyboard, the MIDI connection and the audio
+           device all stay exactly as they are; what changes is what a click on
+           a bar does and what the dock says back. -->
+      <div class="mode-switch" role="radiogroup" aria-label="What to practise">
+        <button class="mode-option" type="button" id="modeChords" role="radio" aria-checked="true">Chords</button>
+        <button class="mode-option" type="button" id="modeSolo" role="radio" aria-checked="false">Solo</button>
+      </div>
+
       <div class="status" id="engineStatus" data-state="loading">starting engine</div>
 
       <button class="help-button" type="button" id="helpButton"
@@ -939,7 +1049,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <p class="menu-note">Open a chart from iReal Pro or a PDF, or take this one away.</p>
           </div>
 
-          <div class="menu-group" role="radiogroup" aria-label="Voicing style">
+          <div class="menu-group" role="radiogroup" aria-label="Voicing style" data-mode="chords">
             <span class="menu-title">Voicing style</span>
             <label class="menu-option"><input type="radio" name="voicingStyle" value="any" checked> Any shape</label>
             <label class="menu-option"><input type="radio" name="voicingStyle" value="root"> Root position</label>
@@ -950,7 +1060,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <p class="menu-note">Everything you play is checked against this shape, on every bar.</p>
           </div>
 
-          <div class="menu-group" role="radiogroup" aria-label="How much colour">
+          <div class="menu-group" role="radiogroup" aria-label="How much colour" data-mode="chords">
             <span class="menu-title">Show me</span>
             <label class="menu-option"><input type="radio" name="voicingColour" value="plain" checked> The base shape</label>
             <label class="menu-option"><input type="radio" name="voicingColour" value="rich"> With the tensions</label>
@@ -1042,10 +1152,34 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         <button class="link-btn" type="button" id="useSpotted">Write it into the bar</button>
       </div>
     </div>
+    <!-- Solo practice reads a line rather than a chord, so it says different
+         things: what the last note was, how the bar is going, and - once the
+         take is stopped - what the whole thing came to. -->
+    <div class="solo" id="soloPanel" hidden>
+      <div class="solo-live">
+        <span class="solo-note" id="soloNote">Play a note over the bar you are on.</span>
+        <span class="solo-against" id="soloAgainst"></span>
+      </div>
+
+      <div class="solo-tallies" id="soloTallies" hidden>
+        <span class="tally" id="soloBarTally"></span>
+        <span class="tally" id="soloTakeTally"></span>
+      </div>
+
+      <div class="solo-summary" id="soloSummary" hidden>
+        <span class="solo-summary-head" id="soloSummaryHead"></span>
+        <ul class="solo-observations" id="soloObservations"></ul>
+        <ul class="solo-bars" id="soloBars"></ul>
+      </div>
+    </div>
+
     <div class="meter" id="meter" hidden><span id="meterFill" style="width:0%"></span></div>
     <div class="keyboard" id="keyboard"></div>
     <div class="dock-foot">
-      <span class="practising">Practising <b id="styleLabel">any shape</b></span>
+      <span class="practising" id="practising">Practising <b id="styleLabel">any shape</b></span>
+      <button class="arm-btn" type="button" id="armTake" hidden aria-pressed="false">
+        <span class="arm-dot" aria-hidden="true"></span><span id="armLabel">Start a take</span>
+      </button>
       <button class="play-btn" type="button" id="playChord" disabled>Play chord</button>
       <button class="link-btn" type="button" id="nameChord" disabled>Name it</button>
       <button class="link-btn" type="button" id="showVoicing">Show me one</button>
@@ -1064,7 +1198,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 225 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 263 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span><a href="https://github.com/22nmcdon/jazz_learning_app" id="repoLink">Source on GitHub</a></span>
@@ -1159,6 +1293,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <li>
         <b>Sustain</b> holds what you have played after the keys lift, and a real pedal on
         a connected keyboard does the same.
+      </li>
+      <li>
+        <b>Solo</b>, at the top, asks a different question of the same notes: not whether a
+        voicing fits the bar, but where each note you play sits against it. Start a take and
+        it keeps count, across as many bars as you walk through, until you stop it.
       </li>
     </ul>
 
@@ -1319,7 +1458,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     scalePitchClasses: [],
     avoidPitchClasses: [],
     scales: [],
+    scalesFor: "",      // the chord state.scales was fetched for
     chosenScale: 0,
+    mode: "chords",     // "chords" or "solo" - a state, never a route
     openFamily: null,
     spotted: null,
     style: "any",
@@ -1351,7 +1492,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   var el = {};
   ["engineStatus", "sheetTitle", "sheetStyle", "sheetCredit", "editToggle", "restoreChart",
    "editor", "progression",
-   "parseError", "systems", "verdict", "played", "expecting", "findingRow", "meter",
+   "parseError", "systems", "feedback", "verdict", "played", "expecting", "findingRow", "meter",
    "meterFill", "keyboard", "clearKeys", "sustainPedal", "chordDialog", "dialogBar", "dialogChord",
    "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
    "scaleRows", "subs", "advanced", "risky", "spotted", "spottedText", "useSpotted",
@@ -1362,7 +1503,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink",
    "shareRow", "copyShare", "shareStatus", "shareLink",
    "helpButton", "helpDialog", "helpClose", "helpMidi",
-   "colophonEngine", "colophonFraming"].forEach(function (id) {
+   "colophonEngine", "colophonFraming",
+   "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloTallies",
+   "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
+   "soloBars", "armTake", "armLabel", "practising"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
 
@@ -1562,10 +1706,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function selectBar(index) {
     if (index < 0 || index >= state.measures.length) return;
 
+    // One pointer, both modes. Clicking a bar moves it either way; only what
+    // happens next is different - a voicing re-read, or a new target for the
+    // line, and that bar's own numbers so far.
     state.selected = index;
     renderSheet();
     updateExpecting();
-    analyseVoicing();
+
+    if (state.mode === "solo") soloMoveToBar(); else analyseVoicing();
   }
 
   function makeBarHandler(index) {
@@ -1662,6 +1810,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (result === null || !result.ok) return;
 
     state.scales = result.scales;
+    state.scalesFor = chord;
     state.chosenScale = 0;
     el.scaleCount.textContent = result.scales.length + " scales fit this chord";
     showScale(0);
@@ -1928,6 +2077,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (!key) return;
 
     var note = Number(key.dataset.note);
+
+    // A line is played, not held. In solo mode a click is one note that sounds
+    // and lets go, rather than a key that stays down waiting for the rest of a
+    // chord - so the same widget serves both without a second keyboard.
+    if (state.mode === "solo") {
+      playNote(note, 0.8);
+      window.setTimeout(function () { if (!pedal.down) stopNote(note); }, 320);
+      soloNotePlayed(note);
+      return;
+    }
+
     var index = state.heldNotes.indexOf(note);
 
     if (index === -1) {
@@ -1972,6 +2132,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   // --- voicing feedback ----------------------------------------------------
   async function analyseVoicing() {
+    // In solo mode the notes go to the line reader instead, and the panel this
+    // writes into is not on screen.
+    if (state.mode === "solo") return;
+
     var chord = selectedChord();
     el.findingRow.textContent = "";
 
@@ -2042,6 +2206,253 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   });
 
   // --- import and export ---------------------------------------------------
+  // --- solo practice -------------------------------------------------------
+  /* Chord practice asks "does this voicing say what the bar says". Solo
+     practice asks a different question of the same notes: where does each one
+     sit. The chart, the keyboard, the MIDI connection and the audio device are
+     untouched by the switch - what changes is where a note goes when it is
+     played, and what the dock says back.
+
+     The take itself lives in the engine, not here. This sends notes and draws
+     the answers; it counts nothing, because counting is theory and theory does
+     not live in the page. */
+
+  var solo = { armed: false, bar: null, take: null };
+
+  /** The scale the current bar is read against: the one the player picked out
+      of the Scales panel, when that panel was showing this chord. Empty lets
+      the engine use its own first suggestion. */
+  function soloChosenScale() {
+    if (state.scalesFor !== selectedChord()) return "";
+
+    var scale = state.scales[state.chosenScale];
+    return scale ? scale.name : "";
+  }
+
+  function setMode(mode) {
+    if (state.mode === mode) return;
+
+    // Leaving solo mode with a take running would leave it running: stop it,
+    // and let the summary stand rather than throwing it away unseen.
+    if (mode !== "solo" && solo.armed) stopTake();
+
+    state.mode = mode;
+    setMenuOpen(false);
+
+    el.modeChords.setAttribute("aria-checked", mode === "chords" ? "true" : "false");
+    el.modeSolo.setAttribute("aria-checked", mode === "solo" ? "true" : "false");
+
+    applyMode();
+  }
+
+  /** Shows whichever half of the dock and the menu this mode uses.
+
+      Everything hidden here is hidden because it has no meaning in the other
+      mode, not because it is busy: a voicing shape does not apply to a single
+      note, and naming a chord needs a chord. */
+  function applyMode() {
+    var soloing = state.mode === "solo";
+
+    document.body.classList.toggle("soloing", soloing);
+
+    el.feedback.hidden = soloing;
+    el.meter.hidden = soloing || el.meter.hidden;
+    el.soloPanel.hidden = !soloing;
+    el.armTake.hidden = !soloing;
+
+    // The dock's chord controls, and the menu groups that drive them.
+    el.playChord.hidden = soloing || midi.connected;
+    el.nameChord.hidden = soloing;
+    el.showVoicing.textContent = soloing ? "Which scale?" : "Show me one";
+    el.practising.hidden = soloing;
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-mode]"), function (group) {
+      group.hidden = group.dataset.mode !== state.mode;
+    });
+
+    if (soloing) {
+      soloMoveToBar();
+    } else {
+      // Back to chords: whatever is under the hands is read as a voicing again.
+      stopAllNotes();
+      state.heldNotes = [];
+      paintKeyboard();
+      analyseVoicing();
+      updateVoicingControls();
+    }
+  }
+
+  /** Tells the engine which bar is being soloed over, and shows what the take
+      has done on it so far. Called on arming, and on every move after that. */
+  async function soloMoveToBar() {
+    if (state.mode !== "solo") return;
+
+    var chord = selectedChord();
+    if (!chord) return;
+
+    // Light the keyboard with the scale this bar is read against, so the target
+    // is on screen before a note is played rather than only after one.
+    if (state.scalesFor !== chord) {
+      var scales = await call("jazzScalesForChord", ["string"], [chord]);
+
+      if (scales !== null && scales.ok && scales.scales.length) {
+        state.scales = scales.scales;
+        state.scalesFor = chord;
+        state.chosenScale = 0;
+        state.scalePitchClasses = scales.scales[0].pitchClasses;
+        state.avoidPitchClasses = scales.scales[0].avoidPitchClasses;
+        paintKeyboard();
+      }
+    }
+
+    var result = await call("jazzSoloSetBar", ["number", "string", "string"],
+                            [state.selected, chord, soloChosenScale()]);
+
+    if (result === null || !result.ok) return;
+
+    solo.bar = result.bar;
+    solo.take = result.take;
+    drawTallies();
+  }
+
+  async function startTake() {
+    var result = await call("jazzSoloStartTake", [], []);
+    if (result === null || !result.ok) return;
+
+    solo.armed = true;
+    solo.take = result;
+    solo.bar = null;
+
+    el.armTake.setAttribute("aria-pressed", "true");
+    el.armLabel.textContent = "Stop the take";
+    document.querySelector(".dock").classList.add("armed");
+
+    el.soloSummary.hidden = true;
+    el.soloNote.textContent = "Take running. Play over the bar you are on - move along the chart and it keeps counting.";
+    el.soloNote.removeAttribute("data-colour");
+    el.soloAgainst.textContent = "";
+
+    await soloMoveToBar();
+  }
+
+  async function stopTake() {
+    var result = await call("jazzSoloEndTake", [], []);
+
+    solo.armed = false;
+    el.armTake.setAttribute("aria-pressed", "false");
+    el.armLabel.textContent = "Start a take";
+    document.querySelector(".dock").classList.remove("armed");
+
+    if (result === null || !result.ok) return;
+
+    drawSummary(result);
+  }
+
+  el.armTake.addEventListener("click", function () {
+    if (solo.armed) stopTake(); else startTake();
+  });
+
+  /** One note, read against the bar it landed in. */
+  async function soloNotePlayed(midiNote) {
+    var result = await call("jazzSoloPlayNote", ["number"], [midiNote]);
+
+    if (result === null || !result.ok) return;
+
+    var note = result.note;
+    solo.bar = result.bar;
+    solo.take = result.take;
+
+    el.soloNote.textContent = "";
+    el.soloNote.dataset.colour = note.colour;
+
+    var name = document.createElement("b");
+    name.textContent = note.name;
+    el.soloNote.appendChild(name);
+    // "the R" is not how anyone says it.
+    var degree = note.degree === "R" ? "the root" : note.degree ? "the " + note.degree : "";
+
+    el.soloNote.appendChild(document.createTextNode(
+      " - " + (degree ? degree + ", " : "") + note.colourName + "."));
+
+    var against = note.chord ? "Against " + note.chord : "";
+
+    if (note.scale) against += ", in " + note.scale;
+    if (note.avoid) against += ". A semitone above a chord tone - fine passing through, not to land on";
+
+    el.soloAgainst.textContent = against ? against + "." : "";
+
+    flashKey(midiNote, note.colour);
+    drawTallies();
+  }
+
+  /** Colours the key that was just played, for as long as it sounds.
+
+      Solo mode does not latch: a line is played, not held, so the key lights
+      and lets go rather than staying down the way a voicing's keys do. */
+  function flashKey(midiNote, colour) {
+    var key = el.keyboard.querySelector('.key[data-note="' + midiNote + '"]');
+    if (!key) return;
+
+    key.dataset.colour = colour;
+    key.classList.add("sounded");
+
+    window.clearTimeout(key.soloTimer);
+    key.soloTimer = window.setTimeout(function () {
+      key.classList.remove("sounded");
+      key.removeAttribute("data-colour");
+    }, 420);
+  }
+
+  function tallyText(label, stats) {
+    if (!stats || !stats.total) return label + ": nothing yet";
+
+    return label + ": " + stats.percentChordTones + "% chord, "
+         + stats.percentScaleTones + "% scale, "
+         + stats.percentOutside + "% outside";
+  }
+
+  function drawTallies() {
+    // Counts before a take is running would be counts of nothing: the engine
+    // reads every note back, but only an armed take keeps any of them.
+    el.soloTallies.hidden = !solo.armed;
+
+    if (!solo.armed) return;
+
+    var bar = solo.bar;
+
+    el.soloBarTally.textContent = tallyText(
+      "This bar" + (bar && bar.chord ? " (" + bar.chord + ")" : ""), bar);
+    el.soloTakeTally.textContent = tallyText("The take", solo.take);
+  }
+
+  function drawSummary(result) {
+    el.soloSummary.hidden = false;
+    el.soloSummaryHead.textContent = result.summary;
+
+    el.soloObservations.textContent = "";
+    (result.observations || []).forEach(function (line) {
+      var item = document.createElement("li");
+      item.textContent = line;
+      el.soloObservations.appendChild(item);
+    });
+
+    el.soloBars.textContent = "";
+    (result.bars || []).forEach(function (bar) {
+      var item = document.createElement("li");
+      var label = document.createElement("b");
+      label.textContent = "Bar " + (bar.index + 1) + " " + bar.chord;
+      item.appendChild(label);
+      item.appendChild(document.createTextNode(
+        " " + bar.percentChordTones + "/" + bar.percentScaleTones + "/" + bar.percentOutside));
+      el.soloBars.appendChild(item);
+    });
+
+    el.soloTallies.hidden = true;
+  }
+
+  el.modeChords.addEventListener("click", function () { setMode("chords"); });
+  el.modeSolo.addEventListener("click", function () { setMode("solo"); });
+
   function setImportStatus(text, tone) {
     el.importStatus.textContent = text;
     el.importStatus.className = "io-status" + (tone ? " " + tone : "");
@@ -2450,6 +2861,28 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var chord = selectedChord();
     if (!chord) return;
 
+    // The same button, asking the question this mode is about. A voicing is
+    // something to put under the hands; a scale is something to be told, and
+    // the engine already knows it - nothing new is being worked out here.
+    if (state.mode === "solo") {
+      await soloMoveToBar();
+
+      var scale = state.scales[state.chosenScale] || state.scales[0];
+
+      if (!scale) return;
+
+      el.soloNote.removeAttribute("data-colour");
+      el.soloNote.textContent = "";
+
+      var name = document.createElement("b");
+      name.textContent = scale.name;
+      el.soloNote.appendChild(name);
+      el.soloNote.appendChild(document.createTextNode(" over " + chord + "."));
+
+      el.soloAgainst.textContent = scale.noteNames.join(" ") + ". " + scale.rationale;
+      return;
+    }
+
     // Anchor 0 means "wherever this shape belongs": a solo left hand sits an
     // octave and a half below a rootless one, and the engine knows where.
     var result = await call("jazzIdiomaticVoicings", ["string", "number", "string", "number"],
@@ -2632,7 +3065,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       needs three notes to say anything, and a naming answer belongs to the
       notes it was asked about. */
   function updateVoicingControls() {
-    el.playChord.hidden = midi.connected;
+    el.playChord.hidden = midi.connected || state.mode === "solo";
     el.playChord.disabled = state.heldNotes.length === 0 || audio.bank === "silent";
     el.nameChord.disabled = state.heldNotes.length < 3;
     el.named.hidden = true;
@@ -2913,6 +3346,18 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   function midiNoteOn(note) {
+    // Solo mode wants the notes one at a time. The chord window below exists to
+    // gather notes that arrived together into one voicing, which is exactly the
+    // wrong thing for a line: a rolled double-stop is two notes, each read
+    // where it sits, not one chord.
+    if (state.mode === "solo") {
+      midi.velocities[note] = midi.velocities[note] || 0.8;
+      if (midi.held.indexOf(note) === -1) midi.held.push(note);
+      playNote(note, velocityOf(note));
+      soloNotePlayed(note);
+      return;
+    }
+
     // The first note after everything was released starts a new chord; notes
     // that arrive together are gathered into one voicing, as the engine's
     // collector does for the app. Under the pedal nothing has been released,
@@ -3102,6 +3547,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     writeColophon(kind);
     await parseChart();
     await openChartFromUrl();
+
+    // Chords to begin with, but the mode groups have to be put in the state
+    // they describe rather than the state the markup happened to ship in.
+    applyMode();
 
     // Last, and only if nothing else is already in front of the reader: a
     // chart that arrived in the link and could not be read has its own thing

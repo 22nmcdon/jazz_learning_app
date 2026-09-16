@@ -178,6 +178,21 @@ the line between what exists and what does not. Do not re-plan something in the 
 - Reads a played voicing back as a *substitution* when it spells one, rather than as a
   broken version of the written chord.
 
+### Solo Practice — built
+- A top-level **mode**, not a second screen. `state.mode` flips and the chart, the
+  keyboard, the MIDI connection and the audio device all stay exactly where they are;
+  what changes is where a played note goes and what the dock says back. The selected bar
+  is one pointer shared by both modes.
+- `LineAnalyzer` (core engine) reads one note against the bar's chord as **chord tone /
+  scale tone / outside**, names its degree, and says which scale accounts for it. `read()`
+  is pure; a *take* is that with a memory - arm, play, walk to other bars, disarm.
+- The take lives in the engine, reached through four entry points in `jazz::api`
+  (`soloStartTake`, `soloSetBar`, `soloPlayNote`, `soloEndTake`). They are the one
+  stateful corner of that API, and deliberately: the alternative is the shell resending
+  every note played so far, which puts the take in the UI.
+- Static, with no clock. A tempo-driven version would drive `setTarget()` from one and
+  need nothing else from the engine.
+
 ### How the app and the page share one interface
 `app/src/WebUi.cpp` is the whole of it. The page is written to a file at startup and
 loaded into a `WebBrowserComponent`; two event channels carry everything else. The page
@@ -204,9 +219,14 @@ build step passes, that setting is the first thing to check.
 
 ### Not built — still genuinely open
 - Voice-leading visualiser. `guideToneMotion()` is the primitive it would draw.
-- Solo/improv feedback layer; personal voicing library; ear training; metronome /
-  practice-loop; progress tracking. The analyser's per-voicing score and the feedback
-  panel's session average are the hook the last of those would build on.
+- Personal voicing library; ear training; metronome / practice-loop; progress tracking.
+  The analyser's per-voicing score, the feedback panel's session average and now a take's
+  own numbers are the hook the last of those would build on.
+- **Licks.** Solo mode's "Which scale?" is the scale half of "show me one"; suggesting a
+  *line* to play over a bar is a separate feature needing generated or curated patterns,
+  rhythm and register - deliberately not started.
+- **A tempo-driven solo transport**, which is the same feature as the metronome /
+  practice loop and should arrive with it.
 - MusicXML / MuseScore import. The page reader is format-agnostic enough to feed it.
 - Reading and printing a PDF in the JUCE app, as above.
 
@@ -214,7 +234,6 @@ build step passes, that setting is the first thing to check.
 
 - iReal Pro and PDF import both ship now. Is MusicXML/MuseScore import needed as well?
 - How much of the reharm suggestion engine should be rule-based vs. data/ML-informed?
-- Is the solo/improv feedback layer in POC scope or a post-POC addition?
 - Is a future dense, DAW-style desktop layout worth designing for now, or deferred?
 
 If work touches one of these, flag the ambiguity rather than silently picking a direction.
@@ -237,6 +256,15 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
   else is curated on purpose. Before adding a name, check what it costs the chords that
   already work — the test "a rootless thirteenth still beats a complete name nobody
   writes" is that trap nailed down, and a wider vocabulary that breaks it is a worse one.
+- **Forgiving is not the same as accepting everything.** Solo mode was specified to read
+  a note against *every* scale that fits the chord, on the grounds that a player who
+  chose a different valid scale has not made a mistake. Counted, that leaves **nothing
+  outside anything**: Cmaj7, G7 and Bbmaj7 each come out 4 chord tones, 8 scale tones,
+  0 outside, and Dm7 has exactly one note it will not account for. Three tiers collapse
+  into two and the feature stops saying anything. Against one scale the same chords read
+  4 / 3 / 5. So `LineAnalyzer` reads against one scale, and the forgiveness lives in
+  *which* one - `Options::chosenScale`, the scale the player picked out of the Scales
+  panel. Before widening a rule in the name of being generous, count what it leaves.
 - **A suggestion the analyser would reject is a bug, not a near miss.** Two invariants in
   `VoicingAnalyzerTests` hold the two halves of the app together: every voicing
   `idiomaticVoicings` offers must classify as the type it was offered for, and none may
@@ -278,6 +306,15 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
   served over the web. A `<link rel="stylesheet">` with no `href` is not a safe parking
   spot either; it counts as a stylesheet still on its way, and a pending stylesheet stops
   every script after it from running.
+- **A service worker never sees the visit that registered it.** `web/sw.js` fetches the
+  page and the engine itself on install, and has to: registration happens on `load`, by
+  which time both have already been fetched, so nothing passes through the worker and a
+  first visit leaves the cache empty. What makes that expensive to find is that it looks
+  like it works - the browser's own HTTP cache will answer a reload through the worker's
+  `fetch` often enough for an offline test to pass. Assert on the cache's contents, not
+  only on the reload. (And `page.waitForFunction` will not wait for an async predicate:
+  it takes the returned promise as the value, and a promise is truthy, so the wait passes
+  on its first tick. Poll from the test process instead.)
 - **The page is loaded from a file, not JUCE's resource provider.** The provider is the
   tidier mechanism and it does not reliably deliver a document this size on Linux - the
   page arrives, its CSS paints, and its script never runs, perhaps one time in ten. The

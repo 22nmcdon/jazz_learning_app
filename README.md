@@ -14,11 +14,11 @@ responsive UI and one UI-agnostic theory engine.
 
 | Directory | Layer | Depends on |
 |---|---|---|
-| `modules/core_engine` | Chord parsing, scale suggestion, reharmonisation, voicing analysis, note-input abstraction. Pure C++17. | nothing |
+| `modules/core_engine` | Chord parsing, scale suggestion, reharmonisation, voicing analysis, solo-line reading, note-input abstraction. Pure C++17. | nothing |
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (225), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (263), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -128,6 +128,31 @@ did I just play", with no chart involved. **Edit chart** types chords into bars 
 **Reharmonise the tune** applies a plan to the whole chart at once, and when a voicing you
 play turns out to spell a substitution rather than the written chord, **Write it into the
 bar** keeps it.
+
+**Solo** and **Chords**, at the top, are the two things you can practise against the same
+chart. Chord practice asks whether the voicing you played says what the bar says. Solo
+practice asks a different question of the same notes: where does each one sit. It is a
+mode, not a second screen - the chart, the keyboard, your MIDI connection and the sound
+all stay exactly where they were, and the bar you are on is the same bar in both.
+
+In solo mode the keys do not latch, because a line is played rather than held: each note
+sounds, is read back - **E4 - the 9th, scale tone, in D Dorian** - and lets go. Every note
+is read on its own, so a rolled double-stop is two notes each read where it sits rather
+than one chord.
+
+**Start a take** to be counted. While a take runs the dock carries a red line and the
+button a pulsing dot, because a take counting on quietly is the one thing here that would
+be annoying to find out about late. It reports the bar you are on and the take as a whole,
+and walking to another bar does not end it - the target moves and the notes keep
+accumulating, which is most of what soloing over a chart is. **Stop the take** freezes a
+summary: how the whole thing divided up, which bar pulled away from the rest, and a bar-by-bar
+line. A note outside the scale is *outside the scale*, never wrong.
+
+Which scale a bar is read against is the scale you chose for it in its Scales panel, or the
+engine's own first suggestion if you have not chosen. That is where the forgiveness in solo
+mode lives, and it is deliberate: reading against *every* scale that fits a chord sounds
+more generous and in fact leaves nothing outside anything - over Cmaj7, G7 or Bbmaj7 not one
+of the twelve notes comes back outside. **Which scale?** says which one you are being held to.
 
 **Import / export**, in the Practice menu, opens a chart that came from somewhere else and
 writes the one on screen back out. Both shells read an iReal Pro link, the `.html` file
@@ -299,6 +324,16 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   PDF needs a PDF library and belongs to the shell; deciding which of that text is a chord
   chart needs none and belongs here. Every reader reports the chord symbols it could not
   understand instead of handing back a chart that looks complete and is not.
+- **Reading a line** — `LineAnalyzer` takes notes one at a time rather than a chord at
+  once, and reads each against the bar it landed in: a chord tone, a tone in the scale
+  that bar is being read against, or outside both. Every note also names its degree
+  against the chord, outside ones included, because "a b9 over Cmaj7" says something a
+  player can use and "outside" does not. A scale tone sitting a semitone above a chord
+  tone — the 4th over a major seventh — is still a scale tone and is named as one to pass
+  through rather than land on, because that is what a line does with it. A *take* is that
+  with a memory: it holds the notes from arming to disarming, across as many bars as you
+  walk through, and reports the whole thing and each bar in it. It shares no code with the
+  voicing analyser and should not: a voicing is a thing, a line is a stream.
 - **Input abstraction** — hardware MIDI and the on-screen keyboard emit identical events;
   `VoicingCollector` groups notes that arrive together into one voicing, so a rolled chord
   or three fingers landing at once both arrive as a chord rather than a stream of notes.
@@ -308,9 +343,15 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
 - **MusicXML / MuseScore import.** iReal Pro and PDF import both ship (see above); which
   further format comes next is still an open question in the design doc.
 - **Audio/pitch-detection input**, deliberately out of scope for this phase.
-- **Solo/improv feedback, voicing library, ear training, metronome/practice loop,
-  progress tracking.** The analyser already reports a per-voicing score and the feedback
-  panel keeps a session average, which is the hook progress tracking would build on.
+- **Voicing library, ear training, metronome/practice loop, progress tracking.** The
+  analyser reports a per-voicing score, the feedback panel keeps a session average and a
+  solo take now keeps its own numbers — between them, the hook progress tracking would
+  build on.
+- **Licks.** Solo mode tells you the scale; suggesting a *line* to play over a bar needs
+  generated or curated patterns, rhythm and register, and is a feature of its own.
+- **A tempo-driven solo transport** — soloing along with a clock that advances the chart
+  by itself. That is the same feature as the metronome and practice loop, and the engine
+  side of it is already done: a transport would move the target bar and need nothing else.
 - **The voice-leading visualiser** — though `guideToneMotion()` in the engine is the
   primitive it needs.
 - **Reading a PDF, and printing one, in the desktop app.** Both need a PDF library the
@@ -326,6 +367,7 @@ These were left open rather than silently decided:
 2. **Rule-based vs. data-informed reharmonisation** — the POC is entirely rule-based, with
    every rule in one file (`Reharmonizer.cpp`) and its own difficulty and style tag, so a
    data-informed ranking could replace the ordering without touching the rules.
-3. **Solo/improv feedback layer** — treated as post-POC.
+3. **Solo/improv feedback layer** — in, and static: you arm a take and walk the chart
+   yourself. The tempo-driven version waits on the metronome, above.
 4. **A dense, DAW-style desktop layout** — deferred; it would arrive as a fourth size
    class rather than a second UI.

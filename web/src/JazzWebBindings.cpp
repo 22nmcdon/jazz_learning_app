@@ -103,3 +103,27 @@ JAZZ_EXPORT const char* jazzIdiomaticVoicings (const char* symbol, int anchorNot
     return hold (jazz::api::idiomaticVoicings (orEmpty (symbol), anchorNote,
                                                orEmpty (practiseStyle), rich));
 }
+
+//==============================================================================
+// Solo practice. These four carry a take, which lives in jazz::api rather than
+// here - a transport remembers nothing.
+
+JAZZ_EXPORT const char* jazzSoloStartTake()
+{
+    return hold (jazz::api::soloStartTake());
+}
+
+JAZZ_EXPORT const char* jazzSoloSetBar (int measureIndex, const char* symbol, const char* chosenScale)
+{
+    return hold (jazz::api::soloSetBar (measureIndex, orEmpty (symbol), orEmpty (chosenScale)));
+}
+
+JAZZ_EXPORT const char* jazzSoloPlayNote (int midiNote)
+{
+    return hold (jazz::api::soloPlayNote (midiNote));
+}
+
+JAZZ_EXPORT const char* jazzSoloEndTake()
+{
+    return hold (jazz::api::soloEndTake());
+}

@@ -8,6 +8,7 @@ add_executable(jazz_core_tests
     ChordIdentifierTests.cpp
     ScaleSuggesterTests.cpp
     VoicingAnalyzerTests.cpp
+    LineAnalyzerTests.cpp
     ReharmonizerTests.cpp
     ChartTests.cpp
     ChartFormatsTests.cpp
