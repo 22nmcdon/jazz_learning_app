@@ -119,6 +119,22 @@ button { font-family: inherit; cursor: pointer; }
   text-wrap: balance;
 }
 .masthead h1 em { font-style: italic; color: var(--blush-deep); }
+
+/* Two readings of the same line, stacked in one grid cell.
+
+   The other mode-specific things on this page are simply hidden, because
+   nothing sits under them. These have the whole chart under them and the two
+   wordings are different lengths, so hiding one outright let everything below
+   jump by a line the moment the mode changed. Here the cell is as tall as the
+   longer of the two at whatever width the window is, and the one not showing
+   keeps its space instead of giving it up. `applyMode` knows to swap these by
+   visibility rather than by `hidden` for that reason. */
+.mode-stack { display: grid; }
+.mode-stack > * { grid-area: 1 / 1; }
+/* The page opens in chord practice, so the solo wording starts out of sight -
+   without this the two are drawn on top of each other for the moment before
+   the first `applyMode`, which sets both explicitly from then on. */
+.mode-stack > [data-mode="solo"] { visibility: hidden; }
 .masthead .lede {
   font-family: var(--script);
   font-style: italic;
@@ -1114,13 +1130,29 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
 <div class="wrap">
   <header class="masthead">
+    <!-- The masthead names the mode as well as the app. The accent italic
+         moved off "Learning App" and onto the mode word on purpose: it is the
+         colour that changes with the mode, so it is the word worth putting in
+         it. -->
     <div>
-      <p class="eyebrow">Chords &middot; scales &middot; voicings</p>
-      <h1>Jazz <em>Learning App</em></h1>
-      <p class="lede">
-        Build and reharmonise a chart, see which scales fit each chord, and get feedback on
-        the voicings you play - on a MIDI keyboard or the one below.
-      </p>
+      <p class="eyebrow" data-mode="chords">Voicings &middot; substitutions</p>
+      <p class="eyebrow" data-mode="solo">Lines &middot; scales &middot; takes</p>
+
+      <h1>Jazz Learning App: <em data-mode="chords">Chords</em><em data-mode="solo">Solo</em></h1>
+
+      <div class="mode-stack">
+        <p class="lede" data-mode="chords">
+          Build and reharmonise a chart, then play each bar and hear back whether the voicing
+          under your hands says what the symbol says - on a MIDI keyboard or the one below.
+        </p>
+        <!-- Kept to about the length of the line above it. The stack means an
+             uneven pair costs nothing but a gap; matching them means there is
+             not even that. -->
+        <p class="lede" data-mode="solo">
+          Play a line over the chart and see where every note lands - chord tone, scale tone
+          or outside. Arm a take and it keeps count across every bar you walk through.
+        </p>
+      </div>
     </div>
     <div class="masthead-controls">
       <!-- A toggle, not a link: nothing here is torn down and rebuilt when it
@@ -1203,11 +1235,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <div class="sheet-tools">
         <!-- What the second click opens depends on the mode, so the line saying
              so does too. It described both at once until the bar dialog stopped
-             showing both. -->
-        <p class="sheet-hint" data-mode="chords">Click a bar to work on it - arrow keys move along.
-          Click it again for the substitutions that could stand in its place.</p>
-        <p class="sheet-hint" data-mode="solo">Click a bar to solo over it - arrow keys move along.
-          Click it again for the scales that fit it.</p>
+             showing both. Stacked, because the chart is directly underneath. -->
+        <div class="mode-stack">
+          <p class="sheet-hint" data-mode="chords">Click a bar to work on it - arrow keys move along.
+            Click it again for the substitutions that could stand in its place.</p>
+          <p class="sheet-hint" data-mode="solo">Click a bar to solo over it - arrow keys move along.
+            Click it again for the scales that fit it, and pick the one you are held to.</p>
+        </div>
         <div class="tools-right">
           <button class="link-btn" type="button" id="planButton">Reharmonise the tune</button>
           <button class="link-btn" type="button" id="editToggle">Edit chart</button>
@@ -2627,8 +2661,18 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.showVoicing.textContent = soloing ? "Which scale?" : "Show me one";
     el.practising.hidden = soloing;
 
+    document.title = "Jazz Learning App: " + (soloing ? "Solo" : "Chords");
+
     Array.prototype.forEach.call(document.querySelectorAll("[data-mode]"), function (group) {
-      group.hidden = group.dataset.mode !== state.mode;
+      var off = group.dataset.mode !== state.mode;
+
+      // Inside a stack the two wordings share one grid cell, and the one not
+      // showing has to keep its space - see `.mode-stack`. Everything else
+      // has nothing underneath it and is simply taken out of the flow.
+      if (group.parentElement.classList.contains("mode-stack"))
+        group.style.visibility = off ? "hidden" : "visible";
+      else
+        group.hidden = off;
     });
 
     if (soloing) {

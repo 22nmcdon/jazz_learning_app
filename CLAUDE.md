@@ -208,8 +208,14 @@ the line between what exists and what does not. Do not re-plan something in the 
   play over this bar, and what this bar should be - and showing both meant every visit
   opened with a choice nobody asked for. Everything else that swaps with the mode swaps
   the same way: `data-mode` on the element and `applyMode` hides the other one. The
-  cheat sheet, the hint above the chart and the Practice menu's groups are all that one
-  mechanism, so adding a mode-specific anything is a markup attribute rather than code.
+  cheat sheet, the masthead, the hint above the chart and the Practice menu's groups are
+  all that one mechanism, so adding a mode-specific anything is a markup attribute rather
+  than code. The one variant is `.mode-stack`: a wrapper putting both wordings in a single
+  grid cell, where `applyMode` swaps them by `visibility` so the one not showing keeps its
+  space. That is for the two with the chart underneath them - the masthead's lede and the
+  hint - because the two wordings are different lengths and hiding one outright let the
+  whole chart jump by a line. Keep a stacked pair roughly the same length anyway; the
+  stack stops the jump, matching lengths stops the gap.
 - **The mode changes the light, not the meaning.** `body.soloing` redefines the palette
   tokens - paper down a stop and cooler, the rose accent to slate - and every rule in the
   sheet already reads those, so the whole page restyles without a single component being

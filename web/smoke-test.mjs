@@ -163,6 +163,18 @@ try {
   const chordsPaper = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const chordsHelp = await page.locator("#helpButton").getAttribute("aria-label");
 
+  // Where everything is before the switch. The masthead and the hint above the
+  // chart are written twice, once per mode, and the two wordings are different
+  // lengths - so this is the check that the chart does not jump up or down a
+  // line when the mode changes.
+  const layout = () => page.evaluate(() => {
+    const top = (sel) => Math.round(document.querySelector(sel).getBoundingClientRect().top);
+    return { toggle: top(".mode-switch"), sheet: top(".sheet"),
+             hint: top(".sheet-hint:not([hidden])"), systems: top("#systems") };
+  });
+  const chordsLayout = await layout();
+  const chordsTitle = await page.title();
+
   await page.locator("#modeSolo").click();
 
   // Arriving at solo practice for the first time is a first visit of its own,
@@ -182,6 +194,15 @@ try {
   // so the 280ms fade has long finished and this is the settled colour.
   check("the page changes colour with the mode",
         (await page.evaluate(() => getComputedStyle(document.body).backgroundColor)) !== chordsPaper);
+
+  check(`the masthead names the mode (${chordsTitle} / ${await page.title()})`,
+        chordsTitle === "Jazz Learning App: Chords"
+        && (await page.title()) === "Jazz Learning App: Solo"
+        && (await page.locator(".masthead h1").innerText()).includes("Solo"));
+
+  const soloLayout = await layout();
+  check(`nothing moves when the mode changes (${JSON.stringify(soloLayout)})`,
+        JSON.stringify(soloLayout) === JSON.stringify(chordsLayout));
 
   // Start from bar one rather than wherever the last section left off. Clicking
   // a bar you are already on opens it, so which bar is selected decides whether

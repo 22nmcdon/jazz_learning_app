@@ -140,9 +140,13 @@ practice asks a different question of the same notes: where does each one sit. I
 mode, not a second screen - the chart, the keyboard, your MIDI connection and the sound
 all stay exactly where they were, and the bar you are on is the same bar in both.
 
-What does change is the light. Solo practice turns the paper down a stop and cools it, and
-the rose accent becomes slate, so which mode you are in is something you can feel without
-reading the toggle. Nothing moves and nothing is rebuilt - it is the same room under a
+What does change is the light, and the words. Solo practice turns the paper down a stop and
+cools it, the rose accent becomes slate, and the masthead reads *Jazz Learning App: Solo*
+over a line about playing one - so which mode you are in is something you can feel without
+reading the toggle, and something you can read without knowing what the toggle does. The
+two mastheads and the two hints above the chart are written one on top of the other rather
+than one replacing the other, so a wording that wraps to a different number of lines cannot
+make the chart jump when you switch. Nothing moves and nothing is rebuilt - it is the same room under a
 different lamp. The three colours that mean something stay exactly as they are: sage,
 gold and rust say chord tone, scale tone and outside in both modes, and recolouring those
 would be changing the meaning rather than the light.
