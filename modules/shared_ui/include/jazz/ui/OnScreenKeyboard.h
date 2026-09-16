@@ -119,6 +119,11 @@ private:
     juce::ToggleButton sustainButton { "Sustain" };
     bool sustainDown { false };
 
+    /** The octave readout is the first thing to go when the row is tight: it
+        says what you can already see, whereas the pedal is a control.
+    */
+    bool showOctaveReadout { true };
+
     bool latchEnabled { true };
     int visibleOctaves { 2 };
     int minimumOctaves { 1 };   ///< raised by ensureNotesVisible, so a resize cannot undo it

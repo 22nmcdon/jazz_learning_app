@@ -224,15 +224,18 @@ void OnScreenKeyboard::resized()
     latchButton.setBounds (header.removeFromLeft (jmax (buttonWidth + 24, 72)).reduced (4, 4));
     clearButton.setBounds (header.removeFromRight (jmax (buttonWidth + 12, 60)).reduced (4, 4));
 
-    // The pedal only fits once the octave label has room; on the narrowest
-    // window it steps aside rather than sitting on top of the label.
+    // The pedal outranks the octave readout: one is a control, the other
+    // repeats what the key labels already say. On a phone-sized window the
+    // readout goes and the pedal stays.
     const auto sustainWidth = jmax (buttonWidth + 40, 86);
-    const auto roomForSustain = header.getWidth() > sustainWidth + 70;
+    const auto roomForSustain = header.getWidth() > sustainWidth + 8;
 
     sustainButton.setVisible (roomForSustain);
 
     if (roomForSustain)
         sustainButton.setBounds (header.removeFromLeft (sustainWidth).reduced (4, 4));
+
+    showOctaveReadout = header.getWidth() > 96;
 
     keyboardArea = area;
     rebuildKeys();
@@ -421,7 +424,10 @@ void OnScreenKeyboard::paint (juce::Graphics& g)
         g.fillRoundedRectangle (key.area.reduced (1.0f), 2.0f);
     }
 
-    // Octave readout between the two shift buttons.
+    // Octave readout between the two shift buttons, where the row has room.
+    if (! showOctaveReadout)
+        return;
+
     g.setColour (theme::textDim);
     g.setFont (Font (FontOptions (theme::bodyFontSize())));
     g.drawText ("Octave " + String (core::octaveOf (lowestNote)) + " - "
