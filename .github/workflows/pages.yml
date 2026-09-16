@@ -44,6 +44,17 @@ jobs:
           mkdir -p _site
           ./web/build.sh "$GITHUB_WORKSPACE/_site"
           cp web/index.html web/sw.js _site/
+
+          # Stamp the build into the page, so the site can be asked what it is
+          # serving instead of the deploy log having to be read.
+          build="${GITHUB_SHA:0:7} $(date -u '+%Y-%m-%d %H:%M')Z"
+          sed -i "s/__JAZZ_BUILD__/$build/" _site/index.html
+          if grep -q "__JAZZ_BUILD__" _site/index.html; then
+            echo "::error::the build stamp was not replaced"
+            exit 1
+          fi
+
+          echo "stamped: $build"
           # Pages runs Jekyll over the upload unless told not to, and Jekyll
           # would drop any file whose name begins with an underscore.
           touch _site/.nojekyll

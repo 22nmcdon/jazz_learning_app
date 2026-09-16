@@ -1,4 +1,9 @@
 <title>Jazz Learning App</title>
+<!-- Replaced with the commit and the time by the Pages workflow, and left
+     alone everywhere else. It exists so that "is the site actually serving
+     what I pushed?" is a question you answer by looking rather than by
+     digging through deploy logs - which is exactly how it was asked once. -->
+<meta name="jazz-build" content="__JAZZ_BUILD__">
 <!-- The webfonts are requested by script rather than written here with an href,
      and only when this page is served over the web. The desktop app runs it in a
      webview that may have no route to the internet, and a webview waiting on a
@@ -1201,6 +1206,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     <span>Engine: <code>modules/core_engine</code> - 263 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
+    <span id="colophonBuild"></span>
     <span><a href="https://github.com/22nmcdon/jazz_learning_app" id="repoLink">Source on GitHub</a></span>
   </footer>
 </div>
@@ -1503,7 +1509,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink",
    "shareRow", "copyShare", "shareStatus", "shareLink",
    "helpButton", "helpDialog", "helpClose", "helpMidi",
-   "colophonEngine", "colophonFraming",
+   "colophonEngine", "colophonFraming", "colophonBuild",
    "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloTallies",
    "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
    "soloBars", "armTake", "armLabel", "practising"].forEach(function (id) {
@@ -3530,6 +3536,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       two ways of reaching one engine, and which one is behind it is not
       otherwise visible from the page. */
   function writeColophon(kind) {
+    // Untouched means this copy was not deployed - run from a file, or served
+    // out of a checkout - and saying "development" is more use than a token.
+    var stamp = document.querySelector('meta[name="jazz-build"]');
+    var build = stamp ? stamp.content : "";
+
+    el.colophonBuild.textContent = build.indexOf("__") === 0 || !build
+      ? "Build: development."
+      : "Build: " + build + ".";
+
     if (kind === "native") {
       el.colophonEngine.textContent = "Running natively, in the desktop app.";
       el.colophonFraming.textContent = "Reading and printing a PDF are the browser's, not this shell's.";

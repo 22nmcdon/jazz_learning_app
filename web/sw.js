@@ -68,9 +68,23 @@ self.addEventListener("fetch", (event) => {
   // replayed from a cache, and neither has anything that is not http.
   if (request.method !== "GET" || !request.url.startsWith("http")) return;
 
+  const isPage = request.mode === "navigate";
+
   event.respondWith((async () => {
     try {
-      const response = await fetch(request);
+      /* Network-first is only as fresh as the network it asks. A navigation
+         reissued as `fetch(request)` keeps that request's cache mode, and
+         GitHub Pages serves HTML with `max-age=600` - so for ten minutes after
+         a deploy the browser answers out of its own HTTP cache and the worker
+         hands that straight back, having done nothing wrong and shown an old
+         page anyway. Asking for the page by URL with `reload` skips the HTTP
+         cache and goes to the network, which is what network-first was for.
+
+         Only the page. The engine beside it is 400-odd KB and changes far less
+         often, so it keeps the HTTP cache it has earned. */
+      const response = isPage
+        ? await fetch(request.url, { cache: "reload", credentials: "same-origin" })
+        : await fetch(request);
 
       // Opaque responses - the PDF library from its CDN - have a status of 0
       // and are still worth keeping: they cannot be read here, only replayed,
@@ -88,7 +102,7 @@ self.addEventListener("fetch", (event) => {
 
       // A navigation to some other path with nothing cached for it still wants
       // the app rather than a browser error page.
-      if (request.mode === "navigate") {
+      if (isPage) {
         const page = await caches.match("index.html") || await caches.match("./");
         if (page) return page;
       }

@@ -231,6 +231,13 @@ try {
   await page.locator("#modeChords").click();
   check("switching back restores chord practice", await page.locator("#feedback").isVisible());
 
+  // The colophon names the build, which is how anyone looking at the site can
+  // tell whether it is serving what was pushed. "development" is the right
+  // answer for a copy that was not deployed, so this only asks that it says
+  // something - the workflow itself checks the stamp was replaced.
+  const build = (await page.locator("#colophonBuild").innerText()).trim();
+  check(`the page names its build (${build})`, build.startsWith("Build:"));
+
   // Offline: the worker has to be registered and awake, or the page is no
   // more use on a train than it was before.
   const worker = await page.evaluate(async () => {
