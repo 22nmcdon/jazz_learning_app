@@ -141,8 +141,17 @@ void ElectricPiano::noteOn (int midiNote, float velocity)
     voice->modulationDecay = decayFactor (0.05, tineDecaySeconds, sampleRate);
     voice->amplitudeDecay = decayFactor (0.3, bodyDecaySeconds, sampleRate);
     voice->stage = Voice::Stage::attack;
+    voice->pedalled = false;
 
     voice->active = true;
+}
+
+void ElectricPiano::releaseVoice (Voice& voice)
+{
+    // Not silence: a key lifted on a Rhodes still rings down.
+    voice.stage = Voice::Stage::release;
+    voice.amplitudeDecay = decayFactor (0.001, releaseSeconds, sampleRate);
+    voice.pedalled = false;
 }
 
 void ElectricPiano::noteOff (int midiNote)
@@ -154,21 +163,44 @@ void ElectricPiano::noteOff (int midiNote)
         if (voice.active.load() && voice.midiNote == midiNote
             && voice.stage != Voice::Stage::release)
         {
-            // Not silence: a key lifted on a Rhodes still rings down.
-            voice.stage = Voice::Stage::release;
-            voice.amplitudeDecay = decayFactor (0.001, releaseSeconds, sampleRate);
+            // The damper is off the string, so the note keeps ringing until the
+            // foot comes up.
+            if (sustainDown)
+                voice.pedalled = true;
+            else
+                releaseVoice (voice);
         }
     }
+}
+
+void ElectricPiano::setSustain (bool isDown)
+{
+    const juce::SpinLock::ScopedLockType lock (voiceLock);
+
+    if (sustainDown == isDown)
+        return;
+
+    sustainDown = isDown;
+
+    if (sustainDown)
+        return;
+
+    // Every release the pedal was holding back happens now, together.
+    for (auto& voice : voices)
+        if (voice.active.load() && voice.pedalled)
+            releaseVoice (voice);
 }
 
 void ElectricPiano::allNotesOff()
 {
     const juce::SpinLock::ScopedLockType lock (voiceLock);
 
+    // Faster than a pedal release: this is "stop", not "the foot came up".
     for (auto& voice : voices)
     {
         voice.stage = Voice::Stage::release;
         voice.amplitudeDecay = decayFactor (0.001, 0.05, sampleRate);
+        voice.pedalled = false;
     }
 }
 

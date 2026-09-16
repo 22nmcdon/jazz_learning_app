@@ -37,6 +37,11 @@ OnScreenKeyboard::OnScreenKeyboard()
     latchButton.setColour (ToggleButton::tickColourId, theme::accent);
     latchButton.onClick = [this] { setLatchEnabled (latchButton.getToggleState()); };
 
+    addAndMakeVisible (sustainButton);
+    sustainButton.setColour (ToggleButton::textColourId, theme::textDim);
+    sustainButton.setColour (ToggleButton::tickColourId, theme::accent);
+    sustainButton.onClick = [this] { setSustainPedal (sustainButton.getToggleState()); };
+
     for (auto* button : { &octaveDownButton, &octaveUpButton, &clearButton })
     {
         button->setColour (TextButton::buttonColourId, theme::surfaceRaised);
@@ -81,6 +86,30 @@ void OnScreenKeyboard::holdNotes (const std::vector<int>& midiNotes)
     }
 
     ensureNotesVisible (midiNotes);
+    repaint();
+}
+
+void OnScreenKeyboard::setSustainPedal (bool isDown)
+{
+    if (sustainDown == isDown)
+        return;
+
+    sustainDown = isDown;
+    sustainButton.setToggleState (isDown, dontSendNotification);
+
+    // One sustain event on the shared interface, whether it came from this
+    // button or from a pedal - the collector cannot tell, and should not.
+    broadcastSustain (isDown);
+    repaint();
+}
+
+void OnScreenKeyboard::showSustainPedal (bool isDown)
+{
+    if (sustainDown == isDown)
+        return;
+
+    sustainDown = isDown;
+    sustainButton.setToggleState (isDown, dontSendNotification);
     repaint();
 }
 
@@ -194,6 +223,16 @@ void OnScreenKeyboard::resized()
     octaveUpButton.setBounds (header.removeFromRight (buttonWidth).reduced (4, 4));
     latchButton.setBounds (header.removeFromLeft (jmax (buttonWidth + 24, 72)).reduced (4, 4));
     clearButton.setBounds (header.removeFromRight (jmax (buttonWidth + 12, 60)).reduced (4, 4));
+
+    // The pedal only fits once the octave label has room; on the narrowest
+    // window it steps aside rather than sitting on top of the label.
+    const auto sustainWidth = jmax (buttonWidth + 40, 86);
+    const auto roomForSustain = header.getWidth() > sustainWidth + 70;
+
+    sustainButton.setVisible (roomForSustain);
+
+    if (roomForSustain)
+        sustainButton.setBounds (header.removeFromLeft (sustainWidth).reduced (4, 4));
 
     keyboardArea = area;
     rebuildKeys();

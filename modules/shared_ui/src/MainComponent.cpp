@@ -265,6 +265,16 @@ void MainComponent::SoundRelay::noteEventReceived (const core::NoteEvent& event)
     owner.onSoundNote (event.midiNote, event.isNoteOn);
 }
 
+void MainComponent::SoundRelay::sustainChanged (bool isDown)
+{
+    // A hardware pedal and the on-screen one are the same event by the time
+    // they reach here, so the control shows the pedal's state either way.
+    owner.keyboard.showSustainPedal (isDown);
+
+    if (owner.onSustainChanged != nullptr)
+        owner.onSustainChanged (isDown);
+}
+
 void MainComponent::applyPractiseStyle()
 {
     core::VoicingAnalyzer::Options options;

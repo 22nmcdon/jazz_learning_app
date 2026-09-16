@@ -46,6 +46,20 @@ public:
     /** Releases every latched note. */
     void clearHeldNotes();
 
+    /** Puts the sustain pedal down or lifts it.
+
+        Offered on screen because most people testing this have no pedal, and
+        because a hardware pedal and this control must mean the same thing: both
+        end up as one sustain event on the input interface.
+    */
+    void setSustainPedal (bool isDown);
+    bool isSustainPedalDown() const noexcept { return sustainDown; }
+
+    /** Shows the pedal as down without sending anything - used when a hardware
+        pedal moved and the on-screen control is only reporting it.
+    */
+    void showSustainPedal (bool isDown);
+
     /** Puts @p midiNotes under the hands as though they had just been played.
 
         A voicing the app offers has to arrive the way a played one does - as
@@ -102,6 +116,8 @@ private:
     juce::TextButton octaveUpButton { "+" };
     juce::TextButton clearButton { "Clear" };
     juce::ToggleButton latchButton { "Hold" };
+    juce::ToggleButton sustainButton { "Sustain" };
+    bool sustainDown { false };
 
     bool latchEnabled { true };
     int visibleOctaves { 2 };

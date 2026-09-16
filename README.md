@@ -71,6 +71,14 @@ With a mouse the keyboard defaults to **Hold** (latch) mode, so clicking several
 builds a chord; on touch, latch is off and several fingers register as one voicing. Any
 MIDI keyboard found at startup — or plugged in or paired later — is opened automatically.
 
+A **sustain pedal** works, on both shells and in both senses: the notes keep sounding
+after the keys lift, and they keep counting as part of the chord. A voicing spread out
+under the pedal — root, then the third, then the seventh, each key released before the
+next is struck — is read as the chord it adds up to rather than as a run of single notes,
+which is how a pianist actually plays one. Controller 64 from a hardware pedal and the
+on-screen **Sustain** control are the same thing by the time anything downstream sees
+them, so the on-screen one is there for the many people who have a keyboard but no pedal.
+
 The **Practice** menu at the top right sets a voicing shape for the whole
 session - root position, shell, rootless left hand, two-handed rootless, solo - and every
 voicing you play is then checked against it, so a rootless voicing played during a
@@ -148,9 +156,19 @@ sudo apt install emscripten   # or install the emsdk
 python3 -m http.server -d web 8000
 ```
 
-Then open <http://localhost:8000>. A published copy of that page is at
-<https://claude.ai/artifact/Q8FpFGkQheyCSXdYSthL3c> (private until shared from the
-page's share menu).
+Then open <http://localhost:8000>. The published copy lives on GitHub Pages:
+
+**<https://22nmcdon.github.io/jazz_learning_app/>**
+
+`.github/workflows/pages.yml` builds the WebAssembly engine and deploys `web/` there on
+every push. Pages has to be switched on once by hand, in **Settings → Pages → Build and
+deployment → Source: GitHub Actions**; until that is done the workflow runs and the
+deploy step fails, which is the only signal that the setting is still off.
+
+Pages rather than an embedded page, because of **Web MIDI**. Connecting a keyboard needs a
+permission that an embedded frame is usually not allowed even to ask for, so a MIDI
+keyboard that works on a served page does nothing inside one. A page served from its own
+origin can ask.
 
 `web/src/JazzWebBindings.cpp` marshals engine results to JSON; it holds no theory, the same
 way `app/` holds none. What the page cannot tell you is whether the JUCE UI works - for

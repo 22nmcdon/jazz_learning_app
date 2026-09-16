@@ -39,6 +39,9 @@ public:
     void noteOff (int midiNote);
     void allNotesOff();
 
+    /** Holds released notes until the pedal comes up, as a damper does. */
+    void setSustain (bool isDown);
+
 private:
     /** One sounding note. Voices are a fixed pool: a chord is ten notes at
         most, and allocating on the audio thread is not allowed.
@@ -68,6 +71,12 @@ private:
         enum class Stage { attack, decay, release };
 
         Stage stage { Stage::attack };
+
+        /** The key is up but the pedal is holding this note down. Kept apart
+            from the stage, because such a note is still decaying normally - the
+            pedal defers its release rather than changing how it rings.
+        */
+        bool pedalled { false };
     };
 
     void audioDeviceIOCallbackWithContext (const float* const* inputChannelData,
@@ -83,8 +92,11 @@ private:
     Voice* findVoiceFor (int midiNote);
     Voice* findFreeVoice();
 
+    void releaseVoice (Voice& voice);
+
     juce::AudioDeviceManager devices;
     std::array<Voice, 16> voices;
+    bool sustainDown { false };
 
     double sampleRate { 44100.0 };
     std::atomic<bool> running { false };

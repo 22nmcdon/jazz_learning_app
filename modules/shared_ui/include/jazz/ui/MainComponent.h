@@ -53,6 +53,7 @@ public:
     std::function<void (int midiNote, bool isOn)> onSoundNote;
     std::function<void (const std::vector<int>& midiNotes)> onSoundChord;
     std::function<void()> onSilenceRequested;
+    std::function<void (bool isDown)> onSustainChanged;
 
     /** Told by the shell whether there is any audio device to sound through. */
     void setSoundAvailable (bool available, const juce::String& note);
@@ -98,6 +99,7 @@ private:
     public:
         explicit SoundRelay (MainComponent& ownerComponent) : owner (ownerComponent) {}
         void noteEventReceived (const core::NoteEvent& event) override;
+        void sustainChanged (bool isDown) override;
 
     private:
         MainComponent& owner;

@@ -91,6 +91,7 @@ private:
             };
 
             contentComponent->onSilenceRequested = [&piano] { piano.allNotesOff(); };
+            contentComponent->onSustainChanged = [&piano] (bool isDown) { piano.setSustain (isDown); };
 
             // Reading a file is the shell's job - the UI is handed text.
             contentComponent->onOpenChartFileRequested = [this] { openChartFile(); };

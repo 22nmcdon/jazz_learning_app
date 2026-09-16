@@ -80,6 +80,16 @@ void MidiDeviceInput::timerCallback()
 
 void MidiDeviceInput::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage& message)
 {
+    // The sustain pedal is controller 64, and on most pedals it is a switch
+    // rather than a sweep - anything from halfway up counts as down, which is
+    // also what JUCE's own helper decides.
+    if (message.isSustainPedalOn() || message.isSustainPedalOff())
+    {
+        const auto isDown = message.isSustainPedalOn();
+        juce::MessageManager::callAsync ([this, isDown] { broadcastSustain (isDown); });
+        return;
+    }
+
     if (! message.isNoteOnOrOff())
         return;
 

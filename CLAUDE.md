@@ -41,7 +41,11 @@ Rules of thumb when writing or reviewing code:
   that a UI exists.
 - **MIDI input is abstracted behind one interface** so Core Engine / UI logic never
   branches on whether a note came from hardware MIDI or the on-screen keyboard — both
-  should produce the same event shape.
+  should produce the same event shape. The sustain pedal travels that same interface
+  (`NoteInputListener::sustainChanged`) rather than being squeezed into `NoteEvent`: a
+  pedal is not a note, but what it changes — which notes still count as sounding — is
+  exactly what every listener downstream is already tracking. Controller 64 and the
+  on-screen control are indistinguishable by the time anything acts on them.
 - **File formats split the same way.** Getting bytes out of a file — opening a PDF, asking
   a PDF library for its text — is the shell's job. Deciding which of that text is a chord
   chart, and turning chords into an iReal Pro link or back, is the engine's, and it does it
@@ -170,6 +174,14 @@ Two things are the page's alone, both for want of a library rather than a decisi
 reading a PDF, and printing one. The engine's chart reader is shared; what the JUCE shell
 lacks is a way to get text out of a PDF. If you add one, the reader is already there.
 
+### Where the browser page is published
+`.github/workflows/pages.yml` builds the wasm and deploys `web/` to GitHub Pages on every
+push to the default branch. That is the demo's real home, not an embedded page: **Web
+MIDI** needs a permission an embedded frame generally cannot ask for, so a keyboard that
+works on a served page does nothing inside one. Pages needs enabling once by hand
+(Settings → Pages → Source: GitHub Actions); if the deploy step is failing while the
+build step passes, that setting is the first thing to check.
+
 ### Not built — still genuinely open
 - Voice-leading visualiser. `guideToneMotion()` is the primitive it would draw.
 - Solo/improv feedback layer; personal voicing library; ear training; metronome /
@@ -220,6 +232,14 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
   a phone-sized window looked perfect on a desktop one: the sheet head, the chart tools
   and the dock's buttons all collided at 420px while being fine at 1200px.
   `JAZZ_UI_SIZE=420x860 JAZZ_UI_TOUCH=1` is two seconds of work and catches all of it.
+- **Web MIDI can be tested without a MIDI keyboard.** Stub
+  `navigator.requestMIDIAccess` in a copy of `web/index.html` before the page's own
+  script tag, hand it a fake input whose `onmidimessage` you keep a reference to, and
+  drive the page's real handler with raw bytes; report the outcome through
+  `document.title` so headless Chromium's `--dump-dom` can read it. That is how the
+  sustain pedal was verified on the page — including the control case of the same broken
+  chord without the pedal, which is what proves the pedal is doing the work. Keep the
+  harness a generated copy, so the code under test is the shipped file unmodified.
 - **A failing test is a question, not a chore.** Several here encoded bugs rather than
   behaviour — two asserted a chord printed a name that silently dropped a note, one
   asserted `F#maj9` should normalise to `Gb`. Work out whether the engine or the

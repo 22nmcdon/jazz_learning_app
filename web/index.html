@@ -252,6 +252,12 @@ button { font-family: inherit; cursor: pointer; }
   font-weight: 500;
 }
 .link-btn:hover { color: var(--blush-deep); border-color: var(--blush-deep); }
+/* The pedal is a state, not an action, so it stays lit while it is down. */
+.link-btn[aria-pressed="true"] {
+  color: var(--blush-deep);
+  border-bottom-width: 2px;
+  border-color: var(--blush-deep);
+}
 
 /* Sounding the whole voicing at once - what a mouse cannot do by clicking keys
    one at a time. Hidden once a MIDI keyboard is doing the playing. */
@@ -1000,6 +1006,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <button class="play-btn" type="button" id="playChord" disabled>Play chord</button>
       <button class="link-btn" type="button" id="nameChord" disabled>Name it</button>
       <button class="link-btn" type="button" id="showVoicing">Show me one</button>
+      <button class="link-btn" type="button" id="sustainPedal" aria-pressed="false"
+              title="Holds notes after the keys lift, as a sustain pedal does. A pedal on a connected MIDI keyboard works this too.">Sustain</button>
       <span class="legend"><span class="dot"></span> scale tone</span>
       <span class="legend"><span class="ring"></span> passing tone</span>
       <button class="link-btn" type="button" id="clearKeys" style="margin-left:auto">Clear keys</button>
@@ -1178,7 +1186,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   ["engineStatus", "sheetTitle", "sheetStyle", "sheetCredit", "editToggle", "restoreChart",
    "editor", "progression",
    "parseError", "systems", "verdict", "played", "expecting", "findingRow", "meter",
-   "meterFill", "keyboard", "clearKeys", "chordDialog", "dialogBar", "dialogChord",
+   "meterFill", "keyboard", "clearKeys", "sustainPedal", "chordDialog", "dialogBar", "dialogChord",
    "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
    "scaleRows", "subs", "advanced", "risky", "spotted", "spottedText", "useSpotted",
    "menuButton", "menuPanel", "connectMidi", "midiStatus", "styleLabel",
@@ -1689,10 +1697,22 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     if (index === -1) {
       state.heldNotes.push(note);
+
+      // Taking a note back off the pedal: it is under a finger again.
+      var holding = pedal.holding.indexOf(note);
+      if (holding !== -1) pedal.holding.splice(holding, 1);
+
       playNote(note, 0.8);
     } else {
       state.heldNotes.splice(index, 1);
-      stopNote(note);
+
+      // Clicking a key off is a key release, so the pedal holds its sound the
+      // same way it holds a released MIDI note's.
+      if (pedal.down) {
+        if (pedal.holding.indexOf(note) === -1) pedal.holding.push(note);
+      } else {
+        stopNote(note);
+      }
     }
 
     state.heldNotes.sort(function (a, b) { return a - b; });
@@ -1701,8 +1721,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     updateVoicingControls();
   });
 
+  el.sustainPedal.addEventListener("click", function () {
+    setSustain(!pedal.down);
+  });
+
   el.clearKeys.addEventListener("click", function () {
     state.heldNotes = [];
+    // "Clear" means clear: the pedal does not get to hold anything back.
+    pedal.holding = [];
     stopAllNotes();
     paintKeyboard();
     analyseVoicing();
@@ -2417,6 +2443,32 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // than leaving the button looking broken.
   var midi = { access: null, connected: false, held: [], chord: [], settleTimer: null, velocities: {} };
 
+  /** The sustain pedal: down or up, and the notes whose release it is holding
+      back. Kept beside the MIDI state because a pedal is a MIDI controller
+      first, but the on-screen button sets exactly the same thing. */
+  var pedal = { down: false, holding: [] };
+
+  /** Puts the pedal down or lifts it.
+
+      Down, a released key keeps sounding and stays in the chord being gathered,
+      so a chord played one note at a time is still read as a chord. Up, every
+      release the pedal was holding back happens at once. */
+  function setSustain(isDown) {
+    if (pedal.down === isDown) return;
+
+    pedal.down = isDown;
+    el.sustainPedal.setAttribute("aria-pressed", isDown ? "true" : "false");
+
+    if (isDown) return;
+
+    // The foot came up: everything no longer under a finger stops now.
+    pedal.holding.forEach(function (note) {
+      if (midi.held.indexOf(note) === -1) stopNote(note);
+    });
+
+    pedal.holding = [];
+  }
+
   function velocityOf(note) {
     return midi.velocities[note] || 0.8;
   }
@@ -2475,6 +2527,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var note = event.data[1];
     var velocity = event.data.length > 2 ? event.data[2] : 0;
 
+    // Controller 64 is the sustain pedal. Most are switches rather than
+    // sweeps, so anything from halfway counts as down.
+    if (status === 0xb0 && note === 64) {
+      setSustain(velocity >= 64);
+      return;
+    }
+
     if (status === 0x90 && velocity > 0) {
       midi.velocities[note] = velocity / 127;
       midiNoteOn(note);
@@ -2485,8 +2544,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function midiNoteOn(note) {
     // The first note after everything was released starts a new chord; notes
     // that arrive together are gathered into one voicing, as the engine's
-    // collector does for the app.
-    if (midi.held.length === 0) midi.chord = [];
+    // collector does for the app. Under the pedal nothing has been released,
+    // so a broken chord keeps adding to the one chord rather than starting a
+    // new one on every note.
+    if (midi.held.length === 0 && !pedal.down && pedal.holding.length === 0) midi.chord = [];
 
     if (midi.held.indexOf(note) === -1) midi.held.push(note);
     if (midi.chord.indexOf(note) === -1) midi.chord.push(note);
@@ -2506,6 +2567,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function midiNoteOff(note) {
     var index = midi.held.indexOf(note);
     if (index !== -1) midi.held.splice(index, 1);
+
+    // The pedal defers the release rather than cancelling it.
+    if (pedal.down) {
+      if (pedal.holding.indexOf(note) === -1) pedal.holding.push(note);
+      return;
+    }
 
     stopNote(note);
     // The voicing stays on screen after the hands lift, so it can be read.

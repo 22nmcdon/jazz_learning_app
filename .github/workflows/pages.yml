@@ -1,0 +1,70 @@
+# Publishes web/ to GitHub Pages.
+#
+# The browser demo needs a real origin rather than an embedded frame: Web MIDI
+# asks for a permission that a sandboxed iframe is usually not allowed to
+# request, so a keyboard that works on a served page does nothing in an
+# embedded one. Pages gives it an origin of its own.
+#
+# The WebAssembly engine is built here rather than committed - web/dist and
+# web/jazz-engine.js are both gitignored, and a binary in the tree would go
+# stale the first time the engine changed without anyone noticing.
+name: Pages
+
+on:
+  push:
+    branches: ["claude/gifted-wozniak-7z4jt6"]
+  workflow_dispatch:
+
+# One deployment at a time, and never cancel one halfway: a half-published site
+# is worse than an old one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build the WebAssembly engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.61
+          actions-cache-folder: emsdk-cache
+
+      - name: Build the page
+        run: |
+          mkdir -p _site
+          ./web/build.sh "$GITHUB_WORKSPACE/_site"
+          cp web/index.html _site/
+          # Pages runs Jekyll over the upload unless told not to, and Jekyll
+          # would drop any file whose name begins with an underscore.
+          touch _site/.nojekyll
+
+      - name: Check the page has something to serve
+        run: |
+          test -s _site/index.html
+          test -s _site/jazz-engine.js
+          ls -lh _site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

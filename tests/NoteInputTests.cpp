@@ -22,7 +22,25 @@ namespace
         {
             broadcast ({ note, 0.0f, false, source, time });
         }
+
+        void pedal (bool isDown) { broadcastSustain (isDown); }
     };
+
+    /** The notes a voicing holds, low to high, as "60 64 67". */
+    std::string notesOf (const Voicing& voicing)
+    {
+        std::string out;
+
+        for (auto note : voicing.midiNotes)
+        {
+            if (! out.empty())
+                out += " ";
+
+            out += std::to_string (note);
+        }
+
+        return out;
+    }
 }
 
 TEST ("simultaneous touches arrive as one voicing, not three note-ons")
@@ -187,4 +205,172 @@ TEST ("duplicate note-ons do not double up")
     source.press (60, 0.01);
 
     CHECK_EQ (collector.heldNotes().size(), std::size_t (1));
+}
+
+//==============================================================================
+// The sustain pedal. A pedal is not a note, but what it changes is which notes
+// count as sounding - which is the collector's whole job.
+
+TEST ("a pedalled note keeps sounding after the key lifts")
+{
+    TestSource source;
+    VoicingCollector collector;
+    source.addListener (&collector);
+
+    source.pedal (true);
+    source.press (60, 0.0);
+    source.release (60, 0.1);
+
+    CHECK_EQ (notesOf (collector.heldNotes()), std::string ("60"));
+
+    // Nobody is holding it, though - the keyboard should not draw it pressed.
+    CHECK (collector.keysHeld().isEmpty());
+}
+
+TEST ("lifting the pedal releases what the fingers had already let go")
+{
+    TestSource source;
+    VoicingCollector collector;
+    source.addListener (&collector);
+
+    source.pedal (true);
+    source.press (60, 0.0);
+    source.press (64, 0.01);
+    source.release (60, 0.1);
+
+    CHECK_EQ (notesOf (collector.heldNotes()), std::string ("60 64"));
+
+    source.pedal (false);
+
+    // 64 is still under a finger; 60 is not, so only 60 goes.
+    CHECK_EQ (notesOf (collector.heldNotes()), std::string ("64"));
+}
+
+TEST ("a chord pedalled one note at a time is recognised as a chord")
+{
+    TestSource source;
+    VoicingCollector collector;
+    source.addListener (&collector);
+
+    Voicing received;
+    auto voicings = 0;
+
+    collector.onVoicing = [&] (const Voicing& voicing, NoteSource)
+    {
+        ++voicings;
+        received = voicing;
+    };
+
+    // Played as a broken chord, each key released before the next is struck.
+    // Without the pedal this is three single notes; with it, one voicing.
+    source.pedal (true);
+    source.press (60, 0.0);
+    source.release (60, 0.02);
+    source.press (64, 0.04);
+    source.release (64, 0.06);
+    source.press (67, 0.08);
+    source.release (67, 0.10);
+
+    collector.advanceTime (0.2);
+
+    CHECK_EQ (voicings, 1);
+    CHECK_EQ (notesOf (received), std::string ("60 64 67"));
+}
+
+TEST ("the same broken chord without the pedal is not one voicing")
+{
+    TestSource source;
+    VoicingCollector collector;
+    source.addListener (&collector);
+
+    Voicing received;
+
+    collector.onVoicing = [&] (const Voicing& voicing, NoteSource) { received = voicing; };
+
+    source.press (60, 0.0);
+    source.release (60, 0.02);
+    source.press (64, 0.04);
+    source.release (64, 0.06);
+    source.press (67, 0.08);
+
+    collector.advanceTime (0.2);
+
+    CHECK_EQ (notesOf (received), std::string ("67"));
+}
+
+TEST ("pressing a key again while pedalled does not double it up")
+{
+    TestSource source;
+    VoicingCollector collector;
+    source.addListener (&collector);
+
+    source.pedal (true);
+    source.press (60, 0.0);
+    source.release (60, 0.02);
+    source.press (60, 0.04);
+
+    CHECK_EQ (collector.heldNotes().size(), std::size_t (1));
+
+    // And the re-pressed key is held again, so lifting the pedal keeps it.
+    source.pedal (false);
+    CHECK_EQ (notesOf (collector.heldNotes()), std::string ("60"));
+}
+
+TEST ("held notes change when the pedal lifts, so the keys can be redrawn")
+{
+    TestSource source;
+    VoicingCollector collector;
+    source.addListener (&collector);
+
+    auto changes = 0;
+    collector.onHeldNotesChanged = [&] (const Voicing&) { ++changes; };
+
+    source.pedal (true);
+    source.press (60, 0.0);
+    source.release (60, 0.02);
+
+    const auto beforeLift = changes;
+
+    source.pedal (false);
+
+    CHECK (changes > beforeLift);
+    CHECK (collector.heldNotes().isEmpty());
+}
+
+TEST ("lifting a pedal that is holding nothing reports no change")
+{
+    TestSource source;
+    VoicingCollector collector;
+    source.addListener (&collector);
+
+    source.press (60, 0.0);   // key still down, no pedal involved
+
+    auto changes = 0;
+    collector.onHeldNotesChanged = [&] (const Voicing&) { ++changes; };
+
+    source.pedal (true);
+    source.pedal (false);
+
+    CHECK_EQ (changes, 0);
+    CHECK_EQ (notesOf (collector.heldNotes()), std::string ("60"));
+}
+
+TEST ("the pedal survives a reset, because a foot does not lift on its own")
+{
+    TestSource source;
+    VoicingCollector collector;
+    source.addListener (&collector);
+
+    source.pedal (true);
+    source.press (60, 0.0);
+    collector.reset();
+
+    CHECK (collector.heldNotes().isEmpty());
+    CHECK (collector.isSustaining());
+
+    // Still pedalled, so the next note behaves as a pedalled one.
+    source.press (64, 0.1);
+    source.release (64, 0.12);
+
+    CHECK_EQ (notesOf (collector.heldNotes()), std::string ("64"));
 }

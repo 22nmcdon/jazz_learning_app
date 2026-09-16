@@ -32,6 +32,15 @@ class NoteInputListener
 public:
     virtual ~NoteInputListener() = default;
     virtual void noteEventReceived (const NoteEvent& event) = 0;
+
+    /** The sustain pedal went down or came up.
+
+        A pedal is not a note, so it is not squeezed into NoteEvent; but it
+        travels the same interface, because whether a note is still sounding is
+        exactly the question every listener downstream is already answering.
+        Listeners that do not care about the pedal need not implement it.
+    */
+    virtual void sustainChanged (bool /*isDown*/) {}
 };
 
 /** Base class for anything that produces notes: hardware MIDI in the platform
@@ -53,6 +62,7 @@ public:
 
 protected:
     void broadcast (const NoteEvent& event);
+    void broadcastSustain (bool isDown);
 
 private:
     std::vector<NoteInputListener*> listeners;
@@ -84,21 +94,42 @@ public:
     std::function<void (const Voicing&)> onHeldNotesChanged;
 
     void noteEventReceived (const NoteEvent& event) override;
+    void sustainChanged (bool isDown) override;
 
     /** Drives the chord-window timeout; call from a timer (or directly in tests). */
     void advanceTime (double nowSeconds);
 
+    /** Everything still sounding: the keys down, plus whatever the pedal is
+        holding after the fingers left.
+    */
     Voicing heldNotes() const;
+
+    /** Just the keys physically down, which is what the keyboard draws as
+        pressed. A pedalled note is sounding but nobody is holding it.
+    */
+    Voicing keysHeld() const;
+
+    bool isSustaining() const noexcept { return sustainDown; }
+
     void reset();
 
 private:
     void emitIfSettled (double nowSeconds);
+    void releaseUnheldNotes();
 
     Options options;
-    std::vector<int> held;
+
+    /** Notes sounding, and the subset of them a finger is still on. Splitting
+        the two is the whole of sustain: a pedal stops a release from reaching
+        the first list, and lifting it lets every deferred release through.
+    */
+    std::vector<int> sounding;
+    std::vector<int> keysDown;
+
     NoteSource lastSource { NoteSource::onScreenKeyboard };
     double lastNoteOnTime {};
     bool awaitingSettle {};
+    bool sustainDown {};
 };
 
 } // namespace jazz::core
