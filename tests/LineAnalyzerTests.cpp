@@ -1087,27 +1087,66 @@ TEST ("a score does not dip and climb back when a player reaches for a chromatic
     CHECK (analyzer.stats().score() >= settledScore);
 }
 
-TEST ("a note the window passes without a resolution is reported, late and once")
+TEST ("the note straight after an open one closes it, when it landed somewhere else")
 {
+    /*  The commonest case there is, and it needs no waiting: A is a chord tone
+        a long way from Db, so no step pattern reaches back and no enclosure can
+        involve a note that landed. Saying so a note later would be holding back
+        the one piece of bad news this reads for no reason. */
     LineAnalyzer analyzer;
     analyzer.startTake();
     analyzer.setTarget (0, chordFrom ("Dm7"));
 
-    analyzer.play (61);                      // open
+    analyzer.play (61);
     CHECK (analyzer.strandedByLastNote().empty());
 
-    analyzer.play (69);                      // a leap away: still reachable
-    CHECK (analyzer.strandedByLastNote().empty());
-
-    analyzer.play (72);                      // the window has now passed it
+    analyzer.play (69);
     CHECK_EQ (static_cast<int> (analyzer.strandedByLastNote().size()), 1);
     CHECK_EQ (analyzer.strandedByLastNote().front().midiNote, 61);
-
-    analyzer.play (74);                      // and it is not reported twice
-    CHECK (analyzer.strandedByLastNote().empty());
-
     CHECK_EQ (analyzer.stats().outside, 1);
     CHECK_EQ (analyzer.stats().unresolved, 0);
+
+    analyzer.play (72);                      // and it is not reported twice
+    CHECK (analyzer.strandedByLastNote().empty());
+}
+
+TEST ("a second outside note with room between them is worth waiting one more for")
+{
+    /*  The one case that does wait, and it waits for a reason: Eb and Db are
+        two semitones apart, so a target could sit between them and be a step
+        from each. That is an enclosure still in play, and closing Eb now would
+        be calling a miss on a phrase about to land. */
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    analyzer.play (63);
+    analyzer.play (61);
+    CHECK (analyzer.strandedByLastNote().empty());
+
+    analyzer.play (62);                      // and it does land
+
+    CHECK (analyzer.strandedByLastNote().empty());
+    CHECK (analyzer.notes()[0].colour == NoteColour::approach);
+    CHECK (analyzer.notes()[1].colour == NoteColour::approach);
+}
+
+TEST ("two outside notes with no room between them do not buy another note")
+{
+    /*  A semitone apart: nothing can sit between them, so there is no enclosure
+        to wait for and the first one closes straight away. */
+    LineAnalyzer::Options pentatonic;
+    pentatonic.style = "pentatonic";
+
+    LineAnalyzer analyzer { pentatonic };
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    analyzer.play (63);
+    analyzer.play (64);
+
+    CHECK_EQ (static_cast<int> (analyzer.strandedByLastNote().size()), 1);
+    CHECK_EQ (analyzer.strandedByLastNote().front().midiNote, 63);
 }
 
 TEST ("ending a take closes everything still open")
@@ -1148,14 +1187,36 @@ TEST ("a summary of a finished take has nothing left open in it")
 
 TEST ("the window without a take reports both halves, and counts neither")
 {
+    // Unarmed, and told at the same moment an armed take would be told.
     LineAnalyzer analyzer;
     analyzer.setTarget (0, chordFrom ("Dm7"));
 
     analyzer.play (61);
     analyzer.play (69);
-    analyzer.play (72);
 
     CHECK_EQ (static_cast<int> (analyzer.strandedByLastNote().size()), 1);
+    CHECK_EQ (analyzer.strandedByLastNote().front().midiNote, 61);
     CHECK (analyzer.notes().empty());
     CHECK_EQ (analyzer.stats().total(), 0);
+}
+
+TEST ("an open note is not lost off the front of the window before it is closed")
+{
+    /*  The buffer keeps only what the widest pattern needs, so a note that was
+        still open when it was dropped would take its verdict with it. Play
+        enough to push several notes through and every one of them has to have
+        been accounted for. */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    auto stranded = 0;
+
+    for (const auto note : { 61, 69, 63, 67, 66, 60, 70, 64 })
+    {
+        analyzer.play (note);
+        stranded += static_cast<int> (analyzer.strandedByLastNote().size());
+    }
+
+    // Four of those eight are outside D Dorian, and none of them resolved.
+    CHECK_EQ (stranded, 4);
 }

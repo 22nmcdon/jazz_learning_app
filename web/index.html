@@ -1392,7 +1392,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 319 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 322 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -2829,6 +2829,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         group.hidden = off;
     });
 
+    // Both directions let go of whatever was being held. A voicing carried
+    // into solo practice is a chord nothing over there will ever read - it just
+    // sits on the keyboard looking pressed - and a line carried back into chord
+    // practice would be analysed as a voicing nobody played. Letting go is the
+    // one thing the two modes agree on.
+    stopAllNotes();
+    state.heldNotes = [];
+    pedal.holding = [];
+    paintKeyboard();
+
     if (soloing) {
       soloMoveToBar();
       paintTakeMarks();
@@ -2836,9 +2846,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       // Back to chords: whatever is under the hands is read as a voicing again,
       // and the chart stops carrying a solo take's marks.
       paintTakeMarks();
-      stopAllNotes();
-      state.heldNotes = [];
-      paintKeyboard();
       analyseVoicing();
       updateVoicingControls();
     }

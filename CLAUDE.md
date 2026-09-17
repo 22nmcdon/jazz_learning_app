@@ -217,9 +217,16 @@ the line between what exists and what does not. Do not re-plan something in the 
   passing tone are outside by pitch and are the line *working*; nothing tells them apart
   from a note that did not land until the note after arrives. So `LineAnalyzer` is not
   per-note: `play()` reads the new note, looks back over the two behind it promoting any it
-  resolved, then *settles* the one the window has finished with. A note outside the harmony
-  comes back `NoteColour::unresolved` and becomes `approach` or `outside` exactly two notes
-  later, once, for good. `read()` - pure, one note - returns `outside`, because one note has
+  resolved, then *settles* every open note the line can no longer reach. A note outside the
+  harmony comes back `NoteColour::unresolved` and becomes `approach` or `outside` once, for
+  good - usually on the very next note. `canStillBeReached()` is where that is decided, and
+  the rule is "could any pattern still promote this", not "have two notes gone by": a note
+  that lands somewhere else closes the one before it immediately, because the step patterns
+  have had their chance and an enclosure needs that note to be outside too. Only a second
+  outside note with room between the two - two to four semitones, so a target could sit
+  between them a step from each - holds the verdict back a further note. Waiting a fixed two
+  notes meant the one piece of bad news this reads arrived a note late in the commonest case
+  of all. `read()` - pure, one note - returns `outside`, because one note has
   no line around it to be waiting on.
     - **Nothing is graded on an open note.** `score()` reads `LineStats::settled()`. Counting
       an open note as outside for the two notes before the window decides made the score dip
@@ -244,7 +251,9 @@ the line between what exists and what does not. Do not re-plan something in the 
     - **It runs without a take.** Notes outside a take go into a three-note `recent` buffer,
       resolved and settled there but never counted. Someone who has not armed anything is
       the person most likely to be trying chromatic notes, and telling them those were
-      misses is the lesson the whole window exists to stop.
+      misses is the lesson the whole window exists to stop - and they are told at the same
+      moment an armed player would be. The buffer is trimmed *after* settling, or a note
+      could drop off the front while still open and take its verdict with it.
     - **`endTake()` closes whatever is still open**, as outside: there will be no more
       notes, so the resolution is not coming. A summary carrying "waiting to see" would be
       waiting for good, which is why every test that reads a colour back ends the take

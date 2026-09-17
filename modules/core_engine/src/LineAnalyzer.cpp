@@ -207,6 +207,42 @@ namespace
                 chord.hasMinorThird());
     }
 
+    /** Whether any pattern could still promote the note at @p index.
+
+        All three patterns are at most three notes wide, so this is a question
+        about what has arrived since.
+
+        A chromatic approach and a passing tone are settled by the very next
+        note: it either landed a step away or it did not, and no later note can
+        change that. An enclosure needs the note after that as well - but only
+        when the next note is itself outside, and only when the two leave room
+        for a target between them. Opposite sides, each within a step, is only
+        possible when they are two to four semitones apart: closer and there is
+        nothing between them, wider and no one note is a step from both.
+
+        Anything else has had every chance it is going to get.
+    */
+    bool canStillBeReached (const std::vector<LineNote>& line, std::size_t index)
+    {
+        // Nothing has followed it yet, so everything is still open to it.
+        if (index + 1 >= line.size())
+            return true;
+
+        // The next note landed: the step patterns have been tried and failed,
+        // and an enclosure needs that note to be outside too.
+        if (! isOutsideByPitch (line[index + 1].colour))
+            return false;
+
+        const auto apart = std::abs (line[index + 1].midiNote - line[index].midiNote);
+
+        if (apart < 2 || apart > 2 * widestStep)
+            return false;
+
+        // Room for an enclosure, so it turns on the note after next - which has
+        // either arrived and not made one, or has not arrived at all.
+        return index + 2 >= line.size();
+    }
+
     /** The scales a note will be read against, best-first. */
     std::vector<ScaleSuggestion> scalesFor (const ChordSymbol& chord,
                                             const LineAnalyzer::Options& options)
@@ -425,42 +461,47 @@ LineNote LineAnalyzer::play (int midiNote)
 
     line.push_back (note);
 
+    resolveTail (line);
+    settleTail (line);
+
     // Without a take the window is all there is, and it never grows past what
     // the widest pattern needs: this is a window, not a second take hiding
-    // behind the first.
+    // behind the first. Trimmed after settling rather than before, or a note
+    // could be dropped off the front while still open and its verdict would go
+    // with it.
     if (! taking)
         while (line.size() > notesInTheWindow)
             line.erase (line.begin());
 
-    resolveTail (line);
-    settleTail (line);
-
     return note;
 }
 
-/** Settles the note the window has just finished with.
+/** Closes every open note the line can no longer reach.
 
-    A note can be reached by the next note and by the one after it, and by
-    nothing else. Once two have gone by, whatever it is now is what it is - so
-    exactly one note settles per note played, the one two back.
+    Waiting a fixed two notes was wrong, and wrong in the direction that
+    matters: the commonest case by far is an outside note followed by one that
+    simply lands somewhere else, and there is nothing to wait for there. The
+    next note either stepped home or it did not, and once it has landed no
+    enclosure can involve the note before it either. Holding the verdict back
+    another note meant the one piece of bad news this reads arrived a note late
+    for no reason at all.
 
-    This is where the bad news comes from, and it is late on purpose: nothing
-    can know a note was left hanging until the notes that could have saved it
-    have been played. Telling a player at the moment of playing that an outside
-    note was a mistake is a guess, and about a third of the time it is wrong.
+    So a note closes as soon as nothing can still reach it, which is usually
+    the very next note - and waits only when an enclosure is genuinely still in
+    play. `canStillBeReached` is where that is decided.
 */
 void LineAnalyzer::settleTail (std::vector<LineNote>& line)
 {
-    if (line.size() < notesInTheWindow)
-        return;
+    for (std::size_t i = 0; i + 1 < line.size(); ++i)
+    {
+        auto& note = line[i];
 
-    auto& note = line[line.size() - notesInTheWindow];
+        if (isSettled (note.colour) || canStillBeReached (line, i))
+            continue;
 
-    if (isSettled (note.colour))
-        return;
-
-    note.colour = NoteColour::outside;
-    justStranded.push_back (note);
+        note.colour = NoteColour::outside;
+        justStranded.push_back (note);
+    }
 }
 
 /** Promotes the note at @p index to an approach note resolving into @p target.

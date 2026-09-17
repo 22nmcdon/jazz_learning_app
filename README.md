@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (319), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (322), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -164,15 +164,17 @@ goes next*. So the app does not guess. What it says instead is the thing that is
 then - *a semitone up lands on D4, the root* - which is both more use than a verdict and
 correct whichever way the line goes.
 
-Then the next two notes decide it, because those are the only two that can reach back. Step
-home, or take the target from both sides first, and the note is read again as an **approach
-note** that counts as landing; the dock says so (*Db4 before it was on the way here*) rather
-than quietly improving a number you are looking at. Go somewhere else and it settles as
-**outside**, and the dock says that then - two notes later, which is the earliest it could
-honestly be said. Either way it can happen across a barline, because running chromatically
-into the next chord is one of the most idiomatic things in the idiom, and it works whether or
-not a take is armed: a player trying things out is the one most likely to be experimenting
-with chromatic notes.
+Then the next note usually decides it. Step home, or take the target from both sides first,
+and the note is read again as an **approach note** that counts as landing; the dock says so
+(*Db4 before it was on the way here*) rather than quietly improving a number you are looking
+at. Play something that lands somewhere else instead and it settles as **outside** right
+there, and the dock says so - *Db4 never found its way home*. Only one thing buys another
+note: a second outside note with room between the two for a target, because that is an
+enclosure still in play and closing the first one would be calling a miss on a phrase about
+to land. Either way it can happen across a barline, because running chromatically into
+the next chord is one of the most idiomatic things in the idiom, and it works whether or not
+a take is armed: a player trying things out is the one most likely to be experimenting with
+chromatic notes, and is told at exactly the same moment an armed one would be.
 
 **Nothing is graded on a note while it is still open.** That is the practical half of it. The
 score reads only the notes whose reading is final, so it no longer dips the moment you reach

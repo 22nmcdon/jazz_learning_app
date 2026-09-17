@@ -243,8 +243,12 @@ struct TakeSummary
 
     So a note outside the harmony is not read as `outside` when it is played.
     It is read as `unresolved`, and stays that way for exactly as long as the
-    window can still reach it: the next note, and the one after. Then it
-    becomes `approach` or `outside`, once, and never changes again.
+    window can still reach it - which is usually only the next note. A note
+    that lands somewhere else settles the one before it immediately: the step
+    patterns have been tried, and an enclosure needs that note to be outside as
+    well. Only a second outside note with room for a target between the two
+    holds the verdict back a further note. Then it becomes `approach` or
+    `outside`, once, and never changes again.
 
     That is a statement about *when* a thing is decided, and it matters twice
     over. The counts do not judge an unresolved note - the score reads
@@ -410,7 +414,7 @@ private:
     /** Promotes any of the last few notes of @p line that the newest resolved. */
     void resolveTail (std::vector<LineNote>& line);
 
-    /** Settles whatever the window has now passed without resolving. */
+    /** Closes every open note the line can no longer reach. */
     void settleTail (std::vector<LineNote>& line);
 
     bool promote (std::vector<LineNote>& line, std::size_t index, int target);

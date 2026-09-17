@@ -183,17 +183,16 @@ TEST ("a note outside the scale comes across as open, with what would close it")
     CHECK (contains (json, "\"settled\":0"));
 }
 
-TEST ("a note the line never closed is reported when the window passes it")
+TEST ("a note the line never closed is reported as soon as nothing can reach it")
 {
     soloStartTake();
     soloSetBar (0, "Cmaj7", "", "");
 
     soloPlayNote (61);
-    CHECK (contains (soloPlayNote (72), "\"stranded\":[]"));
 
-    // Two notes on, nothing could have saved it, and only now does the wire
-    // say so - which is the earliest moment it is true.
-    const auto json = soloPlayNote (76);
+    // The very next note lands somewhere else, which is the earliest moment
+    // the verdict is true - and so the moment the wire carries it.
+    const auto json = soloPlayNote (72);
 
     CHECK (contains (json, "\"stranded\":[\"Db4\"]"));
     CHECK (contains (json, "\"outside\":1"));

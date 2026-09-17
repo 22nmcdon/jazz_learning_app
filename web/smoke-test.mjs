@@ -160,6 +160,10 @@ try {
   const soloKey = (note) => page.locator(`#keyboard .key[data-note="${note}"]`);
   const readout = () => page.locator("#soloNote").innerText();
 
+  // Show me one left a voicing under the hands a few checks ago and nothing has
+  // let go of it, which is what makes the next check mean something.
+  const stillHeld = await page.locator("#keyboard .key[aria-pressed='true']").count();
+
   const chordsPaper = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const chordsHelp = await page.locator("#helpButton").getAttribute("aria-label");
 
@@ -204,6 +208,11 @@ try {
   check(`nothing moves when the mode changes (${JSON.stringify(soloLayout)})`,
         JSON.stringify(soloLayout) === JSON.stringify(chordsLayout));
 
+  // A voicing carried into solo practice is a chord nothing over here reads -
+  // it just sits on the keyboard looking pressed.
+  check(`switching modes lets go of the keys (${stillHeld} held before)`,
+        stillHeld > 0 && (await page.locator("#keyboard .key[aria-pressed='true']").count()) === 0);
+
   // Start from bar one rather than wherever the last section left off. Clicking
   // a bar you are already on opens it, so which bar is selected decides whether
   // these clicks move or open - the test has to know, not hope.
@@ -245,15 +254,15 @@ try {
         + `(${(await page.locator("#soloAgainst").innerText()).replace(/\s+/g, " ")})`, true);
 
   // The other half, and the only place the app ever says a note did not work:
-  // an open note the window passes without the line closing it. Late by
-  // construction - two notes have to go by before it is true.
+  // an open note the line never closed. The note straight after it lands
+  // somewhere else, which is the earliest moment that is true - so it is the
+  // moment it has to be said, not the one after.
   await soloKey(61).click();
   await soloKey(69).click();
-  await soloKey(72).click();
   await page.waitForFunction(
     () => document.querySelector("#soloAgainst").textContent.includes("never found"),
     null, { timeout: 10000 });
-  check(`a note the line never closed is flagged once the window passes it `
+  check(`a note the line never closed is flagged by the very next note `
         + `(${(await page.locator("#soloAgainst").innerText()).replace(/\s+/g, " ")})`, true);
 
   // Nothing is counted until a take is armed.
