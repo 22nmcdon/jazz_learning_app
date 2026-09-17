@@ -228,6 +228,16 @@ try {
     () => document.querySelector("#soloNote").dataset.colour === "outside", null, { timeout: 10000 });
   check("a note outside the scale is read as outside", true);
 
+  // ...and the same note, once the line steps home from it, is read again as
+  // an approach. This is the one behaviour in solo mode that changes after the
+  // fact, so it is the one worth driving end to end rather than trusting.
+  await soloKey(62).click();
+  await page.waitForFunction(
+    () => document.querySelector("#soloAgainst").textContent.includes("on the way here"),
+    null, { timeout: 10000 });
+  check(`an outside note that steps home is read again as an approach `
+        + `(${(await page.locator("#soloAgainst").innerText()).replace(/\s+/g, " ")})`, true);
+
   // Nothing is counted until a take is armed.
   check("nothing is counted before arming", await page.locator("#soloTallies").isHidden());
 
@@ -327,6 +337,18 @@ try {
 
   // The score is the strip's one-number summary, and it comes from the engine
   // rather than from arithmetic in the page.
+  // The take so far is two chord tones; play a chromatic approach into a third
+  // and the bar should count it as landing rather than as outside.
+  await soloKey(64).click();
+  await soloKey(63).click();
+  await soloKey(62).click();
+  await page.waitForFunction(
+    () => /approach/.test(document.querySelector("#systems .bar").dataset.take || ""),
+    null, { timeout: 10000 });
+  check(`the chart counts an approach note as its own tier `
+        + `(${await page.locator("#systems .bar").first().getAttribute("data-take")})`,
+        (await page.locator("#systems .bar .bar-take .ap").count()) === 1);
+
   const scored = (await page.locator("#systems .bar .bar-score").first().innerText()).trim();
   check(`the bar carries a score (${scored})`, /^\d{1,3}%$/.test(scored));
   check("and a screen reader is told it too",

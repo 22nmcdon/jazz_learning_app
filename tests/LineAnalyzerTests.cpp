@@ -19,6 +19,18 @@ namespace
         return LineAnalyzer::read (midiNote, chordFrom (symbol)).colour;
     }
 
+    /** Field by field, never `{ a, b, c }`: a fourth tier landed in the middle
+        of this struct once, and positional init would have gone on compiling. */
+    LineStats statsOf (int chordTones, int scaleTones, int outside, int approachTones = 0)
+    {
+        LineStats stats;
+        stats.chordTones = chordTones;
+        stats.scaleTones = scaleTones;
+        stats.approachTones = approachTones;
+        stats.outside = outside;
+        return stats;
+    }
+
     /** Plays a run of notes into an armed take over one bar. */
     void playAll (LineAnalyzer& analyzer, const std::vector<int>& notes)
     {
@@ -304,24 +316,33 @@ TEST ("walking back to a bar adds to it rather than making a second one")
 
 TEST ("the percentages in a summary add up to a hundred")
 {
-    // 0.505 and 0.495 both round up, so three shares rounded on their own make
-    // 101 often enough to be seen. This is the case that used to.
-    for (auto chordTones = 0; chordTones <= 7; ++chordTones)
+    /*  0.505 and 0.495 both round up, so shares rounded on their own make 101
+        often enough to be seen. This is the case that used to.
+
+        Written out field by field rather than as `{ a, b, c }`. A fourth tier
+        was added between two of these, and positional init went on compiling
+        while quietly meaning something else - which is the same trap
+        `ScaleSuggester::with()` exists to close. */
+    for (auto chordTones = 0; chordTones <= 5; ++chordTones)
     {
-        for (auto scaleTones = 0; scaleTones <= 7; ++scaleTones)
+        for (auto scaleTones = 0; scaleTones <= 5; ++scaleTones)
         {
-            for (auto outside = 0; outside <= 7; ++outside)
+            for (auto approachTones = 0; approachTones <= 5; ++approachTones)
             {
-                const LineStats stats { chordTones, scaleTones, outside };
+                for (auto outside = 0; outside <= 5; ++outside)
+                {
+                    const auto stats = statsOf (chordTones, scaleTones, outside, approachTones);
 
-                if (stats.total() == 0)
-                    continue;
+                    if (stats.total() == 0)
+                        continue;
 
-                const auto sum = stats.percentChordTones()
-                               + stats.percentScaleTones()
-                               + stats.percentOutside();
+                    const auto sum = stats.percentChordTones()
+                                   + stats.percentScaleTones()
+                                   + stats.percentApproachTones()
+                                   + stats.percentOutside();
 
-                CHECK_EQ (sum, 100);
+                    CHECK_EQ (sum, 100);
+                }
             }
         }
     }
@@ -563,17 +584,6 @@ TEST ("changing the style overrides a scale left behind by the last one")
 // The score. It is the only judgement in this file, so it gets the most tests:
 // every constant in it is arguable, and a test is where the argument is held.
 
-namespace
-{
-    LineStats statsOf (int chordTones, int scaleTones, int outside)
-    {
-        LineStats stats;
-        stats.chordTones = chordTones;
-        stats.scaleTones = scaleTones;
-        stats.outside = outside;
-        return stats;
-    }
-}
 
 TEST ("nothing played scores nothing, rather than nothing out of nothing")
 {
@@ -655,4 +665,343 @@ TEST ("a take's bars are scored one by one, not all together")
 
     CHECK (analyzer.statsForBar (0).score() > analyzer.statsForBar (1).score());
     CHECK (analyzer.statsForBar (1).score() == 25);
+}
+
+//==============================================================================
+// The window. Everything below needs more than one note to decide, which is the
+// whole point of it - and is why none of it belongs in `read()`.
+
+namespace
+{
+    /** The colours of a run of notes over one chord, after the take has seen
+        all of them. Every test here is about how a reading changes once the
+        note after it arrives, so reading them back at the end is the only
+        honest way to look. */
+    std::vector<NoteColour> coloursAfter (const std::string& symbol, const std::vector<int>& notes)
+    {
+        LineAnalyzer analyzer;
+        analyzer.startTake();
+        analyzer.setTarget (0, chordFrom (symbol));
+        playAll (analyzer, notes);
+
+        std::vector<NoteColour> colours;
+
+        for (const auto& note : analyzer.notes())
+            colours.push_back (note.colour);
+
+        return colours;
+    }
+}
+
+TEST ("a note on its own is never an approach, however it looks")
+{
+    // Db over Dm7 is a semitone from the root either way, and `read()` cannot
+    // know whether the line is about to use that. It says what it sees.
+    CHECK (colourOf (61, "Dm7") == NoteColour::outside);
+    CHECK (LineAnalyzer::read (61, chordFrom ("Dm7")).colour != NoteColour::approach);
+}
+
+TEST ("an outside note that steps home is an approach, not a miss")
+{
+    // Db, then D: the root of Dm7 approached from a semitone below.
+    const auto colours = coloursAfter ("Dm7", { 61, 62 });
+
+    CHECK_EQ (static_cast<int> (colours.size()), 2);
+    CHECK (colours[0] == NoteColour::approach);
+    CHECK (colours[1] == NoteColour::chordTone);
+}
+
+TEST ("the reading only improves once the note after it has arrived")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    // Read the moment it is played, it is outside - and correctly so.
+    CHECK (analyzer.play (61).colour == NoteColour::outside);
+    CHECK (analyzer.statsForBar (0).outside == 1);
+
+    analyzer.play (62);
+
+    CHECK (analyzer.notes().front().colour == NoteColour::approach);
+    CHECK_EQ (analyzer.statsForBar (0).outside, 0);
+    CHECK_EQ (analyzer.statsForBar (0).approachTones, 1);
+}
+
+TEST ("an outside note that leaps away stays outside")
+{
+    // Db, then A: a fifth away, resolving nothing.
+    const auto colours = coloursAfter ("Dm7", { 61, 69 });
+
+    CHECK (colours[0] == NoteColour::outside);
+}
+
+TEST ("two outside notes in a row are only excused if they enclose something")
+{
+    // Db then Eb, then a leap away: neither went anywhere.
+    const auto wandering = coloursAfter ("Dm7", { 61, 63, 72 });
+
+    CHECK (wandering[0] == NoteColour::outside);
+    CHECK (wandering[1] == NoteColour::outside);
+
+    // Eb above, Db below... no: Eb (63) above D (62), C# (61) below it. Both
+    // sides of the root, then the root. That is an enclosure, and both notes
+    // were the line aiming rather than missing.
+    const auto enclosing = coloursAfter ("Dm7", { 63, 61, 62 });
+
+    CHECK (enclosing[0] == NoteColour::approach);
+    CHECK (enclosing[1] == NoteColour::approach);
+    CHECK (enclosing[2] == NoteColour::chordTone);
+}
+
+TEST ("an approach resolves into a scale tone as readily as into a chord tone")
+{
+    /*  This test started out asserting the opposite, on the assumption that Eb
+        and E over Dm7 were two outside notes circling the root. E is the 9th -
+        it is in D Dorian - so Eb steps into it, and that is a chromatic
+        approach like any other. The target is anything the line landed on, not
+        the chord in particular. */
+    const auto colours = coloursAfter ("Dm7", { 63, 64 });
+
+    CHECK (colours[1] == NoteColour::scaleTone);
+    CHECK (colours[0] == NoteColour::approach);
+}
+
+TEST ("two outside notes on the same side of a target are not an enclosure")
+{
+    /*  An enclosure takes the target from both sides; this takes it twice from
+        above. Over a pentatonic both Eb and E are outside, which is what makes
+        the case constructible at all - in a seven-note scale there is not room
+        for two outside notes a step apart on one side. */
+    LineAnalyzer::Options pentatonic;
+    pentatonic.style = "pentatonic";
+
+    LineAnalyzer analyzer { pentatonic };
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 63, 64, 62 });
+
+    CHECK (analyzer.notes()[0].colour == NoteColour::outside);
+    CHECK (analyzer.notes()[1].colour == NoteColour::outside);
+    CHECK (analyzer.notes()[2].colour == NoteColour::chordTone);
+}
+
+TEST ("a passing tone through a gap the scale leaves open is an approach")
+{
+    /*  Over a pentatonic the gaps are wide enough to pass through by a tone,
+        where a seven-note scale would have made it a semitone. D pentatonic
+        minor is D F G A C, so B is outside; A - B - C steps up through it. */
+    LineAnalyzer::Options pentatonic;
+    pentatonic.style = "pentatonic";
+
+    LineAnalyzer analyzer { pentatonic };
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 69, 71, 72 });
+
+    CHECK (analyzer.notes()[1].colour == NoteColour::approach);
+}
+
+TEST ("an approach note says what it resolved into")
+{
+    const LineAnalyzer::Options options;
+
+    LineAnalyzer analyzer { options };
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.play (61);
+    analyzer.play (62);
+
+    CHECK_EQ (analyzer.notes().front().resolvesTo, 62);
+    CHECK_EQ (static_cast<int> (analyzer.resolvedByLastNote().size()), 1);
+    CHECK_EQ (analyzer.resolvedByLastNote().front().midiNote, 61);
+}
+
+TEST ("a note that resolved nothing is reported as resolving nothing")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.play (62);
+    analyzer.play (69);
+
+    CHECK (analyzer.resolvedByLastNote().empty());
+}
+
+TEST ("running chromatically into the next bar is not punished for crossing the barline")
+{
+    /*  Db is outside Dm7 and a semitone above the root of the bar after it.
+        Landing the next chord from a semitone away is one of the most
+        idiomatic things in the idiom, and a window that stopped at the barline
+        would call it a mistake at the moment it was working. */
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.play (62);
+    analyzer.play (61);
+
+    analyzer.setTarget (1, chordFrom ("Cmaj7"));
+    analyzer.play (60);
+
+    CHECK (analyzer.notes()[1].colour == NoteColour::approach);
+    CHECK_EQ (analyzer.notes()[1].measureIndex, 0);   // it still belongs to the bar it was played in
+    CHECK_EQ (analyzer.statsForBar (0).outside, 0);
+    CHECK_EQ (analyzer.statsForBar (0).approachTones, 1);
+}
+
+TEST ("approach notes count as landing, so a chromatic line scores better than a lost one")
+{
+    // The same four outside pitches: once resolving, once wandering.
+    LineAnalyzer resolving;
+    resolving.startTake();
+    resolving.setTarget (0, chordFrom ("Dm7"));
+    playAll (resolving, { 61, 62, 64, 65 });
+
+    LineAnalyzer wandering;
+    wandering.startTake();
+    wandering.setTarget (0, chordFrom ("Dm7"));
+    playAll (wandering, { 61, 68, 61, 68 });
+
+    CHECK (resolving.stats().score() > wandering.stats().score());
+    CHECK_EQ (resolving.stats().outside, 0);
+}
+
+TEST ("a bar that never left the chord is flagged, and one that did is not")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 62, 65, 69, 72 });          // all chord tones
+
+    analyzer.setTarget (1, chordFrom ("Cmaj7"));
+    playAll (analyzer, { 60, 62, 64, 67 });          // D is the 9th
+
+    const auto take = analyzer.summary();
+
+    CHECK_EQ (static_cast<int> (take.bars.size()), 2);
+    CHECK (take.bars[0].neverLeftTheChord);
+    CHECK (! take.bars[1].neverLeftTheChord);
+    CHECK (mentions (take, "Bar 1 never left the chord"));
+    CHECK (! mentions (take, "wrong"));
+}
+
+TEST ("an approach note does not count as colour for the bar flag")
+{
+    // Chord tones and one note passing between two of them. The line never
+    // said anything about this chord, and the flag is about that.
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 62, 63, 62, 65 });   // Eb passes D - D - F... 
+
+    const auto take = analyzer.summary();
+
+    CHECK_EQ (take.overall.scaleTones, 0);
+    CHECK (take.bars[0].neverLeftTheChord);
+}
+
+TEST ("leaps are counted, and so is whether the line stepped away from them")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    // Up a seventh and step back; up a seventh and leap again.
+    playAll (analyzer, { 62, 72, 71, 60, 70, 60, 70, 62 });
+
+    const auto take = analyzer.summary();
+
+    CHECK (take.leaps >= 3);
+    CHECK (take.leapsResolved < take.leaps);
+    CHECK (mentions (take, "big jumps"));
+}
+
+TEST ("a line that steps away from every leap is not told about leaps")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 62, 69, 67, 60, 62, 69, 67, 65 });
+
+    CHECK (! mentions (analyzer.summary(), "big jumps"));
+}
+
+TEST ("a take that never leaves a hand's width is told to use the horn")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 62, 64, 65, 67, 69, 67, 65, 64 });
+
+    const auto take = analyzer.summary();
+
+    CHECK (take.rangeInSemitones() < 12);
+    CHECK (mentions (take, "whole range"));
+}
+
+TEST ("a take that covers two octaves is not told to spread out")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 50, 53, 57, 62, 65, 69, 74, 77 });
+
+    const auto take = analyzer.summary();
+
+    CHECK (take.rangeInSemitones() >= 24);
+    CHECK (! mentions (take, "whole range"));
+}
+
+TEST ("the range of a take that was never played is nothing, not a negative")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+
+    CHECK_EQ (analyzer.summary().rangeInSemitones(), 0);
+}
+
+TEST ("the window works without a take, and still counts nothing")
+{
+    /*  Someone trying things out has not armed anything, and is the person most
+        likely to be experimenting with chromatic notes. Telling them those were
+        misses is the lesson this whole window exists to stop - so it runs, and
+        says what it found, without a single note being counted. */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    analyzer.play (61);
+    analyzer.play (62);
+
+    CHECK_EQ (static_cast<int> (analyzer.resolvedByLastNote().size()), 1);
+    CHECK_EQ (analyzer.resolvedByLastNote().front().midiNote, 61);
+
+    CHECK (analyzer.notes().empty());
+    CHECK_EQ (analyzer.stats().total(), 0);
+}
+
+TEST ("arming clears the window, so a take does not inherit the note before it")
+{
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    analyzer.play (61);      // outside, before the take
+    analyzer.startTake();
+    analyzer.play (62);      // the take's first note
+
+    CHECK (analyzer.resolvedByLastNote().empty());
+    CHECK_EQ (analyzer.stats().total(), 1);
+}
+
+TEST ("the window does not grow into a second take")
+{
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    for (auto i = 0; i < 40; ++i)
+        analyzer.play (62 + (i % 5));
+
+    CHECK (analyzer.notes().empty());
+    CHECK_EQ (analyzer.stats().total(), 0);
 }

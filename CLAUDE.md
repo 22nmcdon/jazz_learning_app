@@ -212,6 +212,24 @@ the line between what exists and what does not. Do not re-plan something in the 
   quiet bug loud: reopening a bar used to reset the chosen scale to the top of the list
   while the engine kept reading against the old one, which nothing on screen could
   contradict until something on screen named it.
+- **A note's reading can improve after it was played, and that is the point.** A chromatic
+  approach, an enclosure and a passing tone are outside by pitch and are the line *working*;
+  nothing tells them apart from a note that did not land until the note after arrives. So
+  `LineAnalyzer` is no longer purely per-note: `play()` reads the new note and then looks
+  back over the two behind it, promoting any the new note resolved. `NoteColour::approach`
+  is the tier that comes out of it, and `read()` - which is pure and sees one note - can
+  never return it. Three things follow, and each is load-bearing:
+    - **Nothing is ever demoted.** The window only finds reasons a note was better than it
+      first looked, so a reading never gets worse under a player who is watching it.
+    - **The window does not stop at the barline.** Running chromatically into the next
+      chord is idiomatic, so a promotion can change a bar the player has already left -
+      which is why `soloPlayNote` returns a `bars` array of everything that moved, not just
+      the bar the note landed in. A shell reading only `bar` leaves the previous one
+      drawing numbers that stopped being true.
+    - **It runs without a take.** Notes outside a take go into a three-note `recent` buffer
+      and are resolved there but never counted. Someone who has not armed anything is the
+      person most likely to be trying chromatic notes, and telling them those were misses
+      is the lesson the whole window exists to stop.
 - **The score is the only judgement in the engine, so every number in it is named.**
   `LineStats::score()` reads a bar 0-100: chord tones and scale tones both land, an outside
   note is worth a quarter (with no clock, passing through and being stuck look the same
@@ -220,7 +238,15 @@ the line between what exists and what does not. Do not re-plan something in the 
   rather than inside the arithmetic, because each is arguable - and the tests are where
   the argument is held: that leaning off the chord costs what leaning onto it does, that
   two notes are not unbalanced, that an outside bar still scores its quarter, and that the
-  result never leaves 0-100. This sits alongside a rule the rest of the file keeps: nothing
+  result never leaves 0-100. Approach notes land, and count as colour rather than as chord
+  tones for the balance term - they are the opposite of never leaving the chord.
+- **A line has shape as well as content, and the shape does not touch the score.** The
+  summary also reads how the line *moved*: bars it never coloured (`LineBar::
+  neverLeftTheChord`, per bar rather than per N notes, because the bar is a boundary the
+  player already feels and any note count would be invented), leaps that were not followed
+  by a step, and a take that never left a hand's width. All three produce words, none of
+  them produces points. The score is a reading of where notes sat; mixing advice about
+  motion into it would make a number nobody could explain out of one that can be. This sits alongside a rule the rest of the file keeps: nothing
   calls a note wrong. A reading of a bar is not a mark for a player, and the wording on the
   page has to keep saying so.
 - **"In time" is a door with nothing behind it, and says so.** The Practice menu offers

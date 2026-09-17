@@ -12,18 +12,36 @@ namespace jazz::core
 
 /** Where one note of a line sits against the chord it was played over.
 
-    Three tiers, like the substitution difficulties - but they are not the same
-    three and must not be made to share a type. Safe/advanced/risky is a
-    judgement about how far a substitution goes; this is a statement about where
-    a note sits. A note outside the scale is not "risky": it may be the best
-    note in the line. Nothing here scores a note, and nothing should.
+    Not the same tiers as the substitution difficulties, and they must not be
+    made to share a type. Safe/advanced/risky is a judgement about how far a
+    substitution goes; this is a statement about where a note sits. A note
+    outside the scale is not "risky": it may be the best note in the line.
+    Nothing here scores a note, and nothing should.
+
+    `approach` is the odd one and the reason this enum grew. The first three
+    can be decided from one note and one chord. The fourth cannot be decided
+    from a note at all: a chromatic approach, an enclosure and a passing tone
+    are outside by pitch and *are the line working* - what separates them from a
+    note that simply did not land is where the line goes next. So `read()`, which
+    is pure and sees one note, never returns it. Only a take does, and only once
+    the notes after it have arrived.
 */
 enum class NoteColour
 {
     chordTone,   ///< in the chord the bar asks for
     scaleTone,   ///< in a scale that fits the chord, but not in the chord
-    outside      ///< in neither
+    approach,    ///< outside by pitch, and resolving by step into one of the above
+    outside      ///< in neither, and going nowhere in particular
 };
+
+/** Whether a colour is outside the harmony by pitch alone.
+
+    True for `outside` and for `approach`, because an approach note has not
+    changed pitch - only what the line did with it. Anything asking "was that
+    note in the scale" wants this; anything asking "did that note work" wants
+    the colour itself.
+*/
+bool isOutsideByPitch (NoteColour colour) noexcept;
 
 /** One note of a line, read against the bar it landed in. */
 struct LineNote
@@ -47,6 +65,10 @@ struct LineNote
 
     /** The chord this note was read against, as written. */
     std::string chordSymbol;
+
+    /** For an `approach` note, the note it resolved into - the thing that made
+        it an approach rather than a miss. Zero otherwise. */
+    int resolvesTo {};
 };
 
 /** How a stretch of line divided up. Counts rather than percentages: a
@@ -57,14 +79,20 @@ struct LineStats
 {
     int chordTones {};
     int scaleTones {};
+    int approachTones {};
     int outside {};
 
-    int total() const noexcept { return chordTones + scaleTones + outside; }
+    int total() const noexcept { return chordTones + scaleTones + approachTones + outside; }
+
+    /** Everything that worked: the two inside tiers and the approach notes,
+        which are outside by pitch and inside by intent. */
+    int landed() const noexcept { return chordTones + scaleTones + approachTones; }
 
     /** Rounded percentages that always add up to 100 when anything was played,
-        so a readout never shows three numbers making 99. */
+        so a readout never shows four numbers making 99. */
     int percentChordTones() const noexcept;
     int percentScaleTones() const noexcept;
+    int percentApproachTones() const noexcept;
     int percentOutside() const noexcept;
 
     /** How this stretch of line went, 0 to 100. Zero for nothing played.
@@ -72,16 +100,18 @@ struct LineStats
         The one number here that is a judgement rather than a count, so it is
         worth being plain about what it judges.
 
-        Chord tones and scale tones both count as landing: the difference
-        between them is colour, not correctness. An outside note counts a
-        quarter rather than nothing, because with no clock a note passing
-        through from outside and a note stuck out there look identical from in
-        here - scoring it zero would be claiming to know which it was.
+        Chord tones, scale tones and approach notes all count as landing: the
+        difference between them is colour, not correctness. What is left as
+        `outside` counts a quarter rather than nothing, because even a note
+        that resolved into nothing may have been the best note in the line -
+        and because the window that spots an approach is three notes wide, so
+        a line can be doing something this cannot see.
 
         What is left is balance, and it costs fifteen points at the very most.
-        A line is chord tones anchoring it and scale tones colouring it, so a
-        bar that leans all the way onto the chord and one that never touches it
-        are both one-sided, and are marked the same. Anywhere from about a
+        A line is chord tones anchoring it and everything else colouring it,
+        so a bar that leans all the way onto the chord and one that never
+        touches it are both one-sided, and are marked the same. Approach notes
+        count as colour here: they are the opposite of never leaving the chord. Anywhere from about a
         third to about two thirds chord tones gives up nothing at all. And the
         allowance fades in with the length of the bar, because two notes are
         not unbalanced, they are two notes.
@@ -98,6 +128,18 @@ struct LineBar
     int measureIndex {};
     std::string chordSymbol;
     LineStats stats;
+
+    /** The line went over this bar without ever leaving the chord.
+
+        Not a mistake and not scored as one - it is the "add some colour" flag,
+        and it is deliberately about the *bar* rather than about a run of N
+        notes. The bar is a boundary the player already feels and the take
+        already tracks, where any note count would be a number pulled out of
+        the air. An approach note does not clear it: the flag asks whether the
+        line found anything to say over this chord, and a note on its way
+        somewhere else has not answered that.
+    */
+    bool neverLeftTheChord {};
 };
 
 /** A finished take, read back. */
@@ -117,6 +159,23 @@ struct TakeSummary
         Framed the way the voicing analyser frames things: a note outside the
         scale is outside the scale, never wrong. */
     std::vector<std::string> observations;
+
+    /** Shape, rather than content: what the line did as a line, regardless of
+        which chords it was over. These feed the observations above and are
+        left on the summary because a caller may want to draw them.
+
+        None of them touches the score. They are advice about how a line moves,
+        the score is a reading of where its notes sat, and mixing the two would
+        make a number nobody could explain out of one that can be. */
+    int leaps {};             ///< intervals of a fourth or more between consecutive notes
+    int leapsResolved {};     ///< of those, the ones the next note stepped away from
+    int lowestNote {};        ///< 0 when nothing was played
+    int highestNote {};
+
+    int rangeInSemitones() const noexcept
+    {
+        return highestNote > 0 ? highestNote - lowestNote : 0;
+    }
 };
 
 /** Reads a solo line against the chart it is played over.
@@ -129,11 +188,24 @@ struct TakeSummary
     Two ways to use it, and both are the real thing:
 
       - `read()` is pure. One note, one chord, one answer, no state anywhere.
-        Every rule lives here and this is where the tests point.
-      - a take is `read()` with a memory: `startTake()`, then `setTarget()` each
-        time the player moves to another bar, `play()` for each note, and
-        `endTake()` for the summary. Notes keep accumulating across bars, so
-        walking the chart during a take is one take, not several.
+        Every rule that can be decided from a single note lives here.
+      - a take is `read()` with a memory, and with a *window*: `startTake()`,
+        then `setTarget()` each time the player moves to another bar, `play()`
+        for each note, and `endTake()` for the summary. Notes keep accumulating
+        across bars, so walking the chart during a take is one take, not
+        several.
+
+    The window is the part worth knowing about. A chromatic approach, an
+    enclosure and a passing tone are all outside by pitch, and all three are
+    the line working rather than failing - but none of them can be told apart
+    from a note that simply did not land until the note *after* it arrives. So
+    `play()` reads the new note and then looks back over the two notes behind
+    it, promoting any that the new note has just resolved. A note's reading can
+    therefore improve after it was played, and `notes()`, `statsForBar()` and
+    `stats()` all reflect that the moment it happens.
+
+    Nothing is ever demoted. A note that landed stays landed; the window only
+    ever finds a reason a note was better than it first looked.
 
     There is no clock. A take is bounded by the player arming and disarming it,
     not by a transport, which is what makes it testable with no time in it at
@@ -236,8 +308,24 @@ public:
 
         With no target set the note reads as outside with no degree, which is
         the honest answer to "how does this sit against nothing".
+
+        This also resolves the notes behind it - see the class note above - so
+        the returned note is the new one, and `notes()` may have changed
+        further back than the end. It happens with or without a take running:
+        with one the promotion lands in the counts, without one it still shows
+        up in `resolvedByLastNote()`, because "that note before was on its way
+        here" is worth saying to someone who has not armed anything.
     */
     LineNote play (int midiNote);
+
+    /** The notes this last `play()` promoted to `approach`, in the order the
+        window found them.
+
+        Empty almost always. It exists so a shell can say "and that Db before
+        it was on its way here" rather than silently improving a number the
+        player is looking at.
+    */
+    const std::vector<LineNote>& resolvedByLastNote() const noexcept { return justResolved; }
 
     const std::vector<LineNote>& notes() const noexcept { return played; }
 
@@ -254,6 +342,11 @@ public:
 private:
     LineNote readAgainstTarget (int midiNote) const;
 
+    /** Promotes any of the last few notes of @p line that the newest resolved. */
+    void resolveTail (std::vector<LineNote>& line);
+
+    bool promote (std::vector<LineNote>& line, std::size_t index, int target);
+
     Options options;
 
     struct Target
@@ -265,6 +358,17 @@ private:
 
     std::optional<Target> target;
     std::vector<LineNote> played;
+
+    /*  The last few notes when no take is running, so the window still works
+        for someone trying things out. A player who has not armed anything is
+        the one most likely to be experimenting with chromatic notes, and
+        telling them those were misses is the exact lesson this is here to
+        stop. Kept separate from `played` because these notes are not counted:
+        a reading is not a tally. Cleared at both edges of a take, because a
+        take starts and ends clean. */
+    std::vector<LineNote> recent;
+
+    std::vector<LineNote> justResolved;
     bool taking {};
 };
 

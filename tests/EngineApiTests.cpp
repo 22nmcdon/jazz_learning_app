@@ -195,6 +195,43 @@ TEST ("the bar a player moves to answers with what they have done on it")
     CHECK (contains (json, "\"take\":{\"total\":3"));
 }
 
+TEST ("a note that resolves an earlier one says so, and resends the bar it changed")
+{
+    /*  Db over Dm7 is outside; landing C over the next bar makes it a
+        chromatic approach into that bar's root. The bar it changed is the one
+        behind, so the reply has to carry that bar too - a shell that only read
+        the bar just played into would leave the earlier one drawing numbers
+        that stopped being true. */
+    soloStartTake();
+
+    soloSetBar (0, "Dm7", "", "");
+    soloPlayNote (62);
+    soloPlayNote (61);
+
+    soloSetBar (1, "Cmaj7", "", "");
+    const auto json = soloPlayNote (60);
+
+    CHECK (contains (json, "\"resolved\":[\"Db4\"]"));
+    CHECK (contains (json, "\"bar\":{\"index\":1"));
+    CHECK (contains (json, "\"index\":0"));          // the earlier bar came back too
+    CHECK (contains (json, "\"approachTones\":1"));
+}
+
+TEST ("a take that never coloured a bar says which bar, on the bar")
+{
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "");
+    soloPlayNote (62);
+    soloPlayNote (65);
+    soloPlayNote (69);
+
+    const auto json = soloEndTake();
+
+    CHECK (contains (json, "\"neverLeftTheChord\":true"));
+    CHECK (contains (json, "\"leaps\":"));
+    CHECK (contains (json, "\"range\":"));
+}
+
 TEST ("the scale a bar is read against comes across with it")
 {
     soloStartTake();

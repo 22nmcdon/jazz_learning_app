@@ -34,8 +34,16 @@
   --text:       #3a332f;
   --text-soft:  #6b615a;
 
-  /* Semantic colours, kept inside the same warm family. */
+  /* Semantic colours, kept inside the same warm family. These four say chord
+     tone, scale tone, approach note and outside, and they mean that in both
+     practice modes - which is why, unlike the rest of the palette, they do not
+     move when the mode does.
+
+     Approach is rust with the weight taken out of it on purpose: the note was
+     outside by pitch and the line meant it, so it belongs to the outside hue
+     and not beside it. */
   --sage: #6f7f63;
+  --approach: #c98f76;
   --rust: #a4553f;
 
   /* The accent washed over a bar, under the pointer and under the selection.
@@ -283,6 +291,7 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 .solo-note b { font-family: var(--hand); font-size: 20px; }
 .solo-note[data-colour="chordTone"] b { color: var(--sage); }
 .solo-note[data-colour="scaleTone"] b { color: var(--gold); }
+.solo-note[data-colour="approach"] b { color: var(--approach); }
 .solo-note[data-colour="outside"] b { color: var(--rust); }
 .solo-against { font-size: 13px; color: var(--text-soft); }
 
@@ -304,6 +313,7 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
    a line is played, not held, so nothing latches. */
 .key.sounded[data-colour="chordTone"] { background: var(--sage); }
 .key.sounded[data-colour="scaleTone"] { background: var(--gold); }
+.key.sounded[data-colour="approach"] { background: var(--approach); }
 .key.sounded[data-colour="outside"] { background: var(--rust); }
 
 .menu-select {
@@ -618,6 +628,7 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 .bar-take i { display: block; height: 100%; }
 .bar-take .ct { background: var(--sage); }
 .bar-take .st { background: var(--gold); }
+.bar-take .ap { background: var(--approach); }
 .bar-take .out { background: var(--rust); }
 
 /* How the bar went, over the strip that shows what it was made of. Quiet on
@@ -1372,7 +1383,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 286 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 310 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -1484,8 +1495,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     <ul class="help-list" data-mode="solo">
       <li>
         <b>Click a bar to solo over it.</b> Every note you play is read against that bar's
-        chord - a <i>chord tone</i>, a <i>scale tone</i>, or <i>outside</i> - and the key
-        lights in that colour as it sounds. Arrow keys move along the chart.
+        chord - a <i>chord tone</i>, a <i>scale tone</i>, an <i>approach note</i> or
+        <i>outside</i> - and the key lights in that colour as it sounds. Arrow keys move
+        along the chart.
+      </li>
+      <li>
+        <b>A note outside the scale is not a miss if it goes somewhere.</b> Play a semitone
+        away and then land, or take a note from both sides before playing it, and what
+        looked outside is read again as an <b>approach note</b> and counts as landing. It
+        only changes once the note after it arrives - which is the only honest moment to
+        decide, because until then the two look the same.
       </li>
       <li>
         <b>Click the same bar again</b> for the scales that fit it. Picking one is the
@@ -2601,7 +2620,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       score.textContent = score.hidden ? "" : stats.score + "%";
 
       [["ct", stats.percentChordTones], ["st", stats.percentScaleTones],
-       ["out", stats.percentOutside]].forEach(function (part) {
+       ["ap", stats.percentApproachTones], ["out", stats.percentOutside]].forEach(function (part) {
         if (!part[1]) return;
 
         var span = document.createElement("i");
@@ -2612,9 +2631,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
       // The numbers themselves, for anyone who wants them and for a screen
       // reader, which cannot see three coloured strips.
+      // The approach share is left out when there is none of it, because a
+      // reading with a 0% in it is a reading nobody finishes.
       bar.dataset.take = (score.hidden ? "" : stats.score + "% - ")
                        + stats.total + " notes: " + stats.percentChordTones + "% chord, "
-                       + stats.percentScaleTones + "% scale, " + stats.percentOutside + "% outside";
+                       + stats.percentScaleTones + "% scale, "
+                       + (stats.percentApproachTones ? stats.percentApproachTones + "% approach, " : "")
+                       + stats.percentOutside + "% outside"
+                       + (stats.neverLeftTheChord ? " - never left the chord" : "");
       mark.title = bar.dataset.take;
       score.title = bar.dataset.take;
 
@@ -2904,7 +2928,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     solo.bar = result.bar;
     solo.take = result.take;
 
-    if (solo.armed) rememberBarStats(result.bar);
+    // One note can improve the reading of notes behind it, and those may be in
+    // an earlier bar - a line running chromatically into the next chord is the
+    // ordinary case. The engine sends back every bar whose numbers moved, so
+    // take all of them rather than only the one just played into.
+    if (solo.armed) (result.bars || [result.bar]).forEach(rememberBarStats);
 
     el.soloNote.textContent = "";
     el.soloNote.dataset.colour = note.colour;
@@ -2922,6 +2950,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     if (note.scale) against += ", in " + note.scale;
     if (note.avoid) against += ". A semitone above a chord tone - fine passing through, not to land on";
+
+    // The point of the window is that the app stops calling a chromatic
+    // approach a mistake. If it only ever fixed the numbers quietly, nobody
+    // would find out it had learned to.
+    if ((result.resolved || []).length)
+      against += ". " + result.resolved.join(" and ")
+               + (result.resolved.length === 1 ? " before it was" : " before it were")
+               + " on the way here";
 
     el.soloAgainst.textContent = against ? against + "." : "";
 
@@ -2952,6 +2988,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     return label + ": " + stats.percentChordTones + "% chord, "
          + stats.percentScaleTones + "% scale, "
+         + (stats.percentApproachTones ? stats.percentApproachTones + "% approach, " : "")
          + stats.percentOutside + "% outside";
   }
 

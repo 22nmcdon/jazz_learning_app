@@ -17,6 +17,7 @@
 #include "jazz/core/ScaleSuggester.h"
 #include "jazz/core/VoicingAnalyzer.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -176,6 +177,7 @@ namespace
         {
             case NoteColour::chordTone: return "chordTone";
             case NoteColour::scaleTone: return "scaleTone";
+            case NoteColour::approach:  return "approach";
             case NoteColour::outside:   break;
         }
 
@@ -192,14 +194,18 @@ namespace
              + ",\"outside\":" + std::to_string (stats.outside)
              + ",\"percentChordTones\":" + std::to_string (stats.percentChordTones())
              + ",\"percentScaleTones\":" + std::to_string (stats.percentScaleTones())
+             + ",\"approachTones\":" + std::to_string (stats.approachTones)
+             + ",\"percentApproachTones\":" + std::to_string (stats.percentApproachTones())
              + ",\"percentOutside\":" + std::to_string (stats.percentOutside())
              + ",\"score\":" + std::to_string (stats.score());
     }
 
-    std::string lineBarJson (int measureIndex, const std::string& symbol, const LineStats& stats)
+    std::string lineBarJson (int measureIndex, const std::string& symbol, const LineStats& stats,
+                             bool neverLeftTheChord = false)
     {
         return "{\"index\":" + std::to_string (measureIndex)
              + ",\"chord\":" + quoted (symbol)
+             + ",\"neverLeftTheChord\":" + (neverLeftTheChord ? "true" : "false")
              + "," + lineStatsJson (stats) + "}";
     }
 
@@ -212,6 +218,7 @@ namespace
              + ",\"degree\":" + quoted (note.degree)
              + ",\"scale\":" + quoted (note.scaleName)
              + ",\"avoid\":" + (note.avoidNote ? "true" : "false")
+             + ",\"resolvesTo\":" + quoted (note.resolvesTo > 0 ? midiNoteName (note.resolvesTo) : "")
              + ",\"chord\":" + quoted (note.chordSymbol)
              + ",\"bar\":" + std::to_string (note.measureIndex) + "}";
     }
@@ -700,11 +707,30 @@ std::string soloPlayNote (int midiNote)
 {
     auto& analyzer = soloTake();
     const auto note = analyzer.play (midiNote);
+    const auto& resolved = analyzer.resolvedByLastNote();
+
+    /*  One note can change the reading of notes behind it, and those may be in
+        an earlier bar - running chromatically into the next chord is the whole
+        reason the window does not stop at the barline. So the reply carries
+        every bar whose numbers moved, not only the one just played into.
+        Without this, the bar before would keep a strip that stopped being true
+        the moment the line landed. */
+    std::vector<LineNote> changed { note };
+
+    for (const auto& earlier : resolved)
+        if (std::none_of (changed.begin(), changed.end(), [&earlier] (const LineNote& seen)
+                          { return seen.measureIndex == earlier.measureIndex; }))
+            changed.push_back (earlier);
 
     return hold ("{\"ok\":true,\"taking\":" + std::string (analyzer.isTaking() ? "true" : "false")
                  + ",\"note\":" + lineNoteJson (note)
+                 + ",\"resolved\":" + jsonArray (resolved, [] (const LineNote& earlier)
+                   { return quoted (midiNoteName (earlier.midiNote)); })
                  + ",\"bar\":" + lineBarJson (note.measureIndex, note.chordSymbol,
                                               analyzer.statsForBar (note.measureIndex))
+                 + ",\"bars\":" + jsonArray (changed, [&analyzer] (const LineNote& touched)
+                   { return lineBarJson (touched.measureIndex, touched.chordSymbol,
+                                         analyzer.statsForBar (touched.measureIndex)); })
                  + ",\"take\":{" + lineStatsJson (analyzer.stats()) + "}}");
 }
 
@@ -720,8 +746,12 @@ std::string soloEndTake()
                  + ",\"observations\":" + jsonArray (take.observations,
                                                      [] (const std::string& line) { return quoted (line); })
                  + ",\"take\":{" + lineStatsJson (take.overall) + "}"
+                 + ",\"leaps\":" + std::to_string (take.leaps)
+                 + ",\"leapsResolved\":" + std::to_string (take.leapsResolved)
+                 + ",\"range\":" + std::to_string (take.rangeInSemitones())
                  + ",\"bars\":" + jsonArray (take.bars, [] (const LineBar& bar)
-                   { return lineBarJson (bar.measureIndex, bar.chordSymbol, bar.stats); })
+                   { return lineBarJson (bar.measureIndex, bar.chordSymbol, bar.stats,
+                                         bar.neverLeftTheChord); })
                  + "}");
 }
 

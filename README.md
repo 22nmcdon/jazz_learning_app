@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (286), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (310), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -154,7 +154,20 @@ would be changing the meaning rather than the light.
 In solo mode the keys do not latch, because a line is played rather than held: each note
 sounds, is read back - **E4 - the 9th, scale tone, in D Dorian** - and lets go. Every note
 is read on its own, so a rolled double-stop is two notes each read where it sits rather
-than one chord. The dock says it in the same voice chord practice uses, in the same place,
+than one chord.
+
+**An outside note that goes somewhere is not a miss.** Play a semitone away from a note and
+then land on it, or take a note from both sides before playing it, and what read as outside
+is read again as an **approach note** - the third of four tiers, and one that counts as
+landing rather than as a mistake. A chromatic approach, an enclosure and a passing tone are
+all outside by pitch and all three are the line working; what tells them apart from a note
+that simply did not land is *where the line goes next*. So the reading of a note can improve
+after you have played it, once the note after it arrives, and the bar's strip and score
+change with it - including across a barline, because running chromatically into the next
+chord is one of the most idiomatic things in the idiom. The dock says so when it happens
+(*Db4 before it was on the way here*), rather than quietly improving a number you are looking
+at. It works whether or not a take is armed; a player trying things out is the one most
+likely to be experimenting with chromatic notes. The dock says it in the same voice chord practice uses, in the same place,
 and where that mode writes **Expecting Dm7** this one writes **Expecting D Dorian** - the
 scale you are actually being held to, which until now you had to press *Which scale?* to
 find out. Choosing a different one out of the bar rewrites it, and it survives the bar
@@ -176,15 +189,24 @@ have to read about underneath it. The exact counts are on the bar's tooltip, and
 name for a screen reader.
 
 The percentage is the one number in this app that is a judgement rather than a count, so it
-is worth saying what it judges. Chord tones and scale tones both count as landing - the
-difference between them is colour, not correctness. An outside note counts a quarter rather
-than nothing, because with no clock a note passing through from outside and a note stuck out
-there look identical from here, and scoring it zero would be claiming to know which. What is
-left is balance, worth fifteen points at the very most: a line is chord tones anchoring it
-and scale tones colouring it, so a bar that never leaves the chord and a bar that never
-touches it are both one-sided and are marked the same - and a bar of one or two notes is not
-unbalanced, it is short. It is a reading of a bar, not a mark for a player; nothing anywhere
-in here calls a note wrong.
+is worth saying what it judges. Chord tones, scale tones and approach notes all count as
+landing - the difference between them is colour, not correctness. What is left as *outside*
+counts a quarter rather than nothing, because even a note that resolved into nothing may have
+been the best note in the line, and because the window that spots an approach is three notes
+wide, so a line can be doing something the engine cannot see. What is left is balance, worth
+fifteen points at the very most: a line is chord tones anchoring it and everything else
+colouring it, so a bar that never leaves the chord and a bar that never touches it are both
+one-sided and are marked the same - and a bar of one or two notes is not unbalanced, it is
+short. It is a reading of a bar, not a mark for a player; nothing anywhere in here calls a
+note wrong.
+
+Stopping the take also reads the line as a **line**, separately from where its notes sat.
+Which bars went by without the line ever leaving the chord - *add some colour*, said about
+the bar rather than about any note. Whether big leaps were followed by a step, which is what
+fills the gap a leap opens. And whether the whole take stayed inside about a hand's width,
+when the horn players it is all stolen from use the range. None of the three touches the
+score: they are advice about how a line moves, the score is a reading of where its notes sat,
+and mixing the two would make a number nobody could explain out of one that can be.
 
 **Playing**, in the same menu, is **Static** or **In time**, and only the first of them
 exists. Static is what solo practice is: the bar you are on is the bar you chose, it stays
