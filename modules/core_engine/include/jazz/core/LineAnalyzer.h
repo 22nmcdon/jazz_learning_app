@@ -18,30 +18,42 @@ namespace jazz::core
     outside the scale is not "risky": it may be the best note in the line.
     Nothing here scores a note, and nothing should.
 
-    `approach` is the odd one and the reason this enum grew. The first three
-    can be decided from one note and one chord. The fourth cannot be decided
-    from a note at all: a chromatic approach, an enclosure and a passing tone
-    are outside by pitch and *are the line working* - what separates them from a
-    note that simply did not land is where the line goes next. So `read()`, which
-    is pure and sees one note, never returns it. Only a take does, and only once
-    the notes after it have arrived.
+    The last three are the reason this enum grew, and the reason it has an
+    order. The first two can be decided from one note and one chord. The others
+    cannot be decided from a note at all: a chromatic approach, an enclosure and
+    a passing tone are outside by pitch and *are the line working*, and what
+    separates them from a note that simply did not land is where the line goes
+    next.
+
+    So a note outside the harmony starts `unresolved`, which is a real answer
+    and not a placeholder: it says the line has opened something and not yet
+    closed it. Two notes later the window has had every chance it will get, and
+    the note becomes `approach` or `outside` - for good, in both directions.
+
+    `read()`, which is pure and sees one note, returns `outside` for a note
+    outside the harmony, because with one note there is no line to be waiting
+    on. Only a take produces `unresolved` or `approach`.
 */
 enum class NoteColour
 {
     chordTone,   ///< in the chord the bar asks for
     scaleTone,   ///< in a scale that fits the chord, but not in the chord
-    approach,    ///< outside by pitch, and resolving by step into one of the above
-    outside      ///< in neither, and going nowhere in particular
+    approach,    ///< outside by pitch, and resolved by step into one of the above
+    unresolved,  ///< outside by pitch, and the line has not said yet
+    outside      ///< outside by pitch, and the line went somewhere else
 };
 
 /** Whether a colour is outside the harmony by pitch alone.
 
-    True for `outside` and for `approach`, because an approach note has not
-    changed pitch - only what the line did with it. Anything asking "was that
-    note in the scale" wants this; anything asking "did that note work" wants
-    the colour itself.
+    True for all three of `approach`, `unresolved` and `outside`, because none
+    of them changed pitch - only what the line did with it. Anything asking "was
+    that note in the scale" wants this; anything asking "did that note work"
+    wants the colour itself.
 */
 bool isOutsideByPitch (NoteColour colour) noexcept;
+
+/** Whether a colour is final, or still waiting on the notes after it. */
+bool isSettled (NoteColour colour) noexcept;
 
 /** One note of a line, read against the bar it landed in. */
 struct LineNote
@@ -69,6 +81,19 @@ struct LineNote
     /** For an `approach` note, the note it resolved into - the thing that made
         it an approach rather than a miss. Zero otherwise. */
     int resolvesTo {};
+
+    /** For an `unresolved` note, the nearest note that would close it: a step
+        away, semitones before tones, and a chord tone before a scale tone at
+        the same distance - the order a player thinks in.
+
+        This is why "outside" is not the first thing said about a note. "That
+        was wrong" is a guess at this point and a third of the time it is the
+        wrong guess; "a semitone up lands on D" is true whatever happens next,
+        and it is the thing that would have helped. Zero, with an empty degree,
+        when nothing within a step lands - rare, and honest when it happens.
+    */
+    int wantsToReach {};
+    std::string wantsToReachDegree;
 };
 
 /** How a stretch of line divided up. Counts rather than percentages: a
@@ -80,19 +105,29 @@ struct LineStats
     int chordTones {};
     int scaleTones {};
     int approachTones {};
+    int unresolved {};
     int outside {};
 
-    int total() const noexcept { return chordTones + scaleTones + approachTones + outside; }
+    int total() const noexcept
+    {
+        return chordTones + scaleTones + approachTones + unresolved + outside;
+    }
 
     /** Everything that worked: the two inside tiers and the approach notes,
         which are outside by pitch and inside by intent. */
     int landed() const noexcept { return chordTones + scaleTones + approachTones; }
 
+    /** The notes whose reading is final. A note the line has opened and not yet
+        closed is not a note that went wrong, so nothing judges it until it is
+        one or the other. */
+    int settled() const noexcept { return total() - unresolved; }
+
     /** Rounded percentages that always add up to 100 when anything was played,
-        so a readout never shows four numbers making 99. */
+        so a readout never shows a row of numbers making 99. */
     int percentChordTones() const noexcept;
     int percentScaleTones() const noexcept;
     int percentApproachTones() const noexcept;
+    int percentUnresolved() const noexcept;
     int percentOutside() const noexcept;
 
     /** How this stretch of line went, 0 to 100. Zero for nothing played.
@@ -100,12 +135,18 @@ struct LineStats
         The one number here that is a judgement rather than a count, so it is
         worth being plain about what it judges.
 
-        Chord tones, scale tones and approach notes all count as landing: the
-        difference between them is colour, not correctness. What is left as
-        `outside` counts a quarter rather than nothing, because even a note
-        that resolved into nothing may have been the best note in the line -
-        and because the window that spots an approach is three notes wide, so
-        a line can be doing something this cannot see.
+        Read over `settled()` notes alone. A note the line has opened and not
+        yet closed is not a note that went wrong, and grading it as one - even
+        for the two notes before the window decides - meant a score that dipped
+        every time a player reached for a chromatic approach and climbed back
+        once they landed it. Nothing is judged until there is something to
+        judge.
+
+        Of what has settled: chord tones, scale tones and approach notes all
+        count as landing, the difference between them being colour rather than
+        correctness. What is left as `outside` counts a quarter rather than
+        nothing, because a note that resolved into nothing may still have been
+        the best note in the line.
 
         What is left is balance, and it costs fifteen points at the very most.
         A line is chord tones anchoring it and everything else colouring it,
@@ -198,14 +239,22 @@ struct TakeSummary
     The window is the part worth knowing about. A chromatic approach, an
     enclosure and a passing tone are all outside by pitch, and all three are
     the line working rather than failing - but none of them can be told apart
-    from a note that simply did not land until the note *after* it arrives. So
-    `play()` reads the new note and then looks back over the two notes behind
-    it, promoting any that the new note has just resolved. A note's reading can
-    therefore improve after it was played, and `notes()`, `statsForBar()` and
-    `stats()` all reflect that the moment it happens.
+    from a note that simply did not land until the note *after* it arrives.
 
-    Nothing is ever demoted. A note that landed stays landed; the window only
-    ever finds a reason a note was better than it first looked.
+    So a note outside the harmony is not read as `outside` when it is played.
+    It is read as `unresolved`, and stays that way for exactly as long as the
+    window can still reach it: the next note, and the one after. Then it
+    becomes `approach` or `outside`, once, and never changes again.
+
+    That is a statement about *when* a thing is decided, and it matters twice
+    over. The counts do not judge an unresolved note - the score reads
+    `LineStats::settled()` - so a score no longer dips every time a player
+    reaches for a chromatic approach and climbs back when they land it. And a
+    shell has something true to say at the moment of playing that is not "that
+    was wrong": the line has opened something, and here is what would close it.
+
+    Nothing that has settled is ever revisited. A note that landed stays
+    landed, and a note left hanging stays hanging.
 
     There is no clock. A take is bounded by the player arming and disarming it,
     not by a transport, which is what makes it testable with no time in it at
@@ -309,12 +358,17 @@ public:
         With no target set the note reads as outside with no degree, which is
         the honest answer to "how does this sit against nothing".
 
-        This also resolves the notes behind it - see the class note above - so
-        the returned note is the new one, and `notes()` may have changed
-        further back than the end. It happens with or without a take running:
-        with one the promotion lands in the counts, without one it still shows
-        up in `resolvedByLastNote()`, because "that note before was on its way
-        here" is worth saying to someone who has not armed anything.
+        A note outside the harmony comes back `unresolved` rather than
+        `outside`: the line has opened something, and at this instant nothing
+        can know whether it will close it. What a caller can say is what the
+        note now needs.
+
+        This also resolves and settles the notes behind it - see the class note
+        above - so the returned note is the new one, and `notes()` may have
+        changed further back than the end. It happens with or without a take
+        running: with one the readings land in the counts, without one they
+        still show up in `resolvedByLastNote()` and `strandedByLastNote()`,
+        because both are worth saying to someone who has not armed anything.
     */
     LineNote play (int midiNote);
 
@@ -326,6 +380,17 @@ public:
         player is looking at.
     */
     const std::vector<LineNote>& resolvedByLastNote() const noexcept { return justResolved; }
+
+    /** The notes this last `play()` settled as `outside` - ones the window has
+        now passed without the line closing them.
+
+        The other half of the pair, and the one carrying the bad news. It
+        arrives late by construction: nothing can know a note was left hanging
+        until the notes that could have saved it have been played. A shell that
+        reports the first list and not this one tells a player only what they
+        got right.
+    */
+    const std::vector<LineNote>& strandedByLastNote() const noexcept { return justStranded; }
 
     const std::vector<LineNote>& notes() const noexcept { return played; }
 
@@ -344,6 +409,9 @@ private:
 
     /** Promotes any of the last few notes of @p line that the newest resolved. */
     void resolveTail (std::vector<LineNote>& line);
+
+    /** Settles whatever the window has now passed without resolving. */
+    void settleTail (std::vector<LineNote>& line);
 
     bool promote (std::vector<LineNote>& line, std::size_t index, int target);
 
@@ -369,6 +437,7 @@ private:
     std::vector<LineNote> recent;
 
     std::vector<LineNote> justResolved;
+    std::vector<LineNote> justStranded;
     bool taking {};
 };
 

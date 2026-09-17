@@ -46,6 +46,12 @@
   --approach: #c98f76;
   --rust: #a4553f;
 
+  /* A note the line has opened and not yet closed. Deliberately the quietest
+     of the five and the only one with no opinion in it: the whole point of the
+     tier is that nothing has been decided, so the colour must not look like a
+     verdict arriving early. */
+  --unresolved: #b6afa4;
+
   /* The accent washed over a bar, under the pointer and under the selection.
      A token rather than the blush's own rgb spelled out, because the chart is
      the one thing both practice modes share and solo mode moves the accent. */
@@ -292,6 +298,7 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 .solo-note[data-colour="chordTone"] b { color: var(--sage); }
 .solo-note[data-colour="scaleTone"] b { color: var(--gold); }
 .solo-note[data-colour="approach"] b { color: var(--approach); }
+.solo-note[data-colour="unresolved"] b { color: var(--unresolved); }
 .solo-note[data-colour="outside"] b { color: var(--rust); }
 .solo-against { font-size: 13px; color: var(--text-soft); }
 
@@ -314,6 +321,7 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 .key.sounded[data-colour="chordTone"] { background: var(--sage); }
 .key.sounded[data-colour="scaleTone"] { background: var(--gold); }
 .key.sounded[data-colour="approach"] { background: var(--approach); }
+.key.sounded[data-colour="unresolved"] { background: var(--unresolved); }
 .key.sounded[data-colour="outside"] { background: var(--rust); }
 
 .menu-select {
@@ -629,6 +637,7 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 .bar-take .ct { background: var(--sage); }
 .bar-take .st { background: var(--gold); }
 .bar-take .ap { background: var(--approach); }
+.bar-take .un { background: var(--unresolved); }
 .bar-take .out { background: var(--rust); }
 
 /* How the bar went, over the strip that shows what it was made of. Quiet on
@@ -1383,7 +1392,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 310 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 319 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -1500,11 +1509,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         along the chart.
       </li>
       <li>
-        <b>A note outside the scale is not a miss if it goes somewhere.</b> Play a semitone
-        away and then land, or take a note from both sides before playing it, and what
-        looked outside is read again as an <b>approach note</b> and counts as landing. It
-        only changes once the note after it arrives - which is the only honest moment to
-        decide, because until then the two look the same.
+        <b>A note outside the harmony is not called a mistake when you play it.</b> It is
+        <i>open</i>: you have started something and nothing yet knows how it ends. What the
+        dock says is the thing that is true at that instant - which note a step away would
+        land it, and what that note is in the chord.
+      </li>
+      <li>
+        <b>Then the next two notes decide it.</b> Step home from it, or take the target from
+        both sides first, and it is read again as an <b>approach note</b> that counts as
+        landing. Go somewhere else and it settles as <i>outside</i>, and the dock says so
+        then - two notes later, which is the earliest it could honestly be said. Nothing is
+        graded on a note while it is still open.
       </li>
       <li>
         <b>Click the same bar again</b> for the scales that fit it. Picking one is the
@@ -2613,14 +2628,18 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       mark.hidden = false;
       mark.textContent = "";
 
-      // An engine older than this page has no score in its stats. Leave the
-      // number off rather than writing "undefined%" over the chart - the strip
-      // still says everything the score is a summary of.
-      score.hidden = typeof stats.score !== "number";
+      // Two reasons to leave the number off. An engine older than this page has
+      // no score in its stats, and writing "undefined%" across the chart is
+      // worse than writing nothing. And a bar whose notes are all still open
+      // has nothing settled to score yet - a bar that reads 0% while the player
+      // is midway through a phrase is the thing this tier exists to stop.
+      score.hidden = typeof stats.score !== "number"
+                  || (typeof stats.settled === "number" && stats.settled === 0);
       score.textContent = score.hidden ? "" : stats.score + "%";
 
       [["ct", stats.percentChordTones], ["st", stats.percentScaleTones],
-       ["ap", stats.percentApproachTones], ["out", stats.percentOutside]].forEach(function (part) {
+       ["ap", stats.percentApproachTones], ["un", stats.percentUnresolved],
+       ["out", stats.percentOutside]].forEach(function (part) {
         if (!part[1]) return;
 
         var span = document.createElement("i");
@@ -2637,6 +2656,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
                        + stats.total + " notes: " + stats.percentChordTones + "% chord, "
                        + stats.percentScaleTones + "% scale, "
                        + (stats.percentApproachTones ? stats.percentApproachTones + "% approach, " : "")
+                       + (stats.percentUnresolved ? stats.percentUnresolved + "% still open, " : "")
                        + stats.percentOutside + "% outside"
                        + (stats.neverLeftTheChord ? " - never left the chord" : "");
       mark.title = bar.dataset.take;
@@ -2940,8 +2960,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var name = document.createElement("b");
     name.textContent = note.name;
     el.soloNote.appendChild(name);
-    // "the R" is not how anyone says it.
-    var degree = note.degree === "R" ? "the root" : note.degree ? "the " + note.degree : "";
+    var degree = note.degree ? degreeName(note.degree) : "";
 
     el.soloNote.appendChild(document.createTextNode(
       " - " + (degree ? degree + ", " : "") + note.colourName + "."));
@@ -2951,6 +2970,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (note.scale) against += ", in " + note.scale;
     if (note.avoid) against += ". A semitone above a chord tone - fine passing through, not to land on";
 
+    // A note the line has opened. Naming what would close it is the one thing
+    // that is true at this instant - "that was wrong" is a guess, and the whole
+    // reason for the open tier is that the guess is often wrong.
+    if (note.colour === "unresolved" && note.wantsToReach)
+      against += ". " + stepName(note.wantsToReachStep) + " lands on " + note.wantsToReach
+               + (note.wantsToReachDegree ? " - " + degreeName(note.wantsToReachDegree) : "");
+
     // The point of the window is that the app stops calling a chromatic
     // approach a mistake. If it only ever fixed the numbers quietly, nobody
     // would find out it had learned to.
@@ -2959,10 +2985,33 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
                + (result.resolved.length === 1 ? " before it was" : " before it were")
                + " on the way here";
 
+    // And the other half: the notes the window has now passed without the line
+    // closing them. Late by construction - nothing could know sooner - and the
+    // only place the app ever says a note did not work.
+    if ((result.stranded || []).length)
+      against += ". " + result.stranded.join(" and ")
+               + (result.stranded.length === 1 ? " never found its way home"
+                                               : " never found their way home");
+
     el.soloAgainst.textContent = against ? against + "." : "";
 
     flashKey(midiNote, note.colour);
     drawTallies();
+  }
+
+  /** "R" is not how anyone says it, and neither is "b3" on its own. */
+  function degreeName(degree) {
+    return degree === "R" ? "the root" : "the " + degree;
+  }
+
+  /** A signed number of semitones, said the way a player would. */
+  function stepName(step) {
+    if (step === 1) return "A semitone up";
+    if (step === -1) return "A semitone down";
+    if (step === 2) return "A tone up";
+    if (step === -2) return "A tone down";
+
+    return "A step";
   }
 
   /** Colours the key that was just played, for as long as it sounds.
@@ -2989,6 +3038,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     return label + ": " + stats.percentChordTones + "% chord, "
          + stats.percentScaleTones + "% scale, "
          + (stats.percentApproachTones ? stats.percentApproachTones + "% approach, " : "")
+         + (stats.percentUnresolved ? stats.percentUnresolved + "% open, " : "")
          + stats.percentOutside + "% outside";
   }
 

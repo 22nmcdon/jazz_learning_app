@@ -175,10 +175,11 @@ namespace
     {
         switch (colour)
         {
-            case NoteColour::chordTone: return "chordTone";
-            case NoteColour::scaleTone: return "scaleTone";
-            case NoteColour::approach:  return "approach";
-            case NoteColour::outside:   break;
+            case NoteColour::chordTone:  return "chordTone";
+            case NoteColour::scaleTone:  return "scaleTone";
+            case NoteColour::approach:   return "approach";
+            case NoteColour::unresolved: return "unresolved";
+            case NoteColour::outside:    break;
         }
 
         return "outside";
@@ -195,7 +196,10 @@ namespace
              + ",\"percentChordTones\":" + std::to_string (stats.percentChordTones())
              + ",\"percentScaleTones\":" + std::to_string (stats.percentScaleTones())
              + ",\"approachTones\":" + std::to_string (stats.approachTones)
+             + ",\"unresolved\":" + std::to_string (stats.unresolved)
+             + ",\"settled\":" + std::to_string (stats.settled())
              + ",\"percentApproachTones\":" + std::to_string (stats.percentApproachTones())
+             + ",\"percentUnresolved\":" + std::to_string (stats.percentUnresolved())
              + ",\"percentOutside\":" + std::to_string (stats.percentOutside())
              + ",\"score\":" + std::to_string (stats.score());
     }
@@ -219,6 +223,10 @@ namespace
              + ",\"scale\":" + quoted (note.scaleName)
              + ",\"avoid\":" + (note.avoidNote ? "true" : "false")
              + ",\"resolvesTo\":" + quoted (note.resolvesTo > 0 ? midiNoteName (note.resolvesTo) : "")
+             + ",\"wantsToReach\":" + quoted (note.wantsToReach > 0 ? midiNoteName (note.wantsToReach) : "")
+             + ",\"wantsToReachDegree\":" + quoted (note.wantsToReachDegree)
+             + ",\"wantsToReachStep\":" + std::to_string (note.wantsToReach > 0
+                                                          ? note.wantsToReach - note.midiNote : 0)
              + ",\"chord\":" + quoted (note.chordSymbol)
              + ",\"bar\":" + std::to_string (note.measureIndex) + "}";
     }
@@ -708,24 +716,37 @@ std::string soloPlayNote (int midiNote)
     auto& analyzer = soloTake();
     const auto note = analyzer.play (midiNote);
     const auto& resolved = analyzer.resolvedByLastNote();
+    const auto& stranded = analyzer.strandedByLastNote();
 
     /*  One note can change the reading of notes behind it, and those may be in
         an earlier bar - running chromatically into the next chord is the whole
         reason the window does not stop at the barline. So the reply carries
         every bar whose numbers moved, not only the one just played into.
         Without this, the bar before would keep a strip that stopped being true
-        the moment the line landed. */
+        the moment the line landed - or failed to. */
     std::vector<LineNote> changed { note };
 
-    for (const auto& earlier : resolved)
-        if (std::none_of (changed.begin(), changed.end(), [&earlier] (const LineNote& seen)
-                          { return seen.measureIndex == earlier.measureIndex; }))
-            changed.push_back (earlier);
+    const auto alsoSend = [&changed] (const std::vector<LineNote>& notes)
+    {
+        for (const auto& earlier : notes)
+            if (std::none_of (changed.begin(), changed.end(), [&earlier] (const LineNote& seen)
+                              { return seen.measureIndex == earlier.measureIndex; }))
+                changed.push_back (earlier);
+    };
+
+    alsoSend (resolved);
+    alsoSend (stranded);
+
+    const auto names = [] (const std::vector<LineNote>& notes)
+    {
+        return jsonArray (notes, [] (const LineNote& earlier)
+                          { return quoted (midiNoteName (earlier.midiNote)); });
+    };
 
     return hold ("{\"ok\":true,\"taking\":" + std::string (analyzer.isTaking() ? "true" : "false")
                  + ",\"note\":" + lineNoteJson (note)
-                 + ",\"resolved\":" + jsonArray (resolved, [] (const LineNote& earlier)
-                   { return quoted (midiNoteName (earlier.midiNote)); })
+                 + ",\"resolved\":" + names (resolved)
+                 + ",\"stranded\":" + names (stranded)
                  + ",\"bar\":" + lineBarJson (note.measureIndex, note.chordSymbol,
                                               analyzer.statsForBar (note.measureIndex))
                  + ",\"bars\":" + jsonArray (changed, [&analyzer] (const LineNote& touched)

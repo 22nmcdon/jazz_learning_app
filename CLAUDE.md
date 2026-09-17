@@ -212,24 +212,43 @@ the line between what exists and what does not. Do not re-plan something in the 
   quiet bug loud: reopening a bar used to reset the chosen scale to the top of the list
   while the engine kept reading against the old one, which nothing on screen could
   contradict until something on screen named it.
-- **A note's reading can improve after it was played, and that is the point.** A chromatic
-  approach, an enclosure and a passing tone are outside by pitch and are the line *working*;
-  nothing tells them apart from a note that did not land until the note after arrives. So
-  `LineAnalyzer` is no longer purely per-note: `play()` reads the new note and then looks
-  back over the two behind it, promoting any the new note resolved. `NoteColour::approach`
-  is the tier that comes out of it, and `read()` - which is pure and sees one note - can
-  never return it. Three things follow, and each is load-bearing:
-    - **Nothing is ever demoted.** The window only finds reasons a note was better than it
-      first looked, so a reading never gets worse under a player who is watching it.
+- **A note outside the harmony is open, not wrong, until the window has passed it.** This is
+  the rule the rest of solo practice hangs off. A chromatic approach, an enclosure and a
+  passing tone are outside by pitch and are the line *working*; nothing tells them apart
+  from a note that did not land until the note after arrives. So `LineAnalyzer` is not
+  per-note: `play()` reads the new note, looks back over the two behind it promoting any it
+  resolved, then *settles* the one the window has finished with. A note outside the harmony
+  comes back `NoteColour::unresolved` and becomes `approach` or `outside` exactly two notes
+  later, once, for good. `read()` - pure, one note - returns `outside`, because one note has
+  no line around it to be waiting on.
+    - **Nothing is graded on an open note.** `score()` reads `LineStats::settled()`. Counting
+      an open note as outside for the two notes before the window decides made the score dip
+      every time a player reached for a chromatic approach and climb back when they landed
+      it, which reads as the app marking someone down for a phrase it is about to approve
+      of. Do not let a percentage, a strip or a tally treat `unresolved` as a verdict.
+    - **The instant feedback names the resolution, not a mistake.** `LineNote::wantsToReach`
+      is the nearest note a step away that would close it - root first, then chord tone,
+      then scale tone, semitones before tones. "That was wrong" is a guess at that moment
+      and often the wrong one; "a semitone up lands on D" is true whichever way the line
+      goes, and it is the thing that would have helped. The bad news is delivered late
+      instead, by `strandedByLastNote()`, which is the earliest it is honestly available.
+  Three more things follow, and each is load-bearing:
+    - **Nothing that has settled is ever revisited.** A note that landed stays landed and a
+      note left hanging stays hanging, so a reading never changes twice under a player who
+      is watching it.
     - **The window does not stop at the barline.** Running chromatically into the next
       chord is idiomatic, so a promotion can change a bar the player has already left -
       which is why `soloPlayNote` returns a `bars` array of everything that moved, not just
       the bar the note landed in. A shell reading only `bar` leaves the previous one
       drawing numbers that stopped being true.
-    - **It runs without a take.** Notes outside a take go into a three-note `recent` buffer
-      and are resolved there but never counted. Someone who has not armed anything is the
-      person most likely to be trying chromatic notes, and telling them those were misses
-      is the lesson the whole window exists to stop.
+    - **It runs without a take.** Notes outside a take go into a three-note `recent` buffer,
+      resolved and settled there but never counted. Someone who has not armed anything is
+      the person most likely to be trying chromatic notes, and telling them those were
+      misses is the lesson the whole window exists to stop.
+    - **`endTake()` closes whatever is still open**, as outside: there will be no more
+      notes, so the resolution is not coming. A summary carrying "waiting to see" would be
+      waiting for good, which is why every test that reads a colour back ends the take
+      first.
 - **The score is the only judgement in the engine, so every number in it is named.**
   `LineStats::score()` reads a bar 0-100: chord tones and scale tones both land, an outside
   note is worth a quarter (with no clock, passing through and being stuck look the same

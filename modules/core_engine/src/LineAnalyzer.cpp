@@ -50,15 +50,15 @@ namespace
         were cut shortest. Standard largest-remainder, and the only reason it is
         here is that a panel reading "34% / 52% / 15%" looks like a bug.
     */
-    std::array<int, 4> sharesOfOneHundred (const std::array<int, 4>& counts)
+    std::array<int, 5> sharesOfOneHundred (const std::array<int, 5>& counts)
     {
         const auto total = std::accumulate (counts.begin(), counts.end(), 0);
 
         if (total <= 0)
-            return { 0, 0, 0, 0 };
+            return { 0, 0, 0, 0, 0 };
 
-        std::array<int, 4> whole {};
-        std::array<int, 4> remainder {};
+        std::array<int, 5> whole {};
+        std::array<int, 5> remainder {};
 
         for (std::size_t i = 0; i < counts.size(); ++i)
         {
@@ -144,6 +144,69 @@ namespace
         return note;
     }
 
+    /** Fills in the nearest note that would close an open one.
+
+        Looked for a step either way, semitones before tones, and a chord tone
+        before a scale tone at the same distance. Nothing here is a rule about
+        what the player *should* do - it is a statement about what is within
+        reach, which is the only useful thing to say about a note whose fate
+        has not been decided yet.
+    */
+    void describeResolution (LineNote& note,
+                             const ChordSymbol& chord,
+                             const std::vector<ScaleSuggestion>& scales)
+    {
+        /*  Three strengths rather than two, and the third is the tiebreak that
+            matters: Db over Dm7 is a semitone from C and a semitone from D, and
+            both are chord tones. Without a preference the answer came down to
+            which direction the loop happened to try first, which is no way to
+            decide a thing a player is going to read. The root is the strongest
+            place a line can land, so it wins. */
+        const auto lands = [&chord, &scales] (int midiNote)
+        {
+            const auto pitch = toPitchClass (midiNote);
+
+            if (pitch == chord.root())
+                return 3;
+
+            if (chord.containsPitchClass (pitch))
+                return 2;
+
+            for (const auto& suggestion : scales)
+                if (suggestion.scale.contains (pitch))
+                    return 1;
+
+            return 0;
+        };
+
+        auto best = 0;
+
+        for (const auto distance : { 1, 2 })
+        {
+            for (const auto step : { -distance, distance })
+            {
+                const auto strength = lands (note.midiNote + step);
+
+                if (strength > best)
+                {
+                    best = strength;
+                    note.wantsToReach = note.midiNote + step;
+                }
+            }
+
+            // A semitone away beats anything a tone away, so stop as soon as
+            // this distance found something rather than letting the wider
+            // search overwrite it.
+            if (best > 0)
+                break;
+        }
+
+        if (note.wantsToReach > 0)
+            note.wantsToReachDegree = intervalLabel (
+                ascendingInterval (chord.root(), toPitchClass (note.wantsToReach)),
+                chord.hasMinorThird());
+    }
+
     /** The scales a note will be read against, best-first. */
     std::vector<ScaleSuggestion> scalesFor (const ChordSymbol& chord,
                                             const LineAnalyzer::Options& options)
@@ -200,37 +263,34 @@ namespace
 }
 
 //==============================================================================
-int LineStats::percentChordTones() const noexcept
+namespace
 {
-    return sharesOfOneHundred ({ chordTones, scaleTones, approachTones, outside })[0];
+    std::array<int, 5> sharesOf (const LineStats& stats)
+    {
+        return sharesOfOneHundred ({ stats.chordTones, stats.scaleTones,
+                                     stats.approachTones, stats.unresolved, stats.outside });
+    }
 }
 
-int LineStats::percentScaleTones() const noexcept
-{
-    return sharesOfOneHundred ({ chordTones, scaleTones, approachTones, outside })[1];
-}
-
-int LineStats::percentApproachTones() const noexcept
-{
-    return sharesOfOneHundred ({ chordTones, scaleTones, approachTones, outside })[2];
-}
-
-int LineStats::percentOutside() const noexcept
-{
-    return sharesOfOneHundred ({ chordTones, scaleTones, approachTones, outside })[3];
-}
+int LineStats::percentChordTones() const noexcept    { return sharesOf (*this)[0]; }
+int LineStats::percentScaleTones() const noexcept    { return sharesOf (*this)[1]; }
+int LineStats::percentApproachTones() const noexcept { return sharesOf (*this)[2]; }
+int LineStats::percentUnresolved() const noexcept    { return sharesOf (*this)[3]; }
+int LineStats::percentOutside() const noexcept       { return sharesOf (*this)[4]; }
 
 int LineStats::score() const noexcept
 {
-    const auto played = total();
+    // Notes the line has opened and not yet closed are not judged - see the
+    // header. A bar of nothing but those has no score, rather than a bad one.
+    const auto judged = settled();
 
-    if (played <= 0)
+    if (judged <= 0)
         return 0;
 
     const auto working = landed();
 
     // Everything that worked, and a quarter of what did not.
-    const auto reading = 100.0 * (working + 0.25 * outside) / played;
+    const auto reading = 100.0 * (working + 0.25 * outside) / judged;
 
     // Nothing that worked is nothing to be one-sided about.
     if (working <= 0)
@@ -258,17 +318,25 @@ int LineStats::score() const noexcept
 
 bool isOutsideByPitch (NoteColour colour) noexcept
 {
-    return colour == NoteColour::outside || colour == NoteColour::approach;
+    return colour == NoteColour::approach
+        || colour == NoteColour::unresolved
+        || colour == NoteColour::outside;
+}
+
+bool isSettled (NoteColour colour) noexcept
+{
+    return colour != NoteColour::unresolved;
 }
 
 std::string noteColourName (NoteColour colour)
 {
     switch (colour)
     {
-        case NoteColour::chordTone: return "chord tone";
-        case NoteColour::scaleTone: return "scale tone";
-        case NoteColour::approach:  return "approach note";
-        case NoteColour::outside:   break;
+        case NoteColour::chordTone:  return "chord tone";
+        case NoteColour::scaleTone:  return "scale tone";
+        case NoteColour::approach:   return "approach note";
+        case NoteColour::unresolved: return "outside for now";
+        case NoteColour::outside:    break;
     }
 
     return "outside";
@@ -295,6 +363,7 @@ void LineAnalyzer::startTake()
     played.clear();
     recent.clear();
     justResolved.clear();
+    justStranded.clear();
     taking = true;
 }
 
@@ -302,8 +371,21 @@ void LineAnalyzer::endTake()
 {
     // The notes stay. Disarming freezes a summary to read, so throwing the take
     // away at exactly the moment it becomes worth looking at would be perverse.
-    // The window does start clean, though: the first note after a take is not
-    // the resolution of the last note of it.
+    //
+    // Anything still open closes now, as outside: there will be no more notes,
+    // so the resolution it was waiting for is not coming. A summary carrying
+    // "waiting to see" about a take that has ended would be waiting for good.
+    justStranded.clear();
+
+    for (auto& note : played)
+        if (! isSettled (note.colour))
+        {
+            note.colour = NoteColour::outside;
+            justStranded.push_back (note);
+        }
+
+    // The window starts clean too: the first note after a take is not the
+    // resolution of the last note of it.
     recent.clear();
     taking = false;
 }
@@ -323,25 +405,62 @@ LineNote LineAnalyzer::play (int midiNote)
     auto note = readAgainstTarget (midiNote);
 
     justResolved.clear();
+    justStranded.clear();
 
-    if (taking)
+    /*  Outside the harmony, played this instant: the line has opened something
+        and nothing yet knows whether it will close it. `read()` says `outside`
+        because one note has no line around it; a take says `unresolved`, and
+        waits the two notes the window can reach.
+
+        With no bar to read against there is nothing to resolve *into*, so that
+        note stays `outside` - which is the honest answer to how it sits against
+        nothing, and not a question waiting on an answer that cannot come. */
+    if (note.colour == NoteColour::outside && target.has_value())
     {
-        played.push_back (note);
-        resolveTail (played);
+        note.colour = NoteColour::unresolved;
+        describeResolution (note, target->chord, target->scales);
     }
-    else
-    {
-        recent.push_back (note);
 
-        // Only ever as much as the widest pattern needs. This is a window, not
-        // a second take hiding behind the first.
-        while (recent.size() > notesInTheWindow)
-            recent.erase (recent.begin());
+    auto& line = taking ? played : recent;
 
-        resolveTail (recent);
-    }
+    line.push_back (note);
+
+    // Without a take the window is all there is, and it never grows past what
+    // the widest pattern needs: this is a window, not a second take hiding
+    // behind the first.
+    if (! taking)
+        while (line.size() > notesInTheWindow)
+            line.erase (line.begin());
+
+    resolveTail (line);
+    settleTail (line);
 
     return note;
+}
+
+/** Settles the note the window has just finished with.
+
+    A note can be reached by the next note and by the one after it, and by
+    nothing else. Once two have gone by, whatever it is now is what it is - so
+    exactly one note settles per note played, the one two back.
+
+    This is where the bad news comes from, and it is late on purpose: nothing
+    can know a note was left hanging until the notes that could have saved it
+    have been played. Telling a player at the moment of playing that an outside
+    note was a mistake is a guess, and about a third of the time it is wrong.
+*/
+void LineAnalyzer::settleTail (std::vector<LineNote>& line)
+{
+    if (line.size() < notesInTheWindow)
+        return;
+
+    auto& note = line[line.size() - notesInTheWindow];
+
+    if (isSettled (note.colour))
+        return;
+
+    note.colour = NoteColour::outside;
+    justStranded.push_back (note);
 }
 
 /** Promotes the note at @p index to an approach note resolving into @p target.
@@ -354,7 +473,9 @@ bool LineAnalyzer::promote (std::vector<LineNote>& line, std::size_t index, int 
 {
     auto& note = line[index];
 
-    if (note.colour != NoteColour::outside)
+    // Only a note still open can be promoted. One that landed does not need it,
+    // and one the window has already passed is not reachable any more.
+    if (note.colour != NoteColour::unresolved)
         return false;
 
     note.colour = NoteColour::approach;
@@ -458,10 +579,11 @@ namespace
     {
         switch (colour)
         {
-            case NoteColour::chordTone: ++stats.chordTones;    break;
-            case NoteColour::scaleTone: ++stats.scaleTones;    break;
-            case NoteColour::approach:  ++stats.approachTones; break;
-            case NoteColour::outside:   ++stats.outside;       break;
+            case NoteColour::chordTone:  ++stats.chordTones;    break;
+            case NoteColour::scaleTone:  ++stats.scaleTones;    break;
+            case NoteColour::approach:   ++stats.approachTones; break;
+            case NoteColour::unresolved: ++stats.unresolved;    break;
+            case NoteColour::outside:    ++stats.outside;       break;
         }
     }
 }

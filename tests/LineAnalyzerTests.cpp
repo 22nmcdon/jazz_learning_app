@@ -663,6 +663,10 @@ TEST ("a take's bars are scored one by one, not all together")
     analyzer.play (61);
     analyzer.play (66);
 
+    // Ended, because the last notes of a line stay open until something says
+    // there will be no more of it.
+    analyzer.endTake();
+
     CHECK (analyzer.statsForBar (0).score() > analyzer.statsForBar (1).score());
     CHECK (analyzer.statsForBar (1).score() == 25);
 }
@@ -673,16 +677,18 @@ TEST ("a take's bars are scored one by one, not all together")
 
 namespace
 {
-    /** The colours of a run of notes over one chord, after the take has seen
-        all of them. Every test here is about how a reading changes once the
-        note after it arrives, so reading them back at the end is the only
-        honest way to look. */
+    /** The colours of a run of notes over one chord, once every reading is
+        final. Every test here is about how a reading changes as the notes after
+        it arrive, so reading them back at the end is the only honest way to
+        look - and the take has to be ended, because the last notes of a line
+        are still open until something says there will be no more. */
     std::vector<NoteColour> coloursAfter (const std::string& symbol, const std::vector<int>& notes)
     {
         LineAnalyzer analyzer;
         analyzer.startTake();
         analyzer.setTarget (0, chordFrom (symbol));
         playAll (analyzer, notes);
+        analyzer.endTake();
 
         std::vector<NoteColour> colours;
 
@@ -711,20 +717,27 @@ TEST ("an outside note that steps home is an approach, not a miss")
     CHECK (colours[1] == NoteColour::chordTone);
 }
 
-TEST ("the reading only improves once the note after it has arrived")
+TEST ("a note outside the harmony is open, not wrong, until the window has passed it")
 {
     LineAnalyzer analyzer;
     analyzer.startTake();
     analyzer.setTarget (0, chordFrom ("Dm7"));
 
-    // Read the moment it is played, it is outside - and correctly so.
-    CHECK (analyzer.play (61).colour == NoteColour::outside);
-    CHECK (analyzer.statsForBar (0).outside == 1);
+    // The moment it is played it is open. Not outside - nothing knows that yet,
+    // and guessing is what made a score dip and climb back.
+    CHECK (analyzer.play (61).colour == NoteColour::unresolved);
+    CHECK_EQ (analyzer.statsForBar (0).unresolved, 1);
+    CHECK_EQ (analyzer.statsForBar (0).outside, 0);
+
+    // And nothing is graded on it while it is open.
+    CHECK_EQ (analyzer.statsForBar (0).settled(), 0);
+    CHECK_EQ (analyzer.statsForBar (0).score(), 0);
 
     analyzer.play (62);
 
     CHECK (analyzer.notes().front().colour == NoteColour::approach);
     CHECK_EQ (analyzer.statsForBar (0).outside, 0);
+    CHECK_EQ (analyzer.statsForBar (0).unresolved, 0);
     CHECK_EQ (analyzer.statsForBar (0).approachTones, 1);
 }
 
@@ -780,6 +793,7 @@ TEST ("two outside notes on the same side of a target are not an enclosure")
     analyzer.startTake();
     analyzer.setTarget (0, chordFrom ("Dm7"));
     playAll (analyzer, { 63, 64, 62 });
+    analyzer.endTake();
 
     CHECK (analyzer.notes()[0].colour == NoteColour::outside);
     CHECK (analyzer.notes()[1].colour == NoteColour::outside);
@@ -1002,6 +1016,146 @@ TEST ("the window does not grow into a second take")
     for (auto i = 0; i < 40; ++i)
         analyzer.play (62 + (i % 5));
 
+    CHECK (analyzer.notes().empty());
+    CHECK_EQ (analyzer.stats().total(), 0);
+}
+
+//==============================================================================
+// When a reading is made, rather than what it says. The window decides late on
+// purpose, and nothing is graded on a note it has not reached yet.
+
+TEST ("an open note says what would close it, rather than that it was wrong")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    const auto note = analyzer.play (61);   // Db: a semitone under the root
+
+    CHECK (note.colour == NoteColour::unresolved);
+    CHECK_EQ (note.wantsToReach, 62);
+    CHECK_EQ (note.wantsToReachDegree, std::string { "R" });
+}
+
+TEST ("the note a step away that closes it is the chord's before the scale's")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    /*  Eb sits between D (the root) and E (the 9th, in D Dorian). Both are a
+        semitone away and both would land it; the chord tone is the one a
+        player reaches for, so that is the one named. */
+    const auto note = analyzer.play (63);
+
+    CHECK_EQ (note.wantsToReach, 62);
+    CHECK_EQ (note.wantsToReachDegree, std::string { "R" });
+}
+
+TEST ("a note with no bar to read it against is outside, not waiting")
+{
+    // Nothing to resolve into, so nothing to wait for. An open note is a
+    // question; this one has no one to ask.
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+
+    const auto note = analyzer.play (61);
+
+    CHECK (note.colour == NoteColour::outside);
+    CHECK_EQ (note.wantsToReach, 0);
+}
+
+TEST ("a score does not dip and climb back when a player reaches for a chromatic note")
+{
+    /*  This is the behaviour the whole `unresolved` tier exists for. Play four
+        chord tones, then a chromatic approach and its resolution: the score
+        must never fall below where it started. Before, it dropped on the
+        approach note and recovered two notes later, which read as the app
+        marking a player down for a phrase it was about to approve of. */
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    playAll (analyzer, { 62, 65, 69, 64 });
+
+    const auto settledScore = analyzer.stats().score();
+
+    analyzer.play (61);                       // the chromatic note
+    CHECK_EQ (analyzer.stats().score(), settledScore);
+
+    analyzer.play (62);                       // and its resolution
+    CHECK (analyzer.stats().score() >= settledScore);
+}
+
+TEST ("a note the window passes without a resolution is reported, late and once")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    analyzer.play (61);                      // open
+    CHECK (analyzer.strandedByLastNote().empty());
+
+    analyzer.play (69);                      // a leap away: still reachable
+    CHECK (analyzer.strandedByLastNote().empty());
+
+    analyzer.play (72);                      // the window has now passed it
+    CHECK_EQ (static_cast<int> (analyzer.strandedByLastNote().size()), 1);
+    CHECK_EQ (analyzer.strandedByLastNote().front().midiNote, 61);
+
+    analyzer.play (74);                      // and it is not reported twice
+    CHECK (analyzer.strandedByLastNote().empty());
+
+    CHECK_EQ (analyzer.stats().outside, 1);
+    CHECK_EQ (analyzer.stats().unresolved, 0);
+}
+
+TEST ("ending a take closes everything still open")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    playAll (analyzer, { 62, 61 });
+
+    CHECK_EQ (analyzer.stats().unresolved, 1);
+
+    // There will be no more notes, so the resolution it was waiting for is not
+    // coming. A summary carrying "waiting to see" would be waiting for good.
+    analyzer.endTake();
+
+    CHECK_EQ (analyzer.stats().unresolved, 0);
+    CHECK_EQ (analyzer.stats().outside, 1);
+    CHECK_EQ (static_cast<int> (analyzer.strandedByLastNote().size()), 1);
+}
+
+TEST ("a summary of a finished take has nothing left open in it")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 62, 65, 61, 68, 63 });
+    analyzer.endTake();
+
+    const auto take = analyzer.summary();
+
+    CHECK_EQ (take.overall.unresolved, 0);
+    CHECK_EQ (take.overall.settled(), take.overall.total());
+
+    for (const auto& bar : take.bars)
+        CHECK_EQ (bar.stats.unresolved, 0);
+}
+
+TEST ("the window without a take reports both halves, and counts neither")
+{
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    analyzer.play (61);
+    analyzer.play (69);
+    analyzer.play (72);
+
+    CHECK_EQ (static_cast<int> (analyzer.strandedByLastNote().size()), 1);
     CHECK (analyzer.notes().empty());
     CHECK_EQ (analyzer.stats().total(), 0);
 }

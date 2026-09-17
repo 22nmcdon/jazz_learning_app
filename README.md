@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (310), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (319), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -156,18 +156,28 @@ sounds, is read back - **E4 - the 9th, scale tone, in D Dorian** - and lets go. 
 is read on its own, so a rolled double-stop is two notes each read where it sits rather
 than one chord.
 
-**An outside note that goes somewhere is not a miss.** Play a semitone away from a note and
-then land on it, or take a note from both sides before playing it, and what read as outside
-is read again as an **approach note** - the third of four tiers, and one that counts as
-landing rather than as a mistake. A chromatic approach, an enclosure and a passing tone are
-all outside by pitch and all three are the line working; what tells them apart from a note
-that simply did not land is *where the line goes next*. So the reading of a note can improve
-after you have played it, once the note after it arrives, and the bar's strip and score
-change with it - including across a barline, because running chromatically into the next
-chord is one of the most idiomatic things in the idiom. The dock says so when it happens
-(*Db4 before it was on the way here*), rather than quietly improving a number you are looking
-at. It works whether or not a take is armed; a player trying things out is the one most
-likely to be experimenting with chromatic notes. The dock says it in the same voice chord practice uses, in the same place,
+**A note outside the harmony is not called a mistake when you play it.** It is **open**:
+you have started something, and at that instant nothing can know how it ends. A chromatic
+approach, an enclosure and a passing tone are all outside by pitch and all three are the
+line working; what tells them apart from a note that simply did not land is *where the line
+goes next*. So the app does not guess. What it says instead is the thing that is true right
+then - *a semitone up lands on D4, the root* - which is both more use than a verdict and
+correct whichever way the line goes.
+
+Then the next two notes decide it, because those are the only two that can reach back. Step
+home, or take the target from both sides first, and the note is read again as an **approach
+note** that counts as landing; the dock says so (*Db4 before it was on the way here*) rather
+than quietly improving a number you are looking at. Go somewhere else and it settles as
+**outside**, and the dock says that then - two notes later, which is the earliest it could
+honestly be said. Either way it can happen across a barline, because running chromatically
+into the next chord is one of the most idiomatic things in the idiom, and it works whether or
+not a take is armed: a player trying things out is the one most likely to be experimenting
+with chromatic notes.
+
+**Nothing is graded on a note while it is still open.** That is the practical half of it. The
+score reads only the notes whose reading is final, so it no longer dips the moment you reach
+for a chromatic approach and climb back two notes later when you land it - which read as the
+app marking you down for a phrase it was about to approve of. The dock says it in the same voice chord practice uses, in the same place,
 and where that mode writes **Expecting Dm7** this one writes **Expecting D Dorian** - the
 scale you are actually being held to, which until now you had to press *Which scale?* to
 find out. Choosing a different one out of the bar rewrites it, and it survives the bar
@@ -189,11 +199,11 @@ have to read about underneath it. The exact counts are on the bar's tooltip, and
 name for a screen reader.
 
 The percentage is the one number in this app that is a judgement rather than a count, so it
-is worth saying what it judges. Chord tones, scale tones and approach notes all count as
-landing - the difference between them is colour, not correctness. What is left as *outside*
-counts a quarter rather than nothing, because even a note that resolved into nothing may have
-been the best note in the line, and because the window that spots an approach is three notes
-wide, so a line can be doing something the engine cannot see. What is left is balance, worth
+is worth saying what it judges. It reads the notes whose reading is final, and nothing else.
+Of those: chord tones, scale tones and approach notes all count as landing - the difference
+between them is colour, not correctness. What is left as *outside* counts a quarter rather
+than nothing, because a note that resolved into nothing may still have been the best note in
+the line. What is left is balance, worth
 fifteen points at the very most: a line is chord tones anchoring it and everything else
 colouring it, so a bar that never leaves the chord and a bar that never touches it are both
 one-sided and are marked the same - and a bar of one or two notes is not unbalanced, it is

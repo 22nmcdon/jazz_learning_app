@@ -165,15 +165,38 @@ TEST ("a played note comes back with its colour, its degree and the running coun
     CHECK (contains (json, "\"chordTones\":1"));
 }
 
-TEST ("a note outside the scale says so on the wire, and still names its degree")
+TEST ("a note outside the scale comes across as open, with what would close it")
 {
+    /*  Not "outside": nothing knows that yet, and the wire should not say it
+        before the window has had its chance. What it can say is the degree, and
+        the note a step away that would land it. */
     soloStartTake();
     soloSetBar (0, "Cmaj7", "", "");
 
     const auto json = soloPlayNote (61);   // Db over Cmaj7
 
-    CHECK (contains (json, "\"colour\":\"outside\""));
+    CHECK (contains (json, "\"colour\":\"unresolved\""));
     CHECK (contains (json, "\"degree\":\"b9\""));
+    CHECK (contains (json, "\"wantsToReach\":\"C4\""));
+    CHECK (contains (json, "\"wantsToReachStep\":-1"));
+    CHECK (contains (json, "\"unresolved\":1"));
+    CHECK (contains (json, "\"settled\":0"));
+}
+
+TEST ("a note the line never closed is reported when the window passes it")
+{
+    soloStartTake();
+    soloSetBar (0, "Cmaj7", "", "");
+
+    soloPlayNote (61);
+    CHECK (contains (soloPlayNote (72), "\"stranded\":[]"));
+
+    // Two notes on, nothing could have saved it, and only now does the wire
+    // say so - which is the earliest moment it is true.
+    const auto json = soloPlayNote (76);
+
+    CHECK (contains (json, "\"stranded\":[\"Db4\"]"));
+    CHECK (contains (json, "\"outside\":1"));
 }
 
 TEST ("the bar a player moves to answers with what they have done on it")
@@ -238,7 +261,7 @@ TEST ("the scale a bar is read against comes across with it")
 
     // Bb over Dm7: outside D Dorian, inside D Aeolian.
     soloSetBar (0, "Dm7", "", "");
-    CHECK (contains (soloPlayNote (70), "\"colour\":\"outside\""));
+    CHECK (contains (soloPlayNote (70), "\"colour\":\"unresolved\""));
 
     soloSetBar (0, "Dm7", "D Aeolian", "");
     CHECK (contains (soloPlayNote (70), "\"colour\":\"scaleTone\""));
@@ -324,5 +347,5 @@ TEST ("the bar is read against the style it was given")
     CHECK (contains (soloPlayNote (64), "\"colour\":\"scaleTone\""));
 
     soloSetBar (0, "Dm7", "", "pentatonic");
-    CHECK (contains (soloPlayNote (64), "\"colour\":\"outside\""));
+    CHECK (contains (soloPlayNote (64), "\"colour\":\"unresolved\""));
 }

@@ -223,19 +223,37 @@ try {
   check(`a note is read back (${(await readout()).replace(/\s+/g, " ")})`,
         (await page.locator("#soloNote").getAttribute("data-colour")) === "chordTone");
 
+  // A note outside the harmony is not called outside the moment it is played:
+  // nothing knows that yet. It is open, and what the page can say is what would
+  // close it.
   await soloKey(61).click();
   await page.waitForFunction(
-    () => document.querySelector("#soloNote").dataset.colour === "outside", null, { timeout: 10000 });
-  check("a note outside the scale is read as outside", true);
+    () => document.querySelector("#soloNote").dataset.colour === "unresolved",
+    null, { timeout: 10000 });
+  check(`a note outside the harmony is open rather than wrong `
+        + `(${(await page.locator("#soloAgainst").innerText()).replace(/\s+/g, " ")})`,
+        /lands on/.test(await page.locator("#soloAgainst").innerText()));
 
-  // ...and the same note, once the line steps home from it, is read again as
-  // an approach. This is the one behaviour in solo mode that changes after the
-  // fact, so it is the one worth driving end to end rather than trusting.
+  // ...and once the line steps home from it, it is read again as an approach.
+  // This is the one behaviour in solo mode that changes after the fact, so it
+  // is the one worth driving end to end rather than trusting.
   await soloKey(62).click();
   await page.waitForFunction(
     () => document.querySelector("#soloAgainst").textContent.includes("on the way here"),
     null, { timeout: 10000 });
   check(`an outside note that steps home is read again as an approach `
+        + `(${(await page.locator("#soloAgainst").innerText()).replace(/\s+/g, " ")})`, true);
+
+  // The other half, and the only place the app ever says a note did not work:
+  // an open note the window passes without the line closing it. Late by
+  // construction - two notes have to go by before it is true.
+  await soloKey(61).click();
+  await soloKey(69).click();
+  await soloKey(72).click();
+  await page.waitForFunction(
+    () => document.querySelector("#soloAgainst").textContent.includes("never found"),
+    null, { timeout: 10000 });
+  check(`a note the line never closed is flagged once the window passes it `
         + `(${(await page.locator("#soloAgainst").innerText()).replace(/\s+/g, " ")})`, true);
 
   // Nothing is counted until a take is armed.
