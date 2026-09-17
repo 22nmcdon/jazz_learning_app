@@ -28,6 +28,10 @@ std::string identifyChord (const char* midiNotesCsv);
 std::string recogniseSubstitution (const char* progressionText, int measureIndex, const char* midiNotesCsv, int includeAdvanced);
 std::string idiomaticVoicings (const char* symbol, int anchorNote, const char* practiseStyle, int rich);
 
+/** The two-handed voicing a comping piano plays for @p symbol, having just
+    played @p previousNotesCsv (empty for the first chord of a tune). */
+std::string compingVoicing (const char* symbol, const char* previousNotesCsv);
+
 //==============================================================================
 /** Solo practice: reading a line rather than a chord.
 

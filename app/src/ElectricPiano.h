@@ -4,6 +4,7 @@
 
 #include <array>
 #include <atomic>
+#include <vector>
 
 namespace jazz::app
 {
@@ -54,6 +55,23 @@ public:
     */
     void click (bool accented);
 
+    /** The comping piano: one chord replacing whatever it last played.
+
+        It is a channel of its own rather than a set of ordinary notes, because
+        the player and the accompaniment share a keyboard and must not share
+        voices. Comping E4 while the soloist plays E4 would otherwise hand the
+        same voice to both - and then one note-off, from either of them, would
+        stop a note the other one is still sounding.
+
+        One call rather than note-on and note-off, because a comp only ever
+        replaces itself: the chord before it is released here, together, which
+        is also what keeps the voice pool from filling up with tails.
+    */
+    void compChord (const std::vector<int>& midiNotes);
+
+    /** Lets go of the comp, leaving anything the player is holding alone. */
+    void stopComping();
+
 private:
     /** One sounding note. Voices are a fixed pool: a chord is ten notes at
         most, and allocating on the audio thread is not allowed.
@@ -89,6 +107,12 @@ private:
             pedal defers its release rather than changing how it rings.
         */
         bool pedalled { false };
+
+        /** The accompaniment's, not the player's. Kept apart so that a key and
+            a comped note at the same pitch are two voices, and so that neither
+            one's note-off, pedal or panic reaches the other.
+        */
+        bool comping { false };
     };
 
     void audioDeviceIOCallbackWithContext (const float* const* inputChannelData,
@@ -103,6 +127,7 @@ private:
 
     Voice* findVoiceFor (int midiNote);
     Voice* findFreeVoice();
+    void releaseComping();
 
     void releaseVoice (Voice& voice);
 

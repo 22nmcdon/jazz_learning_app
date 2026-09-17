@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (331), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (338), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -243,6 +243,38 @@ Web Audio at an exact time, so it is sample-accurate. In the desktop app the sou
 across an event bridge with no "play this at" argument, so the click is sent when it comes
 due and arrives a message-thread hop later. Both read the same clock, so the chart and the
 click agree in both - what the app gives up is a few milliseconds of jitter on the click.
+
+### Comping
+
+**Comping** — next to *Reharmonise the tune*, above the chart — is the band behind you. It
+opens on a list of who is playing: **piano comping**, which works, and **bass walking** and
+**drums**, which are named and not built yet. The piano has its own sound picker, offering
+the same sounds the Practice menu offers the player, because the band is not playing your
+instrument.
+
+What it plays is **two-handed rootless voicings** — no root to fight a bass player, guide
+tones under colour — and it **leads each one from the one before** rather than spelling
+every chord from scratch. Over `| Dm7 | G7 | Cmaj7 |` that means F3 C4 E4 B4, then F3 B3 E4
+A4, then E3 B3 D4 A4: two notes held each time and two moving by a semitone, which is what a
+pianist's hands actually do. A fixed register would re-spell each chord and leap between
+them.
+
+The rhythm is the chart's own: each chord is struck where it falls in the bar, and a chord
+holding a whole bar is struck again halfway through it. Nothing invents a comping pattern,
+which is the same reason nothing reads one — see rhythm, below.
+
+With the clock running the band plays in time with it. Without it, each bar sounds as you
+land on it, so the toggle does something whether or not you are in time.
+
+The engine decides which notes and knows nothing about when; `compingVoicing()` takes the
+chord and the voicing you last played and gives back the next one. The page holds that
+previous voicing rather than the engine keeping a memory of it, and the searching is bounded
+to a register window — voice leading on its own always takes the nearest voicing, so a
+progression that keeps rising would walk the hands off the top of the keyboard.
+
+In both shells the comp is a channel of its own, never the player's own notes: comping E4
+under a soloist playing E4 has to be two voices, or one note-off silences a note the other
+one is still holding.
 
 What the transport does **not** do yet is make rhythm count. Nothing reads which beat a note
 landed on, so an avoid note is still named rather than marked down, and a chord tone on beat
@@ -515,6 +547,12 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   strong beats, and telling an avoid note passed through from one sat on, both need
   `LineAnalyzer` to be told where in the bar a note fell. It has no time in it today,
   deliberately, so that is a change to the engine's shape and should be designed first.
+- **A walking bass and a drummer.** Both are named in the comping menu and neither is
+  built. A bass line is the shape of problem the piano comp already solved — the engine
+  says which notes, the page says when — but it wants a note per beat rather than a
+  voicing per chord, which makes it the first thing here that would need to know where in
+  the bar it is. Drums need no theory and no engine call at all: a pattern and a kit, and
+  the metronome click is the only percussion the app can make today.
 - **A metre that survives export.** The readers bring a time signature in; the iReal Pro
   writer does not put one back out, so a waltz imported and exported comes back in four.
   One line in `ChartFormats`, once someone wants it.

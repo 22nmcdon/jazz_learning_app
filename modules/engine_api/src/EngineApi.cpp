@@ -699,6 +699,30 @@ std::string idiomaticVoicings (const char* symbol, int anchorNote,
                  + "}");
 }
 
+std::string compingVoicing (const char* symbol, const char* previousNotesCsv)
+{
+    const auto chord = ChordSymbol::parse (symbol != nullptr ? symbol : "");
+
+    if (! chord.has_value())
+        return hold (jsonError ("Not a chord symbol"));
+
+    // The page hands back what it last played rather than the engine keeping a
+    // memory of it: the take is the one stateful corner here, and comping does
+    // not need to be a second one.
+    const auto previous = parseNoteList (previousNotesCsv != nullptr ? previousNotesCsv : "");
+    const auto voicing = core::compingVoicing (*chord, previous);
+
+    std::string notes = "[";
+
+    for (std::size_t i = 0; i < voicing.midiNotes.size(); ++i)
+        notes += (i > 0 ? "," : "") + std::to_string (voicing.midiNotes[i]);
+
+    notes += "]";
+
+    return hold ("{\"ok\":true,\"notes\":" + notes
+                 + ",\"describe\":" + quoted (voicing.describe()) + "}");
+}
+
 //==============================================================================
 std::string soloStartTake()
 {

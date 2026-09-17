@@ -394,3 +394,21 @@ TEST ("the bar is read against the style it was given")
     soloSetBar (0, "Dm7", "", "pentatonic");
     CHECK (contains (soloPlayNote (64), "\"colour\":\"unresolved\""));
 }
+
+TEST ("the wire hands back a comping voicing, and leads it from the last one")
+{
+    const auto opening = compingVoicing ("Dm7", "");
+
+    CHECK (contains (opening, "\"ok\":true"));
+    CHECK (contains (opening, "\"notes\":["));
+    CHECK (contains (opening, "\"describe\":"));
+
+    // Dm7 to G7 over a common tone: the wire has to carry the previous voicing
+    // in, or every chord is spelled from scratch and the hands jump.
+    CHECK (contains (compingVoicing ("G7", "65,72,76,83"), "\"notes\":[65,71,76,81]"));
+}
+
+TEST ("a comping voicing is refused for something that is not a chord")
+{
+    CHECK (contains (compingVoicing ("not a chord", ""), "\"ok\":false"));
+}

@@ -489,3 +489,101 @@ TEST ("no suggested voicing asks for a stretch no hand has")
                 }
     }
 }
+
+//==============================================================================
+// Comping: the same two-handed shapes, chosen for where the last one left the
+// hands rather than at a fixed anchor.
+namespace
+{
+    /** Comps a progression straight through, as the page does bar by bar. */
+    std::vector<Voicing> compThrough (const std::vector<std::string>& symbols)
+    {
+        std::vector<Voicing> played;
+        std::vector<int> previous;
+
+        for (const auto& symbol : symbols)
+        {
+            played.push_back (compingVoicing (chordFrom (symbol), previous));
+            previous = played.back().midiNotes;
+        }
+
+        return played;
+    }
+
+    /** The widest a single hand moves anywhere in a comped progression. */
+    int biggestLeap (const std::vector<Voicing>& played)
+    {
+        auto worst = 0;
+
+        for (std::size_t i = 1; i < played.size(); ++i)
+            worst = std::max (worst, std::abs (played[i].lowestNote() - played[i - 1].lowestNote()));
+
+        return worst;
+    }
+}
+
+TEST ("what a comping piano plays is a two-handed rootless voicing")
+{
+    // The invariant the suggestions are already held to: the app must never
+    // play a voicing it would then read as a different kind of voicing.
+    for (const auto& symbol : { "Cmaj7", "Dm7", "G7", "Bbmaj7", "Am7b5", "D7alt", "F6", "Ebmaj7" })
+    {
+        const auto chord = chordFrom (symbol);
+        const auto voicing = compingVoicing (chord);
+
+        CHECK (! voicing.isEmpty());
+        CHECK (VoicingAnalyzer::classify (voicing, chord) == VoicingType::twoHandedRootless);
+    }
+}
+
+TEST ("with nothing to lead from, comping opens on the shape the app would show")
+{
+    const auto chord = chordFrom ("Dm7");
+    const auto opening = idiomaticVoicings (chord, VoicingType::twoHandedRootless,
+                                            naturalAnchorFor (VoicingType::twoHandedRootless));
+
+    CHECK (! opening.empty());
+    CHECK_EQ (compingVoicing (chord).describe(), opening.front().describe());
+}
+
+TEST ("comping leads from the voicing before it rather than re-anchoring")
+{
+    const std::vector<std::string> tune { "Dm7", "G7", "Cmaj7", "Cm7", "F7", "Bbmaj7" };
+
+    // What a fixed anchor costs: every chord spelled from scratch at C3.
+    std::vector<Voicing> reanchored;
+
+    for (const auto& symbol : tune)
+        reanchored.push_back (idiomaticVoicings (chordFrom (symbol), VoicingType::twoHandedRootless,
+                                                 naturalAnchorFor (VoicingType::twoHandedRootless)).front());
+
+    const auto comped = compThrough (tune);
+
+    CHECK (biggestLeap (comped) <= biggestLeap (reanchored));
+    CHECK (biggestLeap (comped) <= 6);
+}
+
+TEST ("a chord repeated is comped the same way twice")
+{
+    // Nothing to gain by moving, so nothing moves: the cheapest voicing to
+    // lead to from a voicing is that voicing.
+    const auto twice = compThrough ({ "Cmaj7", "Cmaj7" });
+
+    CHECK_EQ (twice[0].describe(), twice[1].describe());
+}
+
+TEST ("comping stays in its register over a long tune")
+{
+    /*  Voice leading on its own drifts: every chord picks the nearest voicing
+        to the last one, and a progression that keeps rising takes the hands up
+        with it until they are somewhere nobody comps. The window is what stops
+        that, so the test is a tune that climbs. */
+    const auto climbing = compThrough ({ "Cmaj7", "Ebmaj7", "Gbmaj7", "Amaj7", "Cmaj7",
+                                         "Ebmaj7", "Gbmaj7", "Amaj7", "Cmaj7" });
+
+    for (const auto& voicing : climbing)
+    {
+        CHECK (voicing.lowestNote() >= 45);    // A2
+        CHECK (voicing.highestNote() <= 84);   // C6
+    }
+}

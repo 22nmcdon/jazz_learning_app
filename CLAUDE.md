@@ -283,6 +283,41 @@ there because these are the ones that break something when a session has not rea
   it includes - and it is the thing that would finally let an avoid note be told apart
   from a note passed through.
 
+### Comping — the band behind the soloist
+- **The engine says which notes, the page says when.** `compingVoicing()` picks a
+  two-handed rootless voicing and the register to put it in; it has no clock, like
+  everything else in the engine. Every question about *when* - which bar, which beat,
+  how often - is the page's, and the transport it already had answers all of them.
+- **It leads from the last voicing rather than spelling each chord afresh.** That is the
+  whole of what `compingVoicing` adds over `idiomaticVoicings`: the same shapes, searched
+  over a register window, scored by how far the hands would travel from
+  `previousNotes`. Comping a tune at one anchor re-spells every chord and leaps around
+  the keyboard; Dm7 to G7 should hold two notes and move two. **The previous voicing is
+  the page's to remember**, handed back in on every call - the take is the one stateful
+  corner of `jazz::api` and comping must not become a second one.
+- **The window is what stops it drifting.** Voice leading alone always takes the nearest
+  voicing, so a progression that keeps rising takes the hands up with it until they are
+  somewhere nobody comps. `lowestCompAnchor`/`highestCompAnchor` bound it, and the
+  tie-break pulls back towards the natural anchor so two equal choices do not get decided
+  by loop order.
+- **The comp is a channel of its own in both shells, never the player's own voices.**
+  Comping E4 under a soloist playing E4 has to be two notes, or one note-off stops a note
+  the other is still sounding. On the web that is `audio.compVoices` beside
+  `audio.voices`; in the app it is `Voice::comping`, which is why `noteOff`, the pedal and
+  `allNotesOff` all skip comp voices - and why the bridge carries `"comp"` rather than
+  reusing `"chord"`, whose first act is to silence everything.
+- **The comp's rhythm is the chart's own.** Each chord is struck where it falls in the
+  bar, and a chord holding the whole bar is struck again halfway. No pattern is invented
+  anywhere, which is what keeps this from being the rhythmic reading the engine still
+  does not do.
+- **Engine calls for the comp are chained, not raced.** Two bars comped concurrently
+  resolve out of order and lead from the same previous voicing - exactly the jump the
+  feature exists to avoid. `comping.chain` is one promise chain, so voicings land in the
+  order they were booked.
+- **Bass and drums are named in the menu and not built.** A rhythm section is three
+  instruments; leaving the other two off the list entirely would say the feature is
+  finished. They are disabled with a "later" tag, not hidden.
+
 ## Both modes — one page, one chart
 
 - **A mode is not a screen.** `state.mode` flips and the chart, the keyboard, the MIDI
@@ -303,6 +338,8 @@ there because these are the ones that break something when a session has not rea
   substitutions in chord practice, never both: they answer different questions - what to
   play over this bar, and what this bar should be - and showing both meant every visit
   opened with a choice nobody asked for.
+- **Comping belongs to solo practice only.** A band playing under chord practice would be
+  sounding the very voicing the player is being asked to find. `applyMode` stops it.
 - **Both directions let go of the keys.** A voicing carried into solo practice is a chord
   nothing over there will ever read, and a line carried back into chord practice would be
   analysed as a voicing nobody played. `applyMode` clears held notes, the pedal's held
@@ -367,6 +404,12 @@ build step passes, that setting is the first thing to check.
   score, the feedback panel's session average and now a take's own numbers are the hook
   the last of those would build on. (The metronome and the practice loop ship - they are
   what In time is.)
+- **A walking bass and a drummer.** Both are named in the comping menu and neither is
+  built. A bass line is the same shape of problem the comp already solved - the engine
+  says which notes, the page says when - but it needs a note per beat rather than a
+  voicing per chord, which is the first thing here that would want to know where in the
+  bar it is. Drums need no theory at all and no engine call; they need a pattern and a
+  kit, and the click is the only percussion the app can make today.
 - **Licks.** Solo mode's "Which scale?" is the scale half of "show me one"; suggesting a
   *line* to play over a bar is a separate feature needing generated or curated patterns,
   rhythm and register - deliberately not started.

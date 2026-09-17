@@ -2,6 +2,8 @@
 
 #include "jazz/api/EngineApi.h"
 
+#include <vector>
+
 #include <BinaryData.h>
 
 
@@ -80,6 +82,9 @@ namespace
         if (name == "jazzIdiomaticVoicings")
             return api::idiomaticVoicings (text (0).c_str(), number (1),
                                            text (2).c_str(), number (3));
+
+        if (name == "jazzCompingVoicing")
+            return api::compingVoicing (text (0).c_str(), text (1).c_str());
 
         // Solo practice. The take these drive lives in jazz::api, so the app and
         // the browser behave the same way without this shell remembering a thing.
@@ -220,6 +225,21 @@ void WebUi::handleSound (const var& request)
         if (auto* notes = object->getProperty ("notes").getArray())
             for (const auto& note : *notes)
                 sound.noteOn (static_cast<int> (note), 0.8f);
+    }
+    else if (what == "comp")
+    {
+        // A channel of its own, not a chord: it must not silence what the
+        // player is holding, and what the player does must not silence it.
+        std::vector<int> notes;
+
+        if (auto* array = object->getProperty ("notes").getArray())
+            for (const auto& note : *array)
+                notes.push_back (static_cast<int> (note));
+
+        if (notes.empty())
+            sound.stopComping();
+        else
+            sound.compChord (notes);
     }
     else if (what == "click")
     {

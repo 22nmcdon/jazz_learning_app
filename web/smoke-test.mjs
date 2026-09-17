@@ -51,6 +51,29 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch();
 const page = await browser.newPage();
 
+/*  Records every oscillator the page starts, so a check can say what was
+    actually sounded rather than only what the page says it did. It runs before
+    any of the page's own script, which is what lets the file under test stay
+    the shipped one, unmodified. Wrapping `start` rather than `createOscillator`
+    alone keeps the scheduled time, which is the half the comp cares about. */
+await page.addInitScript(() => {
+  window.__sounded = [];
+  const Ctor = window.AudioContext || window.webkitAudioContext;
+  const realCreate = Ctor.prototype.createOscillator;
+
+  Ctor.prototype.createOscillator = function () {
+    const osc = realCreate.call(this);
+    const realStart = osc.start.bind(osc);
+
+    osc.start = function (when) {
+      window.__sounded.push({ type: osc.type, hz: osc.frequency.value, when });
+      return realStart(when);
+    };
+
+    return osc;
+  };
+});
+
 // Anything the page says went wrong is a failure here. A page that boots with
 // a broken handler still looks fine in a screenshot, and this is the only
 // place that difference gets caught.
@@ -465,6 +488,98 @@ try {
   check("and the space bar stops it again",
         (await page.locator("#systems .bar.rolling").count()) === 0);
 
+  // --- comping ------------------------------------------------------------
+  // The band behind the soloist. The engine says which notes; everything the
+  // page does is when - so these checks read the notes that actually sounded.
+  //
+  // The piano's voices are sines; the metronome's click is a square wave, and
+  // sorting by that is what keeps the click out of these numbers. Every note
+  // builds two oscillators - a carrier, which is the pitch, and the tine
+  // ringing it, which is not a note - so only every other one counts.
+  const compedVoicing = async () => {
+    const sounded = await page.evaluate(() => window.__sounded);
+
+    return sounded.filter((s) => s.type === "sine")
+                  .map((s) => Math.round(69 + 12 * Math.log2(s.hz / 440)))
+                  .filter((note, i) => i % 2 === 0)
+                  .slice(0, 4);
+  };
+
+  const forgetSounds = () => page.evaluate(() => { window.__sounded = []; });
+
+  /*  Two things sit between this and a bar: the comping panel, which is drawn
+      over the chart it hangs under, and the bar's own dialog, which a second
+      click on the bar already selected opens. Close both, or everything after
+      this is clicking on something else. */
+  const goToBar = async (n) => {
+    if (!(await page.locator("#compingPanel").isHidden()))
+      await page.locator("#compingButton").click();
+
+    await bars.nth(n).click();
+
+    if (await page.locator("#chordDialog[open]").count())
+      await page.locator("#dialogClose").click();
+  };
+
+  await page.locator("#compingButton").click();
+  check("comping offers a band, two of whom are not built yet",
+        (await page.locator("#compingPanel").isVisible())
+        && (await page.locator("#compingPanel input:disabled").count()) === 2);
+
+  // One registry of sounds, not a second copy of the list.
+  const compSounds = await page.locator("#compSound option").allInnerTexts();
+  const menuSounds = await page.locator("input[name=soundBank]").evaluateAll(
+    (radios) => radios.map((r) => r.parentElement.textContent.trim()));
+
+  check(`the band is offered the same sounds as the player (${compSounds.join(", ")})`,
+        compSounds.length === menuSounds.length
+        && compSounds.every((name, i) => name === menuSounds[i]));
+
+  // On bar one first: clicking a bar closes whichever panel is open, so the
+  // toggle has to be the last thing touched before the sound is read.
+  await page.locator("#compingButton").click();
+  await goToBar(0);
+  await page.locator("#compingButton").click();
+  await forgetSounds();
+  await page.locator("#compPiano").check();
+  await page.waitForFunction(() => window.__sounded.length >= 8, null, { timeout: 10000 });
+
+  const overDm7 = await compedVoicing();
+  check(`the band comps the bar it is switched on over (${overDm7.join(" ")})`,
+        overDm7.length === 4);
+
+  // Rootless: a two-handed voicing of Dm7 has no D in it, and it sits under
+  // where a soloist plays rather than on top of them.
+  check("what it plays is a rootless voicing, below the line",
+        overDm7.every((note) => note % 12 !== 2)
+        && overDm7[0] >= 45 && overDm7[3] <= 84);
+
+  await forgetSounds();
+  await goToBar(1);
+  await page.waitForFunction(() => window.__sounded.length >= 8, null, { timeout: 10000 });
+
+  const overG7 = await compedVoicing();
+
+  // The whole point of asking the engine for the *next* voicing rather than a
+  // fresh one: Dm7 to G7 shares two notes, and a comp that re-spelled every
+  // chord would move every finger.
+  const held = overG7.filter((note) => overDm7.indexOf(note) !== -1).length;
+  check(`moving on leads the voicing from the last one (${overG7.join(" ")}, ${held} held)`,
+        held >= 2);
+
+  await page.locator("#compingButton").click();
+  await page.selectOption("#compSound", "silent");
+  await forgetSounds();
+  await goToBar(2);
+  await page.waitForTimeout(600);
+  check("a band set to silent is silent", (await compedVoicing()).length === 0);
+
+  // Put it back the way the rest of the checks expect to find it.
+  await page.locator("#compingButton").click();
+  await page.selectOption("#compSound", "ep");
+  await page.locator("#compPiano").uncheck();
+  await goToBar(0);
+
   // Back to static for the checks that follow, which click bars themselves.
   await page.locator("#menuButton").click();
   await page.locator("#playStatic").click();
@@ -544,6 +659,8 @@ try {
 
   await page.locator("#modeChords").click();
   check("switching back restores chord practice", await page.locator("#feedback").isVisible());
+  check("and chord practice has no band to comp for it",
+        !(await page.locator("#compingButton").isVisible()));
   check("and the chart stops carrying the take's marks",
         (await page.locator("#systems .bar .bar-take:not([hidden])").count()) === 0);
 

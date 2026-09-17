@@ -1,6 +1,7 @@
 #include "jazz/core/Voicing.h"
 
 #include <algorithm>
+#include <cstdlib>
 
 namespace jazz::core
 {
@@ -260,6 +261,87 @@ namespace
 
         return Voicing::fromNotes (std::move (notes));
     }
+}
+
+namespace
+{
+    /*  The window a comping left hand lives in. Low enough to sit under a
+        soloist, high enough to stay off the bass; a voicing free to wander
+        outside it would climb a little with every chord that leads upwards and
+        end the tune somewhere nobody comps. */
+    constexpr int lowestCompAnchor = 45;    // A2
+    constexpr int highestCompAnchor = 57;   // A3
+
+    /** How far the hands travel between two voicings.
+
+        Measured both ways round - every note of each one to the nearest note of
+        the other - so that a voicing is not made to look close merely by having
+        fewer notes to account for.
+    */
+    int voiceLeadingDistance (const std::vector<int>& from, const std::vector<int>& to)
+    {
+        if (from.empty() || to.empty())
+            return 0;
+
+        const auto nearest = [] (const std::vector<int>& notes, int note)
+        {
+            auto best = std::abs (notes.front() - note);
+
+            for (auto other : notes)
+                best = std::min (best, std::abs (other - note));
+
+            return best;
+        };
+
+        auto total = 0;
+
+        for (auto note : to)   total += nearest (from, note);
+        for (auto note : from) total += nearest (to, note);
+
+        return total;
+    }
+}
+
+Voicing compingVoicing (const ChordSymbol& chord, const std::vector<int>& previousNotes)
+{
+    const auto home = naturalAnchorFor (VoicingType::twoHandedRootless);
+
+    // Nothing to lead from: the shape the suggester offers first, where it
+    // naturally sits. That is the voicing the rest of the app would show for
+    // this chord, and a tune should start on it rather than on whatever the
+    // search happened to like.
+    if (previousNotes.empty())
+    {
+        const auto opening = idiomaticVoicings (chord, VoicingType::twoHandedRootless, home);
+
+        return opening.empty() ? Voicing{} : opening.front();
+    }
+
+    Voicing best;
+    auto bestCost = 0;
+
+    for (auto anchor = lowestCompAnchor; anchor <= highestCompAnchor; ++anchor)
+    {
+        for (const auto& candidate : idiomaticVoicings (chord, VoicingType::twoHandedRootless, anchor))
+        {
+            if (candidate.isEmpty())
+                continue;
+
+            // The tie-break keeps a hand near where it belongs. Without it two
+            // voicings the same distance away are decided by loop order, and
+            // the one at the edge of the window wins as often as not.
+            const auto cost = voiceLeadingDistance (previousNotes, candidate.midiNotes) * 4
+                                + std::abs (candidate.lowestNote() - home);
+
+            if (best.isEmpty() || cost < bestCost)
+            {
+                best = candidate;
+                bestCost = cost;
+            }
+        }
+    }
+
+    return best;
 }
 
 int naturalAnchorFor (VoicingType type)

@@ -109,6 +109,11 @@ JAZZ_EXPORT const char* jazzIdiomaticVoicings (const char* symbol, int anchorNot
                                                orEmpty (practiseStyle), rich));
 }
 
+JAZZ_EXPORT const char* jazzCompingVoicing (const char* symbol, const char* previousNotesCsv)
+{
+    return hold (jazz::api::compingVoicing (orEmpty (symbol), orEmpty (previousNotesCsv)));
+}
+
 //==============================================================================
 // Solo practice. These four carry a take, which lives in jazz::api rather than
 // here - a transport remembers nothing.

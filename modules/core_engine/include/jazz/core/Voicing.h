@@ -83,6 +83,24 @@ std::vector<Voicing> idiomaticVoicings (const ChordSymbol& chord,
                                         int anchorNote = 53 /* F3 */,
                                         VoicingDensity density = VoicingDensity::plain);
 
+/** The voicing a comping piano plays for @p chord, having just played
+    @p previousNotes.
+
+    Two-handed rootless, because that is what a pianist comps behind a soloist
+    with: no root to fight the bass, guide tones under colour. The shape comes
+    from idiomaticVoicings like every other suggestion - what this adds is the
+    choice *between* them and the register to put it in, made by voice leading
+    rather than by a fixed anchor. Comping a tune at one anchor re-spells every
+    chord from scratch and leaps a hand around the keyboard; a pianist moves as
+    little as the next chord allows.
+
+    @param previousNotes  the voicing just played, empty for the first chord of
+                          a tune - which is what makes this a pure function of
+                          the two rather than something with a memory.
+*/
+Voicing compingVoicing (const ChordSymbol& chord,
+                        const std::vector<int>& previousNotes = {});
+
 /** The register a shape belongs in - the lowest note it should reach for.
 
     A solo left hand lives an octave and a half below a rootless one, so handing

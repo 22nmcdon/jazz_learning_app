@@ -671,7 +671,30 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 }
 .play-btn:hover:not(:disabled) { background: var(--blush-deep); border-color: var(--blush-deep); }
 .play-btn:disabled { opacity: 0.35; cursor: default; }
-.tools-right { margin-left: auto; display: flex; gap: 18px; }
+.tools-right { margin-left: auto; display: flex; align-items: center; gap: 18px; }
+
+/* An instrument named but not built. Quieter than the label it follows, so the
+   list reads as three instruments of which one is ready. */
+.later {
+  font-style: normal;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-soft);
+  border: 1px solid var(--line);
+  padding: 1px 5px;
+  margin-left: 6px;
+}
+.menu-option:has(input:disabled) { color: var(--text-soft); }
+
+/* The button says whether anyone is playing without the panel being opened. */
+#compingButton[aria-pressed="true"] { border-bottom-width: 2px; font-weight: 600; }
+
+/* Hung from its left edge, not its right. The Practice menu can align to the
+   right because its button is the last thing on that row; this one is the
+   first of four on a row that wraps, so at a phone width `right: 0` put the
+   whole panel off the left of the screen. */
+#compingPanel { left: 0; right: auto; }
 
 .editor { margin-bottom: 24px; }
 #progression {
@@ -1465,6 +1488,45 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             Click it again for the scales that fit it, and pick the one you are held to.</p>
         </div>
         <div class="tools-right">
+          <!-- A chart tool rather than a practice setting: who is playing
+               behind you belongs to the tune on the stand, next to
+               reharmonising it. Solo practice only - a comp under chord
+               practice would be playing the voicing you are being asked to
+               play. -->
+          <div class="menu-wrap" data-mode="solo">
+            <button class="link-btn" type="button" id="compingButton"
+                    aria-expanded="false" aria-controls="compingPanel">Comping</button>
+
+            <div class="menu-panel" id="compingPanel" hidden>
+              <div class="menu-group">
+                <span class="menu-title">The band</span>
+                <label class="menu-option">
+                  <input type="checkbox" id="compPiano"> Piano comping
+                </label>
+                <!-- Named but not offered. A rhythm section is three
+                     instruments and this is one of them; leaving the other two
+                     off the list entirely would say the feature is finished. -->
+                <label class="menu-option" title="Not built yet">
+                  <input type="checkbox" disabled> Bass walking <em class="later">later</em>
+                </label>
+                <label class="menu-option" title="Not built yet">
+                  <input type="checkbox" disabled> Drums <em class="later">later</em>
+                </label>
+                <p class="menu-note" id="compingNote">Two-handed rootless voicings, led from the
+                  chord before rather than spelled afresh. The clock plays them in time; without
+                  it, each bar sounds as you land on it.</p>
+              </div>
+
+              <div class="menu-group">
+                <span class="menu-title">Piano sound</span>
+                <label class="sr-only" for="compSound">Piano sound</label>
+                <select class="menu-select" id="compSound"></select>
+                <p class="menu-note">The same sounds the Practice menu offers, chosen
+                  separately - the band is not playing your instrument.</p>
+              </div>
+            </div>
+          </div>
+
           <button class="link-btn" type="button" id="planButton">Reharmonise the tune</button>
           <button class="link-btn" type="button" id="editToggle">Edit chart</button>
           <button class="link-btn" type="button" id="restoreChart">Restore original</button>
@@ -1578,7 +1640,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 331 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 338 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -1729,6 +1791,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         is just walking the chart instead of your mouse. The metre and the tempo are at the
         head of the chart, where a lead sheet writes them, and a tune imported in three
         arrives counted in three.
+      </li>
+      <li>
+        <b>Bring a band.</b> <i>Comping</i>, above the chart, puts a piano behind you: two-handed
+        rootless voicings, each led from the chord before rather than spelled afresh, in whichever
+        sound you pick for it. In time it plays along with the clock; static, each bar sounds as
+        you land on it. A bass player and a drummer are named there and not built yet.
       </li>
       <li>
         <b>Every bar keeps its own score.</b> A bar you have played over carries a strip in
@@ -1981,6 +2049,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink",
    "shareRow", "copyShare", "shareStatus", "shareLink",
    "helpButton", "helpDialog", "helpClose",
+   "compingButton", "compingPanel", "compPiano", "compSound", "compingNote",
    "playStatic", "playLive", "playingNote", "metreRow", "tempo", "timeSig", "countInRow", "countIn",
    "loopRow", "loopFrom", "loopTo", "beatRow",
    "colophonEngine", "colophonFraming", "colophonBuild",
@@ -2214,6 +2283,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     state.selected = index;
     renderSheet();
     updateExpecting();
+
+    // Rolling, the transport has already booked this bar's comp at the exact
+    // time of its downbeat; comping again here would double every chord.
+    compSelectedBar();
 
     if (state.mode === "solo") soloMoveToBar(); else analyseVoicing();
   }
@@ -2981,6 +3054,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     if (!soloing) stopTransport();
 
+    // A comp under chord practice would be playing the very voicing the player
+    // is being asked to find.
+    if (!soloing) stopComping();
+
     // The dock's chord controls, and the menu groups that drive them.
     el.playChord.hidden = soloing || midi.connected;
     el.nameChord.hidden = soloing;
@@ -3432,6 +3509,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var countInBeats = transport.countIn ? transport.beats : 0;
     var loop = loopRange();
 
+    // Worked out here rather than inside the callback, because the comp needs
+    // it *before* the beat lands: the engine has to be asked for a voicing
+    // early enough that the answer can still be scheduled on time.
+    var barsIn = Math.floor((index - countInBeats) / transport.beats);
+    var barIndex = loop.from + (((barsIn % loop.bars) + loop.bars) % loop.bars);
+
+    if (! isCountIn && inBar === 0)
+      compBar(barIndex, when, secondsPerBeat(), transport.beats);
+
     bookVisual(when, function () {
       if (!transport.running) return;
 
@@ -3453,9 +3539,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       // includes - so a bar is still the unit the engine is told about.
       if (inBar !== 0) return;
 
-      var barsIn = Math.floor((index - countInBeats) / transport.beats);
-
-      selectBar(loop.from + (barsIn % loop.bars));
+      selectBar(barIndex);
       markRollingBar();
     });
   }
@@ -3515,6 +3599,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     transport.booked.forEach(window.clearTimeout);
     transport.booked = [];
+
+    // The band stops with the clock. Comp voicings are booked a bar ahead, so
+    // without this the accompaniment plays on into the silence after a take.
+    stopComping();
     transport.timer = null;
     transport.running = false;
     transport.counting = false;
@@ -4139,19 +4227,76 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.menuButton.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
+  function setCompingOpen(open) {
+    el.compingPanel.hidden = !open;
+    el.compingButton.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
   el.menuButton.addEventListener("click", function () {
+    setCompingOpen(false);
     setMenuOpen(el.menuPanel.hidden);
   });
 
+  el.compingButton.addEventListener("click", function () {
+    setMenuOpen(false);
+    setCompingOpen(el.compingPanel.hidden);
+  });
+
+  // Both panels are `.menu-wrap` children, so one rule closes whichever is
+  // open the moment a click lands anywhere else on the page.
   document.addEventListener("click", function (event) {
-    if (!el.menuPanel.hidden && !event.target.closest(".menu-wrap")) setMenuOpen(false);
+    if (event.target.closest(".menu-wrap")) return;
+
+    setMenuOpen(false);
+    setCompingOpen(false);
   });
 
   document.addEventListener("keydown", function (event) {
-    if (event.key === "Escape" && !el.menuPanel.hidden) {
+    if (event.key !== "Escape") return;
+
+    if (!el.menuPanel.hidden) {
       setMenuOpen(false);
       el.menuButton.focus();
     }
+
+    if (!el.compingPanel.hidden) {
+      setCompingOpen(false);
+      el.compingButton.focus();
+    }
+  });
+
+  /** The band's sound list is the page's one registry of sounds, not a second
+      copy of it: a bank added to SOUND_BANKS appears in both menus. */
+  function fillCompSounds() {
+    el.compSound.textContent = "";
+
+    Object.keys(SOUND_BANKS).forEach(function (key) {
+      var option = document.createElement("option");
+      option.value = key;
+      option.textContent = SOUND_BANKS[key].name;
+      el.compSound.appendChild(option);
+    });
+
+    el.compSound.value = comping.bank;
+  }
+
+  el.compPiano.addEventListener("change", function () {
+    comping.piano = el.compPiano.checked;
+    el.compingButton.setAttribute("aria-pressed", comping.piano ? "true" : "false");
+
+    if (!comping.piano) {
+      stopComping();
+      return;
+    }
+
+    // Turned on over a chart that is not moving, the band has to say something
+    // now - otherwise the toggle looks broken until the next bar change.
+    compSelectedBar();
+  });
+
+  el.compSound.addEventListener("change", function () {
+    comping.bank = el.compSound.value;
+    if (comping.bank === "silent") stopCompVoices();
   });
 
   async function applyStyle(style) {
@@ -4238,7 +4383,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // Sound banks are a registry: a bank is a function that builds one voice for
   // one note. Adding an acoustic piano or an organ later means adding an entry
   // here and a radio to the menu - nothing else in the page changes.
-  var audio = { ctx: null, master: null, voices: {}, bank: "ep" };
+  // `voices` is the player's, keyed by note so a key retriggers its own note.
+  // `compVoices` is the band's, a plain list because nothing ever asks it for
+  // one note back - a comp only ever replaces itself, all of it at once.
+  var audio = { ctx: null, master: null, voices: {}, compVoices: [], bank: "ep" };
 
   var SOUND_BANKS = {
     ep: { name: "Electric piano", buildVoice: buildElectricPianoVoice },
@@ -4379,6 +4527,176 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     }
 
     notes.forEach(function (note) { playNote(note, 0.8); });
+  }
+
+  //--------------------------------------------------------------------------
+  // The comping piano. The engine says which notes; everything here is when.
+  //
+  // It is a channel of its own in both shells, never the player's own voices:
+  // comping E4 under a soloist playing E4 has to be two notes, or one of them
+  // stops the other. On the web that is a second voice map; in the app it is a
+  // flag on the voice, which is why the bridge carries "comp" rather than
+  // reusing "chord" (whose first act is to silence everything).
+  var comping = {
+    piano: false,
+    bank: "ep",
+
+    // The voicing last played, handed back to the engine so it can lead the
+    // next one from it. The page holds it rather than the engine, because a
+    // take is the one stateful corner over there and this need not be another.
+    notes: [],
+
+    // Engine calls resolve out of order if they are allowed to race, and two
+    // bars comped from the same "previous" voicing is exactly the jump this
+    // feature exists to avoid. One chain, so they land in the order booked.
+    chain: Promise.resolve(),
+    booked: []
+  };
+
+  /** Sounds a comped voicing, at @p when on the web and as soon as it arrives
+      in the app - the same inequality the click already has, and for the same
+      reason: the bridge has no "play this at" argument. */
+  function playCompVoicing(notes, when) {
+    var bank = SOUND_BANKS[comping.bank];
+    if (!bank || bank.buildVoice === null) return;
+
+    if (native !== null) {
+      native.send("jazz.sound", { what: "comp", notes: notes });
+      return;
+    }
+
+    var ctx = audioContext();
+    if (ctx === null) return;
+
+    if (ctx.state === "suspended") ctx.resume();
+
+    var at = when || ctx.currentTime;
+
+    stopCompVoices(at);
+
+    notes.forEach(function (note) {
+      // Under the soloist rather than beside them: an accompaniment at the
+      // same level as the line played over it is not an accompaniment.
+      var voice = bank.buildVoice(ctx, noteFrequency(note), 0.45, at);
+      voice.output.connect(audio.master);
+      voice.stop(voice.stopAt);
+      audio.compVoices.push(voice);
+    });
+  }
+
+  /** Lets go of the comp, leaving the player's own notes ringing. */
+  function stopCompVoices(when) {
+    if (native !== null) {
+      native.send("jazz.sound", { what: "comp", notes: [] });
+      return;
+    }
+
+    if (audio.ctx === null) return;
+
+    var at = when || audio.ctx.currentTime;
+
+    audio.compVoices.forEach(function (voice) {
+      voice.amp.gain.cancelScheduledValues(at);
+      voice.amp.gain.setValueAtTime(Math.max(voice.amp.gain.value, 0.0001), at);
+      voice.amp.gain.exponentialRampToValueAtTime(0.0001, at + 0.18);
+      voice.stop(at + 0.2);
+    });
+
+    audio.compVoices = [];
+  }
+
+  /** Everything the comp has booked ahead, dropped. */
+  function forgetBookedComping() {
+    comping.booked.forEach(window.clearTimeout);
+    comping.booked = [];
+  }
+
+  /** Stops the band and forgets where its hands were. */
+  function stopComping() {
+    forgetBookedComping();
+    stopCompVoices();
+    comping.notes = [];
+  }
+
+  /** What the comp plays over one bar, and when.
+
+      The rhythm is the chart's own: each chord is struck where it falls, and a
+      chord holding the whole bar is struck again halfway through it, which is
+      enough to sound like playing rather than like a pad. Nothing here is a
+      rhythm the engine knows about - it still has no time in it.
+  */
+  function compHitsFor(measure, barStart, secondsPerBeatNow, beatsInBar) {
+    var hits = [];
+    var chords = (measure && measure.chords) || [];
+    var beatsSoFar = 0;
+
+    chords.forEach(function (chord) {
+      var length = chord.beats || beatsInBar;
+
+      hits.push({ symbol: chord.symbol, when: barStart + beatsSoFar * secondsPerBeatNow });
+
+      // Long enough to say twice. Half of it, to the nearest half beat, so the
+      // second hit lands somewhere a player would put one.
+      if (length >= beatsInBar && length >= 2) {
+        var offset = Math.round(length / 2 * 2) / 2;
+        hits.push({ symbol: chord.symbol, when: barStart + (beatsSoFar + offset) * secondsPerBeatNow });
+      }
+
+      beatsSoFar += length;
+    });
+
+    return hits;
+  }
+
+  /** Books the comp for one bar, asking the engine for each voicing in turn.
+
+      The transport books beats ahead of time, which is what gives the engine
+      room to answer before the hit is due. An answer that arrives late is
+      played late rather than dropped: silence would be the worse of the two.
+  */
+  function compBar(measureIndex, barStart, secondsPerBeatNow, beatsInBar) {
+    if (!comping.piano || state.mode !== "solo") return;
+
+    var measure = state.measures[measureIndex];
+    if (!measure) return;
+
+    compHitsFor(measure, barStart, secondsPerBeatNow, beatsInBar).forEach(function (hit) {
+      comping.chain = comping.chain.then(async function () {
+        if (!comping.piano) return;
+
+        var result = await call("jazzCompingVoicing", ["string", "string"],
+                                [hit.symbol, comping.notes.join(",")]);
+
+        if (result === null || !result.ok || !result.notes.length) return;
+
+        comping.notes = result.notes;
+        playCompVoicing(result.notes, hit.when);
+      });
+    });
+  }
+
+  /** The comp with no clock behind it: the bar you just landed on, once.
+
+      Without this the toggle does nothing at all until In time is switched on,
+      and a control that does nothing is a control nobody trusts afterwards.
+  */
+  function compSelectedBar() {
+    if (!comping.piano || state.mode !== "solo" || transport.running) return;
+
+    var chord = selectedChord();
+    if (!chord) return;
+
+    comping.chain = comping.chain.then(async function () {
+      if (!comping.piano) return;
+
+      var result = await call("jazzCompingVoicing", ["string", "string"],
+                              [chord, comping.notes.join(",")]);
+
+      if (result === null || !result.ok || !result.notes.length) return;
+
+      comping.notes = result.notes;
+      playCompVoicing(result.notes, 0);
+    });
   }
 
   /** Keeps the dock's controls honest about what is under the hands: Play
@@ -4922,6 +5240,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     await loadScaleStyles();
     fillMetres();
     fillBeatRow();
+    fillCompSounds();
     applyMode();
 
     // Last, and only if nothing else is already in front of the reader: a

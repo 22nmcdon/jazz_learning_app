@@ -84,7 +84,7 @@ juce::String ElectricPiano::statusMessage() const
 ElectricPiano::Voice* ElectricPiano::findVoiceFor (int midiNote)
 {
     for (auto& voice : voices)
-        if (voice.active.load() && voice.midiNote == midiNote
+        if (voice.active.load() && voice.midiNote == midiNote && ! voice.comping
             && voice.stage != Voice::Stage::release)
             return &voice;
 
@@ -127,6 +127,7 @@ void ElectricPiano::noteOn (int midiNote, float velocity)
     const auto level = juce::jlimit (0.08f, 1.0f, velocity);
 
     voice->midiNote = midiNote;
+    voice->comping = false;
     voice->carrierPhase = 0.0;
     voice->modulatorPhase = 0.0;
     voice->carrierDelta = juce::MathConstants<double>::twoPi * frequency / sampleRate;
@@ -171,6 +172,7 @@ void ElectricPiano::click (bool accented)
     // Never a real note's pitch, so `findVoiceFor` can never hand this voice
     // back to a key that happens to be playing while the click rings.
     voice->midiNote = -1;
+    voice->comping = false;
     voice->carrierPhase = 0.0;
     voice->modulatorPhase = 0.0;
     voice->carrierDelta = juce::MathConstants<double>::twoPi * frequency / sampleRate;
@@ -200,7 +202,7 @@ void ElectricPiano::noteOff (int midiNote)
 
     for (auto& voice : voices)
     {
-        if (voice.active.load() && voice.midiNote == midiNote
+        if (voice.active.load() && voice.midiNote == midiNote && ! voice.comping
             && voice.stage != Voice::Stage::release)
         {
             // The damper is off the string, so the note keeps ringing until the
@@ -227,7 +229,7 @@ void ElectricPiano::setSustain (bool isDown)
 
     // Every release the pedal was holding back happens now, together.
     for (auto& voice : voices)
-        if (voice.active.load() && voice.pedalled)
+        if (voice.active.load() && voice.pedalled && ! voice.comping)
             releaseVoice (voice);
 }
 
@@ -236,11 +238,76 @@ void ElectricPiano::allNotesOff()
     const juce::SpinLock::ScopedLockType lock (voiceLock);
 
     // Faster than a pedal release: this is "stop", not "the foot came up".
+    // The comp is left alone - this is the player's panic button, and an
+    // accompaniment that stopped every time the keyboard was cleared would
+    // drop out in the middle of a bar for no reason the player could see.
     for (auto& voice : voices)
     {
+        if (voice.comping)
+            continue;
+
         voice.stage = Voice::Stage::release;
         voice.amplitudeDecay = decayFactor (0.001, 0.05, sampleRate);
         voice.pedalled = false;
+    }
+}
+
+void ElectricPiano::releaseComping()
+{
+    // Quick, because what follows it is the next chord of the same comp: a
+    // slow release would leave the tail of the last chord sounding under it.
+    for (auto& voice : voices)
+        if (voice.comping && voice.stage != Voice::Stage::release)
+        {
+            voice.stage = Voice::Stage::release;
+            voice.amplitudeDecay = decayFactor (0.001, 0.18, sampleRate);
+            voice.pedalled = false;
+        }
+}
+
+void ElectricPiano::stopComping()
+{
+    const juce::SpinLock::ScopedLockType lock (voiceLock);
+    releaseComping();
+}
+
+void ElectricPiano::compChord (const std::vector<int>& midiNotes)
+{
+    if (! running.load())
+        return;
+
+    const juce::SpinLock::ScopedLockType lock (voiceLock);
+
+    releaseComping();
+
+    for (auto midiNote : midiNotes)
+    {
+        auto* voice = findFreeVoice();
+
+        if (voice == nullptr)
+            return;
+
+        const auto frequency = frequencyOf (midiNote);
+
+        voice->midiNote = midiNote;
+        voice->comping = true;
+        voice->carrierPhase = 0.0;
+        voice->modulatorPhase = 0.0;
+        voice->carrierDelta = juce::MathConstants<double>::twoPi * frequency / sampleRate;
+        voice->modulatorDelta = voice->carrierDelta * 2.0;
+
+        // Under the soloist, not beside them: an accompaniment at the same
+        // level as the line being played over it is not an accompaniment.
+        voice->amplitude = 0.0f;
+        voice->amplitudeTarget = 0.22f;
+
+        voice->modulationDepth = static_cast<float> (frequency * 3.0);
+        voice->modulationDecay = decayFactor (0.05, tineDecaySeconds, sampleRate);
+        voice->amplitudeDecay = decayFactor (0.3, bodyDecaySeconds, sampleRate);
+        voice->stage = Voice::Stage::attack;
+        voice->pedalled = false;
+
+        voice->active = true;
     }
 }
 

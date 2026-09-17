@@ -181,3 +181,38 @@ memory and a window.
 - **Rhythm still counts for nothing.** The transport moves bars; no reading anywhere knows
   which beat a note fell on. Landing chord tones on strong beats, and telling an avoid note
   passed through from one sat on, are what a clock unblocks - not what it includes.
+
+### Comping — a band over the same clock
+- **The split is the one the whole project is built on**, and comping is the clearest case
+  of it yet: `compingVoicing()` answers *which notes*, and has no idea a clock exists;
+  every question of *when* is the page's and is answered by the transport that was already
+  there. A comp with a rhythm generator in the engine would have put time into
+  `LineAnalyzer`'s module by the back door.
+- **What it adds over `idiomaticVoicings` is the choice between them.** The shapes are the
+  same two-handed rootless shapes the app already suggests. What comping needs on top is
+  which of them, and in which register, given where the hands just were - so the search is
+  over both shapes across an anchor window, scored by how far the hands travel from
+  `previousNotes`, with a tie-break pulling back to the natural anchor. Dm7 to G7 comes out
+  F3 C4 E4 B4 into F3 B3 E4 A4: two notes held, two moved by a semitone.
+- **Voice leading alone drifts, so the window is not optional.** "Nearest voicing to the
+  last one" has no opinion about register, and a progression that keeps rising takes the
+  hands up with it until they are somewhere nobody comps. The test for this is a tune that
+  climbs, not a ii-V-I - a ii-V-I would pass with no window at all.
+- **The previous voicing is the page's, not the engine's.** The take is the one stateful
+  corner of `jazz::api` and it was made that way deliberately; a comp that remembered its
+  own last chord would be a second one, for no gain - the page has to know what it played
+  anyway, in order to have played it.
+- **The rhythm is the chart's own harmonic rhythm**, not a pattern: each chord struck where
+  it falls, a chord holding the whole bar struck again halfway. That is enough to sound
+  like playing rather than like a pad, and it invents nothing - which matters, because the
+  moment the comp has a pattern of its own it is the rhythmic feature this document says is
+  not built.
+- **Two channels, not one.** Comping E4 under a soloist playing E4 has to be two voices in
+  both shells, or a note-off from either one stops a note the other is still sounding. The
+  browser keeps `audio.compVoices` beside `audio.voices`; the app puts a `comping` flag on
+  the voice, which is why `noteOff`, the pedal and `allNotesOff` all skip them - the last of
+  those being the player's panic button, which should not make the band stop playing.
+- **Engine calls are chained rather than raced.** Booked a bar ahead and awaited
+  concurrently, two bars lead from the same previous voicing and the second one jumps -
+  precisely the thing the feature exists to prevent. One promise chain, so they resolve in
+  the order they were booked.
