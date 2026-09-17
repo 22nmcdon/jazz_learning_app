@@ -210,16 +210,34 @@ a chord sounds more generous and in fact leaves nothing outside anything - over 
 Bbmaj7 not one of the twelve notes comes back outside. **Which scale?** says which one you
 are being held to, and puts it on the keyboard.
 
-**Playing**, in the same menu, is **Static** or **In time**, and only the first of them
-exists. Static is what solo practice is: the bar you are on is the bar you chose, it stays
-there until you move, and nothing is counting time. Choosing *In time* opens a note saying
-so and puts the switch back, rather than doing something approximate - it is a door with
-nothing behind it yet, and it says what it would take: a clock behind the chart, a tempo and
-a count-in, and rhythm starting to count for something. That last part is why it is not a
-small addition. With no clock, *where* in the bar a note landed is invisible, which is why
-an avoid note is named here rather than marked down; with one, sitting on it and passing
-through it stop being the same thing. It is the same feature as the metronome and the
-practice loop, and should arrive with them.
+**Playing**, in the same menu, is **Static** or **In time**. Static is the default: the bar
+you are on is the bar you chose, it stays there until you move, and nothing is counting
+time.
+
+**In time** puts a clock behind the chart. Set a tempo, and **Play** in the dock counts a
+bar in and then moves the chart for you, a bar to the click, looping whatever range of bars
+you give it. Four dots beside the button say where in the bar you are - gold while it is
+counting you in, then the downbeat in red - and the bar the clock is on wears a line across
+its top. Arm a take over the top of it and the two are the same take: the clock is walking
+the chart instead of your mouse, and the engine cannot tell the difference, which is the
+point. Everything else works exactly as it does static.
+
+The clock is the page's, not the engine's. `LineAnalyzer` has no time in it at all - that is
+what makes it testable - so the transport moves the selected bar and the engine finds out the
+same way it would if you had clicked. Beats are *booked* against a lookahead window rather
+than ticked off an interval, because an interval drifts and a metronome that drifts is worse
+than none.
+
+One honest inequality between the shells: on the browser page the click is scheduled into
+Web Audio at an exact time, so it is sample-accurate. In the desktop app the sound is native,
+across an event bridge with no "play this at" argument, so the click is sent when it comes
+due and arrives a message-thread hop later. Both read the same clock, so the chart and the
+click agree in both - what the app gives up is a few milliseconds of jitter on the click.
+
+What the transport does **not** do yet is make rhythm count. Nothing reads which beat a note
+landed on, so an avoid note is still named rather than marked down, and a chord tone on beat
+one reads the same as one on the and of four. That is the feature a clock unblocks rather
+than one it includes.
 
 ### Both modes
 

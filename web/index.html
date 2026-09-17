@@ -263,6 +263,58 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 /* The menu's copy of the switch sits in a column of blocks, so it has to stop
    being one. */
 .menu-group .mode-switch { display: inline-flex; }
+
+/* --- the transport ------------------------------------------------------- */
+.tempo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.tempo-label {
+  font-size: 12.5px;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+.tempo-unit { font-size: 11.5px; color: var(--text-soft); }
+.tempo-input {
+  width: 68px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 1px;
+  padding: 5px 7px;
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--charcoal);
+}
+.tempo-select { width: auto; flex: 1 1 0; min-width: 0; margin-top: 0; }
+
+.transport-btn { min-width: 74px; }
+.transport-btn[aria-pressed="true"] {
+  background: var(--rust);
+  border-color: var(--rust);
+  color: var(--cream);
+}
+
+/* Where the beat is, as four dots. The chart says which bar and this says
+   where in it - the one thing a moving highlight cannot show, because a bar
+   lights for its whole length however long that is. */
+.beat-row { display: flex; align-items: center; gap: 6px; }
+.beat {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid var(--text-soft);
+  display: inline-block;
+}
+.beat.on { background: var(--text-soft); }
+.beat.on.downbeat { background: var(--rust); border-color: var(--rust); }
+.beat-row.counting .beat.on { background: var(--gold); border-color: var(--gold); }
+
+/* The bar the transport is on, which is the selected bar - so this is the
+   selection wearing a second mark rather than a second highlight to keep in
+   step with the first. */
+.bar.rolling { box-shadow: inset 0 3px 0 var(--rust); }
 .mode-option[aria-checked="true"] { background: var(--charcoal); color: var(--cream); }
 
 /* Armed is a state you must never be in doubt about: a pedal can leave notes
@@ -1281,8 +1333,28 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
               <button class="mode-option" type="button" id="playStatic" role="radio" aria-checked="true">Static</button>
               <button class="mode-option" type="button" id="playLive" role="radio" aria-checked="false">In time</button>
             </div>
-            <p class="menu-note">Static: the bar you are on is the bar you chose, and nothing is
-              counting time. In time is not built yet.</p>
+            <p class="menu-note" id="playingNote">Static: the bar you are on is the bar you chose,
+              and nothing is counting time.</p>
+
+            <!-- Only shown once there is a clock to configure. Hidden rather than
+                 disabled: a tempo box beside a switch set to Static is asking a
+                 question nobody has reached yet. -->
+            <div class="tempo-row" id="tempoRow" hidden>
+              <label class="tempo-label" for="tempo">Tempo</label>
+              <input class="tempo-input" id="tempo" type="number" min="40" max="300" step="1" value="120">
+              <span class="tempo-unit">bpm</span>
+            </div>
+
+            <label class="menu-option" id="countInRow" hidden>
+              <input type="checkbox" id="countIn" checked> Count in a bar first
+            </label>
+
+            <div class="tempo-row" id="loopRow" hidden>
+              <label class="tempo-label" for="loopFrom">Loop bars</label>
+              <select class="menu-select tempo-select" id="loopFrom"></select>
+              <span class="tempo-unit">to</span>
+              <select class="menu-select tempo-select" id="loopTo"></select>
+            </div>
           </div>
 
           <div class="menu-group" data-mode="solo">
@@ -1435,6 +1507,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <button class="arm-btn" type="button" id="armTake" hidden aria-pressed="false">
         <span class="arm-dot" aria-hidden="true"></span><span id="armLabel">Start a take</span>
       </button>
+      <button class="play-btn transport-btn" type="button" id="rollTake" hidden aria-pressed="false">
+        <span id="rollLabel">Play</span>
+      </button>
+      <span class="beat-row" id="beatRow" hidden aria-hidden="true">
+        <i class="beat"></i><i class="beat"></i><i class="beat"></i><i class="beat"></i>
+      </span>
       <button class="play-btn" type="button" id="playChord" disabled>Play chord</button>
       <button class="link-btn" type="button" id="nameChord" disabled>Name it</button>
       <button class="link-btn" type="button" id="showVoicing">Show me one</button>
@@ -1598,6 +1676,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         clearing it.
       </li>
       <li>
+        <b>Or set it going in time.</b> <i>Practice &rarr; Playing &rarr; In time</i> puts a
+        click behind the chart and moves the bar for you, counting a bar in first and
+        looping whatever range you set. Arm a take over the top of it and the two are the
+        same take - the clock is just walking the chart instead of your mouse.
+      </li>
+      <li>
         <b>Every bar keeps its own score.</b> A bar you have played over carries a strip in
         those same three colours and a percentage for how it went, so the bar that got away
         is one you can see down the chart rather than one you have to read about. It is a
@@ -1628,50 +1712,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     <p class="voicing-note" data-mode="solo" style="margin-top:20px">
       The <i>Practice</i> menu decides the vocabulary you are working out of - the modes,
       melodic minor, bebop, the pentatonics - and every bar is read against a scale from it.
-    </p>
-  </div>
-</dialog>
-
-<!-- Half a feature is worse than none, so "In time" is a door with nothing
-     behind it yet and says so rather than doing something approximate. What it
-     says is what it would take, because a player who wants it is owed the real
-     answer and not "coming soon". -->
-<dialog id="liveDialog">
-  <div class="dialog-head">
-    <div>
-      <div class="bar-label">Not built yet</div>
-      <div class="plan-title">Playing in time</div>
-    </div>
-    <button class="close-btn" type="button" id="liveClose" aria-label="Close">&times;</button>
-  </div>
-
-  <div class="tab-body">
-    <p class="voicing-note">
-      Solo practice is <i>static</i> on purpose for now. The bar you are on is the bar you
-      chose, it stays there until you move, and nothing anywhere is counting time.
-    </p>
-
-    <ul class="help-list">
-      <li>
-        <b>In time</b> would put a clock behind the chart: a tempo, a count-in, and the bar
-        moving on its own underneath you while you play over it.
-      </li>
-      <li>
-        <b>Rhythm would start to count.</b> With no clock, <i>where</i> in the bar a note
-        landed is invisible from here - which is why an avoid note is named rather than
-        marked down. Sitting on one and passing through it look identical until something
-        knows what the beat was.
-      </li>
-      <li>
-        <b>It is the same feature as a metronome and a practice loop</b>, so it should
-        arrive with them rather than ahead of them.
-      </li>
-    </ul>
-
-    <p class="voicing-note" style="margin-top:18px">
-      The engine is already shaped for it: a take has no clock in it, and the bar it reads
-      against is set from outside. Driving that from a tempo is the part that is missing -
-      nothing already built would have to change.
     </p>
   </div>
 </dialog>
@@ -1890,7 +1930,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink",
    "shareRow", "copyShare", "shareStatus", "shareLink",
    "helpButton", "helpDialog", "helpClose",
-   "playStatic", "playLive", "liveDialog", "liveClose",
+   "playStatic", "playLive", "playingNote", "tempoRow", "tempo", "countInRow", "countIn",
+   "loopRow", "loopFrom", "loopTo", "rollTake", "rollLabel", "beatRow",
    "colophonEngine", "colophonFraming", "colophonBuild",
    "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloScale", "soloOpen",
    "soloTallies",
@@ -2172,6 +2213,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (state.selected >= state.measures.length) state.selected = 0;
     renderSheet();
     updateExpecting();
+
+    // A chart of a different length is a different loop. Kept if it still
+    // fits, widened to the whole tune if it does not.
+    fillLoopRange();
     return true;
   }
 
@@ -2876,6 +2921,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.soloPanel.hidden = !soloing;
     el.armTake.hidden = !soloing;
 
+    // The transport belongs to solo practice and to "in time" within it. A
+    // clock running over chord practice would be moving a bar nothing was
+    // reading.
+    el.rollTake.hidden = !(soloing && transport.inTime);
+    el.beatRow.hidden = !(soloing && transport.inTime && transport.running);
+
+    if (!soloing) stopTransport();
+
     // The dock's chord controls, and the menu groups that drive them.
     el.playChord.hidden = soloing || midi.connected;
     el.nameChord.hidden = soloing;
@@ -3141,6 +3194,269 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (step === -2) return "a tone down";
 
     return "a step away";
+  }
+
+  // --- the transport -------------------------------------------------------
+  //
+  // The clock lives here and nowhere else. `LineAnalyzer` has no time in it -
+  // that is what makes it testable - so a transport is something that calls
+  // `setTarget()` from outside, at the right moments, and the engine never
+  // learns it exists.
+  //
+  // Timing is a lookahead scheduler rather than a `setInterval` at the beat:
+  // an interval drifts, and a metronome that drifts is worse than none. Every
+  // tick works out which beats fall inside the next window and books them, so
+  // the beat times come from arithmetic on one origin and never accumulate the
+  // error of the timer that noticed them.
+  //
+  // The two shells differ in one honest way. On the web the click is scheduled
+  // into Web Audio at an exact time, so it is sample-accurate. In the app the
+  // sound is native, across an event bridge with no "play this at" argument, so
+  // the click is *sent* when it comes due and arrives a message-thread hop
+  // later. Both read the same clock, so the chart and the click agree in both;
+  // what the app gives up is a few milliseconds of jitter on the click itself.
+
+  var TRANSPORT_TICK = 12;        // ms between looks at the clock
+  var BEATS_PER_BAR = 4;
+
+  var transport = {
+    inTime: false,
+    running: false,
+    bpm: 120,
+    countIn: true,
+    counting: false,   // in the count-in bar, which is not yet bar one
+    from: 0,
+
+    // -1 until a chart has been seen, which is what makes the first
+    // `fillLoopRange()` widen the loop to the whole tune. Starting it at 0
+    // looked like a range and was one: bar one to bar one, every time.
+    to: -1,
+    timer: null,
+    origin: 0,        // clock time of beat zero
+    nextBeat: 0,      // index of the next beat to book
+    booked: []        // timeouts for visual changes already scheduled
+  };
+
+  /** Seconds, on whichever clock the click will be scheduled against.
+
+      Web Audio's own clock on the web, so a booked click and the time it was
+      booked for are the same units. `performance.now()` otherwise, which is
+      monotonic where `Date.now()` is not - a machine that resyncs its clock
+      mid-take should not make the metronome jump. */
+  function transportNow() {
+    var ctx = native === null ? audioContext() : null;
+
+    return ctx !== null ? ctx.currentTime : performance.now() / 1000;
+  }
+
+  /** How far ahead beats are booked. Zero in the app, because there is nothing
+      to book them with - the click is sent when it is due. */
+  function transportLookahead() {
+    return native === null && audio.ctx !== null ? 0.15 : 0;
+  }
+
+  function secondsPerBeat() {
+    return 60 / Math.max(40, Math.min(300, transport.bpm));
+  }
+
+  /** The bars the loop covers, as a closed range, clamped to the chart. */
+  function loopRange() {
+    var last = Math.max(0, state.measures.length - 1);
+    var from = Math.max(0, Math.min(last, transport.from));
+    var to = Math.max(from, Math.min(last, transport.to));
+
+    return { from: from, to: to, bars: to - from + 1 };
+  }
+
+  /** A click, at a time on the clock `transportNow()` reads.
+
+      Two pitches: the downbeat is lower and louder, which is how anyone counts
+      a bar without being told which beat they are on. */
+  function clickAt(when, downbeat) {
+    if (audio.bank === "silent") return;
+
+    if (native !== null) {
+      native.send("jazz.sound", { what: "click", accented: !!downbeat });
+      return;
+    }
+
+    var ctx = audioContext();
+    if (ctx === null) return;
+
+    if (ctx.state === "suspended") ctx.resume();
+
+    // A short filtered blip rather than a voice from the piano: a metronome
+    // has to cut through whatever is being played over it, and the piano's own
+    // attack is too soft to do that.
+    var osc = ctx.createOscillator();
+    osc.type = "square";
+    osc.frequency.value = downbeat ? 1600 : 1050;
+
+    var amp = ctx.createGain();
+    amp.gain.setValueAtTime(0.0001, when);
+    amp.gain.exponentialRampToValueAtTime(downbeat ? 0.32 : 0.18, when + 0.002);
+    amp.gain.exponentialRampToValueAtTime(0.0001, when + 0.055);
+
+    var tone = ctx.createBiquadFilter();
+    tone.type = "bandpass";
+    tone.frequency.value = downbeat ? 1600 : 1050;
+    tone.Q.value = 1.2;
+
+    osc.connect(amp);
+    amp.connect(tone);
+    tone.connect(audio.master);
+
+    osc.start(when);
+    osc.stop(when + 0.08);
+  }
+
+  /** Runs @p what at @p when, as near as this shell can manage. */
+  function bookVisual(when, what) {
+    transport.booked.push(
+      window.setTimeout(what, Math.max(0, (when - transportNow()) * 1000)));
+  }
+
+  /** Books every beat that has come inside the lookahead window.
+
+      `nextBeat` counts from the start of the count-in, so beat zero is the
+      first click a player hears and the arithmetic below never has to know
+      whether it is still counting in. */
+  function pumpTransport() {
+    if (!transport.running) return;
+
+    var beat = secondsPerBeat();
+    var countInBeats = transport.countIn ? BEATS_PER_BAR : 0;
+    var horizon = transportNow() + transportLookahead();
+
+    while (transport.origin + transport.nextBeat * beat <= horizon) {
+      var index = transport.nextBeat;
+      var when = transport.origin + index * beat;
+      var inBar = index % BEATS_PER_BAR;
+
+      clickAt(when, inBar === 0);
+      bookBeat(when, index, inBar, index < countInBeats);
+
+      transport.nextBeat += 1;
+    }
+  }
+
+  /** The visual half of one beat: which bar the chart is on, and which dot. */
+  function bookBeat(when, index, inBar, isCountIn) {
+    var countInBeats = transport.countIn ? BEATS_PER_BAR : 0;
+    var loop = loopRange();
+
+    bookVisual(when, function () {
+      if (!transport.running) return;
+
+      drawBeat(inBar, isCountIn);
+
+      if (isCountIn) return;
+
+      // The count-in is over the moment a real beat lands, and only then does
+      // the chart start claiming to be anywhere: a bar wearing the rolling
+      // mark while the dots are still counting says the player is on bar one
+      // when the whole point of a count-in is that they are not yet.
+      if (transport.counting) {
+        transport.counting = false;
+        markRollingBar();
+      }
+
+      // Only the downbeat moves the chart. Nothing in solo practice reads
+      // beats yet - that is the feature this unblocks rather than one it
+      // includes - so a bar is still the unit the engine is told about.
+      if (inBar !== 0) return;
+
+      var barsIn = Math.floor((index - countInBeats) / BEATS_PER_BAR);
+
+      selectBar(loop.from + (barsIn % loop.bars));
+      markRollingBar();
+    });
+  }
+
+  function drawBeat(inBar, counting) {
+    el.beatRow.classList.toggle("counting", !!counting);
+
+    Array.prototype.forEach.call(el.beatRow.querySelectorAll(".beat"), function (dot, i) {
+      dot.classList.toggle("on", i === inBar);
+      dot.classList.toggle("downbeat", i === inBar && inBar === 0 && !counting);
+    });
+  }
+
+  /** The bar the clock is on wears a mark of its own, over the selection it
+      already is. Two highlights for one bar would be two things to keep in
+      step; this is one thing wearing two marks. */
+  function markRollingBar() {
+    Array.prototype.forEach.call(el.systems.querySelectorAll(".bar"), function (bar) {
+      bar.classList.toggle("rolling",
+        transport.running && !transport.counting
+          && Number(bar.dataset.index) === state.selected);
+    });
+  }
+
+  function startTransport() {
+    if (transport.running || state.mode !== "solo") return;
+
+    var loop = loopRange();
+
+    transport.running = true;
+    transport.counting = transport.countIn;
+    transport.nextBeat = 0;
+    transport.origin = transportNow() + 0.12;   // a moment to get the first click out
+
+    selectBar(loop.from);
+
+    el.rollTake.setAttribute("aria-pressed", "true");
+    el.rollLabel.textContent = "Stop";
+    el.beatRow.hidden = false;
+
+    markRollingBar();
+    pumpTransport();
+    transport.timer = window.setInterval(pumpTransport, TRANSPORT_TICK);
+  }
+
+  function stopTransport() {
+    if (transport.timer !== null) window.clearInterval(transport.timer);
+
+    transport.booked.forEach(window.clearTimeout);
+    transport.booked = [];
+    transport.timer = null;
+    transport.running = false;
+    transport.counting = false;
+
+    el.rollTake.setAttribute("aria-pressed", "false");
+    el.rollLabel.textContent = "Play";
+    el.beatRow.hidden = true;
+
+    markRollingBar();
+  }
+
+  /** Fills the loop's two pickers from the chart, keeping the range if it
+      still fits and widening to the whole tune when it does not. */
+  function fillLoopRange() {
+    var bars = state.measures.length;
+
+    [el.loopFrom, el.loopTo].forEach(function (picker) {
+      var wanted = Number(picker.value);
+
+      picker.textContent = "";
+
+      for (var i = 0; i < bars; ++i) {
+        var option = document.createElement("option");
+        option.value = String(i);
+        option.textContent = String(i + 1);
+        picker.appendChild(option);
+      }
+
+      if (wanted >= 0 && wanted < bars) picker.value = String(wanted);
+    });
+
+    // Out of range, backwards, or never chosen: take the whole tune.
+    if (transport.to >= bars || transport.to < transport.from || transport.to < 0) {
+      transport.from = 0;
+      transport.to = Math.max(0, bars - 1);
+      el.loopFrom.value = String(transport.from);
+      el.loopTo.value = String(transport.to);
+    }
   }
 
   /** Colours the key that was just played, for as long as it sounds.
@@ -3604,19 +3920,69 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     rememberCheatSheetSeen(state.mode);
   }
 
-  // Nothing to switch to, so the switch does not move: it opens the door,
-  // shows what is behind it, and goes back to saying what is true.
-  el.playLive.addEventListener("click", function () {
-    setMenuOpen(false);
-    el.playLive.setAttribute("aria-checked", "false");
-    el.playStatic.setAttribute("aria-checked", "true");
+  /** Static or in time. The switch used to be a door with nothing behind it;
+      what is behind it now is a clock, so it opens. */
+  function setInTime(on) {
+    transport.inTime = on;
 
-    if (!el.liveDialog.open) el.liveDialog.showModal();
+    if (!on) stopTransport();
+
+    el.playLive.setAttribute("aria-checked", on ? "true" : "false");
+    el.playStatic.setAttribute("aria-checked", on ? "false" : "true");
+
+    el.tempoRow.hidden = !on;
+    el.countInRow.hidden = !on;
+    el.loopRow.hidden = !on;
+
+    el.playingNote.textContent = on
+      ? "The chart moves on its own, a bar to the click. Play from the dock."
+      : "Static: the bar you are on is the bar you chose, and nothing is counting time.";
+
+    applyMode();
+  }
+
+  el.playLive.addEventListener("click", function () { setInTime(true); });
+  el.playStatic.addEventListener("click", function () { setInTime(false); });
+
+  el.tempo.addEventListener("change", function () {
+    var wanted = Math.round(Number(el.tempo.value));
+
+    transport.bpm = Math.max(40, Math.min(300, isFinite(wanted) ? wanted : 120));
+    el.tempo.value = String(transport.bpm);
+
+    // The origin is where every beat time is measured from, so changing the
+    // tempo mid-roll has to re-anchor it - otherwise the next beat is computed
+    // at the new spacing from an origin that meant the old one, and the whole
+    // line jumps.
+    if (transport.running) {
+      transport.origin = transportNow();
+      transport.nextBeat = 0;
+    }
   });
 
-  el.liveClose.addEventListener("click", function () { el.liveDialog.close(); });
-  el.liveDialog.addEventListener("click", function (event) {
-    if (event.target === el.liveDialog) el.liveDialog.close();
+  el.countIn.addEventListener("change", function () {
+    transport.countIn = el.countIn.checked;
+  });
+
+  [el.loopFrom, el.loopTo].forEach(function (picker) {
+    picker.addEventListener("change", function () {
+      transport.from = Number(el.loopFrom.value);
+      transport.to = Number(el.loopTo.value);
+
+      // Backwards is a range nobody meant; the other end follows rather than
+      // the choice being refused.
+      if (transport.to < transport.from) {
+        if (picker === el.loopFrom) el.loopTo.value = el.loopFrom.value;
+        else el.loopFrom.value = el.loopTo.value;
+
+        transport.from = Number(el.loopFrom.value);
+        transport.to = Number(el.loopTo.value);
+      }
+    });
+  });
+
+  el.rollTake.addEventListener("click", function () {
+    if (transport.running) stopTransport(); else startTransport();
   });
 
   el.helpButton.addEventListener("click", openCheatSheet);

@@ -139,10 +139,30 @@ memory and a window.
   while the engine kept reading against the old one, which nothing on screen could
   contradict until something on screen named it.
 
-### "In time" — a door with nothing behind it
-- The Practice menu offers Static or In time; choosing the second opens a note explaining
-  what it would take and puts the switch back. Half of a transport would be worse than
-  none - the moment a clock exists, rhythm starts to count, and the whole basis for naming
-  an avoid note rather than marking it down goes with it. Do not make that switch do
-  something approximate; build the transport with the metronome and the practice loop, or
-  leave the door shut.
+### In time — the transport
+- The switch was a door with nothing behind it for as long as there was nothing behind it,
+  on the grounds that half a transport is worse than none. What is behind it now is a
+  clock: a tempo, a count-in, the chart moving a bar to the click, and a loop over a range
+  of bars.
+- **The clock is the page's and the engine has none.** `LineAnalyzer` has no time in it,
+  which is what makes it testable, so the transport calls `selectBar()` on each downbeat
+  and the engine hears about it through `soloSetBar` exactly as it would from a mouse
+  click. It cannot tell the two apart, and that is the point: arming a take over a roll
+  needed no new code at all. Nothing in the engine may start depending on when a note
+  arrived.
+- **Beats are booked, not ticked.** A `setInterval` at the beat drifts, and a metronome
+  that drifts is worse than none, so every tick books the beats falling inside a lookahead
+  window with their times computed from one origin. Changing the tempo mid-roll therefore
+  has to re-anchor that origin - otherwise the next beat is spaced the new way from an
+  origin that meant the old one, and the whole line jumps.
+- **The count-in is not bar one.** The chart does not wear the rolling mark until a real
+  beat lands. A bar claiming to be current while the dots are still counting says the
+  player is somewhere they are not, which is the whole thing a count-in exists to prevent.
+- **The click is the one place the shells are honestly unequal.** Scheduled into Web Audio
+  at an exact time on the page; sent over the event bridge when due in the app, because
+  that bridge has no "play this at" argument, and so arriving a message-thread hop later.
+  Both shells read the same clock so chart and click agree in both. Do not paper over the
+  difference by pretending to schedule in the app - if it matters, give the bridge a time.
+- **Rhythm still counts for nothing.** The transport moves bars; no reading anywhere knows
+  which beat a note fell on. Landing chord tones on strong beats, and telling an avoid note
+  passed through from one sat on, are what a clock unblocks - not what it includes.

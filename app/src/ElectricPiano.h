@@ -42,6 +42,18 @@ public:
     /** Holds released notes until the pedal comes up, as a damper does. */
     void setSustain (bool isDown);
 
+    /** A metronome click, on the beat the transport says. Accented is the
+        downbeat: higher and louder, matching the browser shell's click, which
+        is how anyone counts a bar without being told which beat they are on.
+
+        It borrows a voice from the same pool rather than getting a path of its
+        own - it is a very short, very bright note with no attack ramp, and the
+        callback is already general enough to play one. What it must not be is
+        the piano: a metronome has to cut through whatever is played over it,
+        and the tine's own attack is far too soft to do that.
+    */
+    void click (bool accented);
+
 private:
     /** One sounding note. Voices are a fixed pool: a chord is ten notes at
         most, and allocating on the audio thread is not allowed.

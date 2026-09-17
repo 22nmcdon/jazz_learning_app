@@ -221,6 +221,10 @@ void WebUi::handleSound (const var& request)
             for (const auto& note : *notes)
                 sound.noteOn (static_cast<int> (note), 0.8f);
     }
+    else if (what == "click")
+    {
+        sound.click (static_cast<bool> (object->getProperty ("accented")));
+    }
     else if (what == "silence")
     {
         sound.allNotesOff();

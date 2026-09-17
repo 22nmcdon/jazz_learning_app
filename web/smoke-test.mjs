@@ -355,18 +355,63 @@ try {
   const styles = await page.locator("#scaleStyle option").count();
   check(`the engine's styles fill the menu (${styles})`, styles >= 5);
 
-  // In time is a door with nothing behind it. It has to say so, and it must
-  // not leave the switch claiming the chart is moving when it is not.
+  // In time puts a clock behind the chart. Driven fast and looped over two
+  // bars, so the test watches a real roll rather than a stubbed one.
   await page.locator("#playLive").click();
-  await page.waitForSelector("#liveDialog[open]", { timeout: 10000 });
-  check("asking to play in time says it is not built yet",
-        (await page.locator("#liveDialog").innerText()).toLowerCase().includes("not built yet"));
-  check("and the switch goes back to static",
-        (await page.locator("#playStatic").getAttribute("aria-checked")) === "true"
-        && (await page.locator("#playLive").getAttribute("aria-checked")) === "false");
-  await page.locator("#liveClose").click();
+  check("choosing in time reveals what a clock needs",
+        (await page.locator("#tempoRow").isVisible())
+        && (await page.locator("#countInRow").isVisible())
+        && (await page.locator("#loopRow").isVisible()));
 
+  // A loop nobody has chosen is the whole tune, not bar one to bar one.
+  check(`the loop starts as the whole chart `
+        + `(${await page.locator("#loopFrom").inputValue()}-${await page.locator("#loopTo").inputValue()})`,
+        (await page.locator("#loopFrom").inputValue()) === "0"
+        && (await page.locator("#loopTo").inputValue()) === "11");
+
+  // Count in first, which is the default: the dots count and the chart waits.
   await page.locator("#menuButton").click();
+  await page.locator("#rollTake").click();
+  await page.waitForFunction(
+    () => document.querySelector("#beatRow").classList.contains("counting"),
+    null, { timeout: 10000 });
+  check("a count-in counts before the chart moves",
+        (await page.locator("#systems .bar.rolling").count()) === 0);
+  await page.locator("#rollTake").click();
+  await page.locator("#menuButton").click();
+
+  await page.fill("#tempo", "300");
+  await page.dispatchEvent("#tempo", "change");
+  await page.uncheck("#countIn");
+  await page.selectOption("#loopFrom", "0");
+  await page.selectOption("#loopTo", "1");
+  await page.locator("#menuButton").click();
+
+  check("and the dock gets a transport", await page.locator("#rollTake").isVisible());
+
+  await page.locator("#rollTake").click();
+
+  // A bar at 300bpm is 800ms, so the chart has to have moved off bar one
+  // without anything being clicked.
+  await page.waitForFunction(
+    () => document.querySelector("#systems .bar:nth-child(2)").classList.contains("rolling"),
+    null, { timeout: 10000 });
+  check("the clock moves the chart on its own", true);
+
+  // ...and come back round, because the loop is two bars long.
+  await page.waitForFunction(
+    () => document.querySelector("#systems .bar").classList.contains("rolling"),
+    null, { timeout: 10000 });
+  check("and loops the range it was given", true);
+
+  await page.locator("#rollTake").click();
+  check("stopping the transport stops the chart",
+        (await page.locator("#rollTake").getAttribute("aria-pressed")) === "false"
+        && (await page.locator("#systems .bar.rolling").count()) === 0);
+
+  // Back to static for the checks that follow, which click bars themselves.
+  await page.locator("#menuButton").click();
+  await page.locator("#playStatic").click();
   await page.selectOption("#scaleStyle", "pentatonic");
   await page.locator("#menuButton").click();
   await bars.first().click();

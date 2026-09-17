@@ -154,6 +154,46 @@ void ElectricPiano::releaseVoice (Voice& voice)
     voice.pedalled = false;
 }
 
+void ElectricPiano::click (bool accented)
+{
+    if (! running.load())
+        return;
+
+    const juce::SpinLock::ScopedLockType lock (voiceLock);
+
+    auto* voice = findFreeVoice();
+
+    if (voice == nullptr)
+        return;
+
+    const auto frequency = accented ? 1600.0 : 1050.0;
+
+    // Never a real note's pitch, so `findVoiceFor` can never hand this voice
+    // back to a key that happens to be playing while the click rings.
+    voice->midiNote = -1;
+    voice->carrierPhase = 0.0;
+    voice->modulatorPhase = 0.0;
+    voice->carrierDelta = juce::MathConstants<double>::twoPi * frequency / sampleRate;
+
+    // A ratio that is not a whole number, so the partials it throws are not in
+    // tune with anything - which is what makes a click read as a click rather
+    // than as a very short high note.
+    voice->modulatorDelta = voice->carrierDelta * 1.41;
+
+    // Straight to full, with no attack stage: six milliseconds of rise is what
+    // stops a struck tine sounding like a click, and here that is the point.
+    voice->amplitudeTarget = accented ? 0.5f : 0.3f;
+    voice->amplitude = voice->amplitudeTarget;
+    voice->stage = Voice::Stage::decay;
+
+    voice->modulationDepth = static_cast<float> (frequency * 1.5);
+    voice->modulationDecay = decayFactor (0.001, 0.02, sampleRate);
+    voice->amplitudeDecay = decayFactor (0.001, 0.055, sampleRate);
+    voice->pedalled = false;
+
+    voice->active = true;
+}
+
 void ElectricPiano::noteOff (int midiNote)
 {
     const juce::SpinLock::ScopedLockType lock (voiceLock);

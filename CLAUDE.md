@@ -245,11 +245,27 @@ there because these are the ones that break something when a session has not rea
 - **Scale styles come from the engine** (`scaleStyles()`), never from a list in a shell,
   and the forgiveness lives in `Options::chosenScale` rather than in reading against every
   scale that fits.
-- **Static, with no clock.** `LineAnalyzer` has no time in it, which is what makes it
-  testable; a transport drives `setTarget()` from outside and needs nothing else from the
-  engine. **"In time" is a door with nothing behind it** and must not be made to do
-  something approximate - build the transport with the metronome and the practice loop, or
-  leave the door shut.
+- **The engine still has no clock, and must not get one.** `LineAnalyzer` has no time in
+  it, which is what makes it testable. The transport lives in the page: it calls
+  `selectBar()` on each downbeat and the engine learns about it through `soloSetBar` the
+  same way a mouse click teaches it. **Nothing in the engine may start depending on when a
+  note arrived.**
+- **The transport books beats, it does not tick them.** A `setInterval` at the beat
+  drifts, and a metronome that drifts is worse than none. Every tick books the beats
+  falling inside a lookahead window, with times computed from one origin - so changing the
+  tempo mid-roll has to re-anchor that origin, or the next beat is spaced the new way from
+  an origin that meant the old one.
+- **The click is the one place the two shells are honestly unequal.** On the web it is
+  scheduled into Web Audio at an exact time. In the app the sound is native, across an
+  event bridge with no "play this at" argument, so the click is *sent* when due and
+  arrives a message-thread hop later. Both shells read the same clock, so chart and click
+  agree in both; what the app gives up is a few milliseconds of jitter. Do not paper over
+  that by pretending to schedule in the app - fix it, if it matters, by giving the bridge
+  a time.
+- **Rhythm still does not count for anything.** The transport moves bars; no reading
+  anywhere knows which beat a note landed on. That is the feature this unblocks, not one
+  it includes - and it is the thing that would finally let an avoid note be told apart
+  from a note passed through.
 
 ## Both modes — one page, one chart
 
@@ -337,9 +353,11 @@ build step passes, that setting is the first thing to check.
 - **Licks.** Solo mode's "Which scale?" is the scale half of "show me one"; suggesting a
   *line* to play over a bar is a separate feature needing generated or curated patterns,
   rhythm and register - deliberately not started.
-- **A tempo-driven solo transport**, which is the same feature as the metronome /
-  practice loop and should arrive with it. Solo practice's Practice menu already has the
-  switch for it, wired to a note saying it is not built.
+- **Rhythmic reading.** The transport exists, so a clock exists - but nothing reads it.
+  Landing chord tones on strong beats, and telling an avoid note passed through from one
+  sat on, both need `LineAnalyzer` to be told where in the bar a note fell. That is a
+  change to the engine's shape (it has no time in it today, deliberately) and should be
+  designed before it is started.
 - MusicXML / MuseScore import. The page reader is format-agnostic enough to feed it.
 - Reading and printing a PDF in the JUCE app, as above.
 
