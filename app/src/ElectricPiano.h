@@ -4,6 +4,8 @@
 
 #include <array>
 #include <atomic>
+#include <memory>
+#include <string>
 #include <vector>
 
 namespace jazz::app
@@ -36,7 +38,37 @@ public:
     /** What to tell the player about the sound, device and all. */
     juce::String statusMessage() const;
 
+    /** A recorded instrument, pitched by playing it faster or slower.
+
+        One note per instrument rather than a sampled range: this is a practice
+        app's band, not a sampler, and a single well-recorded note stretched
+        across two octaves is the difference between a plausible bass and a sine
+        wave. The cost is that the far ends of the range are a little short and
+        a little wrong, which is why the walking line is bounded to a real
+        bass's compass and the comp to a pianist's.
+    */
+    struct Sample
+    {
+        std::vector<float> audio;   ///< mono, at the rate it was recorded
+        double sampleRate { 44100.0 };
+        int rootNote { 60 };        ///< the note it was played at
+    };
+
+    /** Loads a sampled instrument under a name the page can ask for.
+
+        Called once at startup with what the shell has embedded. A bank nobody
+        loaded simply is not there, and asking for it falls back to the synth -
+        which is a shell missing a file rather than a reason to be silent.
+    */
+    void addSample (const std::string& bank, Sample sample);
+
+    bool hasSample (const std::string& bank) const;
+
     void noteOn (int midiNote, float velocity);
+
+    /** Which sampled instrument the player's own keys use, by name. Empty is
+        the synthesised electric piano, which is what it has always been. */
+    void setPlayerBank (const std::string& bank);
     void noteOff (int midiNote);
     void allNotesOff();
 
@@ -67,7 +99,17 @@ public:
         replaces itself: the chord before it is released here, together, which
         is also what keeps the voice pool from filling up with tails.
     */
-    void compChord (const std::vector<int>& midiNotes);
+    void compChord (const std::vector<int>& midiNotes, const std::string& bank = {});
+
+    /** One note of the walking bass, replacing whatever it last played.
+
+        Its own channel again, for the same reason the comp has one: three
+        instruments sharing a voice pool must not share voices, or a bass note
+        and a comped chord an octave apart stop each other.
+    */
+    void bassNote (int midiNote, const std::string& bank = {});
+
+    void stopBass();
 
     /** Lets go of the comp, leaving anything the player is holding alone. */
     void stopComping();
@@ -113,6 +155,16 @@ private:
             one's note-off, pedal or panic reaches the other.
         */
         bool comping { false };
+
+        /** The walking bass's, which is neither the player's nor the comp's. */
+        bool walking { false };
+
+        /*  Set when this voice is playing a recording rather than the synth.
+            The pointer is into a bank loaded once at startup and never moved,
+            so the audio thread may read it without a lock. */
+        const Sample* sample { nullptr };
+        double samplePosition { 0.0 };
+        double sampleStep { 1.0 };
     };
 
     void audioDeviceIOCallbackWithContext (const float* const* inputChannelData,
@@ -128,8 +180,17 @@ private:
     Voice* findVoiceFor (int midiNote);
     Voice* findFreeVoice();
     void releaseComping();
+    void releaseWalking();
+    const Sample* sampleFor (const std::string& bank) const;
+    void startVoice (Voice& voice, int midiNote, float level, const Sample* sample);
 
     void releaseVoice (Voice& voice);
+
+    /*  Loaded once, never resized afterwards, so the audio thread can hold a
+        pointer into one while the message thread is elsewhere. */
+    std::vector<std::pair<std::string, std::unique_ptr<Sample>>> samples;
+
+    std::string playerBank;
 
     juce::AudioDeviceManager devices;
     std::array<Voice, 16> voices;

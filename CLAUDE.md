@@ -354,9 +354,49 @@ eighth is.
   `audio.voices`; in the app it is `Voice::comping`, which is why `noteOff`, the pedal and
   `allNotesOff` all skip comp voices - and why the bridge carries `"comp"` rather than
   reusing `"chord"`, whose first act is to silence everything.
-- **Bass and drums are named in the menu and not built.** A rhythm section is three
-  instruments; leaving the other two off the list entirely would say the feature is
-  finished.
+- **The walking bass is built the same way and is not a comping style.** `walkingBass()`
+  is one note to the beat, and it walks whatever the piano is doing - which is why it is
+  its own call and its own plan rather than a field on a `CompStyleDefinition`. A change
+  of comping style must not make the bass player start again.
+- **A walking line is built in *runs*, not beat by beat.** A run is a chord arriving and
+  the beats before the next one does. Written beat by beat the line has nothing to aim at,
+  and "the nearest chord tone" walks straight back where it came from - the first version
+  played D, C, D, D over one bar of Dm7. A run knows its root, knows the approach it has
+  to reach by its last beat, and everything between is travel.
+- **Three rules, in this order**: the root on the beat the chord arrives (the one note the
+  line is not free about, because it states the harmony); an approach into the next root
+  on the beat before a change (a semitone either side, or a fifth); chord tones between,
+  moving towards that approach. Bounded to `lowestBassNote`/`highestBassNote`, because a
+  line following the voice leading climbs off the instrument inside a chorus.
+- **Drums are named in the menu and not built.** A rhythm section is three instruments;
+  leaving the last one off the list entirely would say the feature is finished.
+
+### The band's instruments are recordings
+- **`assets/` holds them, because both shells want them.** The app compiles the WAVs in
+  through `juce_add_binary_data`; `web/build.sh` copies the same files next to the page,
+  which fetches them. One copy in the repository, two ways of reaching it - putting them
+  in `web/` would have made the app fetch over a `file://` URL, which webviews refuse.
+- **One note per instrument, pitched by playing it faster or slower.** This is a practice
+  app's band, not a sampler. A single well-recorded note stretched over two octaves is the
+  difference between a plausible bass and a sine wave; the cost is that the far ends are a
+  little short and a little wrong, which is part of why the walking line is bounded to a
+  real bass's compass. **The root note each was played at is written down beside the file**
+  in both shells - guess it wrong and the whole instrument is transposed.
+- **A sampled bank and a synthesised one are one registry.** On the page a bank either
+  builds a voice from oscillators or names a file and a root note, and `voiceFor()` hands
+  back the same shape either way, so the comp, the bass and the player's own keys schedule
+  identically. Adding an instrument is an entry in that table and a file in `assets/`.
+- **Recordings are fetched lazily and only on the web.** A visitor reading a chord chart
+  should not pay for three recordings, and in the app the sound is native and the files are
+  already in the binary. The service worker caches whatever it fetches, so a recording used
+  once is there offline afterwards.
+- **A sampled voice's envelope only shapes the attack and the release.** The decay is in
+  the recording. Running the synth's decay over it as well fades the note out twice.
+- **Each instrument is its own channel, in both shells.** Player, comp and bass share a
+  keyboard and a voice pool and must not share voices: a bass note and a comped chord an
+  octave apart would otherwise stop each other, and the player's own note-off, pedal and
+  panic would reach the band. On the page that is three voice stores; in the app it is
+  `Voice::comping` and `Voice::walking`, which every player-facing function skips.
 - **Where the evaluator will live is decided and not built: a third mode.** Scoring a
   player's *own* comping against a `CompStyleDefinition` is neither of the questions the
   two modes ask, so it gets its own. Note what that costs before starting it: `state.mode`
@@ -450,12 +490,10 @@ build step passes, that setting is the first thing to check.
   score, the feedback panel's session average and now a take's own numbers are the hook
   the last of those would build on. (The metronome and the practice loop ship - they are
   what In time is.)
-- **A walking bass and a drummer.** Both are named in the comping menu and neither is
-  built. A bass line is the same shape of problem the comp already solved - the engine
-  says which notes, the page says when - but it needs a note per beat rather than a
-  voicing per chord, which is the first thing here that would want to know where in the
-  bar it is. Drums need no theory at all and no engine call; they need a pattern and a
-  kit, and the click is the only percussion the app can make today.
+- **A drummer.** Named in the comping menu and not built. Unlike the bass it needs no
+  theory and no engine call at all - a pattern and a kit - so it is the one piece of the
+  rhythm section that is entirely a shell problem. The metronome click is the only
+  percussion either shell can make today.
 - **Licks.** Solo mode's "Which scale?" is the scale half of "show me one"; suggesting a
   *line* to play over a bar is a separate feature needing generated or curated patterns,
   rhythm and register - deliberately not started.

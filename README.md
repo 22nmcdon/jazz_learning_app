@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (371), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (380), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -247,10 +247,9 @@ click agree in both - what the app gives up is a few milliseconds of jitter on t
 ### Comping
 
 **Comping** — next to *Reharmonise the tune*, above the chart — is the band behind you. It
-opens on a list of who is playing: **piano comping**, which works, and **bass walking** and
-**drums**, which are named and not built yet. The piano has its own sound picker, offering
-the same sounds the Practice menu offers the player, because the band is not playing your
-instrument.
+opens on a list of who is playing: **piano comping** and **bass walking**, both of which
+work, and **drums**, which is named and not built yet. Each has its own sound picker,
+because the band is not playing your instrument.
 
 **Comping style** picks what the band plays: *Four to the bar*, *Basie — sparse*,
 *Charleston* or *Ballad — triplet*. The list is the engine's, like the scale styles are, and
@@ -295,9 +294,41 @@ The searching is bounded to a register window — voice leading on its own alway
 nearest voicing, so a progression that keeps rising would walk the hands off the top of the
 keyboard.
 
-In both shells the comp is a channel of its own, never the player's own notes: comping E4
-under a soloist playing E4 has to be two voices, or one note-off silences a note the other
-one is still holding.
+### The walking bass
+
+**Bass walking** puts a bass player under the piano, one note to the beat. The line is
+built in *runs* — a chord arriving, then the beats before the next one does — rather than
+note by note, because written note by note it has nothing to aim at: the first version of
+this played D, C, D, D over a bar of Dm7, since "the nearest chord tone" walks straight
+back where it came from.
+
+Three rules, in order. **The root lands on the beat the chord arrives** — the one note the
+line is not free about, because it is what states the harmony. **The beat before a change
+leads into the next root**, a semitone either side or a fifth, which is what makes a line
+sound like walking rather than like an arpeggio repeated once a bar. **Chord tones fill the
+rest**, travelling towards that approach. Over `| Dm7 | G7 | Cmaj7 |` that gives D–F–A–D,
+then G–F–D–Db, then C: an ascending arpeggio, a descent, and a chromatic note into the
+next root.
+
+The whole line stays inside a real bass's compass. Voice leading on its own climbs, and a
+tune that keeps rising would take the line off the top of the instrument inside a chorus.
+
+### The band's instruments are recordings
+
+The piano offers a synthesised **electric piano** and a recorded **grand piano**; the bass
+offers a recorded **upright** and **electric**. Each is one note, pitched by playing the
+recording faster or slower — this is a practice app's band rather than a sampler, and one
+well-recorded note stretched across two octaves is the difference between a plausible bass
+and a sine wave.
+
+The files live in `assets/` because both shells want them: the desktop app compiles them
+into its binary, and `web/build.sh` copies the same files next to the page, which fetches
+them the first time you turn that instrument on. The grand piano is also on the Practice
+menu, so you can play it yourself.
+
+In both shells each instrument is a channel of its own, never the player's own notes:
+comping E4 under a soloist playing E4 has to be two voices, or one note-off silences a note
+the other one is still holding — and the same goes for a bass note under a comped chord.
 
 ### Reading where a note fell
 
@@ -591,12 +622,10 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
 - **Rhythm in the score.** The readings exist (above) and deliberately produce words
   rather than points. Making placement *count* toward a number is a separate decision,
   and the argument against it is the same one that keeps a line's shape out of the score.
-- **A walking bass and a drummer.** Both are named in the comping menu and neither is
-  built. A bass line is the shape of problem the piano comp already solved — the engine
-  says which notes, the page says when — but it wants a note per beat rather than a
-  voicing per chord, which makes it the first thing here that would need to know where in
-  the bar it is. Drums need no theory and no engine call at all: a pattern and a kit, and
-  the metronome click is the only percussion the app can make today.
+- **A drummer.** Named in the comping menu and not built. Unlike the bass it needs no
+  theory and no engine call at all — a pattern and a kit — which makes it the one piece of
+  the rhythm section that is entirely a shell problem. The metronome click is the only
+  percussion either shell can make today.
 - **A metre that survives export.** The readers bring a time signature in; the iReal Pro
   writer does not put one back out, so a waltz imported and exported comes back in four.
   One line in `ChartFormats`, once someone wants it.

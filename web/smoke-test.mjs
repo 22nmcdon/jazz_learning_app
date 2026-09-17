@@ -72,6 +72,24 @@ await page.addInitScript(() => {
 
     return osc;
   };
+
+  /*  The recorded instruments come out of a buffer source rather than an
+      oscillator, so a check that watched only oscillators would call a sampled
+      bank silent. The rate is what pitched it, which is the half worth
+      keeping. */
+  const realBuffer = Ctor.prototype.createBufferSource;
+
+  Ctor.prototype.createBufferSource = function () {
+    const source = realBuffer.call(this);
+    const realStart = source.start.bind(source);
+
+    source.start = function (when) {
+      window.__sounded.push({ type: "sample", rate: source.playbackRate.value, when });
+      return realStart(when);
+    };
+
+    return source;
+  };
 });
 
 // Anything the page says went wrong is a failure here. A page that boots with
@@ -522,9 +540,19 @@ try {
   };
 
   await page.locator("#compingButton").click();
-  check("comping offers a band, two of whom are not built yet",
+  check("comping offers a band, one of whom is not built yet",
         (await page.locator("#compingPanel").isVisible())
-        && (await page.locator("#compingPanel input:disabled").count()) === 2);
+        && (await page.locator("#compingPanel input[type=checkbox]").count()) === 3
+        && (await page.locator("#compingPanel input:disabled").count()) === 1);
+
+  // Two recorded basses, and neither is on the player's own sound menu: nobody
+  // practises voicings on a double bass.
+  const bassSounds = await page.locator("#bassSound option").allInnerTexts();
+
+  check(`the bass has its own recorded instruments (${bassSounds.join(", ")})`,
+        bassSounds.some((name) => /upright/i.test(name))
+        && bassSounds.some((name) => /electric/i.test(name))
+        && !(await page.locator("input[name=soundBank][value=upright]").count()));
 
   // One registry of sounds, not a second copy of the list.
   const compSounds = await page.locator("#compSound option").allInnerTexts();
@@ -650,8 +678,59 @@ try {
   check(`a swung push lands two thirds through the beat (${sparse.map((t) => t.toFixed(2)).join(" ")})`,
         swung.length > 0);
 
+  /*  The grand piano is a recording where the electric piano is synthesised, so
+      the same comp on the same bar comes out of a different kind of node. That
+      is the check: not that it made a sound, but that it made it the new way. */
+  await page.locator("#compingButton").click();
+  await page.selectOption("#compSound", { value: "grand" });
+  await page.locator("#compingButton").click();
+  await goToBar(1);
+  await forgetSounds();
+  await goToBar(0);
+  await page.waitForFunction(() => window.__sounded.some((s) => s.type === "sample"),
+                             null, { timeout: 15000 });
+
+  check("a recorded piano is played as a recording, not as the synth",
+        (await page.evaluate(() =>
+          window.__sounded.filter((s) => s.type === "sample").length)) >= 4);
+
+  await page.locator("#compingButton").click();
+  await page.selectOption("#compSound", { value: "ep" });
+  await page.locator("#compingButton").click();
+
+  /*  The bass. A recording rather than a synth, so these read buffer sources -
+      and a walking line is one note to the beat, which is what separates it
+      from the piano's comping at a glance. */
   await page.locator("#compingButton").click();
   await page.locator("#compPiano").uncheck();
+  await page.locator("#compBass").check();
+  await page.locator("#compingButton").click();
+
+  await forgetSounds();
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(2600);
+  await page.keyboard.press("Space");
+  await page.waitForFunction(
+    () => document.querySelector("#armTake").getAttribute("aria-pressed") === "false",
+    null, { timeout: 10000 });
+
+  const walked = await page.evaluate(() =>
+    window.__sounded.filter((s) => s.type === "sample").map((s) => s.when));
+  const clicked = await page.evaluate(() =>
+    window.__sounded.filter((s) => s.type === "square").map((s) => s.when).sort((a, b) => a - b));
+
+  check(`the bass is a recording, and it walks (${walked.length} notes, ${clicked.length} beats)`,
+        walked.length > 0 && Math.abs(walked.length - clicked.length) <= 2);
+
+  // One to the beat means on the beat: nothing between them.
+  const bassOffBeats = walked
+    .map((w) => (w - clicked[0]) / 0.25)
+    .filter((b) => Math.abs(b - Math.round(b)) > 0.1);
+
+  check(`the walking line lands on beats (${bassOffBeats.length} off)`, bassOffBeats.length === 0);
+
+  await page.locator("#compingButton").click();
+  await page.locator("#compBass").uncheck();
   await page.locator("#compingButton").click();
 
   /*  The grid's other consumer, over the same clock. A note played while the

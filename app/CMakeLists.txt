@@ -26,10 +26,17 @@ juce_add_gui_app(JazzLearningApp
 
 # The page is the UI, so it ships inside the binary: no files beside the app,
 # and no local server to start.
+# The page, and the band's recorded instruments. The samples live in assets/
+# rather than in web/ or app/ because both shells need them: the app compiles
+# them in here, and web/build.sh copies the same files next to the page.
 juce_add_binary_data(JazzWebUiData
     HEADER_NAME BinaryData.h
     NAMESPACE BinaryData
-    SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../web/index.html)
+    SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../web/index.html
+        ${CMAKE_CURRENT_SOURCE_DIR}/../assets/bass-upright.wav
+        ${CMAKE_CURRENT_SOURCE_DIR}/../assets/bass-electric.wav
+        ${CMAKE_CURRENT_SOURCE_DIR}/../assets/piano-grand.wav)
 
 target_sources(JazzLearningApp PRIVATE
     src/Main.cpp
@@ -44,6 +51,7 @@ target_link_libraries(JazzLearningApp PRIVATE
     jazz::engine_api
     jazz::core_engine
     juce::juce_audio_devices
+    juce::juce_audio_formats
     juce::juce_gui_basics
     juce::juce_gui_extra
     juce::juce_recommended_config_flags

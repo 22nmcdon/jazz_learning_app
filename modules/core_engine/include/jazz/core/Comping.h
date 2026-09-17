@@ -127,6 +127,57 @@ CompPlan compPlan (const Chart& chart,
                    int toBar,
                    std::uint32_t seed);
 
+/** What a walking note is doing in the line.
+
+    Not a tier and not a grade - a bass line is not marked. It is here because
+    the roles are what the rules are written in terms of, and because a shell
+    that wants to draw or explain a line needs to know which note is the root.
+*/
+enum class BassRole
+{
+    root,        ///< states the chord, on the beat the chord arrives
+    chordTone,   ///< filling, from the chord under it
+    scaleTone,   ///< filling, from the scale when the chord has run out of notes
+    approach     ///< the last beat before a change, leading into the next root
+};
+
+std::string bassRoleName (BassRole role);
+
+/** One note of a walking line. Always on a beat: walking is what the name says. */
+struct BassNote
+{
+    int measureIndex {};
+    BarPosition at {};
+    int midiNote {};
+    std::string chordSymbol;
+    BassRole role {};
+};
+
+/** A walking bass line over a range of bars, one note to the beat.
+
+    The rules are the ones every bass player is taught, in this order:
+
+      - **The root on the beat the chord arrives.** That is what states the
+        harmony, and it is the one note the line is not free about.
+      - **An approach into the next root** on the beat before a change: a
+        semitone either side, or the fifth above. Chromatic approaches are what
+        make a line sound like walking rather than like an arpeggio.
+      - **Chord tones in between**, moving towards that approach note rather
+        than wandering, and stepping where a step is available.
+
+    Bounded to a bass's own register throughout, because a line free to follow
+    the voice leading upwards climbs out of the instrument inside a chorus.
+
+    Seeded the same way `compPlan` is, and for the same reason: a loop that
+    came round differently every time would be a different bass player.
+*/
+std::vector<BassNote> walkingBass (const Chart& chart, int fromBar, int toBar,
+                                   std::uint32_t seed);
+
+/** The lowest and highest note a walking line may use. */
+constexpr int lowestBassNote = 28;    // E1, the bottom of a double bass
+constexpr int highestBassNote = 55;   // G3, where a walking line stops walking
+
 /** Whether a hit is one this style could have played.
 
     The slot half of the evaluator, and the half the generator is held to: a

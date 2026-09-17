@@ -2,6 +2,9 @@
 #include "MidiDeviceInput.h"
 #include "WebUi.h"
 
+#include <BinaryData.h>
+#include <juce_audio_formats/juce_audio_formats.h>
+
 #include <juce_gui_basics/juce_gui_basics.h>
 
 namespace jazz::app
@@ -37,6 +40,61 @@ public:
     void systemRequestedQuit() override { quit(); }
 
 private:
+    /** Reads one recorded instrument out of the binary the app was built with.
+
+        Mono, because that is what these were prepared as and what the voice
+        pool plays; a stereo recording would be folded down here rather than
+        doubling every voice for a band nobody pans.
+    */
+    static ElectricPiano::Sample readSample (const void* data, int size, int rootNote)
+    {
+        ElectricPiano::Sample sample;
+        sample.rootNote = rootNote;
+
+        juce::WavAudioFormat wav;
+        std::unique_ptr<juce::AudioFormatReader> reader (
+            wav.createReaderFor (new juce::MemoryInputStream (data, static_cast<std::size_t> (size), false),
+                                 true));
+
+        if (reader == nullptr || reader->lengthInSamples <= 0)
+            return sample;
+
+        juce::AudioBuffer<float> buffer (static_cast<int> (reader->numChannels),
+                                         static_cast<int> (reader->lengthInSamples));
+        reader->read (&buffer, 0, buffer.getNumSamples(), 0, true, true);
+
+        sample.sampleRate = reader->sampleRate;
+        sample.audio.resize (static_cast<std::size_t> (buffer.getNumSamples()));
+
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            auto value = 0.0f;
+
+            for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+                value += buffer.getSample (channel, i);
+
+            sample.audio[static_cast<std::size_t> (i)] = value / static_cast<float> (buffer.getNumChannels());
+        }
+
+        return sample;
+    }
+
+    /** The band's instruments, under the names the page asks for them by.
+
+        The root notes are what was played into the microphone, and getting one
+        wrong transposes a whole instrument - so they are written down here next
+        to the files rather than guessed from a name.
+    */
+    static void loadSamples (ElectricPiano& piano)
+    {
+        piano.addSample ("upright",  readSample (BinaryData::bassupright_wav,
+                                                 BinaryData::bassupright_wavSize, 36));   // C2
+        piano.addSample ("electric", readSample (BinaryData::basselectric_wav,
+                                                 BinaryData::basselectric_wavSize, 36));  // C2
+        piano.addSample ("grand",    readSample (BinaryData::pianogrand_wav,
+                                                 BinaryData::pianogrand_wavSize, 65));    // F4
+    }
+
     class MainWindow : public juce::DocumentWindow
     {
     public:
@@ -47,6 +105,7 @@ private:
         {
             // Sound first: the page asks whether it has any as soon as it loads.
             piano.start();
+            loadSamples (piano);
 
             auto content = std::make_unique<WebUi> (midiInput, piano);
             contentComponent = content.get();

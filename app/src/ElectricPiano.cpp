@@ -81,10 +81,80 @@ juce::String ElectricPiano::statusMessage() const
     return status;
 }
 
+void ElectricPiano::addSample (const std::string& bank, Sample sample)
+{
+    const juce::SpinLock::ScopedLockType lock (voiceLock);
+
+    samples.emplace_back (bank, std::make_unique<Sample> (std::move (sample)));
+}
+
+bool ElectricPiano::hasSample (const std::string& bank) const
+{
+    return sampleFor (bank) != nullptr;
+}
+
+const ElectricPiano::Sample* ElectricPiano::sampleFor (const std::string& bank) const
+{
+    if (bank.empty())
+        return nullptr;
+
+    for (const auto& entry : samples)
+        if (entry.first == bank && ! entry.second->audio.empty())
+            return entry.second.get();
+
+    return nullptr;
+}
+
+/** Sets a voice going, on a recording where there is one and the synth where
+    there is not.
+
+    The two share an envelope: a sample carries its own decay in the recording,
+    so its amplitude is held flat and the envelope only shapes the attack and
+    the release. Running the synth's decay over a recording would fade it out
+    twice.
+*/
+void ElectricPiano::startVoice (Voice& voice, int midiNote, float level, const Sample* sample)
+{
+    const auto frequency = frequencyOf (midiNote);
+
+    voice.midiNote = midiNote;
+    voice.carrierPhase = 0.0;
+    voice.modulatorPhase = 0.0;
+    voice.sample = sample;
+    voice.samplePosition = 0.0;
+    voice.amplitude = 0.0f;
+    voice.amplitudeTarget = level;
+    voice.stage = Voice::Stage::attack;
+    voice.pedalled = false;
+
+    if (sample != nullptr)
+    {
+        // Faster for a higher note, slower for a lower one - the whole of what
+        // pitching a recording is, and why a sample two octaves up is a quarter
+        // as long as the one that was played.
+        voice.sampleStep = (frequency / frequencyOf (sample->rootNote))
+                             * (sample->sampleRate / sampleRate);
+
+        voice.modulationDepth = 0.0f;
+        voice.modulationDecay = 1.0f;
+        voice.amplitudeDecay = 1.0f;   // the recording decays; the envelope does not
+        voice.active = true;
+        return;
+    }
+
+    voice.carrierDelta = juce::MathConstants<double>::twoPi * frequency / sampleRate;
+    voice.modulatorDelta = voice.carrierDelta * 2.0;
+    voice.modulationDepth = static_cast<float> (frequency * 5.0 * level * 2.0);
+    voice.modulationDecay = decayFactor (0.05, tineDecaySeconds, sampleRate);
+    voice.amplitudeDecay = decayFactor (0.3, bodyDecaySeconds, sampleRate);
+    voice.active = true;
+}
+
 ElectricPiano::Voice* ElectricPiano::findVoiceFor (int midiNote)
 {
     for (auto& voice : voices)
-        if (voice.active.load() && voice.midiNote == midiNote && ! voice.comping
+        if (voice.active.load() && voice.midiNote == midiNote
+            && ! voice.comping && ! voice.walking
             && voice.stage != Voice::Stage::release)
             return &voice;
 
@@ -126,25 +196,16 @@ void ElectricPiano::noteOn (int midiNote, float velocity)
     const auto frequency = frequencyOf (midiNote);
     const auto level = juce::jlimit (0.08f, 1.0f, velocity);
 
-    voice->midiNote = midiNote;
+    startVoice (*voice, midiNote, level * 0.5f, sampleFor (playerBank));
+
     voice->comping = false;
-    voice->carrierPhase = 0.0;
-    voice->modulatorPhase = 0.0;
-    voice->carrierDelta = juce::MathConstants<double>::twoPi * frequency / sampleRate;
-    voice->modulatorDelta = voice->carrierDelta * 2.0;   // the bell in the attack
+    voice->walking = false;
+}
 
-    voice->amplitude = 0.0f;
-    voice->amplitudeTarget = level * 0.5f;
-
-    // The modulation starts wide and falls to a quarter of the carrier, which
-    // is the difference between a struck tine and a plain sine.
-    voice->modulationDepth = static_cast<float> (frequency * 5.0 * level);
-    voice->modulationDecay = decayFactor (0.05, tineDecaySeconds, sampleRate);
-    voice->amplitudeDecay = decayFactor (0.3, bodyDecaySeconds, sampleRate);
-    voice->stage = Voice::Stage::attack;
-    voice->pedalled = false;
-
-    voice->active = true;
+void ElectricPiano::setPlayerBank (const std::string& bank)
+{
+    const juce::SpinLock::ScopedLockType lock (voiceLock);
+    playerBank = bank;
 }
 
 void ElectricPiano::releaseVoice (Voice& voice)
@@ -173,6 +234,8 @@ void ElectricPiano::click (bool accented)
     // back to a key that happens to be playing while the click rings.
     voice->midiNote = -1;
     voice->comping = false;
+    voice->walking = false;
+    voice->sample = nullptr;
     voice->carrierPhase = 0.0;
     voice->modulatorPhase = 0.0;
     voice->carrierDelta = juce::MathConstants<double>::twoPi * frequency / sampleRate;
@@ -229,7 +292,7 @@ void ElectricPiano::setSustain (bool isDown)
 
     // Every release the pedal was holding back happens now, together.
     for (auto& voice : voices)
-        if (voice.active.load() && voice.pedalled && ! voice.comping)
+        if (voice.active.load() && voice.pedalled && ! voice.comping && ! voice.walking)
             releaseVoice (voice);
 }
 
@@ -243,7 +306,7 @@ void ElectricPiano::allNotesOff()
     // drop out in the middle of a bar for no reason the player could see.
     for (auto& voice : voices)
     {
-        if (voice.comping)
+        if (voice.comping || voice.walking)
             continue;
 
         voice.stage = Voice::Stage::release;
@@ -271,7 +334,7 @@ void ElectricPiano::stopComping()
     releaseComping();
 }
 
-void ElectricPiano::compChord (const std::vector<int>& midiNotes)
+void ElectricPiano::compChord (const std::vector<int>& midiNotes, const std::string& bank)
 {
     if (! running.load())
         return;
@@ -280,6 +343,8 @@ void ElectricPiano::compChord (const std::vector<int>& midiNotes)
 
     releaseComping();
 
+    const auto* sample = sampleFor (bank);
+
     for (auto midiNote : midiNotes)
     {
         auto* voice = findFreeVoice();
@@ -287,28 +352,52 @@ void ElectricPiano::compChord (const std::vector<int>& midiNotes)
         if (voice == nullptr)
             return;
 
-        const auto frequency = frequencyOf (midiNote);
-
-        voice->midiNote = midiNote;
-        voice->comping = true;
-        voice->carrierPhase = 0.0;
-        voice->modulatorPhase = 0.0;
-        voice->carrierDelta = juce::MathConstants<double>::twoPi * frequency / sampleRate;
-        voice->modulatorDelta = voice->carrierDelta * 2.0;
-
         // Under the soloist, not beside them: an accompaniment at the same
         // level as the line being played over it is not an accompaniment.
-        voice->amplitude = 0.0f;
-        voice->amplitudeTarget = 0.22f;
+        startVoice (*voice, midiNote, 0.22f, sample);
 
-        voice->modulationDepth = static_cast<float> (frequency * 3.0);
-        voice->modulationDecay = decayFactor (0.05, tineDecaySeconds, sampleRate);
-        voice->amplitudeDecay = decayFactor (0.3, bodyDecaySeconds, sampleRate);
-        voice->stage = Voice::Stage::attack;
-        voice->pedalled = false;
-
-        voice->active = true;
+        voice->comping = true;
+        voice->walking = false;
     }
+}
+
+void ElectricPiano::releaseWalking()
+{
+    for (auto& voice : voices)
+        if (voice.walking && voice.stage != Voice::Stage::release)
+        {
+            voice.stage = Voice::Stage::release;
+            voice.amplitudeDecay = decayFactor (0.001, 0.12, sampleRate);
+            voice.pedalled = false;
+        }
+}
+
+void ElectricPiano::stopBass()
+{
+    const juce::SpinLock::ScopedLockType lock (voiceLock);
+    releaseWalking();
+}
+
+void ElectricPiano::bassNote (int midiNote, const std::string& bank)
+{
+    if (! running.load())
+        return;
+
+    const juce::SpinLock::ScopedLockType lock (voiceLock);
+
+    // One note at a time: a bass player has one note sounding, and letting the
+    // last one ring under the next turns a walking line into a drone.
+    releaseWalking();
+
+    auto* voice = findFreeVoice();
+
+    if (voice == nullptr)
+        return;
+
+    startVoice (*voice, midiNote, 0.5f, sampleFor (bank));
+
+    voice->comping = false;
+    voice->walking = true;
 }
 
 void ElectricPiano::audioDeviceAboutToStart (juce::AudioIODevice* device)
@@ -369,14 +458,47 @@ void ElectricPiano::audioDeviceIOCallbackWithContext (const float* const*,
                 voice.amplitude *= voice.amplitudeDecay;
             }
 
-            voice.modulationDepth *= voice.modulationDecay;
+            float value = 0.0f;
 
-            const auto modulation = std::sin (voice.modulatorPhase) * voice.modulationDepth;
-            const auto value = std::sin (voice.carrierPhase) * voice.amplitude * masterGain;
+            if (voice.sample != nullptr)
+            {
+                /*  Reading the recording faster or slower is the whole of the
+                    pitching. Linear between the two nearest samples, which at
+                    these ratios is inaudible and is a great deal cheaper than
+                    anything better on the audio thread. */
+                const auto& audio = voice.sample->audio;
+                const auto index = static_cast<std::size_t> (voice.samplePosition);
 
-            voice.carrierPhase += voice.carrierDelta
-                                  + juce::MathConstants<double>::twoPi * modulation / sampleRate;
-            voice.modulatorPhase += voice.modulatorDelta;
+                if (index + 1 < audio.size())
+                {
+                    const auto fraction = static_cast<float> (voice.samplePosition
+                                                                - static_cast<double> (index));
+
+                    value = (audio[index] * (1.0f - fraction) + audio[index + 1] * fraction)
+                              * voice.amplitude * masterGain;
+
+                    voice.samplePosition += voice.sampleStep;
+                }
+                else
+                {
+                    // The recording has run out. Let the voice go rather than
+                    // looping it, which would turn a piano into an organ.
+                    voice.amplitude = 0.0f;
+                }
+            }
+            else
+            {
+                voice.modulationDepth *= voice.modulationDecay;
+
+                const auto modulation = std::sin (voice.modulatorPhase) * voice.modulationDepth;
+
+                value = static_cast<float> (std::sin (voice.carrierPhase)) * voice.amplitude
+                          * masterGain;
+
+                voice.carrierPhase += voice.carrierDelta
+                                      + juce::MathConstants<double>::twoPi * modulation / sampleRate;
+                voice.modulatorPhase += voice.modulatorDelta;
+            }
 
             for (int channel = 0; channel < numOutputChannels; ++channel)
                 if (outputChannelData[channel] != nullptr)

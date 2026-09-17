@@ -43,6 +43,10 @@ std::string compStyles();
 std::string compPlan (const char* progressionText, const char* styleKey,
                       int fromBar, int toBar, int seed);
 
+/** A walking bass line over a range of bars, one note to the beat. Positions
+    come back the same way a comp plan's do: a beat and a tick, never a time. */
+std::string walkingBass (const char* progressionText, int fromBar, int toBar, int seed);
+
 //==============================================================================
 /** Solo practice: reading a line rather than a chord.
 

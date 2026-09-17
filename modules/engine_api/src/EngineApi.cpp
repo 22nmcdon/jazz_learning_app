@@ -781,6 +781,31 @@ std::string compPlan (const char* progressionText, const char* styleKey,
                  + "}");
 }
 
+std::string walkingBass (const char* progressionText, int fromBar, int toBar, int seed)
+{
+    const auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
+
+    if (! parsed.ok())
+        return hold (jsonError (parsed.error));
+
+    const auto line = core::walkingBass (*parsed.chart, fromBar, toBar,
+                                         static_cast<std::uint32_t> (seed));
+
+    return hold ("{\"ok\":true,\"ticksPerBeat\":" + std::to_string (ticksPerBeat)
+                 + ",\"notes\":"
+                 + jsonArray (line, [] (const BassNote& note)
+                   {
+                       return "{\"bar\":" + std::to_string (note.measureIndex)
+                            + ",\"beat\":" + std::to_string (note.at.beat)
+                            + ",\"tick\":" + std::to_string (note.at.tick)
+                            + ",\"midi\":" + std::to_string (note.midiNote)
+                            + ",\"name\":" + quoted (midiNoteName (note.midiNote))
+                            + ",\"chord\":" + quoted (note.chordSymbol)
+                            + ",\"role\":" + quoted (bassRoleName (note.role)) + "}";
+                   })
+                 + "}");
+}
+
 //==============================================================================
 std::string soloStartTake()
 {

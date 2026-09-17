@@ -549,3 +549,172 @@ TEST ("a note passed through across the barline is still passed through")
     CHECK_EQ (take.notesSatOn, 0);
     CHECK (take.notesPassedThrough >= 1);
 }
+
+//==============================================================================
+// The walking bass. Same grid, same seeding discipline, one note to the beat.
+
+namespace
+{
+    int pitchClassOf (int midiNote) { return ((midiNote % 12) + 12) % 12; }
+
+    int rootPitchClassOf (const std::string& symbol)
+    {
+        const auto chord = ChordSymbol::parse (symbol);
+        CHECK (chord.has_value());
+        return static_cast<int> (chord->root());
+    }
+}
+
+TEST ("a walking line plays one note on every beat")
+{
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 |");
+    const auto line = walkingBass (chart, 0, 3, 5);
+
+    CHECK_EQ (line.size(), std::size_t (16));
+
+    for (std::size_t i = 0; i < line.size(); ++i)
+    {
+        // Walking is what the name says: on the beat, never between.
+        CHECK_EQ (line[i].at.tick, 0);
+        CHECK_EQ (line[i].at.beat, static_cast<int> (i % 4));
+        CHECK_EQ (line[i].measureIndex, static_cast<int> (i / 4));
+    }
+}
+
+TEST ("the root lands on the beat the chord arrives")
+{
+    // The one note a walking line is not free about - it is what states the
+    // harmony, and everything else is travel between two of them.
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Ebmaj7 |");
+
+    for (std::uint32_t seed = 0; seed < 20; ++seed)
+        for (const auto& note : walkingBass (chart, 0, 3, seed))
+            if (note.role == BassRole::root)
+            {
+                CHECK_EQ (note.at.beat, 0);
+                CHECK_EQ (pitchClassOf (note.midiNote), rootPitchClassOf (note.chordSymbol));
+            }
+}
+
+TEST ("a bar of two chords puts a root under each of them")
+{
+    const auto chart = chartOf ("| Dm7 G7 | Cmaj7 |");
+    const auto line = walkingBass (chart, 0, 1, 3);
+
+    CHECK_EQ (pitchClassOf (line[0].midiNote), rootPitchClassOf ("Dm7"));
+    CHECK (line[0].role == BassRole::root);
+
+    // The second chord arrives halfway through the bar, so its root does too.
+    CHECK_EQ (pitchClassOf (line[2].midiNote), rootPitchClassOf ("G7"));
+    CHECK (line[2].role == BassRole::root);
+}
+
+TEST ("the beat before a change leads into the next root")
+{
+    /*  A semitone either side, or a fifth. Those are the approaches every bass
+        player has, and between them they are what makes a line sound like
+        walking rather than like an arpeggio repeated once a bar. */
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Ebmaj7 | Am7 | D7 | Gmaj7 | Gmaj7 |");
+
+    for (std::uint32_t seed = 0; seed < 20; ++seed)
+    {
+        const auto line = walkingBass (chart, 0, 7, seed);
+
+        for (std::size_t i = 0; i + 1 < line.size(); ++i)
+        {
+            if (line[i].role != BassRole::approach)
+                continue;
+
+            const auto gap = std::abs (line[i + 1].midiNote - line[i].midiNote);
+
+            CHECK (gap == 1 || gap == 7 || gap == 5 || gap == 11 || gap == 13);
+        }
+    }
+}
+
+TEST ("a walking line never plays the same note twice in a row")
+{
+    // The first version of this played D, C, D, D over one bar of Dm7, because
+    // "the nearest chord tone" walks straight back where it came from. A run
+    // that knows where it has to be by its last beat does not.
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 | Cm7 | F7 | Bbmaj7 | Bbmaj7 |");
+
+    for (std::uint32_t seed = 0; seed < 30; ++seed)
+    {
+        const auto line = walkingBass (chart, 0, 7, seed);
+
+        for (std::size_t i = 1; i < line.size(); ++i)
+            CHECK (line[i].midiNote != line[i - 1].midiNote);
+    }
+}
+
+TEST ("a walking line stays on the instrument")
+{
+    /*  Voice leading on its own climbs: every note reaches for the nearest
+        next one, and a tune that rises takes the line off the top of the bass
+        inside a chorus. The range is what stops that, so the test is a
+        progression that keeps rising. */
+    const auto climbing = chartOf ("| Cmaj7 | Ebmaj7 | Gbmaj7 | Amaj7 | Cmaj7 | Ebmaj7 |"
+                                   " Gbmaj7 | Amaj7 | Cmaj7 | Ebmaj7 | Gbmaj7 | Amaj7 |");
+
+    for (std::uint32_t seed = 0; seed < 12; ++seed)
+        for (const auto& note : walkingBass (climbing, 0, 11, seed))
+        {
+            CHECK (note.midiNote >= lowestBassNote);
+            CHECK (note.midiNote <= highestBassNote);
+        }
+}
+
+TEST ("a walking line steps rather than leaping about")
+{
+    // Walking is the word. A line that jumps a tenth every beat is doing
+    // something else, whatever notes it picks.
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 | Cm7 | F7 | Bbmaj7 | Bbmaj7 |");
+    const auto line = walkingBass (chart, 0, 7, 9);
+
+    auto biggest = 0;
+
+    for (std::size_t i = 1; i < line.size(); ++i)
+        biggest = std::max (biggest, std::abs (line[i].midiNote - line[i - 1].midiNote));
+
+    CHECK (biggest <= 12);
+}
+
+TEST ("the same seed walks the same line, and a different one does not")
+{
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 |");
+
+    const auto one = walkingBass (chart, 0, 3, 4);
+    const auto same = walkingBass (chart, 0, 3, 4);
+
+    CHECK_EQ (one.size(), same.size());
+
+    for (std::size_t i = 0; i < one.size(); ++i)
+        CHECK_EQ (one[i].midiNote, same[i].midiNote);
+
+    // Different seeds should not reliably give the same line - if they did the
+    // seed would be decoration.
+    auto anyDifferent = false;
+
+    for (std::uint32_t seed = 0; seed < 12; ++seed)
+    {
+        const auto other = walkingBass (chart, 0, 3, seed);
+
+        for (std::size_t i = 0; i < one.size() && i < other.size(); ++i)
+            if (other[i].midiNote != one[i].midiNote)
+                anyDifferent = true;
+    }
+
+    CHECK (anyDifferent);
+}
+
+TEST ("a waltz walks in three")
+{
+    const auto waltz = chartOf ("| Dm7 | G7 | Cmaj7 |", 3);
+    const auto line = walkingBass (waltz, 0, 2, 6);
+
+    CHECK_EQ (line.size(), std::size_t (9));
+
+    for (const auto& note : line)
+        CHECK (note.at.beat >= 0 && note.at.beat < 3);
+}

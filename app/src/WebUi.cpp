@@ -88,6 +88,9 @@ namespace
 
         if (name == "jazzCompStyles")        return api::compStyles();
 
+        if (name == "jazzWalkingBass")
+            return api::walkingBass (text (0).c_str(), number (1), number (2), number (3));
+
         if (name == "jazzCompPlan")
             return api::compPlan (text (0).c_str(), text (1).c_str(),
                                   number (2), number (3), number (4));
@@ -234,6 +237,22 @@ void WebUi::handleSound (const var& request)
             for (const auto& note : *notes)
                 sound.noteOn (static_cast<int> (note), 0.8f);
     }
+    else if (what == "bank")
+    {
+        // Which recorded instrument the player's own keys use. The band's are
+        // named on each message instead, because three instruments may be on
+        // three different sounds at once.
+        sound.setPlayerBank (object->getProperty ("bank").toString().toStdString());
+    }
+    else if (what == "bass")
+    {
+        const auto note = static_cast<int> (object->getProperty ("note"));
+
+        if (note > 0)
+            sound.bassNote (note, object->getProperty ("bank").toString().toStdString());
+        else
+            sound.stopBass();
+    }
     else if (what == "comp")
     {
         // A channel of its own, not a chord: it must not silence what the
@@ -247,7 +266,7 @@ void WebUi::handleSound (const var& request)
         if (notes.empty())
             sound.stopComping();
         else
-            sound.compChord (notes);
+            sound.compChord (notes, object->getProperty ("bank").toString().toStdString());
     }
     else if (what == "click")
     {

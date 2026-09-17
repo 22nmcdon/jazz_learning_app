@@ -126,6 +126,12 @@ JAZZ_EXPORT const char* jazzCompPlan (const char* progressionText, const char* s
                                       fromBar, toBar, seed));
 }
 
+JAZZ_EXPORT const char* jazzWalkingBass (const char* progressionText, int fromBar,
+                                         int toBar, int seed)
+{
+    return hold (jazz::api::walkingBass (orEmpty (progressionText), fromBar, toBar, seed));
+}
+
 //==============================================================================
 // Solo practice. These four carry a take, which lives in jazz::api rather than
 // here - a transport remembers nothing.

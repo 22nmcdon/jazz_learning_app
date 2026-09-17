@@ -1437,6 +1437,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           <div class="menu-group" role="radiogroup" aria-label="Sound">
             <span class="menu-title">Sound</span>
             <label class="menu-option"><input type="radio" name="soundBank" value="ep" checked> Electric piano</label>
+            <label class="menu-option"><input type="radio" name="soundBank" value="grand"> Grand piano</label>
             <label class="menu-option"><input type="radio" name="soundBank" value="silent"> Silent</label>
             <p class="menu-note" id="soundNote">Browsers start audio on the first click, so the first key you press may be quiet.</p>
           </div>
@@ -1503,12 +1504,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
                 <label class="menu-option">
                   <input type="checkbox" id="compPiano"> Piano comping
                 </label>
-                <!-- Named but not offered. A rhythm section is three
-                     instruments and this is one of them; leaving the other two
-                     off the list entirely would say the feature is finished. -->
-                <label class="menu-option" title="Not built yet">
-                  <input type="checkbox" disabled> Bass walking <em class="later">later</em>
+                <label class="menu-option">
+                  <input type="checkbox" id="compBass"> Bass walking
                 </label>
+                <!-- Named but not offered. A rhythm section is three
+                     instruments; leaving the last one off the list entirely
+                     would say the feature is finished. -->
                 <label class="menu-option" title="Not built yet">
                   <input type="checkbox" disabled> Drums <em class="later">later</em>
                 </label>
@@ -1530,6 +1531,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
                 <select class="menu-select" id="compSound"></select>
                 <p class="menu-note">The same sounds the Practice menu offers, chosen
                   separately - the band is not playing your instrument.</p>
+              </div>
+
+              <div class="menu-group">
+                <span class="menu-title">Bass sound</span>
+                <label class="sr-only" for="bassSound">Bass sound</label>
+                <select class="menu-select" id="bassSound"></select>
+                <p class="menu-note">An upright and an electric, both recorded. Nobody
+                  practises voicings on a bass, so these are the band's alone.</p>
               </div>
             </div>
           </div>
@@ -1647,7 +1656,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 371 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 380 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -1801,9 +1810,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       </li>
       <li>
         <b>Bring a band.</b> <i>Comping</i>, above the chart, puts a piano behind you: two-handed
-        rootless voicings, each led from the chord before rather than spelled afresh, in whichever
-        sound you pick for it. In time it plays along with the clock; static, each bar sounds as
-        you land on it. A bass player and a drummer are named there and not built yet.
+        rootless voicings, each led from the chord before rather than spelled afresh, and a bass
+        player walking one note to the beat under it. Pick a comping style and a sound for each -
+        the grand piano and both basses are recordings. In time they play along with the clock;
+        static, each bar sounds as you land on it. A drummer is named there and not built yet.
       </li>
       <li>
         <b>Every bar keeps its own score.</b> A bar you have played over carries a strip in
@@ -2057,7 +2067,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "shareRow", "copyShare", "shareStatus", "shareLink",
    "helpButton", "helpDialog", "helpClose",
    "compingButton", "compingPanel", "compPiano", "compSound", "compingNote",
-   "compStyle", "compStyleNote",
+   "compStyle", "compStyleNote", "compBass", "bassSound",
    "playStatic", "playLive", "playingNote", "metreRow", "tempo", "timeSig", "countInRow", "countIn",
    "loopRow", "loopFrom", "loopTo", "beatRow",
    "colophonEngine", "colophonFraming", "colophonBuild",
@@ -3545,8 +3555,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var barsIn = Math.floor((index - countInBeats) / transport.beats);
     var barIndex = loop.from + (((barsIn % loop.bars) + loop.bars) % loop.bars);
 
+    // Braced, because there are two of them now and an unbraced `if` quietly
+    // booked the bass on every beat rather than on the downbeat - four times
+    // the notes, all of them in the right places, which is the kind of wrong
+    // that sounds merely thick rather than broken.
     if (! isCountIn && inBar === 0)
+    {
       compBar(barIndex, when, secondsPerBeat());
+      bassBar(barIndex, when, secondsPerBeat());
+    }
 
     bookVisual(when, function () {
       if (!transport.running) return;
@@ -4297,27 +4314,42 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   /** The band's sound list is the page's one registry of sounds, not a second
       copy of it: a bank added to SOUND_BANKS appears in both menus. */
-  function fillCompSounds() {
-    el.compSound.textContent = "";
+  function fillFromBanks(picker, banks, chosen) {
+    picker.textContent = "";
 
-    Object.keys(SOUND_BANKS).forEach(function (key) {
+    Object.keys(banks).forEach(function (key) {
       var option = document.createElement("option");
       option.value = key;
-      option.textContent = SOUND_BANKS[key].name;
-      el.compSound.appendChild(option);
+      option.textContent = banks[key].name;
+      picker.appendChild(option);
     });
 
-    el.compSound.value = comping.bank;
+    picker.value = chosen;
+  }
+
+  function fillCompSounds() {
+    fillFromBanks(el.compSound, SOUND_BANKS, comping.bank);
+    fillFromBanks(el.bassSound, BASS_BANKS, comping.bassBank);
+  }
+
+  /** The button wears whether anyone at all is playing, not just the piano. */
+  function updateCompingButton() {
+    el.compingButton.setAttribute("aria-pressed",
+                                  comping.piano || comping.bass ? "true" : "false");
   }
 
   el.compPiano.addEventListener("change", function () {
     comping.piano = el.compPiano.checked;
-    el.compingButton.setAttribute("aria-pressed", comping.piano ? "true" : "false");
+    updateCompingButton();
 
     if (!comping.piano) {
-      stopComping();
+      forgetBookedComping();
+      stopCompVoices();
+      comping.notes = [];
       return;
     }
+
+    loadBankSample(SOUND_BANKS[comping.bank]);
 
     // Turned on over a chart that is not moving, the band has to say something
     // now - otherwise the toggle looks broken until the next bar change.
@@ -4378,6 +4410,25 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   el.compSound.addEventListener("change", function () {
     comping.bank = el.compSound.value;
     if (comping.bank === "silent") stopCompVoices();
+    else loadBankSample(SOUND_BANKS[comping.bank]);
+  });
+
+  el.compBass.addEventListener("change", function () {
+    comping.bass = el.compBass.checked;
+    updateCompingButton();
+
+    if (!comping.bass) {
+      stopBassVoice();
+      return;
+    }
+
+    loadBankSample(BASS_BANKS[comping.bassBank]);
+  });
+
+  el.bassSound.addEventListener("change", function () {
+    comping.bassBank = el.bassSound.value;
+    if (comping.bassBank === "silent") stopBassVoice();
+    else loadBankSample(BASS_BANKS[comping.bassBank]);
   });
 
   async function applyStyle(style) {
@@ -4467,12 +4518,104 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // `voices` is the player's, keyed by note so a key retriggers its own note.
   // `compVoices` is the band's, a plain list because nothing ever asks it for
   // one note back - a comp only ever replaces itself, all of it at once.
-  var audio = { ctx: null, master: null, voices: {}, compVoices: [], bank: "ep" };
+  var audio = { ctx: null, master: null, voices: {}, compVoices: [], bassVoice: null, bank: "ep" };
 
+  /*  Two kinds of bank, one registry. A synthesised bank builds a voice from
+      oscillators; a recorded one names a file, the note it was played at, and
+      keeps the decoded audio once it has been fetched. Everything downstream
+      asks `voiceFor()` and does not care which kind it got. */
   var SOUND_BANKS = {
     ep: { name: "Electric piano", buildVoice: buildElectricPianoVoice },
+    grand: { name: "Grand piano", sample: "piano-grand.wav", rootNote: 65 },   // F4
     silent: { name: "Silent", buildVoice: null }
   };
+
+  /*  The band's basses. Kept apart from the list above because they are not
+      instruments a *player* can choose - nobody practises voicings on a double
+      bass - and a sound menu offering one would be offering a mistake. */
+  var BASS_BANKS = {
+    upright: { name: "Upright bass", sample: "bass-upright.wav", rootNote: 36 },   // C2
+    electric: { name: "Electric bass", sample: "bass-electric.wav", rootNote: 36 },
+    silent: { name: "Silent", buildVoice: null }
+  };
+
+  /** What the app calls this bank, or "" for the synthesised one.
+
+      The app has the same recordings compiled in under these names, so the two
+      shells end up on the same instrument from one word crossing the bridge.
+  */
+  function sampledName(key) {
+    var bank = bankNamed(key);
+    return bank && bank.sample ? bank.sample.replace(/^(bass|piano)-/, "").replace(/\.wav$/, "") : "";
+  }
+
+  function bankNamed(key) {
+    return SOUND_BANKS[key] || BASS_BANKS[key] || null;
+  }
+
+  /** Fetches and decodes a recorded instrument, once.
+
+      Lazily, because a visitor who never turns the band on should not pay for
+      three recordings to read a chord chart - and only on the web, because in
+      the app the sound is native and these files are compiled into it.
+  */
+  async function loadBankSample(bank) {
+    if (!bank || !bank.sample || bank.audio || bank.loading) return;
+
+    var ctx = audioContext();
+    if (ctx === null) return;
+
+    bank.loading = true;
+
+    try {
+      var response = await fetch("assets/" + bank.sample);
+      bank.audio = await ctx.decodeAudioData(await response.arrayBuffer());
+    } catch (e) {
+      // A recording that will not arrive is a bank that falls back to silence
+      // rather than a page that breaks; `voiceFor` returns null and the caller
+      // plays nothing.
+      bank.failed = true;
+    }
+
+    bank.loading = false;
+  }
+
+  /** One voice from a bank, whichever kind it is.
+
+      The shape is the synth's - an output to connect, an amp to fade, a stop -
+      so that the comp, the player's keys and the bass all schedule the same way
+      whether they are sounding oscillators or a recording.
+  */
+  function voiceFor(bank, midiNote, velocity, when) {
+    var ctx = audioContext();
+    if (ctx === null || !bank) return null;
+
+    if (bank.buildVoice) return bank.buildVoice(ctx, noteFrequency(midiNote), velocity, when);
+
+    if (!bank.audio) { loadBankSample(bank); return null; }
+
+    var source = ctx.createBufferSource();
+    source.buffer = bank.audio;
+
+    // Faster for a higher note, slower for a lower one. That is the whole of
+    // pitching a recording, and why a note two octaves up is a quarter as long.
+    source.playbackRate.value = noteFrequency(midiNote) / noteFrequency(bank.rootNote);
+
+    var amp = ctx.createGain();
+    amp.gain.setValueAtTime(velocity, when);
+
+    source.connect(amp);
+    source.start(when);
+
+    var length = bank.audio.duration / source.playbackRate.value;
+
+    return {
+      output: amp,
+      amp: amp,
+      stop: function (at) { try { source.stop(at); } catch (e) { /* already stopped */ } },
+      stopAt: when + length
+    };
+  }
 
   function noteFrequency(midiNote) {
     return 440 * Math.pow(2, (midiNote - 69) / 12);
@@ -4541,6 +4684,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function playNote(midiNote, velocity) {
     var bank = SOUND_BANKS[audio.bank];
     if (!bank || bank.buildVoice === null) return;
+    if (bank.sample && !bank.audio) { loadBankSample(bank); return; }
 
     // In the app the piano is native, next to the MIDI devices - the same
     // instrument whether the note came from a key, a chord button or a pedal.
@@ -4558,7 +4702,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     stopNote(midiNote, 0.02);
 
     var when = ctx.currentTime;
-    var voice = bank.buildVoice(ctx, noteFrequency(midiNote), velocity, when);
+    var voice = voiceFor(bank, midiNote, velocity, when);
+    if (voice === null) return;
+
     voice.output.connect(audio.master);
     voice.stop(voice.stopAt);
     audio.voices[midiNote] = voice;
@@ -4599,7 +4745,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   function playChord(notes) {
     var bank = SOUND_BANKS[audio.bank];
-    if (!bank || bank.buildVoice === null) return;
+    if (!bank || (bank.buildVoice === null && !bank.sample)) return;
 
     // One message rather than one per note, so the app sounds them together.
     if (native !== null) {
@@ -4630,8 +4776,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         the next chord, and a voicing has to be led from the one before it - so
         neither can be done reactively. It also replaced a promise chain: with
         the whole plan in hand there is nothing left to race. */
+    bass: false,
+    bassBank: "upright",
+
     plan: null,
     planFor: "",     // the chart, style and range the plan was made for
+    bassPlan: null,
+    bassPlanFor: "",
     seed: 1,
 
     /*  The voicing last played by the *static* path, handed back to the engine
@@ -4673,6 +4824,103 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function forgetCompPlan() {
     comping.plan = null;
     comping.planFor = "";
+    comping.bassPlan = null;
+    comping.bassPlanFor = "";
+  }
+
+  /** The walking line for the loop as it stands, if it is not in hand.
+
+      Its own call and its own plan rather than a field on the comp's: the bass
+      walks whatever the piano is doing, and a change of comping style should
+      not make the bass player start again.
+  */
+  async function ensureBassPlan() {
+    var loop = loopRange();
+    var key = [state.progression, loop.from, loop.to, comping.seed].join("|");
+
+    if (comping.bassPlan !== null && comping.bassPlanFor === key) return comping.bassPlan;
+
+    var result = await call("jazzWalkingBass", ["string", "number", "number", "number"],
+                            [state.progression, loop.from, loop.to, comping.seed]);
+
+    if (result === null || !result.ok) return null;
+
+    comping.bassPlan = result;
+    comping.bassPlanFor = key;
+    return result;
+  }
+
+  /** Sounds one note of the walking line, at @p when on the web. */
+  function playBassNote(midiNote, when) {
+    var bank = BASS_BANKS[comping.bassBank];
+    if (!bank || (bank.buildVoice === null && !bank.sample)) return;
+
+    if (native !== null) {
+      native.send("jazz.sound", { what: "bass", note: midiNote,
+                                  bank: sampledName(comping.bassBank) });
+      return;
+    }
+
+    var ctx = audioContext();
+    if (ctx === null) return;
+
+    if (ctx.state === "suspended") ctx.resume();
+
+    var at = when || ctx.currentTime;
+
+    // One note at a time. A bass player has one note sounding; letting the last
+    // one ring under the next turns a walking line into a drone.
+    stopBassVoice(at);
+
+    var voice = voiceFor(bank, midiNote, 0.6, at);
+    if (voice === null) return;
+
+    voice.output.connect(audio.master);
+    voice.stop(voice.stopAt);
+    audio.bassVoice = voice;
+  }
+
+  function stopBassVoice(when) {
+    if (native !== null) {
+      native.send("jazz.sound", { what: "bass", note: 0 });
+      return;
+    }
+
+    var voice = audio.bassVoice;
+    if (!voice || audio.ctx === null) return;
+
+    var at = when || audio.ctx.currentTime;
+
+    voice.amp.gain.cancelScheduledValues(at);
+    voice.amp.gain.setValueAtTime(Math.max(voice.amp.gain.value, 0.0001), at);
+    voice.amp.gain.exponentialRampToValueAtTime(0.0001, at + 0.12);
+    voice.stop(at + 0.14);
+
+    audio.bassVoice = null;
+  }
+
+  /** Books the walking line for one bar, note by note. */
+  function bassBar(measureIndex, barStart, secondsPerBeatNow) {
+    if (!comping.bass || state.mode !== "solo") return;
+
+    ensureBassPlan().then(function (plan) {
+      if (plan === null || !comping.bass || !transport.running) return;
+
+      plan.notes.forEach(function (note) {
+        if (note.bar !== measureIndex) return;
+
+        var when = barStart + beatsIntoBar(note.beat, note.tick) * secondsPerBeatNow;
+
+        if (native !== null) {
+          comping.booked.push(window.setTimeout(function () {
+            if (comping.bass && transport.running) playBassNote(note.midi, 0);
+          }, Math.max(0, (when - transportNow()) * 1000)));
+          return;
+        }
+
+        playBassNote(note.midi, when);
+      });
+    });
   }
 
   /*  Swing lives here and nowhere else.
@@ -4736,10 +4984,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       reason: the bridge has no "play this at" argument. */
   function playCompVoicing(notes, when) {
     var bank = SOUND_BANKS[comping.bank];
-    if (!bank || bank.buildVoice === null) return;
+    if (!bank || (bank.buildVoice === null && !bank.sample)) return;
 
     if (native !== null) {
-      native.send("jazz.sound", { what: "comp", notes: notes });
+      native.send("jazz.sound", { what: "comp", notes: notes, bank: sampledName(comping.bank) });
       return;
     }
 
@@ -4755,7 +5003,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     notes.forEach(function (note) {
       // Under the soloist rather than beside them: an accompaniment at the
       // same level as the line played over it is not an accompaniment.
-      var voice = bank.buildVoice(ctx, noteFrequency(note), 0.45, at);
+      var voice = voiceFor(bank, note, 0.45, at);
+      if (voice === null) return;
+
       voice.output.connect(audio.master);
       voice.stop(voice.stopAt);
       audio.compVoices.push(voice);
@@ -4793,6 +5043,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function stopComping() {
     forgetBookedComping();
     stopCompVoices();
+    stopBassVoice();
     comping.notes = [];
   }
 
@@ -5036,7 +5287,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     radio.addEventListener("change", function () {
       if (!radio.checked) return;
       audio.bank = radio.value;
+
+      // The app has the same recordings compiled in, so one word across the
+      // bridge puts both shells on the same instrument.
+      if (native !== null)
+        native.send("jazz.sound", { what: "bank", bank: sampledName(radio.value) });
+
       if (radio.value === "silent") stopAllNotes();
+      else loadBankSample(SOUND_BANKS[radio.value]);
       updateVoicingControls();
     });
   });
