@@ -17,9 +17,12 @@ Two core modules make up the POC:
    against a loaded chart and get feedback on whether the voicing played matches the chord
    symbol's intent, with suggestions to improve it.
 
-Full feature rationale and rationale for design decisions live in
-`jazz_learning_app_design.pdf` (design doc) — treat that as the source of truth for *why*,
-and this file as the source of truth for *how to work in the repo*.
+`docs/jazz_learning_app_design.pdf` is the original design doc. Treat it as the source of
+truth for the *original* why - the scope that was set before any of this was built - and
+not for how anything works now. Everything decided since is in this file and in
+`README.md`, and where the two disagree the PDF is the older one: it predates the move to
+a webview UI, solo practice, and most of what the engine does. This file is the source of
+truth for how to work in the repo.
 
 ## Architecture — Read This Before Adding Code
 
@@ -68,27 +71,38 @@ Rules of thumb when writing or reviewing code:
 
 ## UI Strategy: One Responsive UI, Not Per-Platform UIs
 
-There is a single shared UI component library across desktop and mobile — not separate
-UI codebases. Components adapt via **size classes** (compact / regular / expanded) using
-JUCE's FlexBox/Grid, not hardcoded pixel layouts.
+There is one interface and it is `web/index.html` - the same file in the desktop app and
+on the website. Not a shared component library: literally one document. So "responsive"
+here means CSS, and every mechanism below is the page's own. This section used to describe
+JUCE FlexBox, size classes and `juce::Component`s, which is what the UI was built from
+before the webview carried everything; none of that survived the move, and a session
+following it would rebuild exactly the thing the Architecture section says not to.
 
-When building or modifying a UI component, account for:
+- **One breakpoint, at 760px.** Below it the sheet head centres, the bars grow, and every
+  dialog becomes a bottom sheet rather than a floating panel. That is the whole of it -
+  there are no compact / regular / expanded size classes. Add a second breakpoint only
+  when something actually collides, which `JAZZ_UI_SIZE=430x860` or a 430px viewport is
+  for.
+- **Interaction affordances differ by input type, not by platform**, and the page gets
+  that from the same rule rather than from a decision: the scale picker is a floating
+  dialog where there is room and a bottom sheet where there is not, and it is one dialog
+  either way. Do not write a second version of a screen for touch.
+- **Mode-specific anything is `data-mode` plus `applyMode`**, never a second component -
+  see *Both modes* below. The same goes for anything that differs between the two shells:
+  `onTheWeb`, not a fork.
+- **The on-screen keyboard is a first-class input method, not a fallback.** Two octaves by
+  default; a connected MIDI keyboard widens it to four, and a note played outside that
+  widens it further, so a two-handed voicing is never partly off the end. There is no
+  octave-shift control - the widening replaced the need for one. In chord practice the
+  keys latch, so fingers landing one after another add up to one voicing with no
+  multi-touch event handling anywhere; in solo practice they do not latch, because a line
+  is played rather than held.
+- **Tap targets are sized for touch at every width**, not only below the breakpoint, so
+  there is no "touch mode" to get out of step with.
 
-- **Layout breakpoints** — multi-pane views (e.g. chart + analyzer side-by-side) collapse
-  to tabbed/stacked views below a width threshold.
-- **Interaction affordances differ by input type, not by platform** — e.g. the reharm
-  assistant's scale picker is a dropdown on desktop/mouse, a bottom sheet on touch. Same
-  underlying component, different presentation — implement as one component with a
-  presentation mode, not two components.
-- **On-screen keyboard** is a first-class input method, not a fallback. It must support
-  **multi-touch chord entry**: simultaneous touches should register as one voicing event,
-  not a stream of individual note-on messages. Default visible octave range is
-  size-class–dependent (1–2 octaves, octave-shiftable, on compact/mobile).
-- **Popups/modals**: desktop can use hover states and small floating popups; touch needs
-  larger tap targets and full-sheet modals.
-
-Do not introduce a second, platform-specific UI layer without discussing it first — this
-was a deliberate scope decision to keep a solo/small-team POC maintainable.
+Do not introduce a second, platform-specific UI layer - a JUCE screen, a native sheet, a
+separate stylesheet for mobile. That was a deliberate scope decision, and the JUCE
+component UI was removed to honour it.
 
 ## Input Scope (Current Phase)
 
@@ -434,9 +448,12 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
   wire it into UI components second.
 - When adding a new UI component, default to one component with size-class-aware
   behavior rather than platform-conditional forks.
-- Match existing JUCE idioms in the codebase (Projucer-generated project structure,
-  `juce::Component` lifecycle, `resized()`/`paint()` conventions) rather than introducing
-  new patterns.
+- **JUCE idioms apply to the shell, and the shell is small.** `WebUi` is the only
+  `juce::Component` with a layout worth the name - it holds the webview and little else -
+  and `MidiDeviceInput` is the only other JUCE class with any UI, for the Bluetooth
+  pairing sheet. Match JUCE's conventions there. Everywhere else "the UI" means
+  `web/index.html`, and a new `resized()` or `paint()` is a sign something is being built
+  in the wrong layer.
 - **A wider chord vocabulary is not a better one.** `ChordIdentifier` scores every name it
   knows against the notes, so each one added competes with all the rest — and a name no
   player writes still wins whenever it happens to account for every note. Adding the
@@ -460,11 +477,6 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
   exceed what one hand can reach. Without the first, the app hands you a voicing and then
   marks it wrong; without the second, it hands you one nobody can play. Changing a shape
   table means re-running those, not just the tests for the shape you touched.
-- **Paint and layout must not each do the arithmetic.** Several components here draw
-  headings and lay out buttons down the same column, and when `paint` and `resized` each
-  counted the heights themselves they drifted apart the first time a row changed size.
-  Each of those now works its positions out once — `PracticeMenu::layout`,
-  `MainComponent::frame` and the rest — and both read the result.
 - **Check the narrow window before calling a layout done.** Everything that overlapped on
   a phone-sized window looked perfect on a desktop one: the sheet head, the chart tools
   and the dock's buttons all collided at 420px while being fine at 1200px.

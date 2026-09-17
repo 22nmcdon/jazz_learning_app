@@ -8,7 +8,7 @@ This repository is the proof of concept for the two core modules in
 **Reharmonisation Assistant** and the **Real-Time Chord/Voicing Analyzer**, sharing one
 responsive UI and one UI-agnostic theory engine.
 
-![Desktop layout](docs/screenshot-desktop.png)
+![Chord practice: a shell voicing read back, with the low-interval limit flagged](docs/screenshot-desktop.png)
 
 ## Layout
 
@@ -110,6 +110,8 @@ to the original harmony outwards, each with a difficulty tag and a rationale. Ch
 rewrites the bar.
 
 ### Solo practice
+
+![Solo practice: a take in progress, each bar scored, an enclosure landing](docs/screenshot-solo.png)
 
 The keys do not latch here, because a line is played rather than held: each note sounds,
 is read back - **E4 - the 9th, scale tone, in D Dorian** - and lets go. Every note is read
