@@ -194,7 +194,7 @@ TEST ("a note the line never closed is reported as soon as nothing can reach it"
     // the verdict is true - and so the moment the wire carries it.
     const auto json = soloPlayNote (72);
 
-    CHECK (contains (json, "\"stranded\":[\"Db4\"]"));
+    CHECK (contains (json, "\"stranded\":[{\"name\":\"Db4\",\"midi\":61}]"));
     CHECK (contains (json, "\"outside\":1"));
 }
 
@@ -233,7 +233,7 @@ TEST ("a note that resolves an earlier one says so, and resends the bar it chang
     soloSetBar (1, "Cmaj7", "", "");
     const auto json = soloPlayNote (60);
 
-    CHECK (contains (json, "\"resolved\":[\"Db4\"]"));
+    CHECK (contains (json, "\"resolved\":[{\"name\":\"Db4\",\"midi\":61}]"));
     CHECK (contains (json, "\"bar\":{\"index\":1"));
     CHECK (contains (json, "\"index\":0"));          // the earlier bar came back too
     CHECK (contains (json, "\"approachTones\":1"));

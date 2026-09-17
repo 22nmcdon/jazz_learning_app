@@ -239,6 +239,17 @@ the line between what exists and what does not. Do not re-plan something in the 
       and often the wrong one; "a semitone up lands on D" is true whichever way the line
       goes, and it is the thing that would have helped. The bad news is delivered late
       instead, by `strandedByLastNote()`, which is the earliest it is honestly available.
+    - **Late feedback has to be loud, or it is not feedback.** The verdict is about a note
+      one or two behind the one under the player's fingers, so a sentence appended to a
+      soft grey line went unread - which was reported, and fairly. Two things carry it
+      now. The `.open-note` chip sits in one fixed place in the dock and is the colour of
+      the answer: grey and breathing while the note is open, clay when it landed, rust
+      when it did not. And **the key the open note was played on stays lit**, rather than
+      fading like every other note, until the line says what it was - then it relights in
+      the verdict's colour for a beat and goes out. The keyboard is where the player is
+      looking, so that is where the answer goes. `.solo-live` reserves two lines' height
+      for the same reason `.feedback` does: a dock that grew and shrank under the keyboard
+      would be worse than the thing it is pointing out.
   Three more things follow, and each is load-bearing:
     - **Nothing that has settled is ever revisited.** A note that landed stays landed and a
       note left hanging stays hanging, so a reading never changes twice under a player who

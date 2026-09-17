@@ -737,10 +737,15 @@ std::string soloPlayNote (int midiNote)
     alsoSend (resolved);
     alsoSend (stranded);
 
+    // Name and pitch both: a shell that wants to light the key that note was
+    // played on should not have to work the pitch back out of "Db4".
     const auto names = [] (const std::vector<LineNote>& notes)
     {
         return jsonArray (notes, [] (const LineNote& earlier)
-                          { return quoted (midiNoteName (earlier.midiNote)); });
+                          {
+                              return "{\"name\":" + quoted (midiNoteName (earlier.midiNote))
+                                   + ",\"midi\":" + std::to_string (earlier.midiNote) + "}";
+                          });
     };
 
     return hold ("{\"ok\":true,\"taking\":" + std::string (analyzer.isTaking() ? "true" : "false")

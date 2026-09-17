@@ -281,15 +281,57 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 .arm-btn[aria-pressed="true"] .arm-dot { background: var(--rust); border-color: var(--rust); }
 @media (prefers-reduced-motion: no-preference) {
   .arm-btn[aria-pressed="true"] .arm-dot { animation: armed 1.6s ease-in-out infinite; }
+
+  /* An open note breathes, on the key and on the chip, for as long as it is
+     open. Nothing else on the page moves, so a player catches it out of the
+     corner of an eye - which is the whole job, because the moment it lands or
+     does not is two notes after the one they are listening to. */
+  .key.sounded[data-colour="unresolved"],
+  .open-note:not([data-colour]) { animation: waiting 1.3s ease-in-out infinite; }
 }
 @keyframes armed { 50% { opacity: 0.25; } }
+@keyframes waiting { 50% { opacity: 0.45; } }
 
 /* The whole dock takes the armed colour too, so the state is readable from
    across a room rather than only from the one button that set it. */
 .dock.armed { box-shadow: inset 0 3px 0 var(--rust); }
 
 .solo { margin-bottom: 12px; }
-.solo-live { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+/* Two lines' worth, always. The chip below comes and goes with every note, and
+   a dock that grew and shrank under the keyboard would be worse than the thing
+   it is trying to point out. `.feedback` reserves its height the same way. */
+.solo-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  align-content: flex-start;
+  gap: 6px 14px;
+  min-height: 46px;
+}
+
+/* What is happening to the note the line has left open - the one thing in solo
+   practice that changes after the fact, and so the one thing that has to be
+   impossible to miss. Grey while it is open, then the colour of whichever way
+   it went. */
+.open-note {
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  padding: 2px 10px 3px;
+  border-radius: 20px;
+  border: 1px solid var(--unresolved);
+  background: rgba(182, 175, 164, 0.2);
+  color: var(--text);
+  white-space: nowrap;
+}
+.open-note[data-colour="approach"] {
+  border-color: var(--approach);
+  background: rgba(201, 143, 118, 0.2);
+}
+.open-note[data-colour="outside"] {
+  border-color: var(--rust);
+  background: rgba(164, 85, 63, 0.14);
+  color: var(--rust);
+}
 /* Set like `.verdict`, because it is the same line doing the same job one mode
    over: the dock's answer to what you just played. They had drifted to
    different faces and sizes, which made the two modes look like two pages. */
@@ -1349,6 +1391,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <div class="solo-live">
         <span class="solo-note" id="soloNote">Play a note over the bar you are on.</span>
         <span class="solo-against" id="soloAgainst"></span>
+        <span class="open-note" id="soloOpen" hidden></span>
         <!-- The chord mode's "Expecting Dm7" says what this bar asks for. The
              scale is the answer to the same question here - it is what every
              note is read against - so it is written in the same place, in the
@@ -1826,7 +1869,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "helpButton", "helpDialog", "helpClose",
    "playStatic", "playLive", "liveDialog", "liveClose",
    "colophonEngine", "colophonFraming", "colophonBuild",
-   "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloScale", "soloTallies",
+   "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloScale", "soloOpen",
+   "soloTallies",
    "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
    "armTake", "armLabel", "practising",
    "scaleStyle", "scaleStyleNote", "chordTabs"].forEach(function (id) {
@@ -2599,7 +2643,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
      with its own bar's numbers: the engine is answering the question once and
      the page is remembering the answers. Disarming replaces the lot with the
      engine's own breakdown, so a long take cannot drift from it. */
-  var solo = { armed: false, bar: null, take: null, bars: {} };
+  var solo = { armed: false, bar: null, take: null, bars: {}, open: {} };
 
   /** Draws what the take made of each bar, on the bars.
 
@@ -2837,6 +2881,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     stopAllNotes();
     state.heldNotes = [];
     pedal.holding = [];
+    el.soloOpen.hidden = true;
+    forgetOpenKeys();
     paintKeyboard();
 
     if (soloing) {
@@ -2918,6 +2964,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.soloNote.textContent = "Take running. Play over the bar you are on - move along the chart and it keeps counting.";
     el.soloNote.removeAttribute("data-colour");
     el.soloAgainst.textContent = "";
+    el.soloOpen.hidden = true;
+    forgetOpenKeys();
 
     await soloMoveToBar();
   }
@@ -2937,6 +2985,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     solo.bars = {};
     (result.bars || []).forEach(function (bar) { solo.bars[bar.index] = bar; });
     paintTakeMarks();
+
+    // Ending a take closes everything still open, so nothing is waiting on an
+    // answer any more and no key should still be asking for one.
+    el.soloOpen.hidden = true;
+    forgetOpenKeys();
 
     drawSummary(result);
   }
@@ -2977,33 +3030,56 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (note.scale) against += ", in " + note.scale;
     if (note.avoid) against += ". A semitone above a chord tone - fine passing through, not to land on";
 
-    // A note the line has opened. Naming what would close it is the one thing
-    // that is true at this instant - "that was wrong" is a guess, and the whole
-    // reason for the open tier is that the guess is often wrong.
+    // The chip beside this says which way an open note went; this says the part
+    // that needs room - which note would close it, and what that note is.
     if (note.colour === "unresolved" && note.wantsToReach)
-      against += ". " + stepName(note.wantsToReachStep) + " lands on " + note.wantsToReach
+      against += ". " + stepName(note.wantsToReachStep).replace(/^a/, "A")
+               + " lands on " + note.wantsToReach
                + (note.wantsToReachDegree ? " - " + degreeName(note.wantsToReachDegree) : "");
-
-    // The point of the window is that the app stops calling a chromatic
-    // approach a mistake. If it only ever fixed the numbers quietly, nobody
-    // would find out it had learned to.
-    if ((result.resolved || []).length)
-      against += ". " + result.resolved.join(" and ")
-               + (result.resolved.length === 1 ? " before it was" : " before it were")
-               + " on the way here";
-
-    // And the other half: the notes the window has now passed without the line
-    // closing them. Late by construction - nothing could know sooner - and the
-    // only place the app ever says a note did not work.
-    if ((result.stranded || []).length)
-      against += ". " + result.stranded.join(" and ")
-               + (result.stranded.length === 1 ? " never found its way home"
-                                               : " never found their way home");
 
     el.soloAgainst.textContent = against ? against + "." : "";
 
-    flashKey(midiNote, note.colour);
+    // What became of the note the line left open. One chip, in one place, in
+    // the colour of the answer - because the answer is about a note one or two
+    // behind the one just played, and a sentence tacked onto the end of a grey
+    // line was missable enough that it was missed.
+    var resolved = result.resolved || [];
+    var stranded = result.stranded || [];
+
+    if (stranded.length) {
+      showOpenNote("outside", noteList(stranded) + " never landed");
+      stranded.forEach(function (earlier) { settleKey(earlier.midi, "outside"); });
+    } else if (resolved.length) {
+      showOpenNote("approach", noteList(resolved) + " landed on " + note.name);
+      resolved.forEach(function (earlier) { settleKey(earlier.midi, "approach"); });
+    } else if (note.colour === "unresolved") {
+      // Still open, so say what it is waiting for rather than what it cost.
+      showOpenNote("", note.wantsToReach ? note.name + " wants " + note.wantsToReach
+                                         : note.name + " is open");
+    } else {
+      el.soloOpen.hidden = true;
+    }
+
+    if (note.colour === "unresolved")
+      solo.open[midiNote] = (solo.open[midiNote] || 0) + 1;
+
+    // An open note holds its key rather than fading, so the thing waiting to be
+    // answered is still on screen when the answer comes.
+    flashKey(midiNote, note.colour, note.colour === "unresolved" ? 0 : undefined);
     drawTallies();
+  }
+
+  /** "Db4", or "Db4 and Eb4". */
+  function noteList(notes) {
+    return notes.map(function (earlier) { return earlier.name; }).join(" and ");
+  }
+
+  function showOpenNote(colour, text) {
+    el.soloOpen.hidden = false;
+    el.soloOpen.textContent = text;
+
+    if (colour) el.soloOpen.dataset.colour = colour;
+    else el.soloOpen.removeAttribute("data-colour");
   }
 
   /** "R" is not how anyone says it, and neither is "b3" on its own. */
@@ -3013,19 +3089,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   /** A signed number of semitones, said the way a player would. */
   function stepName(step) {
-    if (step === 1) return "A semitone up";
-    if (step === -1) return "A semitone down";
-    if (step === 2) return "A tone up";
-    if (step === -2) return "A tone down";
+    if (step === 1) return "a semitone up";
+    if (step === -1) return "a semitone down";
+    if (step === 2) return "a tone up";
+    if (step === -2) return "a tone down";
 
-    return "A step";
+    return "a step away";
   }
 
   /** Colours the key that was just played, for as long as it sounds.
 
       Solo mode does not latch: a line is played, not held, so the key lights
       and lets go rather than staying down the way a voicing's keys do. */
-  function flashKey(midiNote, colour) {
+  function flashKey(midiNote, colour, holdFor) {
     var key = el.keyboard.querySelector('.key[data-note="' + midiNote + '"]');
     if (!key) return;
 
@@ -3033,10 +3109,43 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     key.classList.add("sounded");
 
     window.clearTimeout(key.soloTimer);
+
+    // An open note is not given a time to go out at: it stays lit, breathing,
+    // until the line says what it was. Everything else fades the way a note
+    // fades.
+    if (holdFor === 0) return;
+
     key.soloTimer = window.setTimeout(function () {
       key.classList.remove("sounded");
       key.removeAttribute("data-colour");
-    }, 420);
+    }, holdFor || 420);
+  }
+
+  /** Lights the key an open note was played on, in the colour of what became
+      of it, and lets it go.
+
+      The note being answered here is one or two notes behind the one under the
+      player's fingers, so the answer has to arrive somewhere they are already
+      looking. The keyboard is where they are looking. */
+  function settleKey(midiNote, colour) {
+    solo.open[midiNote] = Math.max(0, (solo.open[midiNote] || 0) - 1);
+
+    if (solo.open[midiNote] === 0) flashKey(midiNote, colour, 1600);
+  }
+
+  /** Clears every key still lit for a note nobody is going to answer. */
+  function forgetOpenKeys() {
+    Object.keys(solo.open).forEach(function (midiNote) {
+      var key = el.keyboard.querySelector('.key[data-note="' + midiNote + '"]');
+
+      if (key) {
+        window.clearTimeout(key.soloTimer);
+        key.classList.remove("sounded");
+        key.removeAttribute("data-colour");
+      }
+    });
+
+    solo.open = {};
   }
 
   function tallyText(label, stats) {

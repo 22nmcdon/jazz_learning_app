@@ -243,15 +243,23 @@ try {
         + `(${(await page.locator("#soloAgainst").innerText()).replace(/\s+/g, " ")})`,
         /lands on/.test(await page.locator("#soloAgainst").innerText()));
 
+  // The chip is the part a player actually catches: it sits in one place, it
+  // has no colour while the note is open, and the key stays lit under it.
+  check(`the open note is on show, uncoloured, while it is open `
+        + `(${await page.locator("#soloOpen").innerText()})`,
+        (await page.locator("#soloOpen").isVisible())
+        && (await page.locator("#soloOpen").getAttribute("data-colour")) === null
+        && (await page.locator('#keyboard .key[data-note="61"].sounded').count()) === 1);
+
   // ...and once the line steps home from it, it is read again as an approach.
   // This is the one behaviour in solo mode that changes after the fact, so it
   // is the one worth driving end to end rather than trusting.
   await soloKey(62).click();
   await page.waitForFunction(
-    () => document.querySelector("#soloAgainst").textContent.includes("on the way here"),
+    () => document.querySelector("#soloOpen").dataset.colour === "approach",
     null, { timeout: 10000 });
   check(`an outside note that steps home is read again as an approach `
-        + `(${(await page.locator("#soloAgainst").innerText()).replace(/\s+/g, " ")})`, true);
+        + `(${await page.locator("#soloOpen").innerText()})`, true);
 
   // The other half, and the only place the app ever says a note did not work:
   // an open note the line never closed. The note straight after it lands
@@ -260,10 +268,15 @@ try {
   await soloKey(61).click();
   await soloKey(69).click();
   await page.waitForFunction(
-    () => document.querySelector("#soloAgainst").textContent.includes("never found"),
+    () => document.querySelector("#soloOpen").dataset.colour === "outside",
     null, { timeout: 10000 });
   check(`a note the line never closed is flagged by the very next note `
-        + `(${(await page.locator("#soloAgainst").innerText()).replace(/\s+/g, " ")})`, true);
+        + `(${await page.locator("#soloOpen").innerText()})`, true);
+
+  // And the key it was played on lights in the verdict's colour, because the
+  // note being answered is behind the one under the player's fingers.
+  check("the key the open note was played on says how it ended",
+        (await page.locator('#keyboard .key[data-note="61"]').getAttribute("data-colour")) === "outside");
 
   // Nothing is counted until a take is armed.
   check("nothing is counted before arming", await page.locator("#soloTallies").isHidden());

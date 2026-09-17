@@ -165,10 +165,16 @@ then - *a semitone up lands on D4, the root* - which is both more use than a ver
 correct whichever way the line goes.
 
 Then the next note usually decides it. Step home, or take the target from both sides first,
-and the note is read again as an **approach note** that counts as landing; the dock says so
-(*Db4 before it was on the way here*) rather than quietly improving a number you are looking
-at. Play something that lands somewhere else instead and it settles as **outside** right
-there, and the dock says so - *Db4 never found its way home*. Only one thing buys another
+and the note is read again as an **approach note** that counts as landing. Play something
+that lands somewhere else instead and it settles as **outside** right there.
+
+Either way the answer is about a note you have already played past, so it arrives somewhere
+you are still looking. A chip in the dock holds the open note and changes colour with it -
+*Db4 wants D4* in grey while it is open, *Db4 landed on D4* in the approach colour, *Db4
+never landed* in the outside one. And the key you played it on **stays lit** rather than
+fading like every other note, until the line says what it was; then it relights in that
+colour for a moment and goes out. Nothing else on the keyboard moves while a note is open,
+which is what makes it catchable out of the corner of an eye. Only one thing buys another
 note: a second outside note with room between the two for a target, because that is an
 enclosure still in play and closing the first one would be calling a miss on a phrase about
 to land. Either way it can happen across a barline, because running chromatically into
