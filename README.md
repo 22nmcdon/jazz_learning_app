@@ -170,8 +170,10 @@ that lands somewhere else instead and it settles as **outside** right there.
 
 Either way the answer is about a note you have already played past, so it arrives somewhere
 you are still looking. A chip in the dock holds the open note and changes colour with it -
-*Db4 wants D4* in grey while it is open, *Db4 landed on D4* in the approach colour, *Db4
-never landed* in the outside one. And the key you played it on **stays lit** rather than
+*Db4 wants D4* in grey while it is open, *Db4 landed on D4* in green, *Db4 never landed* in
+the outside colour. One note can do both at once - play Eb, then F#, then G, and the G is
+the chromatic approach the F# earned while the Eb is left having enclosed nothing - so the
+chip names both and each key takes its own colour. And the key you played it on **stays lit** rather than
 fading like every other note, until the line says what it was; then it relights in that
 colour for a moment and goes out. Nothing else on the keyboard moves while a note is open,
 which is what makes it catchable out of the corner of an eye. Only one thing buys another

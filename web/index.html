@@ -39,11 +39,13 @@
      practice modes - which is why, unlike the rest of the palette, they do not
      move when the mode does.
 
-     Approach is rust with the weight taken out of it on purpose: the note was
-     outside by pitch and the line meant it, so it belongs to the outside hue
-     and not beside it. */
+     Approach used to be a lightened rust, on the reasoning that the note was
+     outside by pitch. That was the wrong thing to say: an approach note is the
+     line working, and a colour on the way to the one that means "did not land"
+     reads as a near miss. It is green, like the chord tone - a lighter, fresher
+     one, because it is a different kind of right. */
   --sage: #6f7f63;
-  --approach: #c98f76;
+  --approach: #8fae6d;
   --rust: #a4553f;
 
   /* A note the line has opened and not yet closed. Deliberately the quietest
@@ -325,7 +327,7 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 }
 .open-note[data-colour="approach"] {
   border-color: var(--approach);
-  background: rgba(201, 143, 118, 0.2);
+  background: rgba(143, 174, 109, 0.22);
 }
 .open-note[data-colour="outside"] {
   border-color: var(--rust);
@@ -3046,12 +3048,24 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var resolved = result.resolved || [];
     var stranded = result.stranded || [];
 
-    if (stranded.length) {
+    /*  Both, never one or the other. A single note can close one open note and
+        pass the window on another in the same breath - play Eb, then F#, then
+        G, and the G is a chromatic approach the F# earned while the Eb is left
+        having enclosed nothing. Taking only the first list that had anything
+        in it meant the other one's key was never let go of, and it sat there
+        lit and breathing for the rest of the take, asking a question that had
+        already been answered. */
+    resolved.forEach(function (earlier) { settleKey(earlier.midi, "approach"); });
+    stranded.forEach(function (earlier) { settleKey(earlier.midi, "outside"); });
+
+    if (stranded.length && resolved.length) {
+      // The chip takes the colour of the news worth acting on, and names both,
+      // because both keys just changed colour and neither should be a mystery.
+      showOpenNote("outside", noteList(resolved) + " landed, " + noteList(stranded) + " did not");
+    } else if (stranded.length) {
       showOpenNote("outside", noteList(stranded) + " never landed");
-      stranded.forEach(function (earlier) { settleKey(earlier.midi, "outside"); });
     } else if (resolved.length) {
       showOpenNote("approach", noteList(resolved) + " landed on " + note.name);
-      resolved.forEach(function (earlier) { settleKey(earlier.midi, "approach"); });
     } else if (note.colour === "unresolved") {
       // Still open, so say what it is waiting for rather than what it cost.
       showOpenNote("", note.wantsToReach ? note.name + " wants " + note.wantsToReach

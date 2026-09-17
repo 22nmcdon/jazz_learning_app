@@ -278,6 +278,21 @@ try {
   check("the key the open note was played on says how it ended",
         (await page.locator('#keyboard .key[data-note="61"]').getAttribute("data-colour")) === "outside");
 
+  /*  One note can close one open note and pass the window on another at the
+      same moment: G is the chromatic approach the F# earned, and the Eb before
+      it enclosed nothing. Both have to be let go of - handling only the first
+      list that had anything in it left the other key lit and breathing for the
+      rest of the take. */
+  for (const note of [63, 66, 67]) { await soloKey(note).click(); await page.waitForTimeout(120); }
+
+  await page.waitForFunction(
+    () => document.querySelector('#keyboard .key[data-note="66"]').dataset.colour === "approach",
+    null, { timeout: 10000 });
+  check(`a note that closes one and strands another lets go of both `
+        + `(${await page.locator("#soloOpen").innerText()})`,
+        (await page.locator('#keyboard .key[data-note="63"]').getAttribute("data-colour")) === "outside"
+        && (await page.locator('#keyboard .key.sounded[data-colour="unresolved"]').count()) === 0);
+
   // Nothing is counted until a take is armed.
   check("nothing is counted before arming", await page.locator("#soloTallies").isHidden());
 

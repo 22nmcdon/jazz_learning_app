@@ -243,7 +243,7 @@ the line between what exists and what does not. Do not re-plan something in the 
       one or two behind the one under the player's fingers, so a sentence appended to a
       soft grey line went unread - which was reported, and fairly. Two things carry it
       now. The `.open-note` chip sits in one fixed place in the dock and is the colour of
-      the answer: grey and breathing while the note is open, clay when it landed, rust
+      the answer: grey and breathing while the note is open, green when it landed, rust
       when it did not. And **the key the open note was played on stays lit**, rather than
       fading like every other note, until the line says what it was - then it relights in
       the verdict's colour for a beat and goes out. The keyboard is where the player is
@@ -259,6 +259,12 @@ the line between what exists and what does not. Do not re-plan something in the 
       which is why `soloPlayNote` returns a `bars` array of everything that moved, not just
       the bar the note landed in. A shell reading only `bar` leaves the previous one
       drawing numbers that stopped being true.
+    - **One note can resolve one open note and strand another, in the same breath.**
+      `resolvedByLastNote()` and `strandedByLastNote()` are not alternatives, and a shell
+      must read both every time. Play Eb, then F#, then G: the G is the chromatic approach
+      the F# earned, while the Eb is left having enclosed nothing. The page took whichever
+      list had something in it first, so the other note's key was never let go of and sat
+      lit and breathing for the rest of the take, asking a question that had been answered.
     - **It runs without a take.** Notes outside a take go into a three-note `recent` buffer,
       resolved and settled there but never counted. Someone who has not armed anything is
       the person most likely to be trying chromatic notes, and telling them those were
@@ -310,9 +316,12 @@ the line between what exists and what does not. Do not re-plan something in the 
 - **The mode changes the light, not the meaning.** `body.soloing` redefines the palette
   tokens - paper down a stop and cooler, the rose accent to slate - and every rule in the
   sheet already reads those, so the whole page restyles without a single component being
-  named. Two things are deliberately fixed. Sage, gold and rust mean chord tone, scale
-  tone and outside in both modes, so they do not move and the mode accent is picked to
-  stay clear of all three. And the keys are left out of the fade: they answer a finger,
+  named. Two things are deliberately fixed. Sage, gold, a lighter green and rust mean
+  chord tone, scale tone, approach note and outside in both modes, so they do not move and
+  the mode accent is picked to stay clear of all four. Approach was a lightened rust once,
+  on the reasoning that the note is outside by pitch; that was the wrong thing to say. An
+  approach note is the line working, and a colour on the way to the one that means "did
+  not land" reads as a near miss. And the keys are left out of the fade: they answer a finger,
   and a key that took 280ms to look pressed would be worse at the job it does every
   second. A colour written as `rgba(...)` rather than a token is a colour that will not
   follow the mode - that is what `--wash` exists for.
