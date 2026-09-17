@@ -1518,6 +1518,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
               </div>
 
               <div class="menu-group">
+                <span class="menu-title">Comping style</span>
+                <label class="sr-only" for="compStyle">Comping style</label>
+                <select class="menu-select" id="compStyle"></select>
+                <p class="menu-note" id="compStyleNote"></p>
+              </div>
+
+              <div class="menu-group">
                 <span class="menu-title">Piano sound</span>
                 <label class="sr-only" for="compSound">Piano sound</label>
                 <select class="menu-select" id="compSound"></select>
@@ -1640,7 +1647,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 338 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 371 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -2050,6 +2057,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "shareRow", "copyShare", "shareStatus", "shareLink",
    "helpButton", "helpDialog", "helpClose",
    "compingButton", "compingPanel", "compPiano", "compSound", "compingNote",
+   "compStyle", "compStyleNote",
    "playStatic", "playLive", "playingNote", "metreRow", "tempo", "timeSig", "countInRow", "countIn",
    "loopRow", "loopFrom", "loopTo", "beatRow",
    "colophonEngine", "colophonFraming", "colophonBuild",
@@ -2341,6 +2349,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // A chart of a different length is a different loop. Kept if it still
     // fits, widened to the whole tune if it does not.
     fillLoopRange();
+
+    // A different chart is a different comp, whatever the style.
+    forgetCompPlan();
     return true;
   }
 
@@ -3125,8 +3136,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       }
     }
 
-    var result = await call("jazzSoloSetBar", ["number", "string", "string", "string"],
-                            [state.selected, chord, soloChosenScale(), soloStyle()]);
+    // The metre rides along, because which beats are strong is the metre's
+    // business and the metre is the chart's. Nothing over there reads it
+    // unless the notes also arrive with positions.
+    var result = await call("jazzSoloSetBar",
+                            ["number", "string", "string", "string", "number"],
+                            [state.selected, chord, soloChosenScale(), soloStyle(),
+                             transport.beats]);
 
     if (result === null || !result.ok) return;
 
@@ -3228,7 +3244,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   /** One note, read against the bar it landed in. */
   async function soloNotePlayed(midiNote) {
-    var result = await call("jazzSoloPlayNote", ["number"], [midiNote]);
+    /*  Where the clock says we are, or nowhere. The page turns its own time
+        into a position on the engine's grid and sends that; the engine still
+        has no idea what a second is. Static, there is no position to send and
+        -1 says so - which is not the downbeat, and the engine is careful to
+        treat it as neither. */
+    var at = positionNow();
+
+    var result = await call("jazzSoloPlayNote", ["number", "number", "number"],
+                            [midiNote, at === null ? -1 : at.beat, at === null ? 0 : at.tick]);
 
     if (result === null || !result.ok) return;
 
@@ -3369,6 +3393,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // what the app gives up is a few milliseconds of jitter on the click itself.
 
   var TRANSPORT_TICK = 12;        // ms between looks at the clock
+
+  /*  The engine's grid, mirrored here because the page has to do arithmetic in
+      it. Checked against what the engine actually says rather than trusted:
+      `compPlan` sends its own `ticksPerBeat` with every plan, and a page whose
+      copy had gone stale would place every offbeat wrongly and look fine. */
+  var ENGINE_TICKS_PER_BEAT = 24;
 
   /*  The metres the head offers. A chart may arrive in something that is not
       on this list - the reader will hand back whatever the link said - so its
@@ -3516,7 +3546,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var barIndex = loop.from + (((barsIn % loop.bars) + loop.bars) % loop.bars);
 
     if (! isCountIn && inBar === 0)
-      compBar(barIndex, when, secondsPerBeat(), transport.beats);
+      compBar(barIndex, when, secondsPerBeat());
 
     bookVisual(when, function () {
       if (!transport.running) return;
@@ -4294,6 +4324,57 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     compSelectedBar();
   });
 
+  /** The comping styles are the engine's list, like the scale styles are.
+
+      A second copy of it in the page is a second copy to go stale the first
+      time a style is added to the catalogue - and the style's own words come
+      with it, so the page never has to describe a style it does not define.
+  */
+  async function loadCompStyles() {
+    var result = await call("jazzCompStyles", [], []);
+
+    if (result === null || !result.ok) {
+      // The same failure the scale styles guard against: an engine cached from
+      // the last deploy has no such call, and an empty menu with a chip saying
+      // "ready" is the most confusing thing this page can do.
+      el.compStyleNote.textContent = "This engine is out of date - reload to get the comping styles.";
+      return;
+    }
+
+    comping.styles = result.styles;
+    el.compStyle.textContent = "";
+
+    result.styles.forEach(function (style) {
+      var option = document.createElement("option");
+      option.value = style.key;
+      option.textContent = style.name;
+      el.compStyle.appendChild(option);
+    });
+
+    if (!result.styles.some(function (style) { return style.key === comping.style; }))
+      comping.style = result.styles.length ? result.styles[0].key : "";
+
+    el.compStyle.value = comping.style;
+    describeCompStyle();
+  }
+
+  function describeCompStyle() {
+    var chosen = (comping.styles || []).filter(function (style) {
+      return style.key === comping.style;
+    })[0];
+
+    el.compStyleNote.textContent = chosen ? chosen.summary : "";
+  }
+
+  el.compStyle.addEventListener("change", function () {
+    comping.style = el.compStyle.value;
+    describeCompStyle();
+
+    // A different style is a different plan, and the one in hand is now the
+    // wrong one - including mid-roll, where the next bar picks up the change.
+    forgetCompPlan();
+  });
+
   el.compSound.addEventListener("change", function () {
     comping.bank = el.compSound.value;
     if (comping.bank === "silent") stopCompVoices();
@@ -4540,18 +4621,115 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   var comping = {
     piano: false,
     bank: "ep",
+    style: "charleston",
+    styles: [],
 
-    // The voicing last played, handed back to the engine so it can lead the
-    // next one from it. The page holds it rather than the engine, because a
-    // take is the one stateful corner over there and this need not be another.
+    /*  The plan: what the band plays over the loop, worked out in one go by
+        the engine rather than decided beat by beat here. Two things need more
+        than the moment they are played in - a hit that anticipates has to know
+        the next chord, and a voicing has to be led from the one before it - so
+        neither can be done reactively. It also replaced a promise chain: with
+        the whole plan in hand there is nothing left to race. */
+    plan: null,
+    planFor: "",     // the chart, style and range the plan was made for
+    seed: 1,
+
+    /*  The voicing last played by the *static* path, handed back to the engine
+        so it can lead the next one from it. A rolling comp does not need this:
+        its plan is led through in the engine, in one pass. */
     notes: [],
-
-    // Engine calls resolve out of order if they are allowed to race, and two
-    // bars comped from the same "previous" voicing is exactly the jump this
-    // feature exists to avoid. One chain, so they land in the order booked.
-    chain: Promise.resolve(),
     booked: []
   };
+
+  /** Everything that decides what a plan should be, as one string.
+
+      A plan made for a different chart, style or loop is the wrong plan, and
+      comparing this is cheaper and more honest than remembering which of the
+      four changed. */
+  function compPlanKey() {
+    var loop = loopRange();
+
+    return [state.progression, comping.style, loop.from, loop.to, comping.seed].join("|");
+  }
+
+  /** Fetches the plan for the loop as it now stands, if it is not in hand. */
+  async function ensureCompPlan() {
+    var key = compPlanKey();
+
+    if (comping.plan !== null && comping.planFor === key) return comping.plan;
+
+    var loop = loopRange();
+    var result = await call("jazzCompPlan", ["string", "string", "number", "number", "number"],
+                            [state.progression, comping.style, loop.from, loop.to, comping.seed]);
+
+    if (result === null || !result.ok) return null;
+
+    comping.plan = result;
+    comping.planFor = key;
+    return result;
+  }
+
+  /** Throws the plan away, so the next bar asks for a fresh one. */
+  function forgetCompPlan() {
+    comping.plan = null;
+    comping.planFor = "";
+  }
+
+  /*  Swing lives here and nowhere else.
+
+      The engine writes eighths as eighths - tick 12 of 24 - because swing is a
+      way of playing them, not a different place to write them. This is where
+      that becomes true: the upbeat eighth of a swung feel is sounded two
+      thirds of the way through the beat, which is the second of three
+      triplets, which is exactly what swinging an eighth means.
+
+      Only the eighth moves. A triplet is already written where it is played
+      and a sixteenth in a swung bar is not swung either, so remapping every
+      subdivision - the obvious thing to do - would have bent a ballad's
+      triplets into something nobody plays. */
+  var SWUNG_EIGHTH_TICK = 16;
+
+  function swinging() {
+    // The chart says. iReal Pro charts carry a feel - "Medium Swing", "Bossa
+    // Nova", "Even 8ths" - and this is the one word that decides it.
+    return /swing/i.test(state.chartStyle || el.sheetStyle.textContent || "");
+  }
+
+  /** A position on the engine's grid, as an offset in beats from the downbeat. */
+  function beatsIntoBar(beat, tick) {
+    var played = swinging() && tick === ENGINE_TICKS_PER_BEAT / 2
+                   ? SWUNG_EIGHTH_TICK : tick;
+
+    return beat + played / ENGINE_TICKS_PER_BEAT;
+  }
+
+  /** The other direction: a moment, as beats into the bar, written back onto
+      the grid the engine reads.
+
+      Quantised to the positions music is actually written in rather than to
+      the nearest of twenty-four, so a note played a little early is the note
+      the player meant. The swung eighth folds back onto the straight one,
+      because in a swung bar they are not two positions - they are the same
+      moment, and the engine should see the one a player would write.
+  */
+  function positionFromBeats(beats) {
+    var beat = Math.floor(beats);
+    var fraction = beats - beat;
+    var wanted = fraction * ENGINE_TICKS_PER_BEAT;
+
+    // 0, a sixteenth, a triplet, an eighth, two triplets, three sixteenths.
+    var slots = [0, 6, 8, 12, 16, 18, ENGINE_TICKS_PER_BEAT];
+    var tick = slots[0];
+
+    slots.forEach(function (slot) {
+      if (Math.abs(slot - wanted) < Math.abs(tick - wanted)) tick = slot;
+    });
+
+    if (tick === ENGINE_TICKS_PER_BEAT) { beat += 1; tick = 0; }
+    if (swinging() && tick === SWUNG_EIGHTH_TICK) tick = ENGINE_TICKS_PER_BEAT / 2;
+
+    return { beat: beat, tick: tick };
+  }
 
   /** Sounds a comped voicing, at @p when on the web and as soon as it arrives
       in the app - the same inequality the click already has, and for the same
@@ -4618,59 +4796,68 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     comping.notes = [];
   }
 
-  /** What the comp plays over one bar, and when.
+  /** Where in the bar the clock says we are, right now.
 
-      The rhythm is the chart's own: each chord is struck where it falls, and a
-      chord holding the whole bar is struck again halfway through it, which is
-      enough to sound like playing rather than like a pad. Nothing here is a
-      rhythm the engine knows about - it still has no time in it.
+      The page's whole side of the bargain: it owns the transport, so it is the
+      only thing that can turn a moment into a position - and it hands the
+      engine the position, never the moment. Null when nothing is rolling,
+      which is not the downbeat and must not be sent as one.
   */
-  function compHitsFor(measure, barStart, secondsPerBeatNow, beatsInBar) {
-    var hits = [];
-    var chords = (measure && measure.chords) || [];
-    var beatsSoFar = 0;
+  function positionNow() {
+    if (!transport.running || transport.counting) return null;
 
-    chords.forEach(function (chord) {
-      var length = chord.beats || beatsInBar;
+    var beat = secondsPerBeat();
+    var elapsed = transportNow() - transport.origin;
+    var countIn = transport.countIn ? transport.beats : 0;
+    var beatsIn = elapsed / beat - countIn;
 
-      hits.push({ symbol: chord.symbol, when: barStart + beatsSoFar * secondsPerBeatNow });
+    if (beatsIn < 0) return null;
 
-      // Long enough to say twice. Half of it, to the nearest half beat, so the
-      // second hit lands somewhere a player would put one.
-      if (length >= beatsInBar && length >= 2) {
-        var offset = Math.round(length / 2 * 2) / 2;
-        hits.push({ symbol: chord.symbol, when: barStart + (beatsSoFar + offset) * secondsPerBeatNow });
-      }
+    var within = beatsIn - Math.floor(beatsIn / transport.beats) * transport.beats;
 
-      beatsSoFar += length;
-    });
-
-    return hits;
+    return positionFromBeats(within);
   }
 
-  /** Books the comp for one bar, asking the engine for each voicing in turn.
+  /** Books everything the plan has for one bar, at the moment each hit is due.
 
-      The transport books beats ahead of time, which is what gives the engine
-      room to answer before the hit is due. An answer that arrives late is
-      played late rather than dropped: silence would be the worse of the two.
+      The transport books a bar ahead, which is what gives the engine room to
+      answer with a plan before the first hit of that bar comes round. A plan
+      that arrives late is played late rather than dropped: the alternative is
+      a bar of silence nobody asked for.
   */
-  function compBar(measureIndex, barStart, secondsPerBeatNow, beatsInBar) {
+  function compBar(measureIndex, barStart, secondsPerBeatNow) {
     if (!comping.piano || state.mode !== "solo") return;
 
-    var measure = state.measures[measureIndex];
-    if (!measure) return;
+    // `ensureCompPlan` is this page's own async function, so it is a promise in
+    // both shells - unlike `call()`, which is not one on the web.
+    ensureCompPlan().then(function (plan) {
+      if (plan === null || !comping.piano || !transport.running) return;
 
-    compHitsFor(measure, barStart, secondsPerBeatNow, beatsInBar).forEach(function (hit) {
-      comping.chain = comping.chain.then(async function () {
-        if (!comping.piano) return;
+      // The engine sends its own resolution, so a page whose copy of it had
+      // drifted says so instead of quietly misplacing every offbeat.
+      // Thrown rather than logged, because the failure mode otherwise is
+      // silence with a straight face: every offbeat placed wrongly, and a comp
+      // that sounds merely bad rather than broken. Both shells report a thrown
+      // error, and the smoke test fails on one.
+      if (plan.ticksPerBeat !== ENGINE_TICKS_PER_BEAT)
+        throw new Error("comp plan is on a " + plan.ticksPerBeat
+                          + "-tick grid, the page expects " + ENGINE_TICKS_PER_BEAT);
 
-        var result = await call("jazzCompingVoicing", ["string", "string"],
-                                [hit.symbol, comping.notes.join(",")]);
+      plan.hits.forEach(function (hit) {
+        if (hit.bar !== measureIndex) return;
 
-        if (result === null || !result.ok || !result.notes.length) return;
+        var when = barStart + beatsIntoBar(hit.beat, hit.tick) * secondsPerBeatNow;
 
-        comping.notes = result.notes;
-        playCompVoicing(result.notes, hit.when);
+        // Scheduled where the web can schedule and booked where it cannot -
+        // the same split the click already lives with.
+        if (native !== null) {
+          comping.booked.push(window.setTimeout(function () {
+            if (comping.piano && transport.running) playCompVoicing(hit.notes, 0);
+          }, Math.max(0, (when - transportNow()) * 1000)));
+          return;
+        }
+
+        playCompVoicing(hit.notes, when);
       });
     });
   }
@@ -4679,24 +4866,26 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
       Without this the toggle does nothing at all until In time is switched on,
       and a control that does nothing is a control nobody trusts afterwards.
+      No rhythm to it, because there is no time to have a rhythm in - it is the
+      harmony, sounded, so you can hear what you are playing over.
   */
-  function compSelectedBar() {
+  async function compSelectedBar() {
     if (!comping.piano || state.mode !== "solo" || transport.running) return;
 
     var chord = selectedChord();
     if (!chord) return;
 
-    comping.chain = comping.chain.then(async function () {
-      if (!comping.piano) return;
+    // Awaited, not chained: `call()` hands back a plain value on the web and a
+    // promise in the app, and awaiting a plain value costs nothing while
+    // `.then` on one is a crash.
+    var result = await call("jazzCompingVoicing", ["string", "string"],
+                            [chord, comping.notes.join(",")]);
 
-      var result = await call("jazzCompingVoicing", ["string", "string"],
-                              [chord, comping.notes.join(",")]);
+    if (result === null || !result.ok || !result.notes.length) return;
+    if (!comping.piano || transport.running) return;
 
-      if (result === null || !result.ok || !result.notes.length) return;
-
-      comping.notes = result.notes;
-      playCompVoicing(result.notes, 0);
-    });
+    comping.notes = result.notes;
+    playCompVoicing(result.notes, 0);
   }
 
   /** Keeps the dock's controls honest about what is under the hands: Play
@@ -5238,6 +5427,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // is an engine; and the mode groups have to be put into the state they
     // describe rather than the state the markup happened to ship in.
     await loadScaleStyles();
+    await loadCompStyles();
     fillMetres();
     fillBeatRow();
     fillCompSounds();

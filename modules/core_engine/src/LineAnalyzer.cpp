@@ -42,6 +42,11 @@ namespace
     constexpr int narrowRange = 12;
     constexpr int notesBeforeRangeCounts = 8;
 
+    /*  Notes on strong beats before their share is worth naming. A bar or two
+        of them is not a habit, and the reading is about where a player puts
+        the harmony over a stretch of line rather than over one bar. */
+    constexpr int strongBeatsBeforeItCounts = 8;
+
     /** Rounded percentages of @p counts that add up to exactly 100.
 
         Rounding each share on its own gives three numbers that make 99 or 101
@@ -449,9 +454,28 @@ void LineAnalyzer::setTarget (int measureIndex, const ChordSymbol& chord)
     target = std::move (next);
 }
 
+LineNote LineAnalyzer::play (int midiNote, BarPosition where)
+{
+    /*  The position is attached before the note is read, so everything the
+        window does behind it - resolving, settling, and now marking the note
+        before it as passed through - can see it. */
+    pendingPosition = where;
+
+    auto note = play (midiNote);
+
+    pendingPosition.reset();
+
+    return note;
+}
+
 LineNote LineAnalyzer::play (int midiNote)
 {
     auto note = readAgainstTarget (midiNote);
+
+    note.at = pendingPosition;
+
+    if (pendingPosition.has_value())
+        note.onStrongBeat = isStrong (*pendingPosition, options.beatsPerBar);
 
     justResolved.clear();
     justStranded.clear();
@@ -474,6 +498,7 @@ LineNote LineAnalyzer::play (int midiNote)
 
     line.push_back (note);
 
+    markPassedThrough (line);
     resolveTail (line);
     settleTail (line);
 
@@ -487,6 +512,50 @@ LineNote LineAnalyzer::play (int midiNote)
             line.erase (line.begin());
 
     return note;
+}
+
+/** Says of the note before this one whether the line stayed on it.
+
+    The distinction the grid was wanted for, and the one thing here that could
+    not be said before a note carried a position. An avoid note passed through
+    at speed is what every bebop line does; the same note sat on is the one
+    that sounds like a mistake. Both are the same pitch against the same chord,
+    so nothing but the rhythm can tell them apart.
+
+    Filled in behind rather than at the time, because "passed through" is a
+    fact about the gap to the *next* note and that note has only just arrived.
+    An eighth is the boundary: at any tempo a player would call two notes an
+    eighth apart a run and two notes a beat apart two notes.
+
+    Silent when either note has no position, which is every note of a take
+    played without a clock.
+*/
+void LineAnalyzer::markPassedThrough (std::vector<LineNote>& line)
+{
+    if (line.size() < 2)
+        return;
+
+    auto& previous = line[line.size() - 2];
+    const auto& latest = line.back();
+
+    if (! previous.at.has_value() || ! latest.at.has_value())
+        return;
+
+    // Only a note worth asking the question about. A chord tone held for two
+    // bars is a held chord tone, not something the line sat on.
+    if (! previous.avoidNote
+        && previous.colour != NoteColour::outside
+        && previous.colour != NoteColour::unresolved)
+        return;
+
+    // Bars are whole numbers of beats apart, so the gap is measured in ticks
+    // across the barline rather than within one bar - a note on the and of
+    // four and the downbeat after it are an eighth apart, not a bar and a bit.
+    const auto barsApart = latest.measureIndex - previous.measureIndex;
+    const auto gap = latest.at->inTicks() - previous.at->inTicks()
+                       + barsApart * options.beatsPerBar * ticksPerBeat;
+
+    previous.passedThrough = gap > 0 && gap <= ticksFor (Subdivision::eighth);
 }
 
 /** Closes every open note the line can no longer reach.
@@ -694,6 +763,28 @@ TakeSummary LineAnalyzer::summary() const
         }
 
         count (existing->stats, note.colour);
+
+        // Where it sat in the bar, for the shells that gave a position. Both
+        // counts stay zero without one, which reads the same as "nothing
+        // landed on a strong beat" and is the honest answer.
+        if (note.onStrongBeat)
+        {
+            ++existing->notesOnStrongBeats;
+
+            if (note.colour == NoteColour::chordTone)
+                ++existing->chordTonesOnStrongBeats;
+        }
+
+        /*  Only the notes that have no other verdict. An approach note stepped
+            home, which is the reading that matters about it - saying it was
+            also passed through adds nothing and would count the line's best
+            notes among the ones being asked about. */
+        if (note.at.has_value()
+            && (note.avoidNote || note.colour == NoteColour::outside))
+        {
+            if (note.passedThrough) ++take.notesPassedThrough;
+            else                    ++take.notesSatOn;
+        }
     }
 
     // Which bars the line went over without ever colouring. Approach notes do
@@ -817,6 +908,51 @@ TakeSummary LineAnalyzer::summary() const
                                         : std::to_string (unresolved) + " of them")
             + " jumped again rather than stepping back. A leap opens a gap the ear wants"
               " filled; the note after it is where that happens.");
+    }
+
+    /*  The two rhythmic readings. Both are silent for a take played with no
+        clock, because every count behind them is zero - a shell that cannot
+        say where a note fell gets exactly the take it always got.
+
+        Words, never points, like every other shape reading. Where a note sits
+        in the bar does not make it a better or worse note, and the moment it
+        moved the score the score would stop being explainable. */
+    if (take.notesSatOn > 0 && take.notesSatOn * 2 > take.notesPassedThrough)
+        take.observations.push_back (
+            plural (take.notesSatOn, "note", "notes")
+            + " outside the harmony " + (take.notesSatOn == 1 ? "was" : "were")
+            + " sat on rather than passed through. The same note at speed is what every bebop"
+              " line is made of; it is the dwelling that the ear hears, not the note.");
+    else if (take.notesPassedThrough >= 3)
+        take.observations.push_back (
+            plural (take.notesPassedThrough, "note", "notes")
+            + " outside the harmony went by at an eighth or quicker - passed through rather"
+              " than sat on, which is what makes them read as line rather than as error.");
+
+    {
+        auto onStrong = 0;
+        auto chordTonesOnStrong = 0;
+
+        for (const auto& bar : take.bars)
+        {
+            onStrong += bar.notesOnStrongBeats;
+            chordTonesOnStrong += bar.chordTonesOnStrongBeats;
+        }
+
+        if (onStrong >= strongBeatsBeforeItCounts)
+        {
+            const auto share = chordTonesOnStrong * 100 / onStrong;
+
+            if (share < 40)
+                take.observations.push_back (
+                    "Only " + std::to_string (share) + "% of what landed on a strong beat was a"
+                    " chord tone. The beat is where the harmony is heard, so that is where the"
+                    " chord tones do the most work - the colour goes in between.");
+            else if (share >= 70)
+                take.observations.push_back (
+                    std::to_string (share) + "% of the notes on strong beats were chord tones."
+                    " The harmony is coming through clearly.");
+        }
     }
 
     if (take.overall.total() >= notesBeforeRangeCounts && take.rangeInSemitones() < narrowRange)

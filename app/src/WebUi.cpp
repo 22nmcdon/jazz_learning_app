@@ -86,14 +86,22 @@ namespace
         if (name == "jazzCompingVoicing")
             return api::compingVoicing (text (0).c_str(), text (1).c_str());
 
+        if (name == "jazzCompStyles")        return api::compStyles();
+
+        if (name == "jazzCompPlan")
+            return api::compPlan (text (0).c_str(), text (1).c_str(),
+                                  number (2), number (3), number (4));
+
         // Solo practice. The take these drive lives in jazz::api, so the app and
         // the browser behave the same way without this shell remembering a thing.
         if (name == "jazzSoloStartTake")     return api::soloStartTake();
         if (name == "jazzSoloEndTake")       return api::soloEndTake();
-        if (name == "jazzSoloPlayNote")      return api::soloPlayNote (number (0));
+        if (name == "jazzSoloPlayNote")
+            return api::soloPlayNote (number (0), number (1), number (2));
 
         if (name == "jazzSoloSetBar")
-            return api::soloSetBar (number (0), text (1).c_str(), text (2).c_str(), text (3).c_str());
+            return api::soloSetBar (number (0), text (1).c_str(), text (2).c_str(),
+                                    text (3).c_str(), number (4));
 
         return "{\"ok\":false,\"error\":\"No engine call named "
                + name.toStdString() + "\"}";

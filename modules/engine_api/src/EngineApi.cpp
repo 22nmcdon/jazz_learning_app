@@ -12,6 +12,7 @@
 #include "jazz/core/Chart.h"
 #include "jazz/core/ChartFormats.h"
 #include "jazz/core/ChordIdentifier.h"
+#include "jazz/core/Comping.h"
 #include "jazz/core/LineAnalyzer.h"
 #include "jazz/core/Reharmonizer.h"
 #include "jazz/core/ScaleSuggester.h"
@@ -243,6 +244,11 @@ namespace
              + ",\"wantsToReachStep\":" + std::to_string (note.wantsToReach > 0
                                                           ? note.wantsToReach - note.midiNote : 0)
              + ",\"chord\":" + quoted (note.chordSymbol)
+             // Where it fell, when the shell could say. "" rather than a
+             // position, so a page reading it cannot mistake a missing answer
+             // for the downbeat.
+             + ",\"at\":" + quoted (note.at.has_value() ? note.at->describe() : "")
+             + ",\"onStrongBeat\":" + (note.onStrongBeat ? "true" : "false")
              + ",\"bar\":" + std::to_string (note.measureIndex) + "}";
     }
 
@@ -723,6 +729,58 @@ std::string compingVoicing (const char* symbol, const char* previousNotesCsv)
                  + ",\"describe\":" + quoted (voicing.describe()) + "}");
 }
 
+std::string compStyles()
+{
+    return hold ("{\"ok\":true,\"styles\":"
+                 + jsonArray (core::compStyles(), [] (const CompStyleDefinition& style)
+                   {
+                       return "{\"key\":" + quoted (style.key)
+                            + ",\"name\":" + quoted (style.name)
+                            + ",\"summary\":" + quoted (style.summary)
+                            + ",\"feel\":" + quoted (subdivisionName (style.feel)) + "}";
+                   })
+                 + "}");
+}
+
+std::string compPlan (const char* progressionText, const char* styleKey,
+                      int fromBar, int toBar, int seed)
+{
+    const auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
+
+    if (! parsed.ok())
+        return hold (jsonError (parsed.error));
+
+    const auto& style = compStyleFor (styleKey != nullptr ? styleKey : "");
+    const auto plan = core::compPlan (*parsed.chart, style, fromBar, toBar,
+                                      static_cast<std::uint32_t> (seed));
+
+    /*  Positions go over as beat and tick rather than as a time. The shell owns
+        the clock and is the only thing that can turn one into the other, which
+        is the same division the transport already works to - and the reason
+        this plan can be handed to either shell unchanged. */
+    return hold ("{\"ok\":true,\"style\":" + quoted (style.key)
+                 + ",\"ticksPerBeat\":" + std::to_string (ticksPerBeat)
+                 + ",\"hits\":"
+                 + jsonArray (plan.hits, [] (const CompHit& hit)
+                   {
+                       std::string notes = "[";
+
+                       for (std::size_t i = 0; i < hit.midiNotes.size(); ++i)
+                           notes += (i > 0 ? "," : "") + std::to_string (hit.midiNotes[i]);
+
+                       notes += "]";
+
+                       return "{\"bar\":" + std::to_string (hit.measureIndex)
+                            + ",\"beat\":" + std::to_string (hit.at.beat)
+                            + ",\"tick\":" + std::to_string (hit.at.tick)
+                            + ",\"at\":" + quoted (hit.at.describe())
+                            + ",\"chord\":" + quoted (hit.chordSymbol)
+                            + ",\"anticipation\":" + (hit.anticipation ? "true" : "false")
+                            + ",\"notes\":" + notes + "}";
+                   })
+                 + "}");
+}
+
 //==============================================================================
 std::string soloStartTake()
 {
@@ -732,7 +790,7 @@ std::string soloStartTake()
 }
 
 std::string soloSetBar (int measureIndex, const char* symbol, const char* chosenScale,
-                        const char* style)
+                        const char* style, int beatsPerBar)
 {
     const auto chord = ChordSymbol::parse (symbol != nullptr ? symbol : "");
 
@@ -742,6 +800,10 @@ std::string soloSetBar (int measureIndex, const char* symbol, const char* chosen
     LineAnalyzer::Options options;
     options.chosenScale = chosenScale != nullptr ? chosenScale : "";
     options.style = style != nullptr ? style : "";
+
+    // Which beats are strong is the metre's business, and the metre is the
+    // chart's. Nothing reads it unless the shell also sends positions.
+    options.beatsPerBar = beatsPerBar > 0 ? beatsPerBar : 4;
 
     auto& analyzer = soloTake();
     analyzer.setOptions (options);
@@ -755,10 +817,16 @@ std::string soloSetBar (int measureIndex, const char* symbol, const char* chosen
                  + ",\"take\":{" + lineStatsJson (analyzer.stats()) + "}}");
 }
 
-std::string soloPlayNote (int midiNote)
+std::string soloPlayNote (int midiNote, int beat, int tick)
 {
     auto& analyzer = soloTake();
-    const auto note = analyzer.play (midiNote);
+
+    /*  A negative beat means the shell has no clock running and cannot say
+        where the note fell. There is no position that means "no position", so
+        it is signalled rather than encoded: a made-up downbeat would be read
+        as a real one.  */
+    const auto note = beat >= 0 ? analyzer.play (midiNote, BarPosition { beat, tick })
+                                : analyzer.play (midiNote);
     const auto& resolved = analyzer.resolvedByLastNote();
     const auto& stranded = analyzer.strandedByLastNote();
 

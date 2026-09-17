@@ -114,6 +114,18 @@ JAZZ_EXPORT const char* jazzCompingVoicing (const char* symbol, const char* prev
     return hold (jazz::api::compingVoicing (orEmpty (symbol), orEmpty (previousNotesCsv)));
 }
 
+JAZZ_EXPORT const char* jazzCompStyles()
+{
+    return hold (jazz::api::compStyles());
+}
+
+JAZZ_EXPORT const char* jazzCompPlan (const char* progressionText, const char* styleKey,
+                                      int fromBar, int toBar, int seed)
+{
+    return hold (jazz::api::compPlan (orEmpty (progressionText), orEmpty (styleKey),
+                                      fromBar, toBar, seed));
+}
+
 //==============================================================================
 // Solo practice. These four carry a take, which lives in jazz::api rather than
 // here - a transport remembers nothing.
@@ -124,15 +136,16 @@ JAZZ_EXPORT const char* jazzSoloStartTake()
 }
 
 JAZZ_EXPORT const char* jazzSoloSetBar (int measureIndex, const char* symbol,
-                                        const char* chosenScale, const char* style)
+                                        const char* chosenScale, const char* style,
+                                        int beatsPerBar)
 {
     return hold (jazz::api::soloSetBar (measureIndex, orEmpty (symbol),
-                                        orEmpty (chosenScale), orEmpty (style)));
+                                        orEmpty (chosenScale), orEmpty (style), beatsPerBar));
 }
 
-JAZZ_EXPORT const char* jazzSoloPlayNote (int midiNote)
+JAZZ_EXPORT const char* jazzSoloPlayNote (int midiNote, int beat, int tick)
 {
-    return hold (jazz::api::soloPlayNote (midiNote));
+    return hold (jazz::api::soloPlayNote (midiNote, beat, tick));
 }
 
 JAZZ_EXPORT const char* jazzSoloEndTake()

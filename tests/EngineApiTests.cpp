@@ -412,3 +412,90 @@ TEST ("a comping voicing is refused for something that is not a chord")
 {
     CHECK (contains (compingVoicing ("not a chord", ""), "\"ok\":false"));
 }
+
+TEST ("the comping styles go over the wire for a shell to build a menu from")
+{
+    const auto json = compStyles();
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"key\":\"four\""));
+    CHECK (contains (json, "\"key\":\"basie\""));
+    CHECK (contains (json, "\"summary\":"));
+
+    // The feel goes too, so a page can say "triplet" without a second copy of
+    // the list to go stale.
+    CHECK (contains (json, "eighth-note triplets"));
+}
+
+TEST ("a comp plan goes over as positions, never as times")
+{
+    /*  The whole division this rests on: the engine has no clock, so a hit is
+        a beat and a tick and the shell turns that into a moment. A plan
+        carrying seconds would have put a tempo in the engine. */
+    const auto json = compPlan ("| Dm7 | G7 | Cmaj7 | Cmaj7 |", "charleston", 0, 3, 7);
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"ticksPerBeat\":24"));
+    CHECK (contains (json, "\"beat\":"));
+    CHECK (contains (json, "\"tick\":"));
+    CHECK (contains (json, "\"notes\":["));
+    CHECK (! contains (json, "\"seconds\""));
+    CHECK (! contains (json, "\"when\""));
+}
+
+TEST ("the same seed gives the same plan over the wire too")
+{
+    CHECK_EQ (compPlan ("| Dm7 | G7 |", "basie", 0, 1, 3),
+              compPlan ("| Dm7 | G7 |", "basie", 0, 1, 3));
+
+    CHECK (compPlan ("| Dm7 | G7 |", "basie", 0, 1, 3)
+             != compPlan ("| Dm7 | G7 |", "four", 0, 1, 3));
+}
+
+TEST ("a plan for something that is not a chart is refused")
+{
+    // Not "|||" - that is a real, if empty, one-bar chart. Text with no bar
+    // lines in it at all is the thing the reader turns away.
+    CHECK (contains (compPlan ("nothing like a chart", "four", 0, 1, 1), "\"ok\":false"));
+}
+
+TEST ("a bar with no chord in it is comped with silence, not with a guess")
+{
+    const auto json = compPlan ("| |", "four", 0, 0, 1);
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"hits\":[]"));
+}
+
+TEST ("a note played with no clock says so rather than claiming the downbeat")
+{
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "", 4);
+
+    // The default is "nowhere", because there is no position that means no
+    // position and a made-up downbeat would be read as a real one.
+    CHECK (contains (soloPlayNote (62), "\"at\":\"\""));
+    CHECK (contains (soloPlayNote (64), "\"onStrongBeat\":false"));
+
+    soloEndTake();
+}
+
+TEST ("a note played on a clock carries where it fell")
+{
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "", 4);
+
+    CHECK (contains (soloPlayNote (62, 0, 0), "\"at\":\"1\""));
+    CHECK (contains (soloPlayNote (64, 1, 12), "\"at\":\"2 and\""));
+
+    // Beat three is strong in four...
+    CHECK (contains (soloPlayNote (65, 2, 0), "\"onStrongBeat\":true"));
+
+    soloEndTake();
+
+    // ...and weak in three, which the bar is told when it is set.
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "", 3);
+    CHECK (contains (soloPlayNote (65, 2, 0), "\"onStrongBeat\":false"));
+    soloEndTake();
+}

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "jazz/core/ChordSymbol.h"
+#include "jazz/core/Rhythm.h"
 #include "jazz/core/ScaleSuggester.h"
 
 #include <optional>
@@ -120,6 +121,34 @@ struct LineNote
     */
     int wantsToReach {};
     std::string wantsToReachDegree;
+
+    /** Where in the bar this note fell, when the shell was able to say.
+
+        Empty whenever there is no clock - practising statically, the app has
+        no idea where in a bar a note landed and must not invent one. So every
+        reading below it is an *extra* reading, never a replacement: a line
+        played without the transport is read exactly as it always was.
+
+        This is still not time. A `BarPosition` is a position in a bar, like
+        `measureIndex` is a position in a chart; the shell owns the clock and
+        turns one into the other before the engine sees it. Nothing here may
+        start depending on when a note actually arrived.
+    */
+    std::optional<BarPosition> at;
+
+    /** For an outside or avoid note the line did not stay on: the next note
+        came within an eighth, so it was passed through rather than sat on.
+
+        The distinction the whole grid was wanted for. An avoid note passed
+        through at speed is what every bebop line does; the same note sat on is
+        the one that sounds like a mistake, and until a note carried a position
+        there was no way to tell the two apart. Needs the *next* note to be
+        known, so it is filled in behind, like `resolvesTo`.
+    */
+    bool passedThrough {};
+
+    /** The note was played on the downbeat or the bar's other strong beat. */
+    bool onStrongBeat {};
 };
 
 /** How a stretch of line divided up. Counts rather than percentages: a
@@ -207,6 +236,21 @@ struct LineBar
         somewhere else has not answered that.
     */
     bool neverLeftTheChord {};
+
+    /** Of the notes that landed on a strong beat, how many were chord tones,
+        and how many landed there at all.
+
+        Both zero when the shell gave no positions, which is the same answer as
+        "nothing landed on a strong beat" and is fine: a bar with nothing to
+        say about its rhythm says nothing about it.
+
+        Like every other shape reading, this produces words and never points -
+        see the note on `score()`. Where a note sits in the bar is not a better
+        or worse note, and the moment it moved a number the score would stop
+        being explainable.
+    */
+    int notesOnStrongBeats {};
+    int chordTonesOnStrongBeats {};
 };
 
 /** A finished take, read back. */
@@ -238,6 +282,12 @@ struct TakeSummary
     int leapsResolved {};     ///< of those, the ones the next note stepped away from
     int lowestNote {};        ///< 0 when nothing was played
     int highestNote {};
+
+    /** Outside or avoid notes the line sat on rather than passed through, and
+        how many such notes there were to sit on. Zero for a take played with
+        no clock, where nothing knows how long anything lasted. */
+    int notesSatOn {};
+    int notesPassedThrough {};
 
     int rangeInSemitones() const noexcept
     {
@@ -341,6 +391,16 @@ public:
             a bar read against the wrong vocabulary for one chord.
         */
         std::string style;
+
+        /** The metre the chart is in, which decides which beats are strong.
+
+            Only ever read when a note carries a position, so a take with no
+            clock behind it is unaffected by getting this wrong. It is the
+            chart's own number - see `Chart::timeSignature` - and a waltz read
+            as four would call its second beat strong, which is exactly what a
+            waltz does not do.
+        */
+        int beatsPerBar { 4 };
     };
 
     LineAnalyzer() = default;
@@ -402,6 +462,15 @@ public:
     */
     LineNote play (int midiNote);
 
+    /** The same, told where in the bar the note fell.
+
+        A shell with a clock running knows this and a shell without one does
+        not, which is why it is an overload rather than a defaulted argument:
+        there is no position that means "no position", and a made-up downbeat
+        would be read as a real one.
+    */
+    LineNote play (int midiNote, BarPosition where);
+
     /** The notes this last `play()` promoted to `approach`, in the order the
         window found them.
 
@@ -437,6 +506,9 @@ public:
 private:
     LineNote readAgainstTarget (int midiNote) const;
 
+    /** Says of the note before the newest whether the line stayed on it. */
+    void markPassedThrough (std::vector<LineNote>& line);
+
     /** Promotes any of the last few notes of @p line that the newest resolved. */
     void resolveTail (std::vector<LineNote>& line);
 
@@ -469,6 +541,12 @@ private:
     std::vector<LineNote> justResolved;
     std::vector<LineNote> justStranded;
     bool taking {};
+
+    /*  Where the note now being played fell, for the moment it takes `play()`
+        to read it. A parameter threaded through five private functions would
+        have been the alternative, and all five would then have carried a
+        position they had nothing to do with. */
+    std::optional<BarPosition> pendingPosition;
 };
 
 /** "chord tone", "scale tone", "outside" - for a UI that shows the word. */

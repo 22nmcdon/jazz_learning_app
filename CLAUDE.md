@@ -278,45 +278,91 @@ there because these are the ones that break something when a session has not rea
   agree in both; what the app gives up is a few milliseconds of jitter. Do not paper over
   that by pretending to schedule in the app - fix it, if it matters, by giving the bridge
   a time.
-- **Rhythm still does not count for anything.** The transport moves bars; no reading
-  anywhere knows which beat a note landed on. That is the feature this unblocks, not one
-  it includes - and it is the thing that would finally let an avoid note be told apart
-  from a note passed through.
+- **Where a note fell is now on the wire, and it is still not time.** `soloPlayNote` takes
+  a beat and a tick, and a negative beat means the shell has no clock and cannot say -
+  which is not the downbeat, and the engine is careful to treat it as neither. A take
+  played statically is read exactly as it always was: every rhythmic reading is additive
+  and silent without positions. **Nothing in the engine may start depending on when a note
+  arrived** - a `BarPosition` is a position, like a measure index, and the shell turns its
+  own clock into one before the engine sees it.
+- **Rhythm produces words, never points.** `score()` is untouched by any of it. Where a
+  note sits in a bar does not make it a better or worse note, and the moment it moved the
+  score the score would stop being explainable - the same rule the rest of *A line's shape
+  does not touch the score* is built on.
+- **"Sat on" versus "passed through" is the whole reason the grid exists.** The same pitch
+  against the same chord is what every bebop line is made of at speed and what sounds like
+  a mistake when dwelt on; only the rhythm tells them apart. `LineNote::passedThrough` is
+  filled in behind, like `resolvesTo`, because it is a fact about the gap to the *next*
+  note. An eighth is the boundary, and the gap is measured **through the barline** - the
+  and of four into the next downbeat is an eighth, not a bar and a bit.
+- **An approach note is left out of that reading.** It stepped home, which is the verdict
+  that matters about it; adding "and it was passed through" would count the line's best
+  notes among the ones being asked about.
+
+### The rhythm grid — one representation, two consumers
+`modules/core_engine/.../Rhythm.h` is the whole of it, and it is shared by comping and by
+solo practice on purpose: the moment there are two grids they disagree about what an
+eighth is.
+
+- **24 ticks to the beat**, because 24 divides by 2, 3, 4, 6, 8 and 12 - so straight
+  eighths (12), eighth-note triplets (8), sixteenths (6) and the dotted forms all land
+  exactly on a tick. A straight eighth grid was the obvious choice and could not have
+  written a ballad's triplets or a bebop line's sixteenths at all.
+- **Swing is not in the grid.** Swung eighths are a ratio a shell plays them at, not a
+  different place to write them: the engine writes tick 12 and the page sounds it two
+  thirds of the way through the beat. **Only the eighth moves** - a triplet is already
+  written where it is played, so remapping every subdivision (the obvious implementation)
+  would bend a ballad's triplets into something nobody plays. The page is also the only
+  thing that un-swings a note coming *back* in, so the engine always sees straight
+  notation.
+- **`strengthAt()` is metre-aware rather than tabulated**, which is what keeps a waltz from
+  being a special case: the second strong beat is the one starting the bar's second half,
+  and an odd metre has no second half, so only its downbeat is strong. That is the
+  character of three, not a gap in a table.
 
 ### Comping — the band behind the soloist
-- **The engine says which notes, the page says when.** `compingVoicing()` picks a
-  two-handed rootless voicing and the register to put it in; it has no clock, like
-  everything else in the engine. Every question about *when* - which bar, which beat,
-  how often - is the page's, and the transport it already had answers all of them.
-- **It leads from the last voicing rather than spelling each chord afresh.** That is the
-  whole of what `compingVoicing` adds over `idiomaticVoicings`: the same shapes, searched
-  over a register window, scored by how far the hands would travel from
-  `previousNotes`. Comping a tune at one anchor re-spells every chord and leaps around
-  the keyboard; Dm7 to G7 should hold two notes and move two. **The previous voicing is
-  the page's to remember**, handed back in on every call - the take is the one stateful
-  corner of `jazz::api` and comping must not become a second one.
-- **The window is what stops it drifting.** Voice leading alone always takes the nearest
-  voicing, so a progression that keeps rising takes the hands up with it until they are
-  somewhere nobody comps. `lowestCompAnchor`/`highestCompAnchor` bound it, and the
-  tie-break pulls back towards the natural anchor so two equal choices do not get decided
-  by loop order.
+- **`CompStyleDefinition` is the one artifact**, and the generator, the evaluator seam and
+  the menu all read it. A style described in one place and re-described in another is how
+  the two drift - the same reason `scaleStyles()` lives in the engine.
+- **A slot is written the way a player describes one.** `beat` empty means every beat (so
+  four-to-the-bar is one slot, in any metre); negative counts back from the end (so "the
+  and of four" is the same slot in three). A slot naming a beat the metre has not got says
+  nothing, which is more honest than folding it onto one that exists.
+- **The shape was proved against styles that genuinely differ** - dense four-to-the-bar
+  against sparse Basie, and a ballad whose feel is triplets rather than eighths - rather
+  than fitted to one style and generalised afterwards. Adding a style that the shape
+  cannot express is a sign the shape is wrong, not the style.
+- **The plan is made ahead, not decided per beat.** Two things need more than the moment
+  they are played in: a hit that anticipates has to know the next chord, and a voicing has
+  to be led from the one before. `compPlan()` does both in one pass, which also removed
+  the page's promise chain - with the whole plan in hand there is nothing left to race.
+- **Seeded, with the bar mixed in.** The same seed gives the same comp note for note, and
+  planning bars 4-7 alone gives the same four bars as planning 0-7 and taking the tail -
+  so a loop coming round again is the same band, not a different one each chorus. The
+  hash is hand-rolled because `std::mt19937`'s *distributions* are not specified across
+  standard libraries, and a plan that differed between the browser and the app would be
+  two bands playing.
+- **`fitsStyle()` is the invariant, and it is checked from both directions.** Everything
+  the generator plays for a style must pass the evaluator's own "is this in style" test -
+  the same trap `idiomaticVoicings` and `VoicingAnalyzer` are held out of. Anticipation is
+  checked one way only: a hit that pushed must come from a slot that pushes, but a slot
+  that pushes may honestly produce a hit that did not, because the last bar of a range has
+  no next chord to pull forward.
 - **The comp is a channel of its own in both shells, never the player's own voices.**
   Comping E4 under a soloist playing E4 has to be two notes, or one note-off stops a note
   the other is still sounding. On the web that is `audio.compVoices` beside
   `audio.voices`; in the app it is `Voice::comping`, which is why `noteOff`, the pedal and
   `allNotesOff` all skip comp voices - and why the bridge carries `"comp"` rather than
   reusing `"chord"`, whose first act is to silence everything.
-- **The comp's rhythm is the chart's own.** Each chord is struck where it falls in the
-  bar, and a chord holding the whole bar is struck again halfway. No pattern is invented
-  anywhere, which is what keeps this from being the rhythmic reading the engine still
-  does not do.
-- **Engine calls for the comp are chained, not raced.** Two bars comped concurrently
-  resolve out of order and lead from the same previous voicing - exactly the jump the
-  feature exists to avoid. `comping.chain` is one promise chain, so voicings land in the
-  order they were booked.
 - **Bass and drums are named in the menu and not built.** A rhythm section is three
   instruments; leaving the other two off the list entirely would say the feature is
-  finished. They are disabled with a "later" tag, not hidden.
+  finished.
+- **Where the evaluator will live is decided and not built: a third mode.** Scoring a
+  player's *own* comping against a `CompStyleDefinition` is neither of the questions the
+  two modes ask, so it gets its own. Note what that costs before starting it: `state.mode`
+  is two-valued today and `data-mode`, `applyMode`, the palette tokens, the masthead and
+  the per-mode cheat sheets are all built around exactly two. Comping-as-backing, which is
+  what ships, needed none of that and lives inside solo practice's *In time*.
 
 ## Both modes — one page, one chart
 
@@ -413,11 +459,13 @@ build step passes, that setting is the first thing to check.
 - **Licks.** Solo mode's "Which scale?" is the scale half of "show me one"; suggesting a
   *line* to play over a bar is a separate feature needing generated or curated patterns,
   rhythm and register - deliberately not started.
-- **Rhythmic reading.** The transport exists, so a clock exists - but nothing reads it.
-  Landing chord tones on strong beats, and telling an avoid note passed through from one
-  sat on, both need `LineAnalyzer` to be told where in the bar a note fell. That is a
-  change to the engine's shape (it has no time in it today, deliberately) and should be
-  designed before it is started.
+- **Comping as an exercise** - scoring what *you* comp against a `CompStyleDefinition`.
+  The style data and `fitsStyle()` are the seam it grows from; what is missing is the
+  register and density half, and the third mode to show it in. See the note on that
+  decision above before starting.
+- **Rhythm in the score.** The readings exist - strong beats, sat on versus passed through
+  - and deliberately produce words rather than points. Making rhythm *count* is a separate
+  decision, and the argument against it is in `score()`'s own doc comment.
 - MusicXML / MuseScore import. The page reader is format-agnostic enough to feed it.
 - A metre that survives export. The readers bring a time signature in and the page now
   shows it; the iReal Pro writer does not put one back out.

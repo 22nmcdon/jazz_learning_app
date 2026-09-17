@@ -574,6 +574,109 @@ try {
   await page.waitForTimeout(600);
   check("a band set to silent is silent", (await compedVoicing()).length === 0);
 
+  // --- comping styles, and the rhythm they actually play ------------------
+  // The generator's output only means something if it reaches the speakers, so
+  // these read the times the page scheduled rather than the plan it was given.
+
+  await page.locator("#compingButton").click();
+
+  // The check above left the band silent, and a silent band schedules nothing
+  // for these to read.
+  await page.selectOption("#compSound", { value: "ep" });
+
+  const compStyleNames = await page.locator("#compStyle option").allInnerTexts();
+
+  check(`the comping styles come from the engine (${compStyleNames.length})`,
+        compStyleNames.length >= 2
+        && (await page.locator("#compStyleNote").innerText()).trim().length > 0);
+
+  // Loop one bar, fast, no count-in, so a few bars go by quickly. The options
+  // are selected by value: their labels are bar numbers, and "1" as a label is
+  // bar index 0, which is a one-bar loop when you wanted two.
+  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
+  await page.uncheck("#countIn");
+  await page.selectOption("#loopFrom", { value: "0" });
+  await page.selectOption("#loopTo", { value: "3" });
+  await page.locator("#menuButton").click();
+  await page.fill("#tempo", "240");
+  await page.dispatchEvent("#tempo", "change");
+  await page.evaluate(() => document.activeElement.blur());
+
+  /** Rolls a take in one comping style and returns when each chord was struck,
+      in beats from the first click. */
+  const compRhythmOf = async (style) => {
+    await page.locator("#compingButton").click();
+    await page.selectOption("#compStyle", style);
+    await page.locator("#compPiano").check();
+    await page.locator("#compingButton").click();
+
+    await forgetSounds();
+    await page.keyboard.press("Space");
+    await page.waitForTimeout(2600);
+    await page.keyboard.press("Space");
+    await page.waitForFunction(
+      () => document.querySelector("#armTake").getAttribute("aria-pressed") === "false",
+      null, { timeout: 10000 });
+
+    const sounded = await page.evaluate(() => window.__sounded);
+    // The click is a square wave and marks the beats; the piano is sines.
+    const beats = sounded.filter((s) => s.type === "square").map((s) => s.when).sort((a, b) => a - b);
+    const struck = [...new Set(sounded.filter((s) => s.type === "sine").map((s) => s.when))];
+
+    // 240bpm, so a beat is a quarter of a second.
+    return struck.map((w) => (w - beats[0]) / 0.25).sort((a, b) => a - b);
+  };
+
+  const fourToTheBar = await compRhythmOf("four");
+  const sparse = await compRhythmOf("basie");
+
+  check(`a style says how much the band plays (four: ${fourToTheBar.length}, `
+        + `basie: ${sparse.length})`,
+        fourToTheBar.length >= sparse.length * 2 && sparse.length > 0);
+
+  // Four to the bar is on the beat, every beat: nothing between them.
+  const offTheBeat = (times) =>
+    times.filter((t) => Math.abs(t - Math.round(t)) > 0.1).length;
+
+  check("four to the bar plays on the beat and nowhere else",
+        offTheBeat(fourToTheBar) === 0);
+
+  // Basie's is the pushed one, and a push in a swung bar is two thirds of the
+  // way through the beat - not half, which is what swing means and what the
+  // engine deliberately does not know about.
+  const swung = sparse.filter((t) => Math.abs((t - Math.floor(t)) - 2 / 3) < 0.08);
+
+  check(`a swung push lands two thirds through the beat (${sparse.map((t) => t.toFixed(2)).join(" ")})`,
+        swung.length > 0);
+
+  await page.locator("#compingButton").click();
+  await page.locator("#compPiano").uncheck();
+  await page.locator("#compingButton").click();
+
+  /*  The grid's other consumer, over the same clock. A note played while the
+      transport rolls carries where in the bar it fell; the engine reads it and
+      the page must not break sending it. Static, there is no position to send
+      and the same note reads exactly as it always did - which is the half of
+      this that had to stay true. */
+  await page.keyboard.press("Space");
+  await page.waitForFunction(
+    () => document.querySelector("#armTake").getAttribute("aria-pressed") === "true",
+    null, { timeout: 10000 });
+  await page.waitForTimeout(300);
+
+  await soloKey(62).click();
+  await page.waitForTimeout(250);
+  const whileRolling = await readout();
+
+  await page.keyboard.press("Space");
+  await page.waitForFunction(
+    () => document.querySelector("#armTake").getAttribute("aria-pressed") === "false",
+    null, { timeout: 10000 });
+
+  check(`a note played on the clock is still read back (${whileRolling})`,
+        whileRolling.length > 0 && /D/.test(whileRolling));
+
   // Put it back the way the rest of the checks expect to find it.
   await page.locator("#compingButton").click();
   await page.selectOption("#compSound", "ep");

@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (338), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (371), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -252,6 +252,13 @@ opens on a list of who is playing: **piano comping**, which works, and **bass wa
 the same sounds the Practice menu offers the player, because the band is not playing your
 instrument.
 
+**Comping style** picks what the band plays: *Four to the bar*, *Basie — sparse*,
+*Charleston* or *Ballad — triplet*. The list is the engine's, like the scale styles are, and
+so is each one's description. They differ in the way real styles differ — four to the bar
+puts a chord on every beat; Basie leaves the bar alone and answers at the end of it, mostly
+pushed across the barline into the next chord; the ballad leans on the triplet inside the
+beat rather than on eighths.
+
 What it plays is **two-handed rootless voicings** — no root to fight a bass player, guide
 tones under colour — and it **leads each one from the one before** rather than spelling
 every chord from scratch. Over `| Dm7 | G7 | Cmaj7 |` that means F3 C4 E4 B4, then F3 B3 E4
@@ -259,27 +266,59 @@ A4, then E3 B3 D4 A4: two notes held each time and two moving by a semitone, whi
 pianist's hands actually do. A fixed register would re-spell each chord and leap between
 them.
 
-The rhythm is the chart's own: each chord is struck where it falls in the bar, and a chord
-holding a whole bar is struck again halfway through it. Nothing invents a comping pattern,
-which is the same reason nothing reads one — see rhythm, below.
+The rhythm comes from the style, worked out for the whole loop in one pass rather than
+decided beat by beat — a hit that anticipates the next bar has to know what the next chord
+is, and a voicing has to be led from the one before, and neither is knowable in the moment
+it is played. The plan is **seeded**, so the same bar comes round the same way every chorus
+rather than drifting, and the same seed gives the same comp note for note.
+
+Everything the generator plays for a style must pass the engine's own "is this in that
+style" test — the invariant that stops the app comping in a style and then calling its own
+playing out of style, and the same one `idiomaticVoicings` and `VoicingAnalyzer` are held
+to.
 
 With the clock running the band plays in time with it. Without it, each bar sounds as you
 land on it, so the toggle does something whether or not you are in time.
 
-The engine decides which notes and knows nothing about when; `compingVoicing()` takes the
-chord and the voicing you last played and gives back the next one. The page holds that
-previous voicing rather than the engine keeping a memory of it, and the searching is bounded
-to a register window — voice leading on its own always takes the nearest voicing, so a
-progression that keeps rising would walk the hands off the top of the keyboard.
+The engine decides which notes and *where in the bar*, and knows nothing about when in
+seconds. A hit is a beat and a tick on a grid of 24 ticks to the beat — enough to write
+straight eighths, triplets and sixteenths exactly, where the obvious straight-eighth grid
+could not have written a ballad's triplet at all. The page turns that into a moment.
+
+**Swing lives in the page, not the grid.** A swung eighth is a ratio you play an eighth at,
+not a different place to write it: the engine writes the eighth and the page sounds it two
+thirds of the way through the beat. Only the eighth moves — a triplet is already written
+where it is played, so swinging every subdivision would bend the ballad style into something
+nobody plays.
+
+The searching is bounded to a register window — voice leading on its own always takes the
+nearest voicing, so a progression that keeps rising would walk the hands off the top of the
+keyboard.
 
 In both shells the comp is a channel of its own, never the player's own notes: comping E4
 under a soloist playing E4 has to be two voices, or one note-off silences a note the other
 one is still holding.
 
-What the transport does **not** do yet is make rhythm count. Nothing reads which beat a note
-landed on, so an avoid note is still named rather than marked down, and a chord tone on beat
-one reads the same as one on the and of four. That is the feature a clock unblocks rather
-than one it includes.
+### Reading where a note fell
+
+Solo practice reads the same grid the band plays on. With the clock running, every note you
+play carries where in the bar it landed, and two readings come out of that:
+
+**An avoid note passed through is not an avoid note sat on.** The same pitch against the
+same chord is what every bebop line is made of at speed, and is what sounds like a mistake
+when you stay on it — nothing but the rhythm can tell the two apart, which is why nothing
+could tell them apart before. An eighth is the boundary, and it is measured through the
+barline, so the and of four into the next downbeat is an eighth rather than a bar and a bit.
+
+**Chord tones on strong beats** is the other: the beat is where the harmony is heard, so
+that is where chord tones do the most work and the colour goes in between. Which beats are
+strong comes from the metre rather than a table, so a waltz has only its downbeat — three
+does not have a second half to start.
+
+Both are **words, never points**. The score is untouched: where a note sits in a bar does
+not make it a better or worse note, and the moment placement moved the score the score would
+stop being something anyone could explain. Played statically there are no positions to read,
+and a take is read exactly as it always was — every one of these readings is additive.
 
 ### Both modes
 
@@ -543,10 +582,15 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   practice loop ship, as In time above.
 - **Licks.** Solo mode tells you the scale; suggesting a *line* to play over a bar needs
   generated or curated patterns, rhythm and register, and is a feature of its own.
-- **Rhythmic reading.** The clock exists and nothing reads it: landing chord tones on
-  strong beats, and telling an avoid note passed through from one sat on, both need
-  `LineAnalyzer` to be told where in the bar a note fell. It has no time in it today,
-  deliberately, so that is a change to the engine's shape and should be designed first.
+- **Comping as an exercise** — scoring what *you* comp against a comping style, rather
+  than listening to the band play one. The style data and the "is this in style" test are
+  already there and already hold the generator to them; what is missing is the register
+  and density half of the scoring, and a third mode to show it in. That last part is the
+  expensive bit: the app has exactly two modes today and a good deal is built around
+  there being two.
+- **Rhythm in the score.** The readings exist (above) and deliberately produce words
+  rather than points. Making placement *count* toward a number is a separate decision,
+  and the argument against it is the same one that keeps a line's shape out of the score.
 - **A walking bass and a drummer.** Both are named in the comping menu and neither is
   built. A bass line is the shape of problem the piano comp already solved — the engine
   says which notes, the page says when — but it wants a note per beat rather than a

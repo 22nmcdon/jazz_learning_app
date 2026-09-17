@@ -178,9 +178,36 @@ memory and a window.
   that bridge has no "play this at" argument, and so arriving a message-thread hop later.
   Both shells read the same clock so chart and click agree in both. Do not paper over the
   difference by pretending to schedule in the app - if it matters, give the bridge a time.
-- **Rhythm still counts for nothing.** The transport moves bars; no reading anywhere knows
-  which beat a note fell on. Landing chord tones on strong beats, and telling an avoid note
-  passed through from one sat on, are what a clock unblocks - not what it includes.
+### Reading where a note fell
+- **The grid is shared with comping and is in the engine** (`Rhythm.h`), because two grids
+  would disagree about what an eighth is. 24 ticks to the beat: it divides by 2, 3, 4, 6,
+  8 and 12, so eighths, triplets and sixteenths are all exact. The straight-eighth grid
+  that was the obvious choice could not have written a triplet at all.
+- **A position is not a time.** `BarPosition` is a position in a bar the way `measureIndex`
+  is a position in a chart. The shell owns the clock, turns a moment into one of these
+  before the engine sees it, and turns one back into a moment when it plays it. Nothing
+  here may start depending on when a note actually arrived - that rule did not move.
+- **It is an overload, not a defaulted argument.** There is no position that means "no
+  position", and a made-up downbeat would be read as a real one. `soloPlayNote` signals it
+  with a negative beat for the same reason. A take played statically is read exactly as it
+  was before any of this existed: every reading below is additive and silent without
+  positions.
+- **"Passed through" versus "sat on" is the whole reason the grid was wanted.** The same
+  pitch against the same chord is what every bebop line is made of at speed and what sounds
+  like a mistake when dwelt on. Only the rhythm separates them, which is why nothing
+  separated them before. Filled in behind, like `resolvesTo`, because it is a fact about
+  the gap to the *next* note - and measured **through the barline**, or every pushed note
+  in the idiom reads as one the line sat on.
+- **An approach note is left out of it.** It stepped home, which is the verdict that
+  matters about it. Saying it was also passed through adds nothing and would count the
+  line's best notes among the ones being asked about.
+- **Which beats are strong comes from the metre, not a table.** The second strong beat is
+  the one that starts the bar's second half; an odd metre has no second half, so a waltz
+  has only its downbeat. That is the character of three rather than a gap in the table.
+- **None of it touches the score**, and that is the rule this whole file is built on, not
+  an omission. Where a note sits in a bar does not make it a better or worse note, and the
+  moment placement moved the number the number would stop being explainable. There is a
+  test that says so: the same notes score the same whether or not positions were sent.
 
 ### Comping — a band over the same clock
 - **The split is the one the whole project is built on**, and comping is the clearest case

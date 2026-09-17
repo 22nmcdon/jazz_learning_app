@@ -12,6 +12,8 @@ add_library(jazz_core_engine STATIC
     src/Scale.cpp
     src/ScaleSuggester.cpp
     src/Voicing.cpp
+    src/Rhythm.cpp
+    src/Comping.cpp
     src/VoicingAnalyzer.cpp
     src/LineAnalyzer.cpp
     src/Chart.cpp

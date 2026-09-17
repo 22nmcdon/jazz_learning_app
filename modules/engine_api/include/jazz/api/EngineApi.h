@@ -32,6 +32,17 @@ std::string idiomaticVoicings (const char* symbol, int anchorNote, const char* p
     played @p previousNotesCsv (empty for the first chord of a tune). */
 std::string compingVoicing (const char* symbol, const char* previousNotesCsv);
 
+/** Every comping style the engine knows, for a shell to build a menu from. */
+std::string compStyles();
+
+/** What a comper plays over a range of bars, in a style, reproducibly.
+
+    Positions come back as beat and tick, never as times: the shell owns the
+    clock and turns one into the other.
+*/
+std::string compPlan (const char* progressionText, const char* styleKey,
+                      int fromBar, int toBar, int seed);
+
 //==============================================================================
 /** Solo practice: reading a line rather than a chord.
 
@@ -63,8 +74,11 @@ std::string compingVoicing (const char* symbol, const char* previousNotesCsv);
 std::string scaleStyles();
 
 std::string soloStartTake();
-std::string soloSetBar (int measureIndex, const char* symbol, const char* chosenScale, const char* style);
-std::string soloPlayNote (int midiNote);
+std::string soloSetBar (int measureIndex, const char* symbol, const char* chosenScale,
+                        const char* style, int beatsPerBar = 4);
+/** @param beat  negative when the shell has no clock and cannot say where
+                  the note fell - which is not the same as the downbeat. */
+std::string soloPlayNote (int midiNote, int beat = -1, int tick = 0);
 std::string soloEndTake();
 
 } // namespace jazz::api
