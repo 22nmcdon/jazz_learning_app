@@ -158,18 +158,26 @@ the source layout assumes either build system.
 `README.md` describes the behaviour in detail; this is the map from feature to code, and
 the line between what exists and what does not. Do not re-plan something in the first list.
 
-### Reharmonization Assistant — built
+The app has **two modes over one chart**, so this is organised the same way: what chord
+practice is, what solo practice is, and what the two share. A change that belongs to both
+belongs in the third section, and almost every mistake made here so far was putting
+something in one mode that the other quietly needed too.
+
+## Chord practice — built
+
+The mode the app opens in. It asks whether the voicing you played says what the bar says.
+
+### Reharmonization Assistant
 - Build a progression by hand or import one. `ChartFormats` reads both iReal Pro link
   formats, the `.html` iReal Pro shares, and the text of a PDF lead sheet; it writes an
   iReal Pro link back, and the browser shell prints a lead sheet.
-- Click a measure → suggested scale plus every valid alternate, each with a rationale
-  (`ScaleSuggester`, over a 29-shape catalogue in `Scale.cpp`).
-- Substitutions grouped by family, each carrying a difficulty tag (safe / advanced /
-  risky), a style tag, and a ranking by guide-tone voice leading (`Reharmonizer`).
+- Click a measure twice → every substitution that could stand in its place, grouped by
+  family, each carrying a difficulty tag (safe / advanced / risky), a style tag, and a
+  ranking by guide-tone voice leading (`Reharmonizer`).
 - Whole-tune reharmonisation in six named plans, each bar decided against the chart as it
   stands.
 
-### Real-Time Chord/Voicing Analyzer — built
+### Real-Time Chord/Voicing Analyzer
 - Classifies what was played against the symbol, allowing for voicing type, and explains
   what is missing, outside, clashing or muddy (`VoicingAnalyzer`).
 - Offers idiomatic voicings to play — the "sentence starters" — built from the structures
@@ -177,32 +185,131 @@ the line between what exists and what does not. Do not re-plan something in the 
 - Names a voicing with no chart and no expected chord (`ChordIdentifier`).
 - Reads a played voicing back as a *substitution* when it spells one, rather than as a
   broken version of the written chord.
+- The keys **latch**: a voicing is something you hold, and `state.heldNotes` is what the
+  analyser is handed.
 
-### Solo Practice — built
-- A top-level **mode**, not a second screen. `state.mode` flips and the chart, the
-  keyboard, the MIDI connection and the audio device all stay exactly where they are;
-  what changes is where a played note goes and what the dock says back. The selected bar
-  is one pointer shared by both modes.
-- `LineAnalyzer` (core engine) reads one note against the bar's chord as **chord tone /
-  scale tone / outside**, names its degree, and says which scale accounts for it. `read()`
-  is pure; a *take* is that with a memory - arm, play, walk to other bars, disarm.
+## Solo practice — built
+
+The same chart, the same notes, a different question: where does each one sit.
+`LineAnalyzer` is the whole of the theory; `read()` is pure, and a *take* is that with a
+memory and a window.
+
+### Reading one note
+- `LineAnalyzer::read()` reads one note against the bar's chord as **chord tone / scale
+  tone / outside**, names its degree, and says which scale accounts for it. Pure, one
+  note, no state - every rule that can be decided without a line lives here.
+- **Forgiving is not the same as accepting everything.** Solo mode was specified to read a
+  note against *every* scale that fits the chord, on the grounds that a player who chose a
+  different valid scale has not made a mistake. Counted, that leaves **nothing outside
+  anything**: Cmaj7, G7 and Bbmaj7 each come out 4 chord tones, 8 scale tones, 0 outside,
+  and Dm7 has exactly one note it will not account for. Three tiers collapse into two and
+  the feature stops saying anything. Against one scale the same chords read 4 / 3 / 5. So
+  the reading is against one scale and the forgiveness lives in *which* one -
+  `Options::chosenScale`, the scale the player picked out of the Scales panel. Before
+  widening a rule in the name of being generous, count what it leaves.
+
+### The window: open, approach, outside
+- **A note outside the harmony is open, not wrong, until the window has passed it.** This
+  is the rule the rest of solo practice hangs off. A chromatic approach, an enclosure and
+  a passing tone are outside by pitch and are the line *working*; nothing tells them apart
+  from a note that did not land until the note after arrives. So `play()` reads the new
+  note, looks back over the two behind it promoting any it resolved, then *settles* every
+  open note the line can no longer reach. A note outside the harmony comes back
+  `NoteColour::unresolved` and becomes `approach` or `outside` once, for good - usually on
+  the very next note. `read()` returns `outside`, because one note has no line around it
+  to be waiting on.
+- **`canStillBeReached()` decides when, and the rule is "could any pattern still promote
+  this", not "have two notes gone by".** A note that lands somewhere else closes the one
+  before it immediately, because the step patterns have had their chance and an enclosure
+  needs that note to be outside too. Only a second outside note with room between the two
+  - two to four semitones, so a target could sit between them a step from each - holds the
+  verdict back a further note. Waiting a fixed two notes meant the one piece of bad news
+  this reads arrived a note late in the commonest case of all.
+- **Nothing is graded on an open note.** `score()` reads `LineStats::settled()`. Counting
+  an open note as outside for the notes before the window decides made the score dip every
+  time a player reached for a chromatic approach and climb back when they landed it, which
+  reads as the app marking someone down for a phrase it is about to approve of. Do not let
+  a percentage, a strip or a tally treat `unresolved` as a verdict.
+- **The instant feedback names the resolution, not a mistake.** `LineNote::wantsToReach`
+  is the nearest note a step away that would close it - root first, then chord tone, then
+  scale tone, semitones before tones. "That was wrong" is a guess at that moment and often
+  the wrong one; "a semitone up lands on D" is true whichever way the line goes, and it is
+  the thing that would have helped. The bad news is delivered late instead, by
+  `strandedByLastNote()`, which is the earliest it is honestly available.
+- **Which gesture got a note home is recorded, and is not a tier.** `ApproachKind` is
+  chromatic / passing / enclosure. All three land, all three count identically in
+  `LineStats`, and the score has no opinion about which - but they are not the same thing
+  to play, and an enclosure especially is deliberate in a way a passing tone is not. The
+  rules are tried **most specific first** (enclosure, passing tone, chromatic approach)
+  because a note can honestly answer to more than one and a promoted note is never
+  re-promoted: the second note of an enclosure *is* a chromatic approach on its own, and
+  letting the simpler rule reach it first would lose the harder thing the player did.
+- **Nothing that has settled is ever revisited.** A note that landed stays landed and a
+  note left hanging stays hanging, so a reading never changes twice under a player who is
+  watching it.
+- **The window does not stop at the barline.** Running chromatically into the next chord
+  is idiomatic, so a promotion can change a bar the player has already left - which is why
+  `soloPlayNote` returns a `bars` array of everything that moved, not just the bar the
+  note landed in. A shell reading only `bar` leaves the previous one drawing numbers that
+  stopped being true.
+- **One note can resolve one open note and strand another, in the same breath.**
+  `resolvedByLastNote()` and `strandedByLastNote()` are not alternatives, and a shell must
+  read both every time. Play Eb, then F#, then G: the G is the chromatic approach the F#
+  earned, while the Eb is left having enclosed nothing. The page took whichever list had
+  something in it first, so the other note's key was never let go of and sat lit and
+  breathing for the rest of the take, asking a question that had been answered.
+- **It runs without a take.** Notes outside a take go into a three-note `recent` buffer,
+  resolved and settled there but never counted. Someone who has not armed anything is the
+  person most likely to be trying chromatic notes, and telling them those were misses is
+  the lesson the whole window exists to stop - and they are told at the same moment an
+  armed player would be. The buffer is trimmed *after* settling, or a note could drop off
+  the front while still open and take its verdict with it.
+
+### The take
 - The take lives in the engine, reached through four entry points in `jazz::api`
   (`soloStartTake`, `soloSetBar`, `soloPlayNote`, `soloEndTake`). They are the one
   stateful corner of that API, and deliberately: the alternative is the shell resending
   every note played so far, which puts the take in the UI.
+- **`endTake()` closes whatever is still open**, as outside: there will be no more notes,
+  so the resolution is not coming. A summary carrying "waiting to see" would be waiting
+  for good, which is why every test that reads a colour back ends the take first.
+- **A take marks the chart, not only the dock.** Every bar played over carries a four-part
+  strip in the dock's own colours, in proportion, so which bar went wrong is a glance down
+  the chart rather than a read of a panel. The page keeps those numbers itself, from the
+  bar stats every `soloPlayNote` already returns, and replaces the lot with the engine's
+  breakdown on `soloEndTake` so a long take cannot drift.
 - Static, with no clock. A tempo-driven version would drive `setTarget()` from one and
   need nothing else from the engine.
+
+### The score, and the shape of a line
+- **The score is the only judgement in the engine, so every number in it is named.**
+  `LineStats::score()` reads a bar 0-100 over settled notes: chord tones, scale tones and
+  approach notes all land, an outside note is worth a quarter, and what is left is
+  balance, worth fifteen points at most and fading in with the length of the bar. The
+  constants live at the top of `LineAnalyzer.cpp` with names rather than inside the
+  arithmetic, because each is arguable - and the tests are where the argument is held:
+  that leaning off the chord costs what leaning onto it does, that two notes are not
+  unbalanced, that an outside bar still scores its quarter, and that the result never
+  leaves 0-100. Approach notes count as colour rather than as chord tones for the balance
+  term - they are the opposite of never leaving the chord.
+- **A line has shape as well as content, and the shape does not touch the score.** The
+  summary also reads how the line *moved*: bars it never coloured
+  (`LineBar::neverLeftTheChord`, per bar rather than per N notes, because the bar is a
+  boundary the player already feels and any note count would be invented), leaps that were
+  not followed by a step, and a take that never left a hand's width. All three produce
+  words, none produces points. Mixing advice about motion into the score would make a
+  number nobody could explain out of one that can be.
+- This sits alongside a rule the rest of the file keeps: **nothing calls a note wrong**. A
+  reading of a bar is not a mark for a player, and the wording on the page has to keep
+  saying so.
+
+### Scale styles
 - **Scale styles** (`ScaleStyle` in `Scale.h`) are the soloing vocabularies the Practice
   menu offers - the modes, melodic minor, harmonic minor, bebop, pentatonics and blues,
   whole tone and diminished, everything. They are built out of `ScaleFamily` rather than
   lists of scale names, so a shape added to the catalogue joins its style by itself. A
-  style with nothing for a chord falls back to the whole catalogue and says so; an
-  unknown key widens rather than empties, so a key stored by another version is harmless.
-- **A take marks the chart, not only the dock.** Every bar played over carries a three-part
-  strip in the dock's own colours, in proportion - chord tone, scale tone, outside - so
-  which bar went wrong is a glance down the chart rather than a read of a panel. The page
-  keeps those numbers itself, from the bar stats every `soloPlayNote` already returns, and
-  replaces the lot with the engine's breakdown on `soloEndTake` so a long take cannot drift.
+  style with nothing for a chord falls back to the whole catalogue and says so; an unknown
+  key widens rather than empties, so a key stored by another version is harmless.
 - **The dock names the scale, and derives it the way it derives what it sends.** Solo
   practice writes `Expecting D Dorian` where chord practice writes `Expecting Dm7`, and
   the name comes from `state.scales[state.chosenScale]` - the same expression that feeds
@@ -212,119 +319,68 @@ the line between what exists and what does not. Do not re-plan something in the 
   quiet bug loud: reopening a bar used to reset the chosen scale to the top of the list
   while the engine kept reading against the old one, which nothing on screen could
   contradict until something on screen named it.
-- **A note outside the harmony is open, not wrong, until the window has passed it.** This is
-  the rule the rest of solo practice hangs off. A chromatic approach, an enclosure and a
-  passing tone are outside by pitch and are the line *working*; nothing tells them apart
-  from a note that did not land until the note after arrives. So `LineAnalyzer` is not
-  per-note: `play()` reads the new note, looks back over the two behind it promoting any it
-  resolved, then *settles* every open note the line can no longer reach. A note outside the
-  harmony comes back `NoteColour::unresolved` and becomes `approach` or `outside` once, for
-  good - usually on the very next note. `canStillBeReached()` is where that is decided, and
-  the rule is "could any pattern still promote this", not "have two notes gone by": a note
-  that lands somewhere else closes the one before it immediately, because the step patterns
-  have had their chance and an enclosure needs that note to be outside too. Only a second
-  outside note with room between the two - two to four semitones, so a target could sit
-  between them a step from each - holds the verdict back a further note. Waiting a fixed two
-  notes meant the one piece of bad news this reads arrived a note late in the commonest case
-  of all. `read()` - pure, one note - returns `outside`, because one note has
-  no line around it to be waiting on.
-    - **Nothing is graded on an open note.** `score()` reads `LineStats::settled()`. Counting
-      an open note as outside for the two notes before the window decides made the score dip
-      every time a player reached for a chromatic approach and climb back when they landed
-      it, which reads as the app marking someone down for a phrase it is about to approve
-      of. Do not let a percentage, a strip or a tally treat `unresolved` as a verdict.
-    - **The instant feedback names the resolution, not a mistake.** `LineNote::wantsToReach`
-      is the nearest note a step away that would close it - root first, then chord tone,
-      then scale tone, semitones before tones. "That was wrong" is a guess at that moment
-      and often the wrong one; "a semitone up lands on D" is true whichever way the line
-      goes, and it is the thing that would have helped. The bad news is delivered late
-      instead, by `strandedByLastNote()`, which is the earliest it is honestly available.
-    - **Late feedback has to be loud, or it is not feedback.** The verdict is about a note
-      one or two behind the one under the player's fingers, so a sentence appended to a
-      soft grey line went unread - which was reported, and fairly. Two things carry it
-      now. The `.open-note` chip sits in one fixed place in the dock and is the colour of
-      the answer: grey and breathing while the note is open, green when it landed, rust
-      when it did not. And **the key the open note was played on stays lit**, rather than
-      fading like every other note, until the line says what it was - then it relights in
-      the verdict's colour for a beat and goes out. The keyboard is where the player is
-      looking, so that is where the answer goes. `.solo-live` reserves two lines' height
-      for the same reason `.feedback` does: a dock that grew and shrank under the keyboard
-      would be worse than the thing it is pointing out.
-  Three more things follow, and each is load-bearing:
-    - **Nothing that has settled is ever revisited.** A note that landed stays landed and a
-      note left hanging stays hanging, so a reading never changes twice under a player who
-      is watching it.
-    - **The window does not stop at the barline.** Running chromatically into the next
-      chord is idiomatic, so a promotion can change a bar the player has already left -
-      which is why `soloPlayNote` returns a `bars` array of everything that moved, not just
-      the bar the note landed in. A shell reading only `bar` leaves the previous one
-      drawing numbers that stopped being true.
-    - **One note can resolve one open note and strand another, in the same breath.**
-      `resolvedByLastNote()` and `strandedByLastNote()` are not alternatives, and a shell
-      must read both every time. Play Eb, then F#, then G: the G is the chromatic approach
-      the F# earned, while the Eb is left having enclosed nothing. The page took whichever
-      list had something in it first, so the other note's key was never let go of and sat
-      lit and breathing for the rest of the take, asking a question that had been answered.
-    - **It runs without a take.** Notes outside a take go into a three-note `recent` buffer,
-      resolved and settled there but never counted. Someone who has not armed anything is
-      the person most likely to be trying chromatic notes, and telling them those were
-      misses is the lesson the whole window exists to stop - and they are told at the same
-      moment an armed player would be. The buffer is trimmed *after* settling, or a note
-      could drop off the front while still open and take its verdict with it.
-    - **`endTake()` closes whatever is still open**, as outside: there will be no more
-      notes, so the resolution is not coming. A summary carrying "waiting to see" would be
-      waiting for good, which is why every test that reads a colour back ends the take
-      first.
-- **The score is the only judgement in the engine, so every number in it is named.**
-  `LineStats::score()` reads a bar 0-100: chord tones and scale tones both land, an outside
-  note is worth a quarter (with no clock, passing through and being stuck look the same
-  from here), and what is left is balance, worth fifteen points at most and fading in with
-  the length of the bar. The constants live at the top of `LineAnalyzer.cpp` with names
-  rather than inside the arithmetic, because each is arguable - and the tests are where
-  the argument is held: that leaning off the chord costs what leaning onto it does, that
-  two notes are not unbalanced, that an outside bar still scores its quarter, and that the
-  result never leaves 0-100. Approach notes land, and count as colour rather than as chord
-  tones for the balance term - they are the opposite of never leaving the chord.
-- **A line has shape as well as content, and the shape does not touch the score.** The
-  summary also reads how the line *moved*: bars it never coloured (`LineBar::
-  neverLeftTheChord`, per bar rather than per N notes, because the bar is a boundary the
-  player already feels and any note count would be invented), leaps that were not followed
-  by a step, and a take that never left a hand's width. All three produce words, none of
-  them produces points. The score is a reading of where notes sat; mixing advice about
-  motion into it would make a number nobody could explain out of one that can be. This sits alongside a rule the rest of the file keeps: nothing
-  calls a note wrong. A reading of a bar is not a mark for a player, and the wording on the
-  page has to keep saying so.
-- **"In time" is a door with nothing behind it, and says so.** The Practice menu offers
-  Static or In time; choosing the second opens a note explaining what it would take and
-  puts the switch back. Half of a transport would be worse than none - the moment a clock
-  exists, rhythm starts to count, and the whole basis for naming an avoid note rather than
-  marking it down goes with it. Do not make that switch do something approximate; build
-  the transport with the metronome and the practice loop, or leave the door shut.
+
+### "In time" — a door with nothing behind it
+- The Practice menu offers Static or In time; choosing the second opens a note explaining
+  what it would take and puts the switch back. Half of a transport would be worse than
+  none - the moment a clock exists, rhythm starts to count, and the whole basis for naming
+  an avoid note rather than marking it down goes with it. Do not make that switch do
+  something approximate; build the transport with the metronome and the practice loop, or
+  leave the door shut.
+
+## Both modes — one page, one chart
+
+- **A mode is not a screen.** `state.mode` flips and the chart, the keyboard, the MIDI
+  connection and the audio device all stay exactly where they are; what changes is where a
+  played note goes and what the dock says back. The selected bar is one pointer shared by
+  both.
+- **Everything that swaps with the mode swaps the same way**: `data-mode` on the element
+  and `applyMode` hides the other one. The bar dialog, the cheat sheet, the masthead, the
+  hint above the chart and the Practice menu's groups are all that one mechanism, so
+  adding a mode-specific anything is a markup attribute rather than code. The one variant
+  is `.mode-stack`: a wrapper putting both wordings in a single grid cell, where
+  `applyMode` swaps them by `visibility` so the one not showing keeps its space. That is
+  for the two with the chart underneath them - the masthead's lede and the hint - because
+  the two wordings are different lengths and hiding one outright let the whole chart jump
+  by a line. Keep a stacked pair roughly the same length anyway; the stack stops the jump,
+  matching lengths stops the gap.
 - **The bar dialog belongs to whichever mode is on.** Scales in solo practice,
   substitutions in chord practice, never both: they answer different questions - what to
   play over this bar, and what this bar should be - and showing both meant every visit
-  opened with a choice nobody asked for. Everything else that swaps with the mode swaps
-  the same way: `data-mode` on the element and `applyMode` hides the other one. The
-  cheat sheet, the masthead, the hint above the chart and the Practice menu's groups are
-  all that one mechanism, so adding a mode-specific anything is a markup attribute rather
-  than code. The one variant is `.mode-stack`: a wrapper putting both wordings in a single
-  grid cell, where `applyMode` swaps them by `visibility` so the one not showing keeps its
-  space. That is for the two with the chart underneath them - the masthead's lede and the
-  hint - because the two wordings are different lengths and hiding one outright let the
-  whole chart jump by a line. Keep a stacked pair roughly the same length anyway; the
-  stack stops the jump, matching lengths stops the gap.
+  opened with a choice nobody asked for.
+- **Both directions let go of the keys.** A voicing carried into solo practice is a chord
+  nothing over there will ever read, and a line carried back into chord practice would be
+  analysed as a voicing nobody played. `applyMode` clears held notes, the pedal's held
+  notes and any key still lit for an open note, in either direction.
 - **The mode changes the light, not the meaning.** `body.soloing` redefines the palette
   tokens - paper down a stop and cooler, the rose accent to slate - and every rule in the
   sheet already reads those, so the whole page restyles without a single component being
-  named. Two things are deliberately fixed. Sage, gold, a lighter green and rust mean
-  chord tone, scale tone, approach note and outside in both modes, so they do not move and
-  the mode accent is picked to stay clear of all four. Approach was a lightened rust once,
-  on the reasoning that the note is outside by pitch; that was the wrong thing to say. An
-  approach note is the line working, and a colour on the way to the one that means "did
-  not land" reads as a near miss. And the keys are left out of the fade: they answer a finger,
-  and a key that took 280ms to look pressed would be worse at the job it does every
-  second. A colour written as `rgba(...)` rather than a token is a colour that will not
-  follow the mode - that is what `--wash` exists for.
+  named. Two things are deliberately fixed:
+    - **The colours that mean something do not move.** Sage, gold, green, teal and rust
+      say chord tone, scale tone, approach note, enclosure and outside in both modes, and
+      the mode accent is picked to stay clear of all of them. Approach was a lightened
+      rust once, on the reasoning that the note is outside by pitch; that was the wrong
+      thing to say. An approach note is the line working, and a colour on the way to the
+      one that means "did not land" reads as a near miss. An enclosure earns its own
+      colour on the key and the chip, where one note's story is told, and shares the
+      approach tier's colour on the bar strip, where four tiers are counted - it is not a
+      fifth tier and must not become one.
+    - **The keys are left out of the fade.** They answer a finger, and a key that took
+      280ms to look pressed would be worse at the job it does every second.
+  A colour written as `rgba(...)` rather than a token is a colour that will not follow the
+  mode - that is what `--wash` exists for.
+- **Late feedback has to be loud, or it is not feedback.** Solo practice's verdict is
+  about a note one or two behind the one under the player's fingers, so a sentence
+  appended to a soft grey line went unread - which was reported, and fairly. The
+  `.open-note` chip sits in one fixed place in the dock and is the colour of the answer,
+  and **the key the open note was played on stays lit** rather than fading like every
+  other note, until the line says what it was. The keyboard is where the player is
+  looking, so that is where the answer goes. `.solo-live` reserves two lines' height for
+  the same reason `.feedback` does: a dock that grew and shrank under the keyboard would
+  be worse than the thing it is pointing out.
+- **The cheat sheet is per mode, and per first visit.** One "seen" flag each, because they
+  explain different pages; the chords flag keeps its original key so a returning visitor
+  is not shown that half again. The `?` names the mode it will explain.
 
 ### How the app and the page share one interface
 `app/src/WebUi.cpp` is the whole of it. The page is written to a file at startup and
@@ -350,7 +406,7 @@ works on a served page does nothing inside one. Pages needs enabling once by han
 (Settings → Pages → Source: GitHub Actions); if the deploy step is failing while the
 build step passes, that setting is the first thing to check.
 
-### Not built — still genuinely open
+## Not built — still genuinely open
 - Voice-leading visualiser. `guideToneMotion()` is the primitive it would draw.
 - Personal voicing library; ear training; metronome / practice-loop; progress tracking.
   The analyser's per-voicing score, the feedback panel's session average and now a take's
@@ -394,15 +450,10 @@ If work touches one of these, flag the ambiguity rather than silently picking a 
   styles the menu offers come from `scaleStyles()` over the wire, not from options
   written into the page. A second copy of that list in a shell is a second copy to go
   stale the first time a scale is added to the catalogue.
-- **Forgiving is not the same as accepting everything.** Solo mode was specified to read
-  a note against *every* scale that fits the chord, on the grounds that a player who
-  chose a different valid scale has not made a mistake. Counted, that leaves **nothing
-  outside anything**: Cmaj7, G7 and Bbmaj7 each come out 4 chord tones, 8 scale tones,
-  0 outside, and Dm7 has exactly one note it will not account for. Three tiers collapse
-  into two and the feature stops saying anything. Against one scale the same chords read
-  4 / 3 / 5. So `LineAnalyzer` reads against one scale, and the forgiveness lives in
-  *which* one - `Options::chosenScale`, the scale the player picked out of the Scales
-  panel. Before widening a rule in the name of being generous, count what it leaves.
+- **Before widening a rule in the name of being generous, count what it leaves.** Solo
+  practice's "read against every scale that fits" is the worked example - see *Reading one
+  note* above, where being maximally forgiving turned out to leave nothing outside
+  anything and collapse the feature.
 - **A suggestion the analyser would reject is a bug, not a near miss.** Two invariants in
   `VoicingAnalyzerTests` hold the two halves of the app together: every voicing
   `idiomaticVoicings` offers must classify as the type it was offered for, and none may

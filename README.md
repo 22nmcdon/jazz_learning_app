@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (322), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (329), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -70,91 +70,52 @@ where MIDI bugs show up first (see the platform notes in `CLAUDE.md`).
 The app opens on a built-in practice chart, drawn as a lead sheet: systems of four bars
 divided by barlines, the feel written top left, the title in the middle and the composer
 on the right. Click a bar to move to it; click the bar you are already on for the question
-the mode you are in is about - its substitutions in chord practice, its scales in solo
-practice. Play the chord on a MIDI keyboard or the on-screen keyboard to get feedback on
-the voicing.
+the mode you are in is about.
 
 The desktop app and the browser page are not merely alike: they are the same page. A
 screenshot of one is a screenshot of the other, because there is one file. What differs is
 what is behind it - native C++ in the app, WebAssembly in the browser - and which of the
 two is answering is written in the colophon at the foot of the page.
 
-The keys on the on-screen keyboard **stay down** when clicked, so a chord is built one
-note at a time and held: they are a voicing you are holding rather than a piano you are
-playing. Clicking a key again, or **Clear keys**, lets go. On touch several fingers
-register as one voicing the same way. Any MIDI keyboard found at startup — or plugged in
-or paired later — is opened automatically.
-
-A first visit opens a short cheat sheet covering the things that cannot be guessed from
-looking - that a bar is clicked twice, that the keys latch, and where MIDI comes from.
-There is one for each mode, because they explain different pages: arriving at solo
-practice for the first time opens the solo half, which has more that cannot be guessed
-(a take has to be armed, and the keys stop latching). Each appears once; the **?** beside
-the Practice menu brings back the one for the mode you are in, and says so when you hover
-it.
-
-A **sustain pedal** works, on both shells and in both senses: the notes keep sounding
-after the keys lift, and they keep counting as part of the chord. A voicing spread out
-under the pedal — root, then the third, then the seventh, each key released before the
-next is struck — is read as the chord it adds up to rather than as a run of single notes,
-which is how a pianist actually plays one. Controller 64 from a hardware pedal and the
-on-screen **Sustain** control are the same thing by the time anything downstream sees
-them, so the on-screen one is there for the many people who have a keyboard but no pedal.
-
-The **Practice** menu at the top right sets a voicing shape for the whole
-session - root position, shell, rootless left hand, two-handed rootless, solo - and every
-voicing you play is then checked against it, so a rootless voicing played during a
-root-position exercise is reported even though the notes spell the chord. The same menu
-says how much colour **Show me one** should put in what it plays: the base shape, or the
-same shape with the tensions. Pressing the button again walks on to the next shape rather
-than repeating the last one. What it shows goes under your hands rather than merely onto
-the screen, so it sounds, is analysed, and can be named - the same path a played chord
-takes. On the browser page the menu also connects a MIDI keyboard through the Web MIDI
-API; that needs Chrome or Edge, and an embedded page may not be allowed to ask for
-permission at all, in which case use the page in its own tab or the desktop app, which
-talks to MIDI devices directly.
-
-The menu also carries the sound bank: an **electric piano**, or silent. Both shells
-synthesise the same voice rather than sampling it - one sine ringing another, with the
-modulation dying away faster than the note, so the attack barks and the tail settles - the
-page through Web Audio and the app through its own audio device. A mouse can only press
-one key at a time, so **Play chord** (or the space bar) sounds every key currently down at
-once. Connecting a MIDI keyboard widens the drawn keyboard to four octaves, and anything
-played outside that widens it further, so a two-handed voicing is never partly off the
-end; both shells do this.
-
-Clicking a bar moves to it; clicking the bar you are already on opens its scales and
-reharmonisations. Stepping along the chart to check one voicing after another therefore
-never puts a dialog in front of the keyboard, and the arrow keys move between bars without
-taking a hand off the keys.
-
-**Name it** asks the other question — not "is this the right chord for the bar" but "what
-did I just play", with no chart involved. **Edit chart** types chords into bars directly,
-**Reharmonise the tune** applies a plan to the whole chart at once, and when a voicing you
-play turns out to spell a substitution rather than the written chord, **Write it into the
-bar** keeps it.
-
-**Solo** and **Chords**, at the top, are the two things you can practise against the same
+**Chords** and **Solo**, at the top, are the two things you can practise against that one
 chart. Chord practice asks whether the voicing you played says what the bar says. Solo
 practice asks a different question of the same notes: where does each one sit. It is a
 mode, not a second screen - the chart, the keyboard, your MIDI connection and the sound
 all stay exactly where they were, and the bar you are on is the same bar in both.
 
-What does change is the light, and the words. Solo practice turns the paper down a stop and
-cools it, the rose accent becomes slate, and the masthead reads *Jazz Learning App: Solo*
-over a line about playing one - so which mode you are in is something you can feel without
-reading the toggle, and something you can read without knowing what the toggle does. The
-two mastheads and the two hints above the chart are written one on top of the other rather
-than one replacing the other, so a wording that wraps to a different number of lines cannot
-make the chart jump when you switch. Nothing moves and nothing is rebuilt - it is the same room under a
-different lamp. The three colours that mean something stay exactly as they are: sage,
-gold and rust say chord tone, scale tone and outside in both modes, and recolouring those
-would be changing the meaning rather than the light.
+### Chord practice
 
-In solo mode the keys do not latch, because a line is played rather than held: each note
-sounds, is read back - **E4 - the 9th, scale tone, in D Dorian** - and lets go. Every note
-is read on its own, so a rolled double-stop is two notes each read where it sits rather
-than one chord.
+Play a chord on a MIDI keyboard or the on-screen keyboard and the dock says what it makes
+of it: whether it is the chord the bar asks for, what is missing, what is outside, what is
+clashing or muddy, and what would improve it. **Expecting Dm7** at the right of the dock
+says which bar it is being checked against.
+
+The **Practice** menu sets a voicing shape for the whole session - root position, shell,
+rootless left hand, two-handed rootless, solo - and every voicing you play is then checked
+against it, so a rootless voicing played during a root-position exercise is reported even
+though the notes spell the chord. The same menu says how much colour **Show me one** should
+put in what it plays: the base shape, or the same shape with the tensions. Pressing the
+button again walks on to the next shape rather than repeating the last one. What it shows
+goes under your hands rather than merely onto the screen, so it sounds, is analysed, and
+can be named - the same path a played chord takes.
+
+**Name it** asks the other question - not "is this the right chord for the bar" but "what
+did I just play", with no chart involved. **Edit chart** types chords into bars directly,
+**Reharmonise the tune** applies a plan to the whole chart at once, and when a voicing you
+play turns out to spell a substitution rather than the written chord, **Write it into the
+bar** keeps it.
+
+Clicking the bar you are already on opens **its substitutions**, grouped from the closest
+to the original harmony outwards, each with a difficulty tag and a rationale. Choosing one
+rewrites the bar.
+
+### Solo practice
+
+The keys do not latch here, because a line is played rather than held: each note sounds,
+is read back - **E4 - the 9th, scale tone, in D Dorian** - and lets go. Every note is read
+on its own, so a rolled double-stop is two notes each read where it sits rather than one
+chord. Where chord practice writes *Expecting Dm7*, this mode writes **Expecting D Dorian** -
+the scale you are actually being held to.
 
 **A note outside the harmony is not called a mistake when you play it.** It is **open**:
 you have started something, and at that instant nothing can know how it ends. A chromatic
@@ -166,59 +127,63 @@ correct whichever way the line goes.
 
 Then the next note usually decides it. Step home, or take the target from both sides first,
 and the note is read again as an **approach note** that counts as landing. Play something
-that lands somewhere else instead and it settles as **outside** right there.
-
-Either way the answer is about a note you have already played past, so it arrives somewhere
-you are still looking. A chip in the dock holds the open note and changes colour with it -
-*Db4 wants D4* in grey while it is open, *Db4 landed on D4* in green, *Db4 never landed* in
-the outside colour. One note can do both at once - play Eb, then F#, then G, and the G is
-the chromatic approach the F# earned while the Eb is left having enclosed nothing - so the
-chip names both and each key takes its own colour. And the key you played it on **stays lit** rather than
-fading like every other note, until the line says what it was; then it relights in that
-colour for a moment and goes out. Nothing else on the keyboard moves while a note is open,
-which is what makes it catchable out of the corner of an eye. Only one thing buys another
-note: a second outside note with room between the two for a target, because that is an
-enclosure still in play and closing the first one would be calling a miss on a phrase about
-to land. Either way it can happen across a barline, because running chromatically into
+that lands somewhere else instead and it settles as **outside** right there. Only one thing
+buys another note: a second outside note with room between the two for a target, because
+that is an enclosure still in play and closing the first one would be calling a miss on a
+phrase about to land. It can all happen across a barline, because running chromatically into
 the next chord is one of the most idiomatic things in the idiom, and it works whether or not
-a take is armed: a player trying things out is the one most likely to be experimenting with
+a take is armed - a player trying things out is the one most likely to be experimenting with
 chromatic notes, and is told at exactly the same moment an armed one would be.
 
-**Nothing is graded on a note while it is still open.** That is the practical half of it. The
-score reads only the notes whose reading is final, so it no longer dips the moment you reach
-for a chromatic approach and climb back two notes later when you land it - which read as the
-app marking you down for a phrase it was about to approve of. The dock says it in the same voice chord practice uses, in the same place,
-and where that mode writes **Expecting Dm7** this one writes **Expecting D Dorian** - the
-scale you are actually being held to, which until now you had to press *Which scale?* to
-find out. Choosing a different one out of the bar rewrites it, and it survives the bar
-being opened again.
+The answer is about a note you have already played past, so it arrives somewhere you are
+still looking. A chip in the dock holds the open note and changes colour with it - *Db4
+wants D4* in grey while it is open, *Db4 landed on D4* in green, *Db4 never landed* in the
+outside colour. And the key you played it on **stays lit** rather than fading like every
+other note, until the line says what it was; then it relights in that colour for a moment
+and goes out. Nothing else on the keyboard moves while a note is open, which is what makes
+it catchable out of the corner of an eye.
 
-**Start a take** to be counted. While a take runs the dock carries a red line and the
-button a pulsing dot, because a take counting on quietly is the one thing here that would
-be annoying to find out about late. It reports the bar you are on and the take as a whole,
-and walking to another bar does not end it - the target moves and the notes keep
-accumulating, which is most of what soloing over a chart is. **Stop the take** freezes a
-summary: how the whole thing divided up, and which bar pulled away from the rest. A note
-outside the scale is *outside the scale*, never wrong.
+One note can do both at once - play Eb, then F#, then G, and the G is the chromatic approach
+the F# earned while the Eb is left having enclosed nothing - so the chip names both and each
+key takes its own colour.
 
-Every bar you play over also carries its own verdict, **on the bar**: a slim three-part
-strip in the same colours the dock uses - chord tone, scale tone, outside - in proportion,
-and a **percentage** for how the bar went. It fills in as you play and stays after you stop,
-so the bar that got away is one you can see at a glance down the chart rather than one you
-have to read about underneath it. The exact counts are on the bar's tooltip, and in its
-name for a screen reader.
+**An enclosure gets a colour of its own**, teal rather than the approach green. It is an
+approach note by every measure the engine takes - it lands, it counts as colour, the score
+has no opinion about it - but taking a note from both sides before you play it is deliberate
+in a way a passing tone is not, and a reading that called the two the same thing would lose
+the harder thing you did. The bar strip still counts it as an approach note, because that is
+where four tiers are being counted rather than one note's story being told.
+
+**Nothing is graded on a note while it is still open.** That is the practical half of it.
+The score reads only the notes whose reading is final, so it no longer dips the moment you
+reach for a chromatic approach and climb back two notes later when you land it - which read
+as the app marking you down for a phrase it was about to approve of.
+
+**Start a take** to be counted. While a take runs the dock carries a red line and the button
+a pulsing dot, because a take counting on quietly is the one thing here that would be
+annoying to find out about late. It reports the bar you are on and the take as a whole, and
+walking to another bar does not end it - the target moves and the notes keep accumulating,
+which is most of what soloing over a chart is. **Stop the take** freezes a summary: how the
+whole thing divided up, and which bar pulled away from the rest. A note outside the scale is
+*outside the scale*, never wrong.
+
+Every bar you play over also carries its own verdict, **on the bar**: a slim four-part strip
+in the same colours the dock uses - chord tone, scale tone, approach note, outside - in
+proportion, and a **percentage** for how the bar went. It fills in as you play and stays
+after you stop, so the bar that got away is one you can see at a glance down the chart rather
+than one you have to read about underneath it. The exact counts are on the bar's tooltip, and
+in its name for a screen reader.
 
 The percentage is the one number in this app that is a judgement rather than a count, so it
 is worth saying what it judges. It reads the notes whose reading is final, and nothing else.
 Of those: chord tones, scale tones and approach notes all count as landing - the difference
 between them is colour, not correctness. What is left as *outside* counts a quarter rather
 than nothing, because a note that resolved into nothing may still have been the best note in
-the line. What is left is balance, worth
-fifteen points at the very most: a line is chord tones anchoring it and everything else
-colouring it, so a bar that never leaves the chord and a bar that never touches it are both
-one-sided and are marked the same - and a bar of one or two notes is not unbalanced, it is
-short. It is a reading of a bar, not a mark for a player; nothing anywhere in here calls a
-note wrong.
+the line. What is left is balance, worth fifteen points at the very most: a line is chord
+tones anchoring it and everything else colouring it, so a bar that never leaves the chord and
+a bar that never touches it are both one-sided and are marked the same - and a bar of one or
+two notes is not unbalanced, it is short. It is a reading of a bar, not a mark for a player;
+nothing anywhere in here calls a note wrong.
 
 Stopping the take also reads the line as a **line**, separately from where its notes sat.
 Which bars went by without the line ever leaving the chord - *add some colour*, said about
@@ -227,6 +192,21 @@ fills the gap a leap opens. And whether the whole take stayed inside about a han
 when the horn players it is all stolen from use the range. None of the three touches the
 score: they are advice about how a line moves, the score is a reading of where its notes sat,
 and mixing the two would make a number nobody could explain out of one that can be.
+
+**Scale style**, in the Practice menu, is the vocabulary you are working out of: the modes,
+melodic minor, harmonic minor, bebop, pentatonics and blues, whole tone and diminished, or
+everything. It decides which scales a bar is offered and which one it is read against, so
+practising the modes over a tune and practising bebop over the same tune are two different
+exercises. A style with nothing for a bar - bebop over a diminished chord - shows the whole
+catalogue instead and says so, rather than calling every note you play outside.
+
+Clicking the bar you are already on opens **its scales**, narrowed to that style; choosing
+one is not just something to look at, it is what the bar is read against from there on, and
+it survives the bar being opened again. Between the style and that choice is where the
+forgiveness in solo mode lives, and it is deliberate: reading against *every* scale that fits
+a chord sounds more generous and in fact leaves nothing outside anything - over Cmaj7, G7 or
+Bbmaj7 not one of the twelve notes comes back outside. **Which scale?** says which one you
+are being held to, and puts it on the keyboard.
 
 **Playing**, in the same menu, is **Static** or **In time**, and only the first of them
 exists. Static is what solo practice is: the bar you are on is the bar you chose, it stays
@@ -239,22 +219,55 @@ an avoid note is named here rather than marked down; with one, sitting on it and
 through it stop being the same thing. It is the same feature as the metronome and the
 practice loop, and should arrive with them.
 
-**Scale style**, in the Practice menu, is the vocabulary you are working out of: the modes,
-melodic minor, harmonic minor, bebop, pentatonics and blues, whole tone and diminished, or
-everything. It decides which scales a bar is offered and which one it is read against, so
-practising the modes over a tune and practising bebop over the same tune are two different
-exercises. A style with nothing for a bar - bebop over a diminished chord - shows the whole
-catalogue instead and says so, rather than calling every note you play outside.
+### Both modes
 
-Clicking a bar in solo mode opens **its scales**, narrowed to that style; choosing one is
-not just something to look at, it is what the bar is read against from there on. Clicking a
-bar in chord mode opens **its substitutions** instead. Each mode's dialog answers the one
-question that mode is about - what to play over this bar, or what this bar should be.
+Switching modes changes **the light, and the words**. Solo practice turns the paper down a
+stop and cools it, the rose accent becomes slate, and the masthead reads *Jazz Learning App:
+Solo* over a line about playing one - so which mode you are in is something you can feel
+without reading the toggle, and something you can read without knowing what the toggle does.
+The two mastheads and the two hints above the chart are written one on top of the other
+rather than one replacing the other, so a wording that wraps to a different number of lines
+cannot make the chart jump when you switch. Nothing moves and nothing is rebuilt - it is the
+same room under a different lamp. The colours that mean something stay exactly as they are:
+sage, gold, green, teal and rust say chord tone, scale tone, approach note, enclosure and
+outside in both modes, and recolouring those would be changing the meaning rather than the
+light. Whatever was under your hands is let go of on the way through, in either direction.
 
-Between the style and that choice is where the forgiveness in solo mode lives, and it is
-deliberate: reading against *every* scale that fits a chord sounds more generous and in fact
-leaves nothing outside anything - over Cmaj7, G7 or Bbmaj7 not one of the twelve notes comes
-back outside. **Which scale?** says which one you are being held to.
+The keys on the on-screen keyboard **stay down** when clicked in chord practice, so a chord
+is built one note at a time and held: they are a voicing you are holding rather than a piano
+you are playing. Clicking a key again, or **Clear keys**, lets go. On touch several fingers
+register as one voicing the same way. Any MIDI keyboard found at startup — or plugged in or
+paired later — is opened automatically.
+
+A **sustain pedal** works, on both shells and in both senses: the notes keep sounding after
+the keys lift, and they keep counting as part of the chord. A voicing spread out under the
+pedal — root, then the third, then the seventh, each key released before the next is struck —
+is read as the chord it adds up to rather than as a run of single notes, which is how a
+pianist actually plays one. Controller 64 from a hardware pedal and the on-screen **Sustain**
+control are the same thing by the time anything downstream sees them, so the on-screen one is
+there for the many people who have a keyboard but no pedal.
+
+The Practice menu carries the sound bank: an **electric piano**, or silent. Both shells
+synthesise the same voice rather than sampling it - one sine ringing another, with the
+modulation dying away faster than the note, so the attack barks and the tail settles - the
+page through Web Audio and the app through its own audio device. A mouse can only press one
+key at a time, so **Play chord** (or the space bar) sounds every key currently down at once.
+Connecting a MIDI keyboard widens the drawn keyboard to four octaves, and anything played
+outside that widens it further, so a two-handed voicing is never partly off the end; both
+shells do this. On the browser page the menu also connects a MIDI keyboard through the Web
+MIDI API; that needs Chrome or Edge, and an embedded page may not be allowed to ask for
+permission at all, in which case use the page in its own tab or the desktop app, which talks
+to MIDI devices directly.
+
+Stepping along the chart to check one bar after another never puts a dialog in front of the
+keyboard - it takes a second click on the bar you are already on to open one - and the arrow
+keys move between bars without taking a hand off the keys.
+
+A first visit opens a short cheat sheet covering the things that cannot be guessed from
+looking. There is one for each mode, because they explain different pages: arriving at solo
+practice for the first time opens the solo half, which has more that cannot be guessed (a
+take has to be armed, and the keys stop latching). Each appears once; the **?** beside the
+Practice menu brings back the one for the mode you are in, and says so when you hover it.
 
 **Import / export**, in the Practice menu, opens a chart that came from somewhere else and
 writes the one on screen back out. Both shells read an iReal Pro link, the `.html` file
@@ -262,13 +275,14 @@ iReal Pro sends when you share a song, or a progression typed as `| Dm7 | G7 | C
 pasted in or picked as a file, and both put an `irealbook://` link back on the clipboard
 that iReal Pro opens directly.
 
-Two things are the browser page's alone, and both for the same reason - they need
-something the JUCE shell has no library for. The page reads a **PDF lead sheet** (iReal
-Pro exports one, and so does the page) using pdf.js; the app says so and points you at the
-link instead of reading a PDF as gibberish. And **Print or save as PDF** prints the lead
-sheet alone, menus and keyboard left off the page, which is the browser's print pipeline
-doing the work. The chart reader itself is in the engine either way: what the app is
-missing is a way to get text out of a PDF, not a way to understand one.
+Two things are the browser page's alone, and both for the same reason - they need something
+the JUCE shell has no library for. The page reads a **PDF lead sheet** (iReal Pro exports
+one, and so does the page) using pdf.js; the app says so and points you at the link instead
+of reading a PDF as gibberish. And **Print or save as PDF** prints the lead sheet alone,
+menus and keyboard left off the page, which is the browser's print pipeline doing the work.
+The chart reader itself is in the engine either way: what the app is missing is a way to get
+text out of a PDF, not a way to understand one.
+
 A chart that arrives with a chord the engine cannot read says so and names it rather than
 quietly dropping it, and the title, composer and style survive a round trip - they are
 written around the music the way a lead sheet writes them, feel top left and composer top
@@ -432,14 +446,26 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   owns the list and both shells build their menu from it.
 - **Reading a line** — `LineAnalyzer` takes notes one at a time rather than a chord at
   once, and reads each against the bar it landed in: a chord tone, a tone in the scale
-  that bar is being read against, or outside both. Every note also names its degree
-  against the chord, outside ones included, because "a b9 over Cmaj7" says something a
-  player can use and "outside" does not. A scale tone sitting a semitone above a chord
-  tone — the 4th over a major seventh — is still a scale tone and is named as one to pass
-  through rather than land on, because that is what a line does with it. A *take* is that
-  with a memory: it holds the notes from arming to disarming, across as many bars as you
-  walk through, and reports the whole thing and each bar in it. It shares no code with the
-  voicing analyser and should not: a voicing is a thing, a line is a stream.
+  that bar is being read against, an approach note, or outside all of them. Every note
+  also names its degree against the chord, outside ones included, because "a b9 over
+  Cmaj7" says something a player can use and "outside" does not. A scale tone sitting a
+  semitone above a chord tone — the 4th over a major seventh — is still a scale tone and
+  is named as one to pass through rather than land on, because that is what a line does
+  with it. It shares no code with the voicing analyser and should not: a voicing is a
+  thing, a line is a stream.
+- **A three-note window** — an outside note is not read as outside when it is played. It
+  is *open*, and stays open only for as long as some pattern could still reach back and
+  claim it: a chromatic approach and a passing tone are settled by the very next note, an
+  enclosure by the one after. Then it becomes an approach note or outside, once, and never
+  changes again. The engine also says which of the three gestures got it home, and what a
+  still-open note would need — the nearest note a step away that would land it, root
+  before chord tone before scale tone, semitones before tones — because at the moment of
+  playing, that is the only thing that is true.
+- **A take** — the window with a memory: it holds the notes from arming to disarming,
+  across as many bars as you walk through, and reports the whole thing and each bar in it.
+  Each bar gets a score out of 100 read over settled notes alone, and the whole take gets
+  read as a *line* as well: bars that never left the chord, leaps not followed by a step,
+  and a range that never left a hand's width. None of those three touches the score.
 - **Input abstraction** — hardware MIDI and the on-screen keyboard emit identical events;
   `VoicingCollector` groups notes that arrive together into one voicing, so a rolled chord
   or three fingers landing at once both arrive as a chord rather than a stream of notes.

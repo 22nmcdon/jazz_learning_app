@@ -55,6 +55,29 @@ bool isOutsideByPitch (NoteColour colour) noexcept;
 /** Whether a colour is final, or still waiting on the notes after it. */
 bool isSettled (NoteColour colour) noexcept;
 
+/** How an approach note got home.
+
+    Not a tier and not a fifth colour: all three land, all three count the same
+    in `LineStats`, and the score has no opinion about which. This is about the
+    *gesture*, which is a different question from where the note sat - and it is
+    worth telling apart because the three are not the same thing to play.
+
+    An enclosure in particular is the deliberate one. Taking a note from both
+    sides before playing it is a thing a player practises on purpose, and a
+    reading that called it "an approach note" alongside a passing tone would be
+    losing the harder thing they did.
+*/
+enum class ApproachKind
+{
+    none,        ///< not an approach note
+    chromatic,   ///< a semitone into the note that followed it
+    passing,     ///< stepped into, stepped out of, still going the same way
+    enclosure    ///< one of a pair that took the target from both sides
+};
+
+/** "chromatic approach", "passing tone", "enclosure" - for a UI that says it. */
+std::string approachKindName (ApproachKind kind);
+
 /** One note of a line, read against the bar it landed in. */
 struct LineNote
 {
@@ -81,6 +104,9 @@ struct LineNote
     /** For an `approach` note, the note it resolved into - the thing that made
         it an approach rather than a miss. Zero otherwise. */
     int resolvesTo {};
+
+    /** For an `approach` note, which of the three gestures got it there. */
+    ApproachKind approachKind {};
 
     /** For an `unresolved` note, the nearest note that would close it: a step
         away, semitones before tones, and a chord tone before a scale tone at
@@ -417,7 +443,7 @@ private:
     /** Closes every open note the line can no longer reach. */
     void settleTail (std::vector<LineNote>& line);
 
-    bool promote (std::vector<LineNote>& line, std::size_t index, int target);
+    bool promote (std::vector<LineNote>& line, std::size_t index, int target, ApproachKind kind);
 
     Options options;
 

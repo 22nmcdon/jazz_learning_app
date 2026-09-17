@@ -194,7 +194,7 @@ TEST ("a note the line never closed is reported as soon as nothing can reach it"
     // the verdict is true - and so the moment the wire carries it.
     const auto json = soloPlayNote (72);
 
-    CHECK (contains (json, "\"stranded\":[{\"name\":\"Db4\",\"midi\":61}]"));
+    CHECK (contains (json, "\"stranded\":[{\"name\":\"Db4\",\"midi\":61,\"kind\":\"\"}]"));
     CHECK (contains (json, "\"outside\":1"));
 }
 
@@ -233,10 +233,28 @@ TEST ("a note that resolves an earlier one says so, and resends the bar it chang
     soloSetBar (1, "Cmaj7", "", "");
     const auto json = soloPlayNote (60);
 
-    CHECK (contains (json, "\"resolved\":[{\"name\":\"Db4\",\"midi\":61}]"));
+    // D, Db, C is a descending chromatic line, so the fuller reading wins:
+    // the Db was passed through, not merely leaned on.
+    CHECK (contains (json, "\"resolved\":[{\"name\":\"Db4\",\"midi\":61,\"kind\":\"passing\"}]"));
     CHECK (contains (json, "\"bar\":{\"index\":1"));
     CHECK (contains (json, "\"index\":0"));          // the earlier bar came back too
     CHECK (contains (json, "\"approachTones\":1"));
+}
+
+TEST ("an enclosure comes across the wire as one, not as an approach note")
+{
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "");
+
+    soloPlayNote (63);
+    soloPlayNote (61);
+
+    const auto json = soloPlayNote (62);
+
+    // Both notes of it, and neither called a chromatic approach - which the
+    // second of them would honestly answer to on its own.
+    CHECK (contains (json, "\"kind\":\"enclosure\""));
+    CHECK (! contains (json, "\"kind\":\"chromatic\""));
 }
 
 TEST ("a take that never coloured a bar says which bar, on the bar")

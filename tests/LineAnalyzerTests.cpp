@@ -1220,3 +1220,89 @@ TEST ("an open note is not lost off the front of the window before it is closed"
     // Four of those eight are outside D Dorian, and none of them resolved.
     CHECK_EQ (stranded, 4);
 }
+
+//==============================================================================
+// Which gesture got a note home. Not a tier and not a score - all three land,
+// and `LineStats` counts them together. This is about what the player did.
+
+TEST ("a chromatic approach knows it was one")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 61, 62 });
+
+    CHECK (analyzer.notes()[0].approachKind == ApproachKind::chromatic);
+    CHECK_EQ (approachKindName (analyzer.notes()[0].approachKind),
+              std::string { "chromatic approach" });
+}
+
+TEST ("an enclosure is named as one, and both of its notes are")
+{
+    // Eb above, Db below, then the root: the deliberate gesture, and the one
+    // worth telling apart from the other two.
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 63, 61, 62 });
+
+    CHECK (analyzer.notes()[0].approachKind == ApproachKind::enclosure);
+    CHECK (analyzer.notes()[1].approachKind == ApproachKind::enclosure);
+}
+
+TEST ("the second note of an enclosure is not called a chromatic approach")
+{
+    /*  It is one, taken on its own - Db into D is a semitone either way - and
+        the simpler rule would have claimed it first. The enclosure is tried
+        first for exactly this reason: whichever rule reaches a note decides
+        what it is called, and calling this a chromatic approach would lose the
+        harder thing the player did. */
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 63, 61, 62 });
+
+    CHECK (analyzer.notes()[1].approachKind != ApproachKind::chromatic);
+}
+
+TEST ("a passing tone knows it was one")
+{
+    LineAnalyzer::Options pentatonic;
+    pentatonic.style = "pentatonic";
+
+    LineAnalyzer analyzer { pentatonic };
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 69, 71, 72 });
+
+    CHECK (analyzer.notes()[1].approachKind == ApproachKind::passing);
+}
+
+TEST ("a note that never became an approach has no gesture to report")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    playAll (analyzer, { 61, 69, 72 });
+
+    CHECK (analyzer.notes()[0].approachKind == ApproachKind::none);
+    CHECK (approachKindName (ApproachKind::none).empty());
+}
+
+TEST ("the gesture changes nothing about how a note counts")
+{
+    /*  All three gestures land in the same tier, and the score is a function of
+        the counts alone. Checked against `statsOf` rather than against a number
+        - the point is that the reading does not know how the notes got there,
+        not that this particular bar comes to any particular figure. */
+    LineAnalyzer enclosing;
+    enclosing.startTake();
+    enclosing.setTarget (0, chordFrom ("Dm7"));
+    playAll (enclosing, { 63, 61, 62 });
+    enclosing.endTake();
+
+    CHECK_EQ (enclosing.stats().approachTones, 2);
+    CHECK_EQ (enclosing.stats().chordTones, 1);
+    CHECK_EQ (enclosing.stats().outside, 0);
+    CHECK_EQ (enclosing.stats().score(), statsOf (1, 0, 0, 2).score());
+}

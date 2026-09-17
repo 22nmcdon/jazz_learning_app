@@ -364,6 +364,19 @@ bool isSettled (NoteColour colour) noexcept
     return colour != NoteColour::unresolved;
 }
 
+std::string approachKindName (ApproachKind kind)
+{
+    switch (kind)
+    {
+        case ApproachKind::chromatic: return "chromatic approach";
+        case ApproachKind::passing:   return "passing tone";
+        case ApproachKind::enclosure: return "enclosure";
+        case ApproachKind::none:      break;
+    }
+
+    return "";
+}
+
 std::string noteColourName (NoteColour colour)
 {
     switch (colour)
@@ -510,7 +523,8 @@ void LineAnalyzer::settleTail (std::vector<LineNote>& line)
     the callers below try patterns in order and several of them overlap, so
     "already landed" is an answer rather than a mistake.
 */
-bool LineAnalyzer::promote (std::vector<LineNote>& line, std::size_t index, int target)
+bool LineAnalyzer::promote (std::vector<LineNote>& line, std::size_t index, int target,
+                            ApproachKind kind)
 {
     auto& note = line[index];
 
@@ -521,6 +535,7 @@ bool LineAnalyzer::promote (std::vector<LineNote>& line, std::size_t index, int 
 
     note.colour = NoteColour::approach;
     note.resolvesTo = target;
+    note.approachKind = kind;
 
     justResolved.push_back (note);
     return true;
@@ -558,29 +573,17 @@ void LineAnalyzer::resolveTail (std::vector<LineNote>& played)
 
     const auto last = count - 1;
 
-    // A chromatic approach: one note outside, and the next one a semitone away
-    // and home. The commonest of the three by a wide margin.
-    if (landed (last) && std::abs (played[last].midiNote - played[last - 1].midiNote) == 1)
-        promote (played, last - 1, played[last].midiNote);
+    /*  Most specific first, and it matters now that the three gestures are
+        told apart: a note can honestly answer to more than one of them, and a
+        promoted note is never re-promoted, so whichever rule reaches it first
+        decides what it is called.
 
-    // A passing tone: stepped into, stepped out of, and still going the same
-    // way. This is what catches the wider gaps - between two notes of a
-    // pentatonic there is room to pass through by a tone, where a seven-note
-    // scale would have made it a semitone and the rule above would have had it.
-    if (count >= 3 && landed (last) && landed (last - 2))
-    {
-        const auto in = played[last - 1].midiNote - played[last - 2].midiNote;
-        const auto out = played[last].midiNote - played[last - 1].midiNote;
-
-        if (((in > 0) == (out > 0))
-            && step (played[last - 2].midiNote, played[last - 1].midiNote)
-            && step (played[last - 1].midiNote, played[last].midiNote))
-            promote (played, last - 1, played[last].midiNote);
-    }
-
-    // An enclosure: two notes taking the target from both sides before landing
-    // on it. Both are outside, and both are the line aiming rather than
-    // missing, so both are promoted.
+        The second note of an enclosure is a chromatic approach in its own
+        right - Db into D is a semitone either way - and a note stepped into
+        and stepped out of, still rising, is a passing tone *and* a chromatic
+        approach when the last step is a semitone. Both of those are true and
+        the fuller description is the more useful one, so the order runs
+        enclosure, passing tone, chromatic approach. */
     if (count >= 3 && landed (last)
         && isOutsideByPitch (played[last - 1].colour)
         && isOutsideByPitch (played[last - 2].colour))
@@ -589,14 +592,37 @@ void LineAnalyzer::resolveTail (std::vector<LineNote>& played)
         const auto above = played[last - 2].midiNote - target;
         const auto below = played[last - 1].midiNote - target;
 
+        // Two notes taking the target from both sides before landing on it.
+        // Both were the line aiming rather than missing, so both are promoted.
         if (((above > 0) != (below > 0))
             && step (played[last - 2].midiNote, target)
             && step (played[last - 1].midiNote, target))
         {
-            promote (played, last - 2, target);
-            promote (played, last - 1, target);
+            promote (played, last - 2, target, ApproachKind::enclosure);
+            promote (played, last - 1, target, ApproachKind::enclosure);
         }
     }
+
+    // A passing tone: stepped into, stepped out of, and still going the same
+    // way. Says more than "a semitone from the next note" does - the note was
+    // in transit rather than leaning - and it is what catches the wider gaps,
+    // where a pentatonic leaves room to pass through by a whole tone.
+    if (count >= 3 && landed (last) && landed (last - 2))
+    {
+        const auto in = played[last - 1].midiNote - played[last - 2].midiNote;
+        const auto out = played[last].midiNote - played[last - 1].midiNote;
+
+        if (((in > 0) == (out > 0))
+            && step (played[last - 2].midiNote, played[last - 1].midiNote)
+            && step (played[last - 1].midiNote, played[last].midiNote))
+            promote (played, last - 1, played[last].midiNote, ApproachKind::passing);
+    }
+
+    // A chromatic approach: one note outside, and the next one a semitone away
+    // and home. The commonest of the three by a wide margin, and the one left
+    // when neither of the fuller readings fits.
+    if (landed (last) && std::abs (played[last].midiNote - played[last - 1].midiNote) == 1)
+        promote (played, last - 1, played[last].midiNote, ApproachKind::chromatic);
 }
 
 LineNote LineAnalyzer::readAgainstTarget (int midiNote) const

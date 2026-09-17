@@ -278,6 +278,18 @@ try {
   check("the key the open note was played on says how it ended",
         (await page.locator('#keyboard .key[data-note="61"]').getAttribute("data-colour")) === "outside");
 
+  // An enclosure is an approach note everywhere a tier is counted, and its own
+  // colour on the key and the chip, where one note's story is being told.
+  for (const note of [63, 61, 62]) { await soloKey(note).click(); await page.waitForTimeout(120); }
+
+  await page.waitForFunction(
+    () => document.querySelector("#soloOpen").dataset.colour === "enclosure",
+    null, { timeout: 10000 });
+  check(`an enclosure is told apart from a plain approach `
+        + `(${await page.locator("#soloOpen").innerText()})`,
+        (await page.locator('#keyboard .key[data-note="63"]').getAttribute("data-colour")) === "enclosure"
+        && (await page.locator('#keyboard .key[data-note="61"]').getAttribute("data-colour")) === "enclosure");
+
   /*  One note can close one open note and pass the window on another at the
       same moment: G is the chromatic approach the F# earned, and the Eb before
       it enclosed nothing. Both have to be let go of - handling only the first

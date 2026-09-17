@@ -171,6 +171,19 @@ namespace
         return std::nullopt;  // "any": read the chart, do not drill a shape
     }
 
+    std::string approachKindKey (ApproachKind kind)
+    {
+        switch (kind)
+        {
+            case ApproachKind::chromatic: return "chromatic";
+            case ApproachKind::passing:   return "passing";
+            case ApproachKind::enclosure: return "enclosure";
+            case ApproachKind::none:      break;
+        }
+
+        return "";
+    }
+
     std::string noteColourKey (NoteColour colour)
     {
         switch (colour)
@@ -223,6 +236,8 @@ namespace
              + ",\"scale\":" + quoted (note.scaleName)
              + ",\"avoid\":" + (note.avoidNote ? "true" : "false")
              + ",\"resolvesTo\":" + quoted (note.resolvesTo > 0 ? midiNoteName (note.resolvesTo) : "")
+             + ",\"approachKind\":" + quoted (approachKindKey (note.approachKind))
+             + ",\"approachName\":" + quoted (approachKindName (note.approachKind))
              + ",\"wantsToReach\":" + quoted (note.wantsToReach > 0 ? midiNoteName (note.wantsToReach) : "")
              + ",\"wantsToReachDegree\":" + quoted (note.wantsToReachDegree)
              + ",\"wantsToReachStep\":" + std::to_string (note.wantsToReach > 0
@@ -744,7 +759,9 @@ std::string soloPlayNote (int midiNote)
         return jsonArray (notes, [] (const LineNote& earlier)
                           {
                               return "{\"name\":" + quoted (midiNoteName (earlier.midiNote))
-                                   + ",\"midi\":" + std::to_string (earlier.midiNote) + "}";
+                                   + ",\"midi\":" + std::to_string (earlier.midiNote)
+                                   + ",\"kind\":" + quoted (approachKindKey (earlier.approachKind))
+                                   + "}";
                           });
     };
 

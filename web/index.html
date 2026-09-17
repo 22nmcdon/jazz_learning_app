@@ -46,7 +46,18 @@
      one, because it is a different kind of right. */
   --sage: #6f7f63;
   --approach: #8fae6d;
+  --enclosure: #3f8f88;
   --rust: #a4553f;
+
+  /* An enclosure is an approach note by every measure the engine takes - it
+     lands, it counts as colour, the score has no opinion about it. What it is
+     not is the same thing to play: taking a note from both sides before you
+     play it is deliberate in a way a passing tone is not. So it keeps the
+     approach tier and gets its own colour on the key and the chip, where one
+     note's story is being told, and shares the tier's colour on the bar strip,
+     where four tiers are being counted. Teal because it is the only cool
+     colour among the five, and the only one that could not be mistaken for
+     either green at a glance. */
 
   /* A note the line has opened and not yet closed. Deliberately the quietest
      of the five and the only one with no opinion in it: the whole point of the
@@ -329,6 +340,10 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
   border-color: var(--approach);
   background: rgba(143, 174, 109, 0.22);
 }
+.open-note[data-colour="enclosure"] {
+  border-color: var(--enclosure);
+  background: rgba(63, 143, 136, 0.18);
+}
 .open-note[data-colour="outside"] {
   border-color: var(--rust);
   background: rgba(164, 85, 63, 0.14);
@@ -365,6 +380,7 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 .key.sounded[data-colour="chordTone"] { background: var(--sage); }
 .key.sounded[data-colour="scaleTone"] { background: var(--gold); }
 .key.sounded[data-colour="approach"] { background: var(--approach); }
+.key.sounded[data-colour="enclosure"] { background: var(--enclosure); }
 .key.sounded[data-colour="unresolved"] { background: var(--unresolved); }
 .key.sounded[data-colour="outside"] { background: var(--rust); }
 
@@ -1437,7 +1453,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 322 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 329 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -1560,11 +1576,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         land it, and what that note is in the chord.
       </li>
       <li>
-        <b>Then the next two notes decide it.</b> Step home from it, or take the target from
-        both sides first, and it is read again as an <b>approach note</b> that counts as
-        landing. Go somewhere else and it settles as <i>outside</i>, and the dock says so
-        then - two notes later, which is the earliest it could honestly be said. Nothing is
-        graded on a note while it is still open.
+        <b>Then the next note usually decides it.</b> Step home from it and it is read again
+        as an <b>approach note</b> that counts as landing; go somewhere else and it settles
+        as <i>outside</i> right there. The key it was played on stays lit until then, and
+        relights in the colour of the answer. Nothing is graded on a note while it is open.
+      </li>
+      <li>
+        <b>Take the target from both sides first</b> - a note above, a note below, then the
+        note itself - and that is an <b>enclosure</b>, which gets a colour of its own. It
+        counts exactly as an approach note does; it is just a harder thing to have done on
+        purpose, and worth telling apart from passing through.
       </li>
       <li>
         <b>Click the same bar again</b> for the scales that fit it. Picking one is the
@@ -3055,7 +3076,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         in it meant the other one's key was never let go of, and it sat there
         lit and breathing for the rest of the take, asking a question that had
         already been answered. */
-    resolved.forEach(function (earlier) { settleKey(earlier.midi, "approach"); });
+    // An enclosure wears its own colour on the key and the chip. It is an
+    // approach note everywhere a tier is counted; this is the one place a
+    // single note's story is told, and the gesture is the story.
+    var enclosing = resolved.length > 0
+                 && resolved.every(function (earlier) { return earlier.kind === "enclosure"; });
+
+    resolved.forEach(function (earlier) {
+      settleKey(earlier.midi, earlier.kind === "enclosure" ? "enclosure" : "approach");
+    });
+
     stranded.forEach(function (earlier) { settleKey(earlier.midi, "outside"); });
 
     if (stranded.length && resolved.length) {
@@ -3064,6 +3094,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       showOpenNote("outside", noteList(resolved) + " landed, " + noteList(stranded) + " did not");
     } else if (stranded.length) {
       showOpenNote("outside", noteList(stranded) + " never landed");
+    } else if (enclosing) {
+      showOpenNote("enclosure", noteList(resolved) + " enclosed " + note.name);
     } else if (resolved.length) {
       showOpenNote("approach", noteList(resolved) + " landed on " + note.name);
     } else if (note.colour === "unresolved") {
