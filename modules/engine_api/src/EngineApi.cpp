@@ -445,6 +445,11 @@ namespace
         return hold ("{\"ok\":true,\"title\":" + quoted (result.chart->title)
                      + ",\"composer\":" + quoted (result.chart->composer)
                      + ",\"style\":" + quoted (result.chart->style)
+                     // The readers have always pulled this out of an iReal Pro
+                     // link and off a PDF; nothing ever asked them for it, so a
+                     // waltz imported as a waltz was counted in four.
+                     + ",\"beatsPerBar\":" + std::to_string (result.chart->timeSignature.numerator)
+                     + ",\"beatUnit\":" + std::to_string (result.chart->timeSignature.denominator)
                      + ",\"bars\":" + std::to_string (result.chart->measureCount())
                      + ",\"unreadable\":" + jsonArray (result.unreadable, [] (const std::string& text)
                        {

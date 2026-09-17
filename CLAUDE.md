@@ -254,7 +254,23 @@ there because these are the ones that break something when a session has not rea
   drifts, and a metronome that drifts is worse than none. Every tick books the beats
   falling inside a lookahead window, with times computed from one origin - so changing the
   tempo mid-roll has to re-anchor that origin, or the next beat is spaced the new way from
-  an origin that meant the old one.
+  an origin that meant the old one. The metre cannot be re-anchored the same way, because
+  the count-in and the bar arithmetic are both in beats-per-bar: changing it mid-roll
+  stops and starts the clock in the metre just chosen.
+- **The metre is the chart's, not the transport's.** `ChartFormats` has always read a time
+  signature out of an iReal Pro link and off a PDF; it only reached the page when the
+  sheet head got somewhere to put it, and until then a waltz was counted in four. It rides
+  `holdChart` as `beatsPerBar` / `beatUnit`, seeds `transport.beats`, and fills both the
+  picker and the beat dots. `transport.beats`, never a literal 4 - the dots, the count-in
+  and the bar arithmetic all read it. (The writer does not put it back out yet, so export
+  does not round-trip the metre; that is one line in `ChartFormats` when someone wants it.)
+- **Arming a take and starting the clock are one gesture.** Two buttons made two states
+  nobody meant - a take over a chart that never moves, and a chart rolling with nothing
+  counting - so `toggleTake()` does both, and the space bar is the same call. The take
+  starts first, because the transport's first `selectBar` has to reach an engine that
+  already has one. Space is fenced out of fields where a space is a character
+  (`typingInto`) rather than fenced to `document.body`: a take is started right after
+  clicking a bar or the button, which is exactly where the body is not.
 - **The click is the one place the two shells are honestly unequal.** On the web it is
   scheduled into Web Audio at an exact time. In the app the sound is native, across an
   event bridge with no "play this at" argument, so the click is *sent* when due and
@@ -347,9 +363,10 @@ build step passes, that setting is the first thing to check.
 
 ## Not built — still genuinely open
 - Voice-leading visualiser. `guideToneMotion()` is the primitive it would draw.
-- Personal voicing library; ear training; metronome / practice-loop; progress tracking.
-  The analyser's per-voicing score, the feedback panel's session average and now a take's
-  own numbers are the hook the last of those would build on.
+- Personal voicing library; ear training; progress tracking. The analyser's per-voicing
+  score, the feedback panel's session average and now a take's own numbers are the hook
+  the last of those would build on. (The metronome and the practice loop ship - they are
+  what In time is.)
 - **Licks.** Solo mode's "Which scale?" is the scale half of "show me one"; suggesting a
   *line* to play over a bar is a separate feature needing generated or curated patterns,
   rhythm and register - deliberately not started.
@@ -359,6 +376,8 @@ build step passes, that setting is the first thing to check.
   change to the engine's shape (it has no time in it today, deliberately) and should be
   designed before it is started.
 - MusicXML / MuseScore import. The page reader is format-agnostic enough to feed it.
+- A metre that survives export. The readers bring a time signature in and the page now
+  shows it; the iReal Pro writer does not put one back out.
 - Reading and printing a PDF in the JUCE app, as above.
 
 ## Open Questions (Don't Assume — Ask)

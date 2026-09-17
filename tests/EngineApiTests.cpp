@@ -165,6 +165,34 @@ TEST ("a played note comes back with its colour, its degree and the running coun
     CHECK (contains (json, "\"chordTones\":1"));
 }
 
+TEST ("a chart brings its time signature with it")
+{
+    /*  iReal Pro writes the metre into the body of the link as a T token, not
+        into the header fields, and the reader has always pulled it out; until
+        now nothing asked for it, so a waltz arrived as a waltz and was counted
+        in four. */
+    const auto waltz = importIRealPro ("irealb://Blue%20Waltz=Someone==Medium%20Swing===="
+                                      "*A{T34Dm7 |G7 |C^7 |C^7 }");
+
+    CHECK (contains (waltz, "\"ok\":true"));
+    CHECK (contains (waltz, "\"beatsPerBar\":3"));
+    CHECK (contains (waltz, "\"beatUnit\":4"));
+
+    const auto five = importIRealPro ("irealb://Take%20Some=Nobody==Medium%20Swing===="
+                                     "*A{T54Dm7 |G7 |C^7 |C^7 }");
+
+    CHECK (contains (five, "\"beatsPerBar\":5"));
+    CHECK (contains (five, "\"beatUnit\":4"));
+}
+
+TEST ("a chart with nothing to say about its metre says four four")
+{
+    const auto plain = importIRealPro ("irealb://Plain=Nobody==Medium Swing===*A{Dm7 |G7 |C^7 |C^7 }");
+
+    CHECK (contains (plain, "\"beatsPerBar\":4"));
+    CHECK (contains (plain, "\"beatUnit\":4"));
+}
+
 TEST ("a note outside the scale comes across as open, with what would close it")
 {
     /*  Not "outside": nothing knows that yet, and the wire should not say it

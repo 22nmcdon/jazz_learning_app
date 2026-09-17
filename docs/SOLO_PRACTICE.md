@@ -97,8 +97,8 @@ memory and a window.
   the chart rather than a read of a panel. The page keeps those numbers itself, from the
   bar stats every `soloPlayNote` already returns, and replaces the lot with the engine's
   breakdown on `soloEndTake` so a long take cannot drift.
-- Static, with no clock. A tempo-driven version would drive `setTarget()` from one and
-  need nothing else from the engine.
+- Either static or in time; see *In time* below. The clock needed nothing new from the
+  engine, because it moves the bar the same way a click does.
 
 ### The score, and the shape of a line
 - **The score is the only judgement in the engine, so every number in it is named.**
@@ -155,6 +155,21 @@ memory and a window.
   window with their times computed from one origin. Changing the tempo mid-roll therefore
   has to re-anchor that origin - otherwise the next beat is spaced the new way from an
   origin that meant the old one, and the whole line jumps.
+- **The metre is the chart's, and it cannot be re-anchored the way the tempo can.** Both
+  the count-in and the bar arithmetic are counted in beats-per-bar, so a metre changed
+  mid-roll would mean two different bar lengths measured from one origin. It stops the
+  clock and starts it again in the metre just chosen, which is what choosing it meant.
+  The value itself comes off the chart - `ChartFormats` has always read a time signature
+  out of an iReal Pro link and off a PDF, and it reached the page only once the sheet head
+  had somewhere to put it. Read `transport.beats` for it, never a literal four: the dots,
+  the count-in and the loop arithmetic all do.
+- **Arming and rolling are one gesture.** There were two buttons for one intention, and
+  between them two states nobody ever meant: a take counting over a chart that never
+  moved, and a chart rolling with nothing counting. `toggleTake()` is both, and the space
+  bar calls it - fenced out of fields where a space is a character rather than fenced to
+  `document.body`, because a take is started straight after clicking a bar or the button
+  and the body is exactly where the focus is not. The take is started before the clock, so
+  the transport's first `selectBar` reaches an engine that already has one.
 - **The count-in is not bar one.** The chart does not wear the rolling mark until a real
   beat lands. A bar claiming to be current while the dots are still counting says the
   player is somewhere they are not, which is the whole thing a count-in exists to prevent.

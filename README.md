@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (329), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (331), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -214,13 +214,23 @@ are being held to, and puts it on the keyboard.
 you are on is the bar you chose, it stays there until you move, and nothing is counting
 time.
 
-**In time** puts a clock behind the chart. Set a tempo, and **Play** in the dock counts a
-bar in and then moves the chart for you, a bar to the click, looping whatever range of bars
-you give it. Four dots beside the button say where in the bar you are - gold while it is
-counting you in, then the downbeat in red - and the bar the clock is on wears a line across
-its top. Arm a take over the top of it and the two are the same take: the clock is walking
-the chart instead of your mouse, and the engine cannot tell the difference, which is the
-point. Everything else works exactly as it does static.
+**In time** puts a clock behind the chart. **Start a take** then counts a bar in and moves
+the chart for you, a bar to the click, looping whatever range of bars you give it - arming
+the take and starting the clock are one gesture, from the button in the dock or from the
+**space bar**. Dots beside the button say where in the bar you are, one per beat of the
+metre - gold while it is counting you in, then the downbeat in red - and the bar the clock is
+on wears a line across its top. The take and the clock are the same take: the clock is
+walking the chart instead of your mouse, and the engine cannot tell the difference, which is
+the point. Everything else works exactly as it does static.
+
+The **tempo and the metre are at the head of the chart**, where a lead sheet writes them,
+rather than in the menu - they belong to the tune, not to the practice session, which is also
+why an imported one brings its own. iReal Pro links and PDF lead sheets have always carried a
+time signature and the readers have always pulled it out; until the head had somewhere to put
+it, a waltz arrived as a waltz and was counted in four. The click counts the numerator, so
+6/8 is six clicks in a bar rather than two. Changing the metre while it is rolling starts it
+again in the metre you just chose, because beat times are counted from one origin at one
+spacing and cannot be re-cut mid-flight.
 
 The clock is the page's, not the engine's. `LineAnalyzer` has no time in it at all - that is
 what makes it testable - so the transport moves the selected bar and the engine finds out the
@@ -495,15 +505,19 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
 - **MusicXML / MuseScore import.** iReal Pro and PDF import both ship (see above); which
   further format comes next is still an open question in the design doc.
 - **Audio/pitch-detection input**, deliberately out of scope for this phase.
-- **Voicing library, ear training, metronome/practice loop, progress tracking.** The
-  analyser reports a per-voicing score, the feedback panel keeps a session average and a
-  solo take now keeps its own numbers — between them, the hook progress tracking would
-  build on.
+- **Voicing library, ear training, progress tracking.** The analyser reports a per-voicing
+  score, the feedback panel keeps a session average and a solo take now keeps its own
+  numbers — between them, the hook progress tracking would build on. The metronome and the
+  practice loop ship, as In time above.
 - **Licks.** Solo mode tells you the scale; suggesting a *line* to play over a bar needs
   generated or curated patterns, rhythm and register, and is a feature of its own.
-- **A tempo-driven solo transport** — soloing along with a clock that advances the chart
-  by itself. That is the same feature as the metronome and practice loop, and the engine
-  side of it is already done: a transport would move the target bar and need nothing else.
+- **Rhythmic reading.** The clock exists and nothing reads it: landing chord tones on
+  strong beats, and telling an avoid note passed through from one sat on, both need
+  `LineAnalyzer` to be told where in the bar a note fell. It has no time in it today,
+  deliberately, so that is a change to the engine's shape and should be designed first.
+- **A metre that survives export.** The readers bring a time signature in; the iReal Pro
+  writer does not put one back out, so a waltz imported and exported comes back in four.
+  One line in `ChartFormats`, once someone wants it.
 - **The voice-leading visualiser** — though `guideToneMotion()` in the engine is the
   primitive it needs.
 - **Reading a PDF, and printing one, in the desktop app.** Both need a PDF library the
@@ -519,7 +533,7 @@ These were left open rather than silently decided:
 2. **Rule-based vs. data-informed reharmonisation** — the POC is entirely rule-based, with
    every rule in one file (`Reharmonizer.cpp`) and its own difficulty and style tag, so a
    data-informed ranking could replace the ordering without touching the rules.
-3. **Solo/improv feedback layer** — in, and static: you arm a take and walk the chart
-   yourself. The tempo-driven version waits on the metronome, above.
+3. **Solo/improv feedback layer** — in, both static and in time: you arm a take and either
+   walk the chart yourself or let the clock walk it. What is still open is rhythm, above.
 4. **A dense, DAW-style desktop layout** — deferred; it would arrive as a fourth size
    class rather than a second UI.

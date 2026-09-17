@@ -152,6 +152,27 @@ try {
     await second.close();
   }
 
+  // A tune's metre is the tune's. iReal Pro writes it into the link, the reader
+  // has always pulled it out, and the head is where it now shows up - so a
+  // waltz opened from a link is counted in three rather than in four.
+  {
+    // index.html rather than "/": this little server types a response by its
+    // file extension, and a directory has none.
+    const waltz = origin + "/index.html?chart="
+      + encodeURIComponent("irealb://Blue%20Waltz=Someone==Medium%20Swing===="
+                           + "*A{T34Dm7 |G7 |C^7 |C^7 }");
+    const third = await browser.newPage();
+    await third.goto(waltz, { waitUntil: "load" });
+    await third.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    await third.waitForFunction(
+      () => document.querySelectorAll("#systems .bar").length === 4, null, { timeout: 15000 });
+
+    check(`an imported waltz arrives in three `
+          + `(${await third.locator("#timeSig").inputValue()})`,
+          (await third.locator("#timeSig").inputValue()) === "3/4");
+    await third.close();
+  }
+
   await page.locator("#ioClose").click();
 
   // --- solo practice ------------------------------------------------------
@@ -359,9 +380,15 @@ try {
   // bars, so the test watches a real roll rather than a stubbed one.
   await page.locator("#playLive").click();
   check("choosing in time reveals what a clock needs",
-        (await page.locator("#tempoRow").isVisible())
-        && (await page.locator("#countInRow").isVisible())
+        (await page.locator("#countInRow").isVisible())
         && (await page.locator("#loopRow").isVisible()));
+
+  // The tempo and the metre are at the head of the chart, not in the menu, so
+  // they are readable while playing rather than behind a button.
+  check("the tempo mark is at the head of the chart",
+        (await page.locator("#metreRow").isVisible())
+        && (await page.locator(".sheet-head #tempo").count()) === 1
+        && (await page.locator(".sheet-head #timeSig").count()) === 1);
 
   // A loop nobody has chosen is the whole tune, not bar one to bar one.
   check(`the loop starts as the whole chart `
@@ -370,26 +397,53 @@ try {
         && (await page.locator("#loopTo").inputValue()) === "11");
 
   // Count in first, which is the default: the dots count and the chart waits.
+  // One button does both jobs now - starting a take is what sets it rolling.
   await page.locator("#menuButton").click();
-  await page.locator("#rollTake").click();
+  await page.locator("#armTake").click();
   await page.waitForFunction(
     () => document.querySelector("#beatRow").classList.contains("counting"),
     null, { timeout: 10000 });
   check("a count-in counts before the chart moves",
         (await page.locator("#systems .bar.rolling").count()) === 0);
-  await page.locator("#rollTake").click();
-  await page.locator("#menuButton").click();
+  check("one button arms the take and starts the clock",
+        (await page.locator("#armTake").getAttribute("aria-pressed")) === "true");
+  await page.locator("#armTake").click();
+  check("and stopping it stops both",
+        (await page.locator("#armTake").getAttribute("aria-pressed")) === "false"
+        && !(await page.locator("#beatRow").isVisible()));
 
-  await page.fill("#tempo", "300");
-  await page.dispatchEvent("#tempo", "change");
+  // The metre is the chart's, and the dots are the metre's.
+  await page.selectOption("#timeSig", "3/4");
+  check("the metre fills the beat row (3)",
+        (await page.locator("#beatRow .beat").count()) === 3);
+  await page.selectOption("#timeSig", "4/4");
+
+  await page.locator("#menuButton").click();
   await page.uncheck("#countIn");
   await page.selectOption("#loopFrom", "0");
   await page.selectOption("#loopTo", "1");
   await page.locator("#menuButton").click();
 
-  check("and the dock gets a transport", await page.locator("#rollTake").isVisible());
+  await page.fill("#tempo", "300");
+  await page.dispatchEvent("#tempo", "change");
 
-  await page.locator("#rollTake").click();
+  // A space typed into the tempo box is a character, not a command, so the
+  // test leaves the field the way a player would before reaching for it.
+  await page.locator("#tempo").press("Space");
+  check("a space in the tempo box is not a transport key",
+        (await page.locator("#armTake").getAttribute("aria-pressed")) === "false");
+
+  // The space bar is the transport key everywhere else a musician meets one,
+  // and it works from wherever the last click left the focus.
+  await page.evaluate(() => document.activeElement.blur());
+  await page.keyboard.press("Space");
+
+  // Arming asks the engine for a take, so it lands a tick later even on the
+  // web - the app awaits a bridge call for the same thing.
+  await page.waitForFunction(
+    () => document.querySelector("#armTake").getAttribute("aria-pressed") === "true",
+    null, { timeout: 10000 });
+  check("the space bar starts a take", true);
 
   // A bar at 300bpm is 800ms, so the chart has to have moved off bar one
   // without anything being clicked.
@@ -404,10 +458,12 @@ try {
     null, { timeout: 10000 });
   check("and loops the range it was given", true);
 
-  await page.locator("#rollTake").click();
-  check("stopping the transport stops the chart",
-        (await page.locator("#rollTake").getAttribute("aria-pressed")) === "false"
-        && (await page.locator("#systems .bar.rolling").count()) === 0);
+  await page.keyboard.press("Space");
+  await page.waitForFunction(
+    () => document.querySelector("#armTake").getAttribute("aria-pressed") === "false",
+    null, { timeout: 10000 });
+  check("and the space bar stops it again",
+        (await page.locator("#systems .bar.rolling").count()) === 0);
 
   // Back to static for the checks that follow, which click bars themselves.
   await page.locator("#menuButton").click();

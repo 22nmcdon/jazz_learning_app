@@ -278,7 +278,7 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 }
 .tempo-unit { font-size: 11.5px; color: var(--text-soft); }
 .tempo-input {
-  width: 68px;
+  width: 62px;
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 1px;
@@ -296,7 +296,7 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
   color: var(--cream);
 }
 
-/* Where the beat is, as four dots. The chart says which bar and this says
+/* Where the beat is, one dot to a beat of the metre. The chart says which bar and this says
    where in it - the one thing a moving highlight cannot show, because a bar
    lights for its whole length however long that is. */
 .beat-row { display: flex; align-items: center; gap: 6px; }
@@ -574,12 +574,42 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
   gap: 10px;
   margin-bottom: 26px;
 }
+.sheet-mark { min-width: 0; }
 .style-mark {
+  display: block;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.2em;
   color: var(--text-soft);
   padding-top: 8px;
+}
+
+/* The tempo mark, written the way a chart writes it. Wraps rather than
+   squeezing, because at a phone width the metre and the tempo do not both fit
+   beside a centred title. */
+.metre-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 10px;
+}
+.tempo-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+.note-value { font-size: 17px; color: var(--charcoal); line-height: 1; }
+.metre-select {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 1px;
+  padding: 4px 6px;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--charcoal);
 }
 .sheet-title {
   font-size: clamp(22px, 3.4vw, 30px);
@@ -1220,6 +1250,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 @media (max-width: 760px) {
   .masthead { padding-block: 26px 18px; }
   .sheet-head { grid-template-columns: 1fr; text-align: center; }
+  /* The head centres here, and a tempo mark left-aligned under a centred feel
+     mark reads as something that missed. */
+  .metre-row { justify-content: center; }
   .sheet-title { text-align: center; }
   .sheet-credit, .style-mark { text-align: center; padding-top: 0; }
   .keyboard { height: 100px; }
@@ -1336,15 +1369,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <p class="menu-note" id="playingNote">Static: the bar you are on is the bar you chose,
               and nothing is counting time.</p>
 
-            <!-- Only shown once there is a clock to configure. Hidden rather than
-                 disabled: a tempo box beside a switch set to Static is asking a
-                 question nobody has reached yet. -->
-            <div class="tempo-row" id="tempoRow" hidden>
-              <label class="tempo-label" for="tempo">Tempo</label>
-              <input class="tempo-input" id="tempo" type="number" min="40" max="300" step="1" value="120">
-              <span class="tempo-unit">bpm</span>
-            </div>
-
+            <!-- Tempo and metre used to sit here. They belong to the chart, so
+                 they moved to its head; what is left is only what belongs to
+                 the practice session. Hidden rather than disabled: a count-in
+                 beside a switch set to Static is asking a question nobody has
+                 reached yet. -->
             <label class="menu-option" id="countInRow" hidden>
               <input type="checkbox" id="countIn" checked> Count in a bar first
             </label>
@@ -1402,7 +1431,25 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   <section class="sheet-section">
     <div class="sheet">
       <div class="sheet-head">
-        <span class="style-mark" id="sheetStyle">Medium Swing</span>
+        <div class="sheet-mark">
+          <span class="style-mark" id="sheetStyle">Medium Swing</span>
+
+          <!-- Where a lead sheet puts them: the metre and the tempo mark sit
+               under the feel, at the head of the chart, rather than inside a
+               menu. They are the chart's own - an imported waltz arrives in
+               three - so this is also where they are most honestly read. Shown
+               only once there is a clock for them to mean anything to. -->
+          <div class="metre-row" id="metreRow" hidden>
+            <label class="sr-only" for="timeSig">Time signature</label>
+            <select class="metre-select" id="timeSig"></select>
+            <span class="tempo-mark">
+              <span class="note-value" aria-hidden="true">&#9833;</span>
+              <span aria-hidden="true">=</span>
+              <label class="sr-only" for="tempo">Tempo, in beats per minute</label>
+              <input class="tempo-input" id="tempo" type="number" min="40" max="300" step="1" value="120">
+            </span>
+          </div>
+        </div>
         <h2 class="sheet-title" id="sheetTitle">Practice Chart</h2>
         <span class="sheet-credit" id="sheetCredit">chord chart</span>
       </div>
@@ -1507,12 +1554,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <button class="arm-btn" type="button" id="armTake" hidden aria-pressed="false">
         <span class="arm-dot" aria-hidden="true"></span><span id="armLabel">Start a take</span>
       </button>
-      <button class="play-btn transport-btn" type="button" id="rollTake" hidden aria-pressed="false">
-        <span id="rollLabel">Play</span>
-      </button>
-      <span class="beat-row" id="beatRow" hidden aria-hidden="true">
-        <i class="beat"></i><i class="beat"></i><i class="beat"></i><i class="beat"></i>
-      </span>
+      <!-- No Play button beside it: in time, starting a take *is* pressing
+           play. Two buttons meant a take running against a still chart and a
+           chart rolling with nothing counting, both of which were only ever
+           mistakes. The dots are filled from the metre, so a waltz shows
+           three. -->
+      <span class="beat-row" id="beatRow" hidden aria-hidden="true"></span>
       <button class="play-btn" type="button" id="playChord" disabled>Play chord</button>
       <button class="link-btn" type="button" id="nameChord" disabled>Name it</button>
       <button class="link-btn" type="button" id="showVoicing">Show me one</button>
@@ -1531,7 +1578,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 329 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 331 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -1671,15 +1718,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         scale you chose instead.
       </li>
       <li>
-        <b>Start a take</b> to make it keep count. It runs until you stop it, across as
-        many bars as you walk through, and stopping freezes the summary rather than
-        clearing it.
+        <b>Start a take</b> - the button under the keyboard, or the space bar - to make it
+        keep count. It runs until you stop it, across as many bars as you walk through, and
+        stopping freezes the summary rather than clearing it.
       </li>
       <li>
         <b>Or set it going in time.</b> <i>Practice &rarr; Playing &rarr; In time</i> puts a
         click behind the chart and moves the bar for you, counting a bar in first and
-        looping whatever range you set. Arm a take over the top of it and the two are the
-        same take - the clock is just walking the chart instead of your mouse.
+        looping whatever range you set. Starting a take is what sets it rolling: the clock
+        is just walking the chart instead of your mouse. The metre and the tempo are at the
+        head of the chart, where a lead sheet writes them, and a tune imported in three
+        arrives counted in three.
       </li>
       <li>
         <b>Every bar keeps its own score.</b> A bar you have played over carries a strip in
@@ -1810,7 +1859,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     progression: DEFAULT_PROGRESSION,
     title: document.getElementById("sheetTitle").textContent,
     style: document.getElementById("sheetStyle").textContent,
-    composer: ""
+    composer: "",
+    beats: 4,
+    beatUnit: 4
   };
 
   var engine = null;
@@ -1930,8 +1981,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink",
    "shareRow", "copyShare", "shareStatus", "shareLink",
    "helpButton", "helpDialog", "helpClose",
-   "playStatic", "playLive", "playingNote", "tempoRow", "tempo", "countInRow", "countIn",
-   "loopRow", "loopFrom", "loopTo", "rollTake", "rollLabel", "beatRow",
+   "playStatic", "playLive", "playingNote", "metreRow", "tempo", "timeSig", "countInRow", "countIn",
+   "loopRow", "loopFrom", "loopTo", "beatRow",
    "colophonEngine", "colophonFraming", "colophonBuild",
    "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloScale", "soloOpen",
    "soloTallies",
@@ -2923,8 +2974,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     // The transport belongs to solo practice and to "in time" within it. A
     // clock running over chord practice would be moving a bar nothing was
-    // reading.
-    el.rollTake.hidden = !(soloing && transport.inTime);
+    // reading, and a tempo mark at the head of a chart nothing is counting is
+    // a number with no clock behind it.
+    el.metreRow.hidden = !(soloing && transport.inTime);
     el.beatRow.hidden = !(soloing && transport.inTime && transport.running);
 
     if (!soloing) stopTransport();
@@ -3067,12 +3119,35 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.soloOpen.hidden = true;
     forgetOpenKeys();
 
+    // The live line is the take's, and the take is over: leaving it saying
+    // "take running" over a frozen summary is the one thing on this panel that
+    // would be untrue.
+    el.soloNote.textContent = "Play a note over the bar you are on.";
+    el.soloNote.removeAttribute("data-colour");
+    el.soloAgainst.textContent = "";
+
     drawSummary(result);
   }
 
-  el.armTake.addEventListener("click", function () {
-    if (solo.armed) stopTake(); else startTake();
-  });
+  /** Arming and the clock are one gesture.
+
+      In time, a take that is not rolling is a take over a chart that never
+      moves, and a chart rolling with nothing counting is practice nobody is
+      marking - both were reachable when these were two buttons, and neither is
+      anything a player meant. The take is started first so the engine has one
+      before the transport's first `selectBar` tells it which bar. */
+  async function toggleTake() {
+    if (solo.armed) {
+      stopTransport();
+      await stopTake();
+      return;
+    }
+
+    await startTake();
+    if (transport.inTime) startTransport();
+  }
+
+  el.armTake.addEventListener("click", toggleTake);
 
   /** One note, read against the bar it landed in. */
   async function soloNotePlayed(midiNote) {
@@ -3217,12 +3292,24 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // what the app gives up is a few milliseconds of jitter on the click itself.
 
   var TRANSPORT_TICK = 12;        // ms between looks at the clock
-  var BEATS_PER_BAR = 4;
+
+  /*  The metres the head offers. A chart may arrive in something that is not
+      on this list - the reader will hand back whatever the link said - so its
+      own metre is added to the list when it is not already there, rather than
+      being rounded to the nearest thing on it. */
+  var METRES = [[2, 4], [3, 4], [4, 4], [5, 4], [6, 8], [7, 4], [12, 8]];
 
   var transport = {
     inTime: false,
     running: false,
     bpm: 120,
+
+    /*  The chart's own, seeded from whatever the reader found in it and
+        overridable at the head. The click counts beats, so it is the numerator
+        that moves the chart along; the beat unit is what the tempo is a tempo
+        of, which for 6/8 means six clicks in a bar rather than two. */
+    beats: 4,
+    beatUnit: 4,
     countIn: true,
     counting: false,   // in the count-in bar, which is not yet bar one
     from: 0,
@@ -3325,13 +3412,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (!transport.running) return;
 
     var beat = secondsPerBeat();
-    var countInBeats = transport.countIn ? BEATS_PER_BAR : 0;
+    var countInBeats = transport.countIn ? transport.beats : 0;
     var horizon = transportNow() + transportLookahead();
 
     while (transport.origin + transport.nextBeat * beat <= horizon) {
       var index = transport.nextBeat;
       var when = transport.origin + index * beat;
-      var inBar = index % BEATS_PER_BAR;
+      var inBar = index % transport.beats;
 
       clickAt(when, inBar === 0);
       bookBeat(when, index, inBar, index < countInBeats);
@@ -3342,7 +3429,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   /** The visual half of one beat: which bar the chart is on, and which dot. */
   function bookBeat(when, index, inBar, isCountIn) {
-    var countInBeats = transport.countIn ? BEATS_PER_BAR : 0;
+    var countInBeats = transport.countIn ? transport.beats : 0;
     var loop = loopRange();
 
     bookVisual(when, function () {
@@ -3366,11 +3453,21 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       // includes - so a bar is still the unit the engine is told about.
       if (inBar !== 0) return;
 
-      var barsIn = Math.floor((index - countInBeats) / BEATS_PER_BAR);
+      var barsIn = Math.floor((index - countInBeats) / transport.beats);
 
       selectBar(loop.from + (barsIn % loop.bars));
       markRollingBar();
     });
+  }
+
+  /** The dots, one per beat of the chart's own metre. */
+  function fillBeatRow() {
+    if (el.beatRow.children.length === transport.beats) return;
+
+    el.beatRow.textContent = "";
+
+    for (var i = 0; i < transport.beats; ++i)
+      el.beatRow.appendChild(document.createElement("i")).className = "beat";
   }
 
   function drawBeat(inBar, counting) {
@@ -3405,8 +3502,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     selectBar(loop.from);
 
-    el.rollTake.setAttribute("aria-pressed", "true");
-    el.rollLabel.textContent = "Stop";
+    fillBeatRow();
     el.beatRow.hidden = false;
 
     markRollingBar();
@@ -3423,11 +3519,50 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     transport.running = false;
     transport.counting = false;
 
-    el.rollTake.setAttribute("aria-pressed", "false");
-    el.rollLabel.textContent = "Play";
     el.beatRow.hidden = true;
 
     markRollingBar();
+  }
+
+  /** Fills the metre picker, with the chart's own metre on it whether or not
+      it is one of the usual ones. */
+  function fillMetres() {
+    var wanted = transport.beats + "/" + transport.beatUnit;
+    var metres = METRES.slice();
+
+    if (!metres.some(function (m) { return m[0] + "/" + m[1] === wanted; }))
+      metres.push([transport.beats, transport.beatUnit]);
+
+    el.timeSig.textContent = "";
+
+    metres.forEach(function (metre) {
+      var option = document.createElement("option");
+      option.value = metre[0] + "/" + metre[1];
+      option.textContent = option.value;
+      el.timeSig.appendChild(option);
+    });
+
+    el.timeSig.value = wanted;
+  }
+
+  /** Takes the metre a chart arrived in, which is the chart's to say. */
+  function setMetre(beats, beatUnit) {
+    var rolling = transport.running;
+
+    transport.beats = Math.max(1, Math.min(16, beats || 4));
+    transport.beatUnit = beatUnit || 4;
+
+    fillMetres();
+    fillBeatRow();
+
+    // Beat times are counted from one origin at one spacing, and both the
+    // count-in and the bar arithmetic are in beats-per-bar, so a metre changed
+    // mid-roll cannot be patched into the run in flight. It starts again in
+    // the metre just chosen, which is what changing it meant.
+    if (rolling) {
+      stopTransport();
+      startTransport();
+    }
   }
 
   /** Fills the loop's two pickers from the chart, keeping the range if it
@@ -3587,13 +3722,20 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     showChartHead(result.title || el.sheetTitle.textContent, state.chartStyle, state.composer);
 
+    // A waltz imported as a waltz should be counted in three. The readers have
+    // always pulled the metre off a link and a PDF; it only reached the page
+    // once the head had somewhere to put it.
+    setMetre(result.beatsPerBar, result.beatUnit);
+
     // This is the chart now. Restoring should come back here, not to the one
     // that happened to be on screen when the page loaded.
     original = {
       progression: result.progression,
       title: el.sheetTitle.textContent,
       style: state.chartStyle,
-      composer: state.composer
+      composer: state.composer,
+      beats: transport.beats,
+      beatUnit: transport.beatUnit
     };
 
     analyseVoicing();
@@ -3930,12 +4072,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.playLive.setAttribute("aria-checked", on ? "true" : "false");
     el.playStatic.setAttribute("aria-checked", on ? "false" : "true");
 
-    el.tempoRow.hidden = !on;
     el.countInRow.hidden = !on;
     el.loopRow.hidden = !on;
 
     el.playingNote.textContent = on
-      ? "The chart moves on its own, a bar to the click. Play from the dock."
+      ? "The chart moves on its own, a bar to the click. Starting a take starts it rolling."
       : "Static: the bar you are on is the bar you chose, and nothing is counting time.";
 
     applyMode();
@@ -3960,6 +4101,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     }
   });
 
+  el.timeSig.addEventListener("change", function () {
+    var parts = el.timeSig.value.split("/");
+    setMetre(Number(parts[0]), Number(parts[1]));
+  });
+
   el.countIn.addEventListener("change", function () {
     transport.countIn = el.countIn.checked;
   });
@@ -3981,9 +4127,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     });
   });
 
-  el.rollTake.addEventListener("click", function () {
-    if (transport.running) stopTransport(); else startTransport();
-  });
 
   el.helpButton.addEventListener("click", openCheatSheet);
   el.helpClose.addEventListener("click", function () { el.helpDialog.close(); });
@@ -4345,8 +4488,36 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // goes through the same select-then-open as a click.
   });
 
+  /** True where a space is a character rather than a command. */
+  function typingInto(target) {
+    if (!target) return false;
+
+    var tag = target.tagName;
+
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT"
+             || target.isContentEditable === true;
+  }
+
+  /*  Space is the transport key everywhere else a musician meets one, so in
+      solo practice it starts and stops the take - and with it the clock, which
+      is now the same gesture.
+
+      It is deliberately not fenced to the body the way the chord shortcut
+      below it is. A take is started after clicking a bar or the button itself,
+      so the body is exactly where focus is *not*; the space would land on
+      whatever was last clicked and re-press it. Only a field where a space is
+      a character is left alone, and `preventDefault` is what stops a focused
+      bar or key being activated underneath. */
   document.addEventListener("keydown", function (event) {
-    if (event.code !== "Space" || event.target !== document.body) return;
+    if (event.code !== "Space" || typingInto(event.target)) return;
+
+    if (state.mode === "solo") {
+      event.preventDefault();
+      toggleTake();
+      return;
+    }
+
+    if (event.target !== document.body) return;
     if (midi.connected || state.heldNotes.length === 0) return;
 
     event.preventDefault();
@@ -4586,6 +4757,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     state.chartStyle = original.style;
     state.reharmonised = {};
     showChartHead(original.title, original.style, original.composer);
+    setMetre(original.beats, original.beatUnit);
     refreshChart();
   });
 
@@ -4748,6 +4920,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // is an engine; and the mode groups have to be put into the state they
     // describe rather than the state the markup happened to ship in.
     await loadScaleStyles();
+    fillMetres();
+    fillBeatRow();
     applyMode();
 
     // Last, and only if nothing else is already in front of the reader: a
