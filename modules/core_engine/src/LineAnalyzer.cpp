@@ -29,8 +29,10 @@ namespace
     constexpr int widestStep = 2;
     constexpr int smallestLeap = 5;
 
-    /*  An enclosure is the widest pattern here: two notes and the target. */
-    constexpr std::size_t notesInTheWindow = 3;
+    /*  An enclosure is the widest pattern here: two attacks and the target.
+        Counted in attacks rather than notes because a chord is one of them -
+        a window three notes wide would hold less than one voicing. */
+    constexpr std::size_t attacksInTheWindow = 3;
 
     /*  A bar the line never coloured is only worth mentioning once there is
         enough of it to be talking about - the same threshold the summary
@@ -212,42 +214,6 @@ namespace
                 chord.hasMinorThird());
     }
 
-    /** Whether any pattern could still promote the note at @p index.
-
-        All three patterns are at most three notes wide, so this is a question
-        about what has arrived since.
-
-        A chromatic approach and a passing tone are settled by the very next
-        note: it either landed a step away or it did not, and no later note can
-        change that. An enclosure needs the note after that as well - but only
-        when the next note is itself outside, and only when the two leave room
-        for a target between them. Opposite sides, each within a step, is only
-        possible when they are two to four semitones apart: closer and there is
-        nothing between them, wider and no one note is a step from both.
-
-        Anything else has had every chance it is going to get.
-    */
-    bool canStillBeReached (const std::vector<LineNote>& line, std::size_t index)
-    {
-        // Nothing has followed it yet, so everything is still open to it.
-        if (index + 1 >= line.size())
-            return true;
-
-        // The next note landed: the step patterns have been tried and failed,
-        // and an enclosure needs that note to be outside too.
-        if (! isOutsideByPitch (line[index + 1].colour))
-            return false;
-
-        const auto apart = std::abs (line[index + 1].midiNote - line[index].midiNote);
-
-        if (apart < 2 || apart > 2 * widestStep)
-            return false;
-
-        // Room for an enclosure, so it turns on the note after next - which has
-        // either arrived and not made one, or has not arrived at all.
-        return index + 2 >= line.size();
-    }
-
     /** The scales a note will be read against, best-first. */
     std::vector<ScaleSuggestion> scalesFor (const ChordSymbol& chord,
                                             const LineAnalyzer::Options& options)
@@ -416,6 +382,9 @@ void LineAnalyzer::startTake()
 {
     played.clear();
     recent.clear();
+    justResolvedAt.clear();
+    justStrandedAt.clear();
+    strandedThisAttack.clear();
     justResolved.clear();
     justStranded.clear();
     taking = true;
@@ -429,19 +398,61 @@ void LineAnalyzer::endTake()
     // Anything still open closes now, as outside: there will be no more notes,
     // so the resolution it was waiting for is not coming. A summary carrying
     // "waiting to see" about a take that has ended would be waiting for good.
-    justStranded.clear();
+    justResolvedAt.clear();
+    justStrandedAt.clear();
+    strandedThisAttack.clear();
 
-    for (auto& note : played)
-        if (! isSettled (note.colour))
+    for (std::size_t i = 0; i < played.size(); ++i)
+        if (! isSettled (played[i].colour))
         {
-            note.colour = NoteColour::outside;
-            justStranded.push_back (note);
+            played[i].colour = NoteColour::outside;
+            justStrandedAt.push_back (i);
         }
+
+    publishJust (played);
 
     // The window starts clean too: the first note after a take is not the
     // resolution of the last note of it.
     recent.clear();
     taking = false;
+}
+
+//==============================================================================
+std::vector<LineAnalyzer::AttackSpan> LineAnalyzer::attacksIn (const std::vector<LineNote>& line)
+{
+    std::vector<AttackSpan> attacks;
+
+    for (std::size_t i = 0; i < line.size(); ++i)
+    {
+        if (attacks.empty() || ! line[i].struckWithPrevious)
+            attacks.push_back ({ i, i + 1 });
+        else
+            attacks.back().end = i + 1;
+    }
+
+    return attacks;
+}
+
+/** Rebuilds the two public lists from the indices behind them.
+
+    Built at the end of `play()` rather than as the window goes, so a note that
+    was stranded and then reached by the rest of its own chord appears in one
+    list rather than in both - and so neither list can hand out a copy of a
+    reading that has moved on since it was taken.
+*/
+void LineAnalyzer::publishJust (const std::vector<LineNote>& line)
+{
+    const auto fill = [&line] (std::vector<LineNote>& into, const std::vector<std::size_t>& from)
+    {
+        into.clear();
+
+        for (const auto index : from)
+            if (index < line.size())
+                into.push_back (line[index]);
+    };
+
+    fill (justResolved, justResolvedAt);
+    fill (justStranded, justStrandedAt);
 }
 
 void LineAnalyzer::setTarget (int measureIndex, const ChordSymbol& chord)
@@ -454,21 +465,21 @@ void LineAnalyzer::setTarget (int measureIndex, const ChordSymbol& chord)
     target = std::move (next);
 }
 
-LineNote LineAnalyzer::play (int midiNote, BarPosition where)
+LineNote LineAnalyzer::play (int midiNote, BarPosition where, Attack attack)
 {
     /*  The position is attached before the note is read, so everything the
         window does behind it - resolving, settling, and now marking the note
         before it as passed through - can see it. */
     pendingPosition = where;
 
-    auto note = play (midiNote);
+    auto note = play (midiNote, attack);
 
     pendingPosition.reset();
 
     return note;
 }
 
-LineNote LineAnalyzer::play (int midiNote)
+LineNote LineAnalyzer::play (int midiNote, Attack attack)
 {
     auto note = readAgainstTarget (midiNote);
 
@@ -477,8 +488,26 @@ LineNote LineAnalyzer::play (int midiNote)
     if (pendingPosition.has_value())
         note.onStrongBeat = isStrong (*pendingPosition, options.beatsPerBar);
 
-    justResolved.clear();
-    justStranded.clear();
+    auto& line = taking ? played : recent;
+
+    /*  Joining the attack before it, rather than starting one. Refused across
+        a bar change: notes struck together are struck against one chord, and
+        two notes read against different bars are two gestures whatever the
+        shell believed about the keyboard. */
+    note.struckWithPrevious = attack == Attack::withPrevious
+                           && ! line.empty()
+                           && line.back().measureIndex == note.measureIndex;
+
+    /*  Cleared per attack, not per note. A chord's notes arrive one call at a
+        time and between them they have one piece of news, so a shell reading
+        this after each of them sees that news accumulate and correct itself
+        rather than flickering through it. */
+    if (! note.struckWithPrevious)
+    {
+        justResolvedAt.clear();
+        justStrandedAt.clear();
+        strandedThisAttack.clear();
+    }
 
     /*  Outside the harmony, played this instant: the line has opened something
         and nothing yet knows whether it will close it. `read()` says `outside`
@@ -494,22 +523,48 @@ LineNote LineAnalyzer::play (int midiNote)
         describeResolution (note, target->chord, target->scales);
     }
 
-    auto& line = taking ? played : recent;
-
     line.push_back (note);
 
-    markPassedThrough (line);
-    resolveTail (line);
-    settleTail (line);
+    const auto attacks = attacksIn (line);
+
+    markPassedThrough (line, attacks);
+    resolveTail (line, attacks);
+    settleTail (line, attacks);
 
     // Without a take the window is all there is, and it never grows past what
     // the widest pattern needs: this is a window, not a second take hiding
-    // behind the first. Trimmed after settling rather than before, or a note
-    // could be dropped off the front while still open and its verdict would go
-    // with it.
+    // behind the first. Trimmed by whole attacks, because half a chord is not
+    // a thing the line can resolve into - and after settling rather than
+    // before, or a note could be dropped off the front while still open and
+    // its verdict would go with it.
     if (! taking)
-        while (line.size() > notesInTheWindow)
-            line.erase (line.begin());
+    {
+        const auto spans = attacksIn (line);
+
+        if (spans.size() > attacksInTheWindow)
+        {
+            const auto dropped = spans[spans.size() - attacksInTheWindow].begin;
+
+            line.erase (line.begin(), line.begin() + static_cast<std::ptrdiff_t> (dropped));
+
+            const auto shift = [dropped] (std::vector<std::size_t>& indices)
+            {
+                std::vector<std::size_t> kept;
+
+                for (const auto index : indices)
+                    if (index >= dropped)
+                        kept.push_back (index - dropped);
+
+                indices = std::move (kept);
+            };
+
+            shift (justResolvedAt);
+            shift (justStrandedAt);
+            shift (strandedThisAttack);
+        }
+    }
+
+    publishJust (line);
 
     return note;
 }
@@ -529,33 +584,111 @@ LineNote LineAnalyzer::play (int midiNote)
 
     Silent when either note has no position, which is every note of a take
     played without a clock.
+
+    Asked of a whole attack at once, and only when the newest note started one.
+    The note struck with a chord's Ab is not the note after it, so it says
+    nothing about how long the line stayed there; what does is the next thing
+    struck, which is what the next attack is.
 */
-void LineAnalyzer::markPassedThrough (std::vector<LineNote>& line)
+void LineAnalyzer::markPassedThrough (std::vector<LineNote>& line,
+                                      const std::vector<AttackSpan>& attacks)
 {
-    if (line.size() < 2)
+    if (attacks.size() < 2)
         return;
 
-    auto& previous = line[line.size() - 2];
-    const auto& latest = line.back();
+    const auto& latestAttack = attacks.back();
 
-    if (! previous.at.has_value() || ! latest.at.has_value())
+    // The newest note joined the attack rather than starting one, so the attack
+    // before it was already asked when this one began.
+    if (latestAttack.begin + 1 != line.size())
         return;
 
-    // Only a note worth asking the question about. A chord tone held for two
-    // bars is a held chord tone, not something the line sat on.
-    if (! previous.avoidNote
-        && previous.colour != NoteColour::outside
-        && previous.colour != NoteColour::unresolved)
+    const auto& latest = line[latestAttack.begin];
+
+    if (! latest.at.has_value())
         return;
 
-    // Bars are whole numbers of beats apart, so the gap is measured in ticks
-    // across the barline rather than within one bar - a note on the and of
-    // four and the downbeat after it are an eighth apart, not a bar and a bit.
-    const auto barsApart = latest.measureIndex - previous.measureIndex;
-    const auto gap = latest.at->inTicks() - previous.at->inTicks()
-                       + barsApart * options.beatsPerBar * ticksPerBeat;
+    const auto& previousAttack = attacks[attacks.size() - 2];
 
-    previous.passedThrough = gap > 0 && gap <= ticksFor (Subdivision::eighth);
+    for (auto i = previousAttack.begin; i < previousAttack.end; ++i)
+    {
+        auto& previous = line[i];
+
+        if (! previous.at.has_value())
+            continue;
+
+        // Only a note worth asking the question about. A chord tone held for
+        // two bars is a held chord tone, not something the line sat on.
+        if (! previous.avoidNote
+            && previous.colour != NoteColour::outside
+            && previous.colour != NoteColour::unresolved)
+            continue;
+
+        // Bars are whole numbers of beats apart, so the gap is measured in
+        // ticks across the barline rather than within one bar - a note on the
+        // and of four and the downbeat after it are an eighth apart, not a bar
+        // and a bit.
+        const auto barsApart = latest.measureIndex - previous.measureIndex;
+        const auto gap = latest.at->inTicks() - previous.at->inTicks()
+                           + barsApart * options.beatsPerBar * ticksPerBeat;
+
+        previous.passedThrough = gap > 0 && gap <= ticksFor (Subdivision::eighth);
+    }
+}
+
+/** Whether any pattern could still promote the note at @p noteIndex.
+
+    All three patterns are at most three attacks wide, so this is a
+    question about what has been struck since.
+
+    A chromatic approach and a passing tone are settled by the very next
+    attack: something in it landed a step away or nothing did, and no later
+    attack can change that. An enclosure needs the attack after that as
+    well - but only when the next attack has a note that is itself outside,
+    and only when the two leave room for a target between them. Opposite
+    sides, each within a step, is only possible when they are two to four
+    semitones apart: closer and there is nothing between them, wider and no
+    one note is a step from both.
+
+    Anything else has had every chance it is going to get.
+
+    Read over attacks rather than notes, which is the whole of what a chord
+    changes here: the note struck with this one is not the note after it,
+    and cannot close the question about it. With nothing struck together
+    every attack is one note and this is the rule it always was.
+*/
+bool LineAnalyzer::canStillBeReached (const std::vector<LineNote>& line,
+                                      const std::vector<AttackSpan>& attacks,
+                                      std::size_t attackIndex,
+                                      std::size_t noteIndex)
+{
+    // Nothing has followed it yet, so everything is still open to it.
+    if (attackIndex + 1 >= attacks.size())
+        return true;
+
+    const auto& next = attacks[attackIndex + 1];
+
+    /*  An enclosure needs a note of the next attack to be outside as well,
+        and to leave room for a target between the two. Nothing like that
+        in it means the step patterns have been tried and failed. */
+    auto roomForAnEnclosure = false;
+
+    for (auto j = next.begin; j < next.end && ! roomForAnEnclosure; ++j)
+    {
+        if (! isOutsideByPitch (line[j].colour))
+            continue;
+
+        const auto apart = std::abs (line[j].midiNote - line[noteIndex].midiNote);
+
+        roomForAnEnclosure = apart >= 2 && apart <= 2 * widestStep;
+    }
+
+    if (! roomForAnEnclosure)
+        return false;
+
+    // Room for one, so it turns on the attack after next - which has either
+    // been struck and not made one, or has not been struck at all.
+    return attackIndex + 2 >= attacks.size();
 }
 
 /** Closes every open note the line can no longer reach.
@@ -572,17 +705,26 @@ void LineAnalyzer::markPassedThrough (std::vector<LineNote>& line)
     the very next note - and waits only when an enclosure is genuinely still in
     play. `canStillBeReached` is where that is decided.
 */
-void LineAnalyzer::settleTail (std::vector<LineNote>& line)
+void LineAnalyzer::settleTail (std::vector<LineNote>& line,
+                              const std::vector<AttackSpan>& attacks)
 {
-    for (std::size_t i = 0; i + 1 < line.size(); ++i)
+    /*  Every attack but the newest. A chord's own notes cannot close each
+        other - they sounded together, and a note is not the resolution of one
+        played at the same moment - so the attack being struck is left alone
+        until something follows it. */
+    for (std::size_t k = 0; k + 1 < attacks.size(); ++k)
     {
-        auto& note = line[i];
+        for (auto i = attacks[k].begin; i < attacks[k].end; ++i)
+        {
+            auto& note = line[i];
 
-        if (isSettled (note.colour) || canStillBeReached (line, i))
-            continue;
+            if (isSettled (note.colour) || canStillBeReached (line, attacks, k, i))
+                continue;
 
-        note.colour = NoteColour::outside;
-        justStranded.push_back (note);
+            note.colour = NoteColour::outside;
+            justStrandedAt.push_back (i);
+            strandedThisAttack.push_back (i);
+        }
     }
 }
 
@@ -600,47 +742,80 @@ bool LineAnalyzer::promote (std::vector<LineNote>& line, std::size_t index, int 
     // Only a note still open can be promoted. One that landed does not need it,
     // and one the window has already passed is not reachable any more.
     if (note.colour != NoteColour::unresolved)
-        return false;
+    {
+        /*  With one exception, and it is the one a chord needs. The window
+            cannot tell a chord's first note from an ordinary next note until
+            the second one arrives, so it judges on the first - and a voicing
+            whose lowest note lands nowhere near an open note will have
+            stranded it a few milliseconds before the note that was actually
+            resolving it was struck. Taking that back inside the same gesture
+            is not revisiting a settled note; it is finishing reading the
+            gesture that settled it. */
+        const auto stranded = std::find (strandedThisAttack.begin(),
+                                         strandedThisAttack.end(), index);
+
+        if (note.colour != NoteColour::outside || stranded == strandedThisAttack.end())
+            return false;
+
+        strandedThisAttack.erase (stranded);
+        justStrandedAt.erase (std::remove (justStrandedAt.begin(), justStrandedAt.end(), index),
+                              justStrandedAt.end());
+    }
 
     note.colour = NoteColour::approach;
     note.resolvesTo = target;
     note.approachKind = kind;
 
-    justResolved.push_back (note);
+    justResolvedAt.push_back (index);
     return true;
 }
 
 /** Looks back over the notes the newest one could have resolved.
 
-    Two of them, and no more: the note before it, which the new note may have
-    been approached from, and the note before that, which the pair may have
-    enclosed. Every pattern here is at most three notes wide, so a longer look
-    back would find nothing and a shorter one would miss the enclosure.
+    Two attacks, and no more: the attack before it, which the new note may have
+    been approached from, and the one before that, which the pair may have
+    enclosed. Every pattern here is at most three attacks wide, so a longer
+    look back would find nothing and a shorter one would miss the enclosure.
+
+    Attacks rather than notes, and that is the whole of what chordal playing
+    needs. A voicing descending into the next one is several lines at once -
+    the Ab of a G7alt going to the G of a Cmaj7 while its Eb goes to the D -
+    and each of those voices finds its own note in the attack that follows. Run
+    over notes instead, an inner voice's resolution is whatever happened to be
+    struck next, which over a chord is one of its own notes and never a
+    resolution at all. Every rule below is the rule it always was with "the
+    note before" widened to "any note of the attack before".
 
     Nothing here cares which bar a note was in. Running chromatically into the
     first beat of the next chord is one of the most idiomatic things in the
     idiom, and a window that stopped at the barline would call it a mistake at
     exactly the moment it was working.
 */
-void LineAnalyzer::resolveTail (std::vector<LineNote>& played)
+void LineAnalyzer::resolveTail (std::vector<LineNote>& line,
+                                const std::vector<AttackSpan>& attacks)
 {
-    const auto count = played.size();
-
-    if (count < 2)
+    if (attacks.size() < 2)
         return;
 
-    const auto landed = [&played] (std::size_t i)
-    {
-        return ! isOutsideByPitch (played[i].colour);
-    };
+    const auto last = line.size() - 1;
+
+    // Only a note that landed is somewhere to land. The newest note is the only
+    // one that can have resolved anything: everything before it was asked when
+    // it arrived.
+    if (isOutsideByPitch (line[last].colour))
+        return;
+
+    const auto target = line[last].midiNote;
+
+    const auto& before = attacks[attacks.size() - 2];
+    const auto haveTwoBefore = attacks.size() >= 3;
+    const auto& twoBefore = attacks[haveTwoBefore ? attacks.size() - 3 : attacks.size() - 2];
 
     const auto step = [] (int from, int to)
     {
         const auto distance = std::abs (to - from);
         return distance >= 1 && distance <= widestStep;
     };
-
-    const auto last = count - 1;
 
     /*  Most specific first, and it matters now that the three gestures are
         told apart: a note can honestly answer to more than one of them, and a
@@ -653,22 +828,31 @@ void LineAnalyzer::resolveTail (std::vector<LineNote>& played)
         approach when the last step is a semitone. Both of those are true and
         the fuller description is the more useful one, so the order runs
         enclosure, passing tone, chromatic approach. */
-    if (count >= 3 && landed (last)
-        && isOutsideByPitch (played[last - 1].colour)
-        && isOutsideByPitch (played[last - 2].colour))
+    if (haveTwoBefore)
     {
-        const auto target = played[last].midiNote;
-        const auto above = played[last - 2].midiNote - target;
-        const auto below = played[last - 1].midiNote - target;
-
         // Two notes taking the target from both sides before landing on it.
         // Both were the line aiming rather than missing, so both are promoted.
-        if (((above > 0) != (below > 0))
-            && step (played[last - 2].midiNote, target)
-            && step (played[last - 1].midiNote, target))
+        for (auto j = before.begin; j < before.end; ++j)
         {
-            promote (played, last - 2, target, ApproachKind::enclosure);
-            promote (played, last - 1, target, ApproachKind::enclosure);
+            if (! isOutsideByPitch (line[j].colour))
+                continue;
+
+            for (auto i = twoBefore.begin; i < twoBefore.end; ++i)
+            {
+                if (! isOutsideByPitch (line[i].colour))
+                    continue;
+
+                const auto above = line[i].midiNote - target;
+                const auto below = line[j].midiNote - target;
+
+                if (((above > 0) != (below > 0))
+                    && step (line[i].midiNote, target)
+                    && step (line[j].midiNote, target))
+                {
+                    promote (line, i, target, ApproachKind::enclosure);
+                    promote (line, j, target, ApproachKind::enclosure);
+                }
+            }
         }
     }
 
@@ -676,22 +860,32 @@ void LineAnalyzer::resolveTail (std::vector<LineNote>& played)
     // way. Says more than "a semitone from the next note" does - the note was
     // in transit rather than leaning - and it is what catches the wider gaps,
     // where a pentatonic leaves room to pass through by a whole tone.
-    if (count >= 3 && landed (last) && landed (last - 2))
+    if (haveTwoBefore)
     {
-        const auto in = played[last - 1].midiNote - played[last - 2].midiNote;
-        const auto out = played[last].midiNote - played[last - 1].midiNote;
+        for (auto j = before.begin; j < before.end; ++j)
+        {
+            for (auto i = twoBefore.begin; i < twoBefore.end; ++i)
+            {
+                if (isOutsideByPitch (line[i].colour))
+                    continue;
 
-        if (((in > 0) == (out > 0))
-            && step (played[last - 2].midiNote, played[last - 1].midiNote)
-            && step (played[last - 1].midiNote, played[last].midiNote))
-            promote (played, last - 1, played[last].midiNote, ApproachKind::passing);
+                const auto in = line[j].midiNote - line[i].midiNote;
+                const auto out = target - line[j].midiNote;
+
+                if (((in > 0) == (out > 0))
+                    && step (line[i].midiNote, line[j].midiNote)
+                    && step (line[j].midiNote, target))
+                    promote (line, j, target, ApproachKind::passing);
+            }
+        }
     }
 
     // A chromatic approach: one note outside, and the next one a semitone away
     // and home. The commonest of the three by a wide margin, and the one left
     // when neither of the fuller readings fits.
-    if (landed (last) && std::abs (played[last].midiNote - played[last - 1].midiNote) == 1)
-        promote (played, last - 1, played[last].midiNote, ApproachKind::chromatic);
+    for (auto j = before.begin; j < before.end; ++j)
+        if (std::abs (target - line[j].midiNote) == 1)
+            promote (line, j, target, ApproachKind::chromatic);
 }
 
 LineNote LineAnalyzer::readAgainstTarget (int midiNote) const
@@ -785,6 +979,26 @@ TakeSummary LineAnalyzer::summary() const
             if (note.passedThrough) ++take.notesPassedThrough;
             else                    ++take.notesSatOn;
         }
+    }
+
+    /*  Chords in the line, and the voices of them that were outside and stepped
+        home. A note is in a chord when it joined the attack before it or the
+        note after it joined this one - the flag describes the join rather than
+        the chord, so both ends of a two-note attack have to be read from it.
+
+        Counted, never weighted. A note struck with three others is counted,
+        coloured and scored exactly like any other note; this is here so the
+        summary can say back what the player was doing. */
+    for (std::size_t i = 0; i < played.size(); ++i)
+    {
+        const auto joinedByNext = i + 1 < played.size() && played[i + 1].struckWithPrevious;
+
+        if (played[i].struckWithPrevious && ! joinedByNext)
+            ++take.chordsPlayed;   // one per chord, counted at its last note
+
+        if ((played[i].struckWithPrevious || joinedByNext)
+            && played[i].colour == NoteColour::approach)
+            ++take.chordVoicesResolved;
     }
 
     // Which bars the line went over without ever colouring. Approach notes do
@@ -953,6 +1167,28 @@ TakeSummary LineAnalyzer::summary() const
                     std::to_string (share) + "% of the notes on strong beats were chord tones."
                     " The harmony is coming through clearly.");
         }
+    }
+
+    /*  Chordal playing, said back. A player comping behind themselves or
+        soloing in block chords is doing a different thing from playing a line,
+        and the reading they most need is the one that used to be wrong: the
+        inner voices of a voicing moving into the next one are resolutions, not
+        a handful of notes that went nowhere. */
+    if (take.chordsPlayed > 0)
+    {
+        auto said = plural (take.chordsPlayed, "chord", "chords") + " in the line";
+
+        if (take.chordVoicesResolved > 0)
+            said += ", and " + plural (take.chordVoicesResolved, "voice", "voices")
+                  + " inside them stepped home into the next voicing. Voices resolving"
+                    " together is what moving a whole voicing chromatically sounds like,"
+                    " and each of them is read on its own way home rather than against"
+                    " whatever else was struck with it.";
+        else
+            said += ". Every note of one is read against the bar on its own, and the"
+                    " voices resolve into the next voicing rather than into each other.";
+
+        take.observations.push_back (said);
     }
 
     if (take.overall.total() >= notesBeforeRangeCounts && take.rangeInSemitones() < narrowRange)

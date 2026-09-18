@@ -222,7 +222,7 @@ TEST ("a note the line never closed is reported as soon as nothing can reach it"
     // the verdict is true - and so the moment the wire carries it.
     const auto json = soloPlayNote (72);
 
-    CHECK (contains (json, "\"stranded\":[{\"name\":\"Db4\",\"midi\":61,\"kind\":\"\"}]"));
+    CHECK (contains (json, "\"stranded\":[{\"name\":\"Db4\",\"midi\":61,\"kind\":\"\",\"to\":\"\"}]"));
     CHECK (contains (json, "\"outside\":1"));
 }
 
@@ -263,7 +263,7 @@ TEST ("a note that resolves an earlier one says so, and resends the bar it chang
 
     // D, Db, C is a descending chromatic line, so the fuller reading wins:
     // the Db was passed through, not merely leaned on.
-    CHECK (contains (json, "\"resolved\":[{\"name\":\"Db4\",\"midi\":61,\"kind\":\"passing\"}]"));
+    CHECK (contains (json, "\"resolved\":[{\"name\":\"Db4\",\"midi\":61,\"kind\":\"passing\",\"to\":\"C4\"}]"));
     CHECK (contains (json, "\"bar\":{\"index\":1"));
     CHECK (contains (json, "\"index\":0"));          // the earlier bar came back too
     CHECK (contains (json, "\"approachTones\":1"));
@@ -497,5 +497,53 @@ TEST ("a note played on a clock carries where it fell")
     soloStartTake();
     soloSetBar (0, "Dm7", "", "", 3);
     CHECK (contains (soloPlayNote (65, 2, 0), "\"onStrongBeat\":false"));
+    soloEndTake();
+}
+
+TEST ("a chord crosses the wire one note at a time, and reads as one gesture")
+{
+    /*  The shell says which notes were struck together; nothing waits for the
+        chord to be finished. G7alt into Cmaj7, two voices stepping down a
+        semitone each, which read as two notes that went nowhere before the
+        engine knew what a chord was. */
+    soloStartTake();
+    soloSetBar (0, "G7", "", "", 4);
+
+    soloPlayNote (53, 0, 0, 0);
+    CHECK (contains (soloPlayNote (56, 0, 0, 1), "\"withPrevious\":true"));
+    soloPlayNote (59, 0, 0, 1);
+    soloPlayNote (63, 0, 0, 1);
+
+    soloSetBar (1, "Cmaj7", "", "", 4);
+
+    soloPlayNote (52, 0, 0, 0);
+    soloPlayNote (55, 0, 0, 1);
+    soloPlayNote (59, 0, 0, 1);
+    const auto json = soloPlayNote (62, 0, 0, 1);
+
+    /*  Both voices, each named with the note it reached rather than with
+        whatever was struck last. Chromatic rather than passing: with only two
+        voicings there is nothing before the G7alt for the line to have been
+        stepping through from. */
+    CHECK (contains (json, "\"name\":\"Ab3\",\"midi\":56,\"kind\":\"chromatic\",\"to\":\"G3\""));
+    CHECK (contains (json, "\"name\":\"Eb4\",\"midi\":63,\"kind\":\"chromatic\",\"to\":\"D4\""));
+    CHECK (contains (json, "\"stranded\":[]"));
+
+    const auto take = soloEndTake();
+
+    CHECK (contains (take, "\"outside\":0"));
+    CHECK (contains (take, "chords in the line"));
+}
+
+TEST ("a note with no attack given starts one of its own")
+{
+    /*  The default on both sides of the wire, and the reading every take had
+        before chords were a thing an engine could be told about. */
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "", 4);
+
+    CHECK (contains (soloPlayNote (62), "\"withPrevious\":false"));
+    CHECK (contains (soloPlayNote (64, 1, 0), "\"withPrevious\":false"));
+
     soloEndTake();
 }

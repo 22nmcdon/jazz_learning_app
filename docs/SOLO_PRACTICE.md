@@ -209,6 +209,59 @@ memory and a window.
   moment placement moved the number the number would stop being explainable. There is a
   test that says so: the same notes score the same whether or not positions were sent.
 
+### Chords in a line
+Players comp behind themselves and solo in block chords, and the most idiomatic move either
+makes is sliding a whole voicing chromatically into the next one. G13, the same shape with
+two voices pushed down a semitone to make a G7alt, then Cmaj7:
+
+```
+G13      F3  A3   B3  E4
+G7alt    F3  Ab3  B3  Eb4      Ab and Eb are outside G mixolydian
+Cmaj7    E3  G3   B3  D4       and both step into it - Ab to G, Eb to D
+```
+
+Read as a stream of single notes, that was `CSCS CXCX CCCS`: two notes that went nowhere.
+The note *after* the Ab is the chord's own B, four semitones away, so the window tried its
+patterns against a note that was never a resolution and could not be one. It now reads
+`CSCS CACA CCCS`, with nothing outside — which is what it sounds like.
+
+- **An attack is the unit, not a note.** Notes struck together are one attack; they neither
+  resolve nor strand one another, and the window runs attack to attack. Every rule is the
+  rule it always was with "the note before" widened to "any note of the attack before", so
+  each voice finds its own way home and a line with nothing struck together reads exactly
+  as it did. Every test written before any of this existed passed untouched, which is the
+  evidence for that claim rather than the hope behind it.
+- **The shell says which notes were struck together, because nothing else can.** The
+  pitches do not tell a chord from a line — the same notes are both, which is the control
+  case in the tests. This is not the clock coming back: "struck together" is a fact about a
+  gesture, the way a measure index is a fact about a bar, and the engine still has no idea
+  what a second is.
+- **Nothing waits for the chord to be finished.** The flag says a note *joined* an attack,
+  which is knowable the instant it arrives, so no shell buffers and no note is read later
+  than it was. The whole cost is paid in one place: the window cannot tell a chord's first
+  note from an ordinary next note, so it judges on the first, and takes the judgement back
+  when the rest of the same chord answers it. That is the only exception to *nothing that
+  has settled is ever revisited*, and the rule it leaves is the one that was meant —
+  nothing across two gestures is ever revisited.
+- **So the two lists are cleared per attack, not per note.** Otherwise a shell reading them
+  after each note of a chord would show "Ab3 never landed" for the twenty milliseconds
+  between the voicing's lowest note and the one that was actually resolving it. Accumulated
+  across the gesture, the correction happens inside the answer instead of after it.
+- **Forty milliseconds, and MIDI only.** Held keys are the obvious signal and the wrong one:
+  a legato line holds the note before too. Time is right, and the window has to sit between
+  two bad mistakes — wider and sixteenths at 240 (62ms apart) read as chords and stop
+  resolving each other; narrower and a rolled chord comes apart again. A pointer plays one
+  key at a time however fast it is clicked, so the on-screen keyboard never joins an attack
+  at all.
+- **An attack does not cross a barline.** Two notes read against different bars were played
+  against different chords whatever the shell believed, and grouping them would stop each
+  resolving the other — exactly wrong for running into the downbeat of the next chord.
+- **A note struck with three others is still one note.** Counted, coloured, scored and
+  positioned like any other; `chordsPlayed` and `chordVoicesResolved` exist so the summary
+  can say back what the player was doing, not so it can weigh it. The one rhythmic
+  adjustment is that a chord is not passed through by its own notes — what says how long
+  the line stayed there is the next thing *struck*.
+
 ### Comping — a band over the same clock
 - **The split is the one the whole project is built on**, and comping is the clearest case
   of it yet: `compingVoicing()` answers *which notes*, and has no idea a clock exists;

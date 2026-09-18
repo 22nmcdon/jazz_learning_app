@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (380), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (393), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -330,6 +330,36 @@ In both shells each instrument is a channel of its own, never the player's own n
 comping E4 under a soloist playing E4 has to be two voices, or one note-off silences a note
 the other one is still holding — and the same goes for a bass note under a comped chord.
 
+### Chords in a line
+
+Players comp behind themselves and solo in block chords, and the most idiomatic move either
+makes is sliding a whole voicing chromatically into the next one — a G7, the same shape with
+two voices pushed down a semitone to make a G7alt, then the Cmaj7:
+
+```
+G13      F3  A3   B3  E4
+G7alt    F3  Ab3  B3  Eb4     Ab and Eb are outside G mixolydian
+Cmaj7    E3  G3   B3  D4      and both step into it - Ab to G, Eb to D
+```
+
+Read one note at a time, that was two notes that went nowhere: the note *after* the Ab is
+the chord's own B, four semitones away, so it was never a resolution and could not be one.
+**Notes struck together are read as one attack** — they neither resolve nor strand each
+other, and the line resolves voicing to voicing, each voice finding its own way home.
+
+Which notes were struck together is something only the shell can say; nothing about the
+pitches tells a chord from a line, and the same notes played one at a time really are the
+line they look like. It is still not a clock reaching the engine: "struck together" is a
+fact about a gesture, the way a measure index is a fact about a bar. Nothing is buffered
+either — a note says it *joined* a chord, which is knowable the instant it arrives, so every
+note is read as immediately as it ever was.
+
+It needs a MIDI keyboard. A pointer plays one key at a time however fast you click, so the
+on-screen keyboard always plays a line.
+
+A note struck with three others is still one note: counted, coloured and scored like any
+other. The gesture changes which notes can resolve which, and nothing else.
+
 ### Reading where a note fell
 
 Solo practice reads the same grid the band plays on. With the clock running, every note you
@@ -577,7 +607,8 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   added to the catalogue joins its style without anyone remembering to add it. The engine
   owns the list and both shells build their menu from it.
 - **Reading a line** — `LineAnalyzer` takes notes one at a time rather than a chord at
-  once, and reads each against the bar it landed in: a chord tone, a tone in the scale
+  once — being told, per note, whether it was struck with the one before it — and reads each
+  against the bar it landed in: a chord tone, a tone in the scale
   that bar is being read against, an approach note, or outside all of them. Every note
   also names its degree against the chord, outside ones included, because "a b9 over
   Cmaj7" says something a player can use and "outside" does not. A scale tone sitting a
@@ -585,10 +616,12 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   is named as one to pass through rather than land on, because that is what a line does
   with it. It shares no code with the voicing analyser and should not: a voicing is a
   thing, a line is a stream.
-- **A three-note window** — an outside note is not read as outside when it is played. It
+- **A three-attack window** — an outside note is not read as outside when it is played. It
   is *open*, and stays open only for as long as some pattern could still reach back and
-  claim it: a chromatic approach and a passing tone are settled by the very next note, an
-  enclosure by the one after. Then it becomes an approach note or outside, once, and never
+  claim it: a chromatic approach and a passing tone are settled by the very next attack, an
+  enclosure by the one after. An *attack* is the notes struck together, which is a note in
+  an ordinary line and a whole voicing in a chordal one — the notes of a chord neither
+  resolve nor strand each other, so each voice finds its own way home. Then it becomes an approach note or outside, once, and never
   changes again. The engine also says which of the three gestures got it home, and what a
   still-open note would need — the nearest note a step away that would land it, root
   before chord tone before scale tone, semitones before tones — because at the moment of

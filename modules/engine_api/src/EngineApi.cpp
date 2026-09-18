@@ -249,6 +249,9 @@ namespace
              // for the downbeat.
              + ",\"at\":" + quoted (note.at.has_value() ? note.at->describe() : "")
              + ",\"onStrongBeat\":" + (note.onStrongBeat ? "true" : "false")
+             // Struck with the note before it: the two are one chord. A shell
+             // drawing a voicing finds the runs of this.
+             + ",\"withPrevious\":" + (note.struckWithPrevious ? "true" : "false")
              + ",\"bar\":" + std::to_string (note.measureIndex) + "}";
     }
 
@@ -842,16 +845,22 @@ std::string soloSetBar (int measureIndex, const char* symbol, const char* chosen
                  + ",\"take\":{" + lineStatsJson (analyzer.stats()) + "}}");
 }
 
-std::string soloPlayNote (int midiNote, int beat, int tick)
+std::string soloPlayNote (int midiNote, int beat, int tick, int withPrevious)
 {
     auto& analyzer = soloTake();
+
+    /*  Whether this note was struck with the one before it - a chord in the
+        line rather than the next note of it. Known to the shell at the moment
+        the note arrives, so it costs no waiting: the engine never needs to be
+        told a chord is finished, only that a note joined one.  */
+    const auto attack = withPrevious != 0 ? Attack::withPrevious : Attack::fresh;
 
     /*  A negative beat means the shell has no clock running and cannot say
         where the note fell. There is no position that means "no position", so
         it is signalled rather than encoded: a made-up downbeat would be read
         as a real one.  */
-    const auto note = beat >= 0 ? analyzer.play (midiNote, BarPosition { beat, tick })
-                                : analyzer.play (midiNote);
+    const auto note = beat >= 0 ? analyzer.play (midiNote, BarPosition { beat, tick }, attack)
+                                : analyzer.play (midiNote, attack);
     const auto& resolved = analyzer.resolvedByLastNote();
     const auto& stranded = analyzer.strandedByLastNote();
 
@@ -883,6 +892,12 @@ std::string soloPlayNote (int midiNote, int beat, int tick)
                               return "{\"name\":" + quoted (midiNoteName (earlier.midiNote))
                                    + ",\"midi\":" + std::to_string (earlier.midiNote)
                                    + ",\"kind\":" + quoted (approachKindKey (earlier.approachKind))
+                                   // Where it went. Several voices of a chord
+                                   // can land in one breath and land on
+                                   // different notes, so "on to what" is per
+                                   // note rather than one answer for the list.
+                                   + ",\"to\":" + quoted (earlier.resolvesTo > 0
+                                                          ? midiNoteName (earlier.resolvesTo) : "")
                                    + "}";
                           });
     };

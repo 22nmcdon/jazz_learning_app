@@ -38,6 +38,33 @@ namespace
             analyzer.play (note);
     }
 
+    /** Strikes a voicing: one attack, however many notes. */
+    void playChord (LineAnalyzer& analyzer, const std::vector<int>& notes)
+    {
+        for (std::size_t i = 0; i < notes.size(); ++i)
+            analyzer.play (notes[i], i == 0 ? Attack::fresh : Attack::withPrevious);
+    }
+
+    /** The colours of a take, in order, as one string to compare against. */
+    std::string coloursOf (const LineAnalyzer& analyzer)
+    {
+        std::string text;
+
+        for (const auto& note : analyzer.notes())
+        {
+            switch (note.colour)
+            {
+                case NoteColour::chordTone:  text += "C"; break;
+                case NoteColour::scaleTone:  text += "S"; break;
+                case NoteColour::approach:   text += "A"; break;
+                case NoteColour::unresolved: text += "?"; break;
+                case NoteColour::outside:    text += "X"; break;
+            }
+        }
+
+        return text;
+    }
+
     bool mentions (const TakeSummary& take, const std::string& fragment)
     {
         if (take.summary.find (fragment) != std::string::npos)
@@ -1305,4 +1332,241 @@ TEST ("the gesture changes nothing about how a note counts")
     CHECK_EQ (enclosing.stats().chordTones, 1);
     CHECK_EQ (enclosing.stats().outside, 0);
     CHECK_EQ (enclosing.stats().score(), statsOf (1, 0, 0, 2).score());
+}
+
+//==============================================================================
+// Chords in a line - a player comping behind themselves, or soloing in blocks.
+
+TEST ("a voicing moving chromatically into the next one resolves voice by voice")
+{
+    /*  The case this was built for, and the one that used to read as a handful
+        of notes that went nowhere: G13, the same shape with two voices pushed
+        down a semitone to make a G7alt, then Cmaj7. Read as a line, the note
+        after the Ab is the chord's own B, four semitones away, so the Ab was
+        marked as never having landed - while what it actually did was step
+        into the G of the next voicing, at the same moment the Eb stepped into
+        the D.  */
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+
+    analyzer.setTarget (0, chordFrom ("G7"));
+    playChord (analyzer, { 53, 57, 59, 64 });   // F3 A3  B3 E4  - G13
+    playChord (analyzer, { 53, 56, 59, 63 });   // F3 Ab3 B3 Eb4 - G7alt
+
+    analyzer.setTarget (1, chordFrom ("Cmaj7"));
+    playChord (analyzer, { 52, 55, 59, 62 });   // E3 G3  B3 D4  - Cmaj7
+
+    analyzer.endTake();
+
+    CHECK_EQ (coloursOf (analyzer), std::string ("CSCS" "CACA" "CCCS"));
+    CHECK_EQ (analyzer.stats().outside, 0);
+
+    const auto& ab = analyzer.notes()[5];
+    const auto& eb = analyzer.notes()[7];
+
+    CHECK_EQ (ab.midiNote, 56);
+    CHECK_EQ (ab.resolvesTo, 55);
+    CHECK_EQ (eb.midiNote, 63);
+    CHECK_EQ (eb.resolvesTo, 62);
+}
+
+TEST ("the same notes played one at a time are the line they actually are")
+{
+    /*  The control, and the reason the shell has to say which notes were
+        struck together: nothing about the pitches tells the two apart. Played
+        as a line, the Ab really is followed by a B four semitones away and
+        really did not land - and this is what the take used to read for the
+        chords above.  */
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+
+    analyzer.setTarget (0, chordFrom ("G7"));
+    playAll (analyzer, { 53, 57, 59, 64, 53, 56, 59, 63 });
+
+    analyzer.setTarget (1, chordFrom ("Cmaj7"));
+    playAll (analyzer, { 52, 55, 59, 62 });
+
+    analyzer.endTake();
+
+    CHECK_EQ (analyzer.stats().outside, 2);
+    CHECK_EQ (analyzer.stats().approachTones, 0);
+}
+
+TEST ("a chord's own notes neither resolve nor strand one another")
+{
+    /*  Two notes struck together are not a step from one note to another, even
+        when they happen to be a semitone apart. Db and D in one voicing is a
+        cluster somebody meant; the Db is still open when the chord ends.  */
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    playChord (analyzer, { 61, 62 });
+
+    CHECK (analyzer.notes()[0].colour == NoteColour::unresolved);
+    CHECK (analyzer.resolvedByLastNote().empty());
+    CHECK (analyzer.strandedByLastNote().empty());
+}
+
+TEST ("a note the first of a chord passed is still reached by the rest of it")
+{
+    /*  The one place a settled note is revisited, and the reason it has to be.
+        The window cannot tell a chord's first note from an ordinary next note
+        until the second one arrives, so it judges on the first - and a voicing
+        whose lowest note is nowhere near the open one will have stranded it
+        milliseconds before the note that was actually resolving it was struck.
+
+        Both lists are read, because a shell showing "left hanging" and then
+        taking it back is the thing this is here to stop.  */
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+
+    analyzer.setTarget (0, chordFrom ("G7"));
+    analyzer.play (56);                              // Ab3, outside G7
+
+    analyzer.setTarget (1, chordFrom ("Cmaj7"));
+    analyzer.play (52, Attack::fresh);               // E3 - four away: strands it
+    CHECK_EQ (static_cast<int> (analyzer.strandedByLastNote().size()), 1);
+
+    analyzer.play (55, Attack::withPrevious);        // G3 - where it was going
+    CHECK (analyzer.strandedByLastNote().empty());
+    CHECK_EQ (static_cast<int> (analyzer.resolvedByLastNote().size()), 1);
+    CHECK_EQ (analyzer.resolvedByLastNote()[0].midiNote, 56);
+
+    analyzer.play (59, Attack::withPrevious);        // and the news stays said
+    CHECK (analyzer.strandedByLastNote().empty());
+    CHECK_EQ (static_cast<int> (analyzer.resolvedByLastNote().size()), 1);
+
+    CHECK (analyzer.notes()[0].colour == NoteColour::approach);
+    CHECK_EQ (analyzer.notes()[0].resolvesTo, 55);
+}
+
+TEST ("a chord that reaches nothing leaves the note open exactly once")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    analyzer.play (61);                              // Db, outside
+    playChord (analyzer, { 52, 55, 59 });            // E3 G3 B3 - nothing within a step
+
+    CHECK (analyzer.notes()[0].colour == NoteColour::outside);
+    CHECK_EQ (static_cast<int> (analyzer.strandedByLastNote().size()), 1);
+    CHECK (analyzer.resolvedByLastNote().empty());
+}
+
+TEST ("struck together across a bar change is two gestures, not one chord")
+{
+    /*  Whatever the shell believed about the keyboard, two notes read against
+        different bars were played against different chords. Grouping them
+        would make each of them unable to resolve the other, which is exactly
+        wrong for the commonest thing in the idiom: running into the downbeat
+        of the next chord.  */
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.play (61);                              // Db
+
+    analyzer.setTarget (1, chordFrom ("Cmaj7"));
+    analyzer.play (60, Attack::withPrevious);        // C, a semitone up and home
+
+    CHECK (! analyzer.notes()[1].struckWithPrevious);
+    CHECK (analyzer.notes()[0].colour == NoteColour::approach);
+    CHECK_EQ (analyzer.notes()[0].resolvesTo, 60);
+}
+
+TEST ("the first note of a take is never struck with anything")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    analyzer.play (62, Attack::withPrevious);
+
+    CHECK (! analyzer.notes()[0].struckWithPrevious);
+}
+
+TEST ("a chord is not sat on or passed through by its own notes")
+{
+    /*  The note struck with an avoid note says nothing about how long the line
+        stayed there; what does is the next thing struck. Without that, the
+        lowest note of every voicing containing one would read as passed
+        through at the speed of a chord being rolled.  */
+    LineAnalyzer::Options inFour;
+    inFour.beatsPerBar = 4;
+
+    LineAnalyzer analyzer { inFour };
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Cmaj7"));
+
+    // F is the avoid note over Cmaj7. Struck with the chord on beat one, and
+    // held there until beat three.
+    analyzer.play (60, BarPosition { 0, 0 }, Attack::fresh);
+    analyzer.play (65, BarPosition { 0, 0 }, Attack::withPrevious);
+    analyzer.play (67, BarPosition { 0, 0 }, Attack::withPrevious);
+    analyzer.play (64, BarPosition { 2, 0 }, Attack::fresh);
+
+    analyzer.endTake();
+
+    const auto take = analyzer.summary();
+
+    CHECK_EQ (take.notesSatOn, 1);
+    CHECK_EQ (take.notesPassedThrough, 0);
+}
+
+TEST ("the take says how many chords were in it, and what their voices did")
+{
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+
+    analyzer.setTarget (0, chordFrom ("G7"));
+    playChord (analyzer, { 53, 56, 59, 63 });
+
+    analyzer.setTarget (1, chordFrom ("Cmaj7"));
+    playChord (analyzer, { 52, 55, 59, 62 });
+    analyzer.endTake();
+
+    const auto take = analyzer.summary();
+
+    CHECK_EQ (take.chordsPlayed, 2);
+    CHECK_EQ (take.chordVoicesResolved, 2);
+    CHECK (mentions (take, "2 chords in the line"));
+    CHECK (mentions (take, "stepped home into the next voicing"));
+}
+
+TEST ("a chord counts as the notes it is, not as one note")
+{
+    /*  Nothing about a chord is weighted. Four notes struck together are four
+        notes in the counts, four notes in the bar and four notes in the score
+        - the gesture changes which notes can resolve which, and nothing else. */
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+
+    playChord (analyzer, { 62, 65, 69, 72 });
+    analyzer.endTake();
+
+    CHECK_EQ (analyzer.stats().total(), 4);
+    CHECK_EQ (analyzer.stats().chordTones, 4);
+    CHECK_EQ (analyzer.summary().chordsPlayed, 1);
+}
+
+TEST ("the window without a take holds whole chords, not three notes of one")
+{
+    /*  Nothing armed, so the window is all there is - and trimmed by notes it
+        would have held less than one voicing, which would leave a chord unable
+        to resolve the one before it at exactly the moment a player trying
+        things out most needs it to.  */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("G7"));
+
+    playChord (analyzer, { 53, 56, 59, 63 });   // G7alt: Ab and Eb are open
+
+    analyzer.setTarget (1, chordFrom ("Cmaj7"));
+    playChord (analyzer, { 52, 55, 59, 62 });   // Cmaj7: G and D take them home
+
+    CHECK_EQ (static_cast<int> (analyzer.resolvedByLastNote().size()), 2);
+    CHECK (analyzer.strandedByLastNote().empty());
+    CHECK (analyzer.notes().empty());           // still no take: nothing counted
 }

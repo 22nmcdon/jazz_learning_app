@@ -100,7 +100,7 @@ namespace
         if (name == "jazzSoloStartTake")     return api::soloStartTake();
         if (name == "jazzSoloEndTake")       return api::soloEndTake();
         if (name == "jazzSoloPlayNote")
-            return api::soloPlayNote (number (0), number (1), number (2));
+            return api::soloPlayNote (number (0), number (1), number (2), number (3));
 
         if (name == "jazzSoloSetBar")
             return api::soloSetBar (number (0), text (1).c_str(), text (2).c_str(),

@@ -4,6 +4,7 @@
 #include "jazz/core/Rhythm.h"
 #include "jazz/core/ScaleSuggester.h"
 
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>
@@ -79,6 +80,31 @@ enum class ApproachKind
 /** "chromatic approach", "passing tone", "enclosure" - for a UI that says it. */
 std::string approachKindName (ApproachKind kind);
 
+/** Whether a note began an attack of its own or joined the one before it.
+
+    A line is not always one note at a time. Players comp behind themselves and
+    solo in block chords, and the most idiomatic thing either does is move a
+    whole voicing chromatically into the next one - G7, a G7alt a semitone
+    under half of it, then Cmaj7. Read as a stream of single notes that is four
+    voices each missing their resolution, because the note after a chord's Ab
+    is the chord's own B rather than the G it was heading for.
+
+    So the shell says which notes were struck together, and the engine reads
+    what it is given as one attack: the notes of a chord neither resolve nor
+    strand one another, and the line resolves voicing to voicing, each voice
+    finding its own way home.
+
+    This is a fact the shell has whether or not it has a clock - two keys going
+    down at once is not a time, it is a gesture - so it is said here rather
+    than inferred from positions. `fresh` is the default and is what an
+    ordinary line is made of.
+*/
+enum class Attack
+{
+    fresh,         ///< a note of its own: the next note of the line, or the first of a chord
+    withPrevious   ///< struck with the note before it - the two are one chord
+};
+
 /** One note of a line, read against the bar it landed in. */
 struct LineNote
 {
@@ -149,6 +175,15 @@ struct LineNote
 
     /** The note was played on the downbeat or the bar's other strong beat. */
     bool onStrongBeat {};
+
+    /** Struck at the same moment as the note before it: the two are one chord.
+
+        Exactly what the shell said, kept rather than digested, so the runs of
+        it are the attacks and a shell wanting to draw a voicing can find them
+        again. False for the first note of a chord as well as for every note of
+        an ordinary line - it describes the join, not the chord.
+    */
+    bool struckWithPrevious {};
 };
 
 /** How a stretch of line divided up. Counts rather than percentages: a
@@ -289,6 +324,15 @@ struct TakeSummary
     int notesSatOn {};
     int notesPassedThrough {};
 
+    /** Chords in the line - attacks of two notes or more - and how many of
+        their notes were outside and stepped home into the next voicing.
+
+        Counted because chordal playing is a different thing to be doing and
+        worth saying back, not because it is worth more: a note in a chord is
+        counted, coloured and scored exactly like any other note. */
+    int chordsPlayed {};
+    int chordVoicesResolved {};
+
     int rangeInSemitones() const noexcept
     {
         return highestNote > 0 ? highestNote - lowestNote : 0;
@@ -333,8 +377,13 @@ struct TakeSummary
     shell has something true to say at the moment of playing that is not "that
     was wrong": the line has opened something, and here is what would close it.
 
-    Nothing that has settled is ever revisited. A note that landed stays
-    landed, and a note left hanging stays hanging.
+    Nothing that has settled is ever revisited, with one exception, and the
+    exception is the whole of what a chord changes: a note stranded by the
+    first note of a chord may still be reached by the rest of that chord. The
+    window cannot tell a chord's first note from an ordinary next note until
+    the second one arrives, so it judges as it always did and takes the
+    judgement back when the same gesture turns out to answer it. Nothing across
+    two gestures is ever revisited, which is the rule that was actually meant.
 
     There is no clock. A take is bounded by the player arming and disarming it,
     not by a transport, which is what makes it testable with no time in it at
@@ -460,7 +509,7 @@ public:
         still show up in `resolvedByLastNote()` and `strandedByLastNote()`,
         because both are worth saying to someone who has not armed anything.
     */
-    LineNote play (int midiNote);
+    LineNote play (int midiNote, Attack attack = Attack::fresh);
 
     /** The same, told where in the bar the note fell.
 
@@ -469,7 +518,7 @@ public:
         there is no position that means "no position", and a made-up downbeat
         would be read as a real one.
     */
-    LineNote play (int midiNote, BarPosition where);
+    LineNote play (int midiNote, BarPosition where, Attack attack = Attack::fresh);
 
     /** The notes this last `play()` promoted to `approach`, in the order the
         window found them.
@@ -477,6 +526,11 @@ public:
         Empty almost always. It exists so a shell can say "and that Db before
         it was on its way here" rather than silently improving a number the
         player is looking at.
+
+        Cleared at the start of each *attack* rather than of each note, so the
+        notes of a chord accumulate one answer between them. That is what stops
+        a shell showing "left hanging" for the twenty milliseconds between a
+        chord's first note and the one that actually resolved it.
     */
     const std::vector<LineNote>& resolvedByLastNote() const noexcept { return justResolved; }
 
@@ -506,16 +560,38 @@ public:
 private:
     LineNote readAgainstTarget (int midiNote) const;
 
-    /** Says of the note before the newest whether the line stayed on it. */
-    void markPassedThrough (std::vector<LineNote>& line);
+    /** The notes of one attack: a half-open range of the line. */
+    struct AttackSpan
+    {
+        std::size_t begin {};
+        std::size_t end {};
+    };
 
-    /** Promotes any of the last few notes of @p line that the newest resolved. */
-    void resolveTail (std::vector<LineNote>& line);
+    /** The line divided into attacks, oldest first. Every note belongs to
+        exactly one, and a line with nothing struck together is a run of
+        attacks one note long - which is why everything below reduces to what
+        it did before the moment no chords are played. */
+    static std::vector<AttackSpan> attacksIn (const std::vector<LineNote>& line);
+
+    /** Says of the attack before the newest whether the line stayed on it. */
+    void markPassedThrough (std::vector<LineNote>& line, const std::vector<AttackSpan>& attacks);
+
+    /** Promotes any note of the last two attacks that the newest resolved. */
+    void resolveTail (std::vector<LineNote>& line, const std::vector<AttackSpan>& attacks);
 
     /** Closes every open note the line can no longer reach. */
-    void settleTail (std::vector<LineNote>& line);
+    void settleTail (std::vector<LineNote>& line, const std::vector<AttackSpan>& attacks);
+
+    /** Whether any pattern could still promote the note at @p noteIndex. */
+    static bool canStillBeReached (const std::vector<LineNote>& line,
+                                   const std::vector<AttackSpan>& attacks,
+                                   std::size_t attackIndex,
+                                   std::size_t noteIndex);
 
     bool promote (std::vector<LineNote>& line, std::size_t index, int target, ApproachKind kind);
+
+    /** Rebuilds the two public lists from the indices behind them. */
+    void publishJust (const std::vector<LineNote>& line);
 
     Options options;
 
@@ -537,6 +613,18 @@ private:
         a reading is not a tally. Cleared at both edges of a take, because a
         take starts and ends clean. */
     std::vector<LineNote> recent;
+
+    /*  Held as indices into the line rather than as copies, so a note revived
+        by the rest of its chord can be taken back out of the stranded list
+        instead of appearing in both. The public vectors are built from these
+        at the end of every `play()`, which also means they never carry a
+        reading that has since moved on. */
+    std::vector<std::size_t> justResolvedAt;
+    std::vector<std::size_t> justStrandedAt;
+
+    /*  Notes stranded since the current attack began - the only notes a later
+        note of that attack is allowed to promote. See the class note. */
+    std::vector<std::size_t> strandedThisAttack;
 
     std::vector<LineNote> justResolved;
     std::vector<LineNote> justStranded;

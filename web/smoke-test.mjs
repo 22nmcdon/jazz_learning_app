@@ -90,6 +90,25 @@ await page.addInitScript(() => {
 
     return source;
   };
+
+  /*  A MIDI keyboard, so the chordal half of solo practice can be driven at
+      all. Notes struck together are the whole of what tells the engine it is
+      reading a chord rather than a line, and a pointer plays one key at a time
+      by construction - so the on-screen keyboard cannot produce one however
+      fast it is clicked. The page's own handler is what runs; this hands it
+      the bytes a keyboard would, which keeps the file under test the shipped
+      one, unmodified. */
+  window.__midi = { send: null };
+
+  navigator.requestMIDIAccess = () => {
+    const input = { name: "Smoke test keyboard", onmidimessage: null };
+
+    window.__midi.send = (bytes) => input.onmidimessage({ data: Uint8Array.from(bytes) });
+
+    return Promise.resolve({ inputs: new Map([["in", input]]),
+                             outputs: new Map(),
+                             onstatechange: null });
+  };
 });
 
 // Anything the page says went wrong is a failure here. A page that boots with
@@ -366,6 +385,61 @@ try {
         + `(${await page.locator("#soloOpen").innerText()})`,
         (await page.locator('#keyboard .key[data-note="63"]').getAttribute("data-colour")) === "outside"
         && (await page.locator('#keyboard .key.sounded[data-colour="unresolved"]').count()) === 0);
+
+  /*  Chords in a line: a player comping behind themselves, or soloing in
+      blocks. A G13, the same shape with two voices pushed down a semitone to
+      make a G7alt, then a Cmaj7 - which is the most ordinary way there is of
+      getting from the one to the other, and which read as a handful of notes
+      that went nowhere until the page started saying which notes were struck
+      together. The Ab steps into the G of the next voicing at the same moment
+      the Eb steps into its D.
+
+      Driven over MIDI because that is the only input that can strike two notes
+      at once, and struck in one synchronous burst the way a keyboard sends
+      them. */
+  await page.locator("#menuButton").click();
+  await page.locator("#connectMidi").click();
+  await page.waitForFunction(
+    () => document.querySelector("#midiStatus").classList.contains("good"),
+    null, { timeout: 10000 });
+
+  check(`a MIDI keyboard is seen (${(await page.locator("#midiStatus").innerText()).trim()})`, true);
+
+  await page.locator("#menuButton").click();
+
+  await page.evaluate(() => {
+    const voicings = [[53, 57, 59, 64], [53, 56, 59, 63], [52, 55, 59, 62]];
+
+    return voicings.reduce((wait, voicing) => wait.then(() => {
+      voicing.forEach((note) => window.__midi.send([0x90, note, 80]));
+      voicing.forEach((note) => window.__midi.send([0x80, note, 0]));
+
+      return new Promise((done) => setTimeout(done, 200));
+    }), Promise.resolve());
+  });
+
+  await page.waitForFunction(
+    () => document.querySelector('#keyboard .key[data-note="56"]').dataset.colour === "approach",
+    null, { timeout: 10000 });
+
+  check(`a voicing moving chromatically into the next one resolves voice by voice `
+        + `(${await page.locator("#soloOpen").innerText()})`,
+        (await page.locator('#keyboard .key[data-note="63"]').getAttribute("data-colour")) === "approach");
+
+  // And nothing was left lit asking a question that had been answered.
+  check("neither voice was left hanging",
+        (await page.locator('#keyboard .key[data-colour="outside"]').count()) === 0);
+
+  // The control, and the reason the shell has to be the one to say it: the
+  // same pitches clicked one at a time are the line they actually are.
+  for (const note of [53, 56, 59, 63]) { await soloKey(note).click(); await page.waitForTimeout(90); }
+  for (const note of [52, 55, 59, 62]) { await soloKey(note).click(); await page.waitForTimeout(90); }
+
+  await page.waitForFunction(
+    () => document.querySelector('#keyboard .key[data-note="56"]').dataset.colour === "outside",
+    null, { timeout: 10000 });
+
+  check("the same notes played one at a time are read as the line they are", true);
 
   // Nothing is counted until a take is armed.
   check("nothing is counted before arming", await page.locator("#soloTallies").isHidden());

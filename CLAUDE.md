@@ -298,6 +298,43 @@ there because these are the ones that break something when a session has not rea
 - **An approach note is left out of that reading.** It stepped home, which is the verdict
   that matters about it; adding "and it was passed through" would count the line's best
   notes among the ones being asked about.
+- **A line is not always one note at a time, and the shell is the one that knows.** Players
+  comp behind themselves and solo in block chords, and the most idiomatic move either makes
+  is sliding a whole voicing chromatically into the next one - G7, a G7alt under half of it,
+  Cmaj7. Read as a stream the inner voices never resolve, because the note after a chord's
+  Ab is the chord's own B rather than the G it was heading for. That read as four failed
+  resolutions, which was reported, and it was the reading that was wrong rather than the
+  playing.
+- **`Attack` is the whole of the fix, and it is a gesture rather than a time.** `play()`
+  takes `Attack::withPrevious` for a note struck with the one before it, and notes so joined
+  are one attack: **they neither resolve nor strand one another**, and the window runs
+  attack to attack so each voice finds its own way home. Every rule is the rule it always
+  was with "the note before" widened to "any note of the attack before" - which is why a
+  line with nothing struck together reads exactly as it did, and why all of the existing
+  tests passed untouched.
+- **It is the shell's to say because only the shell can.** Nothing about the pitches tells a
+  chord from a line - the same notes are both - so this is knowledge the page has and the
+  engine must not invent. It is still not a clock: "struck together" is a fact about a
+  gesture, like a measure index is a fact about a bar. The page works it out from its own
+  clock (40ms, and MIDI only - a pointer plays one key at a time however fast it is
+  clicked, so a click is always its own attack) and the engine never learns what a second
+  is.
+- **Nothing waits for a chord to be finished.** The flag says a note *joined* an attack,
+  which is knowable the instant it arrives, so no shell buffers and no reading is delayed.
+  The cost is the one exception to *nothing settled is ever revisited*: the window cannot
+  tell a chord's first note from an ordinary next note, so it judges on the first and takes
+  the judgement back when the rest of the same chord answers it. Nothing across two
+  gestures is ever revisited, which is the rule that was actually meant. `resolvedByLastNote`
+  and `strandedByLastNote` are therefore cleared **per attack, not per note**, so a shell
+  reading them after each note of a chord sees one corrected answer rather than a flicker.
+- **A note struck with three others is still one note.** It is counted, coloured, scored and
+  positioned exactly like any other. The gesture changes which notes can resolve which, and
+  nothing else - `chordsPlayed` and `chordVoicesResolved` are there so the summary can say
+  back what the player was doing, not so it can weigh it.
+- **An attack does not cross a barline.** Two notes read against different bars were played
+  against different chords, whatever the shell believed about the keyboard - and grouping
+  them would stop each resolving the other, which is exactly wrong for the commonest thing
+  in the idiom.
 
 ### The rhythm grid — one representation, two consumers
 `modules/core_engine/.../Rhythm.h` is the whole of it, and it is shared by comping and by
@@ -497,6 +534,11 @@ build step passes, that setting is the first thing to check.
 - **Licks.** Solo mode's "Which scale?" is the scale half of "show me one"; suggesting a
   *line* to play over a bar is a separate feature needing generated or curated patterns,
   rhythm and register - deliberately not started.
+- **Reading a chord as a chord.** Solo practice now reads chordal playing voice by voice,
+  which is what a line needs. What it does not do is ask whether the *voicing* said what the
+  bar said - that is `VoicingAnalyzer`'s question, and joining the two would mean deciding
+  which answer a block-chord solo wants. `LineNote::struckWithPrevious` is the seam: the
+  runs of it are the voicings, already on the wire.
 - **Comping as an exercise** - scoring what *you* comp against a `CompStyleDefinition`.
   The style data and `fitsStyle()` are the seam it grows from; what is missing is the
   register and density half, and the third mode to show it in. See the note on that

@@ -149,9 +149,9 @@ JAZZ_EXPORT const char* jazzSoloSetBar (int measureIndex, const char* symbol,
                                         orEmpty (chosenScale), orEmpty (style), beatsPerBar));
 }
 
-JAZZ_EXPORT const char* jazzSoloPlayNote (int midiNote, int beat, int tick)
+JAZZ_EXPORT const char* jazzSoloPlayNote (int midiNote, int beat, int tick, int withPrevious)
 {
-    return hold (jazz::api::soloPlayNote (midiNote, beat, tick));
+    return hold (jazz::api::soloPlayNote (midiNote, beat, tick, withPrevious));
 }
 
 JAZZ_EXPORT const char* jazzSoloEndTake()

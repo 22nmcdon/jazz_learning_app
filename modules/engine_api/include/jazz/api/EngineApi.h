@@ -62,8 +62,11 @@ std::string walkingBass (const char* progressionText, int fromBar, int toBar, in
       soloSetBar      the bar being soloed over, and the scale to read against.
                       Called on arming and again on every move. Moving during a
                       take does not end it.
-      soloPlayNote    one note. Read back whether a take is running or not;
-                      counted only when one is.
+      soloPlayNote    one note, and whether it was struck with the one before
+                      it - which is how a chord reaches the engine, one call
+                      per note and no waiting for the rest of it. Read back
+                      whether a take is running or not; counted only when one
+                      is.
       soloEndTake     disarm, and hand back the take to read.
 
     A bar's own numbers come back from `soloSetBar`, because clicking a bar is
@@ -82,7 +85,7 @@ std::string soloSetBar (int measureIndex, const char* symbol, const char* chosen
                         const char* style, int beatsPerBar = 4);
 /** @param beat  negative when the shell has no clock and cannot say where
                   the note fell - which is not the same as the downbeat. */
-std::string soloPlayNote (int midiNote, int beat = -1, int tick = 0);
+std::string soloPlayNote (int midiNote, int beat = -1, int tick = 0, int withPrevious = 0);
 std::string soloEndTake();
 
 } // namespace jazz::api

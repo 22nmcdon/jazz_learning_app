@@ -1656,7 +1656,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 380 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 393 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -1789,6 +1789,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         note itself - and that is an <b>enclosure</b>, which gets a colour of its own. It
         counts exactly as an approach note does; it is just a harder thing to have done on
         purpose, and worth telling apart from passing through.
+      </li>
+      <li>
+        <b>Play chords and each voice is read on its own way home.</b> Sliding a whole
+        voicing chromatically into the next one - a G7, a G7alt under half of it, then the
+        Cmaj7 - is several lines at once, so the Ab is read against the G it steps into
+        rather than against whatever else was struck with it. Needs a MIDI keyboard: the
+        on-screen one plays a note at a time.
       </li>
       <li>
         <b>Click the same bar again</b> for the scales that fit it. Picking one is the
@@ -2856,7 +2863,34 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
      with its own bar's numbers: the engine is answering the question once and
      the page is remembering the answers. Disarming replaces the lot with the
      engine's own breakdown, so a long take cannot drift from it. */
-  var solo = { armed: false, bar: null, take: null, bars: {}, open: {} };
+  var solo = { armed: false, bar: null, take: null, bars: {}, open: {},
+               lastStruck: 0, lastAt: null, lastBar: -1 };
+
+  /*  How close together two notes have to be struck to be one chord.
+
+      Players comp behind themselves and solo in block chords, and a voicing
+      moving into the next one is several lines at once - so the engine has to
+      be told which notes were struck together, or an inner voice's resolution
+      is whatever happened to be played next, which over a chord is one of its
+      own notes.
+
+      The page is the only thing that knows: it has the clock, and the engine
+      deliberately does not. Forty milliseconds because both mistakes are bad
+      and this is where they are furthest apart. Wider and a fast run gets
+      swallowed - sixteenths at 240 are sixty-two milliseconds apart, and two
+      of them read as a chord would stop resolving each other. Narrower and a
+      rolled chord comes apart again, which is the thing being fixed. A struck
+      chord arrives inside a few milliseconds either way.
+
+      Held keys would be the obvious signal and it is the wrong one: a legato
+      line holds the note before too, so it cannot tell a chord from a line
+      played the way lines are actually played.
+
+      MIDI's alone. A pointer plays one key at a time however fast it is moved,
+      so two clicks are two gestures whatever the clock says - and the page has
+      no multi-touch handling to make them anything else. Asking the clock about
+      them would only find chords nobody played. */
+  var CHORD_WINDOW_MS = 40;
 
   /** Draws what the take made of each bar, on the bars.
 
@@ -3191,6 +3225,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.armLabel.textContent = "Stop the take";
     document.querySelector(".dock").classList.add("armed");
 
+    // Whatever was played before arming is not the start of the first chord of
+    // the take.
+    solo.lastStruck = 0;
+    solo.lastAt = null;
+    solo.lastBar = -1;
+
     el.soloSummary.hidden = true;
     el.soloNote.textContent = "Take running. Play over the bar you are on - move along the chart and it keeps counting.";
     el.soloNote.removeAttribute("data-colour");
@@ -3252,17 +3292,45 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.armTake.addEventListener("click", toggleTake);
 
-  /** One note, read against the bar it landed in. */
-  async function soloNotePlayed(midiNote) {
+  /** One note, read against the bar it landed in.
+
+      @param struckTogether  it was played with the note before it - one chord.
+                             Known at the moment the note arrives rather than
+                             after waiting to see what else does: the engine
+                             never needs telling that a chord has finished, only
+                             that a note joined one, so nothing here is buffered
+                             and every note is read as immediately as it was.
+  */
+  async function soloNotePlayed(midiNote, struckTogether) {
+    var withPrevious = struckTogether === true;
+
+    solo.lastStruck = performance.now();
+
     /*  Where the clock says we are, or nowhere. The page turns its own time
         into a position on the engine's grid and sends that; the engine still
         has no idea what a second is. Static, there is no position to send and
         -1 says so - which is not the downbeat, and the engine is careful to
-        treat it as neither. */
-    var at = positionNow();
+        treat it as neither.
 
-    var result = await call("jazzSoloPlayNote", ["number", "number", "number"],
-                            [midiNote, at === null ? -1 : at.beat, at === null ? 0 : at.tick]);
+        The notes of one chord are given one position, which is what a chord
+        *is* on paper - three notes written at the same place. Left to their
+        own they would land a tick or two apart and the bar would read as
+        having been rolled through rather than struck.
+
+        Not across a bar, though. The engine refuses to join an attack that
+        crosses one - two notes read against different bars were played against
+        different chords - so handing the second of them the first's position
+        would be putting a note late in the old bar where it is early in the
+        new one. */
+    var joining = withPrevious && solo.lastAt !== null && solo.lastBar === state.selected;
+    var at = joining ? solo.lastAt : positionNow();
+
+    solo.lastAt = at;
+    solo.lastBar = state.selected;
+
+    var result = await call("jazzSoloPlayNote", ["number", "number", "number", "number"],
+                            [midiNote, at === null ? -1 : at.beat, at === null ? 0 : at.tick,
+                             withPrevious ? 1 : 0]);
 
     if (result === null || !result.ok) return;
 
@@ -3334,9 +3402,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     } else if (stranded.length) {
       showOpenNote("outside", noteList(stranded) + " never landed");
     } else if (enclosing) {
-      showOpenNote("enclosure", noteList(resolved) + " enclosed " + note.name);
+      showOpenNote("enclosure", noteList(resolved) + " enclosed " + (landedOn(resolved) || note.name));
     } else if (resolved.length) {
-      showOpenNote("approach", noteList(resolved) + " landed on " + note.name);
+      /*  Where they went, when they all went to the same place. Several voices
+          of a chord can land in one breath and land on different notes - the
+          Ab of a G7alt going to G while its Eb goes to D - and naming the last
+          note struck as the one they all reached would be untrue of most of
+          them. */
+      var target = landedOn(resolved);
+
+      showOpenNote("approach", target ? noteList(resolved) + " landed on " + target
+                                      : noteList(resolved) + " stepped home");
     } else if (note.colour === "unresolved") {
       // Still open, so say what it is waiting for rather than what it cost.
       showOpenNote("", note.wantsToReach ? note.name + " wants " + note.wantsToReach
@@ -3352,6 +3428,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // answered is still on screen when the answer comes.
     flashKey(midiNote, note.colour, note.colour === "unresolved" ? 0 : undefined);
     drawTallies();
+  }
+
+  /** The one note they all reached, or "" when they reached different ones. */
+  function landedOn(notes) {
+    var first = notes.length ? notes[0].to || "" : "";
+
+    return notes.every(function (earlier) { return (earlier.to || "") === first; }) ? first : "";
   }
 
   /** "Db4", or "Db4 and Eb4". */
@@ -5460,15 +5543,18 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   function midiNoteOn(note) {
-    // Solo mode wants the notes one at a time. The chord window below exists to
-    // gather notes that arrived together into one voicing, which is exactly the
-    // wrong thing for a line: a rolled double-stop is two notes, each read
-    // where it sits, not one chord.
+    /*  Solo mode reads the notes one at a time, and that stays true for a
+        chord: the chord window below gathers notes into one voicing to be
+        analysed as a thing, which a line never is. What solo practice does
+        instead is tell the engine which notes were struck together and go on
+        reading each of them against the bar - so a block chord is four
+        readings and one gesture, rather than one voicing or four unrelated
+        notes. `soloNotePlayed` works the gesture out from its own clock. */
     if (state.mode === "solo") {
       midi.velocities[note] = midi.velocities[note] || 0.8;
       if (midi.held.indexOf(note) === -1) midi.held.push(note);
       playNote(note, velocityOf(note));
-      soloNotePlayed(note);
+      soloNotePlayed(note, performance.now() - solo.lastStruck < CHORD_WINDOW_MS);
       return;
     }
 
