@@ -1,298 +1,64 @@
-<!-- The long "why" for solo practice. The load-bearing rules are summarised in
-     CLAUDE.md, which is loaded every session; this file is where each of them is
-     argued for, with the counts and the bugs that produced it.
+<!-- The long "why" for solo practice. The load-bearing rules are summarised in CLAUDE.md, which is loaded every session; this file is where each of them is argued for, with the counts and the bugs that produced it. The rhythm grid this reads against is shared with comping — see docs/RHYTHM.md — and comping's own reasoning now lives in docs/COMPING.md. If you are changing solo practice, read this. If you are changing something else, CLAUDE.md's summary is enough and this file is why it says what it says. Do not let the two disagree: a rule moved here without a line left behind is a rule a session will not see. -->
+Solo practice
 
-     If you are changing solo practice, read this. If you are changing something
-     else, CLAUDE.md's summary is enough and this file is why it says what it
-     says. Do not let the two disagree: a rule moved here without a line left
-     behind is a rule a session will not see. -->
+The same chart, the same notes, a different question: where does each one sit. LineAnalyzer is the whole of the theory; read() is pure, and a take is that with a memory and a window.
 
-# Solo practice
+Reading one note
+LineAnalyzer::read() reads one note against the bar's chord as chord tone / scale tone / outside, names its degree, and says which scale accounts for it. Pure, one note, no state — every rule decidable without a line lives here.
+Forgiving is not the same as accepting everything. Solo mode was specified to read a note against every scale that fits the chord, on the grounds that a player who chose a different valid scale hasn't made a mistake. Counted, that leaves nothing outside anything: Cmaj7, G7 and Bbmaj7 each come out 4 chord tones, 8 scale tones, 0 outside, and Dm7 has exactly one note it will not account for. Three tiers collapse into two and the feature stops saying anything. Against one scale the same chords read 4/3/5. So the reading is against one scale, and the forgiveness lives in which one — Options::chosenScale, the scale the player picked from the Scales panel. Before widening a rule in the name of being generous, count what it leaves.
+The window: open, approach, outside
+A note outside the harmony is open, not wrong, until the window has passed it. This is the rule the rest of solo practice hangs off. A chromatic approach, an enclosure and a passing tone are outside by pitch and are the line working; nothing tells them apart from a note that didn't land until the note after arrives. So play() reads the new note, looks back over the two behind it promoting any it resolved, then settles every open note the line can no longer reach. A note outside the harmony comes back NoteColour::unresolved and becomes approach or outside once, for good — usually on the very next note. read() returns outside, because one note has no line around it to be waiting on.
+canStillBeReached() decides when, and the rule is "could any pattern still promote this," not "have two notes gone by." A note that lands somewhere else closes the one before it immediately, because the step patterns have had their chance and an enclosure needs that note to be outside too. Only a second outside note with room between the two — two to four semitones, so a target could sit between them a step from each — holds the verdict back a further note. Waiting a fixed two notes meant the one piece of bad news this reads arrived a note late in the commonest case of all.
+Nothing is graded on an open note. score() reads LineStats::settled(). Counting an open note as outside before the window decides made the score dip every time a player reached for a chromatic approach and climb back when they landed it — which reads as the app marking someone down for a phrase it's about to approve of. Do not let a percentage, a strip or a tally treat unresolved as a verdict.
+The instant feedback names the resolution, not a mistake. LineNote::wantsToReach is the nearest note a step away that would close it — root first, then chord tone, then scale tone, semitones before tones. "That was wrong" is a guess at that moment and often the wrong one; "a semitone up lands on D" is true whichever way the line goes, and it's the thing that would have helped. The bad news is delivered late instead, by strandedByLastNote(), which is the earliest it's honestly available.
+Which gesture got a note home is recorded, and is not a tier. ApproachKind is chromatic / passing / enclosure. All three land, all three count identically in LineStats, and the score has no opinion about which — but they aren't the same thing to play, and an enclosure is deliberate in a way a passing tone isn't. Rules try most specific first (enclosure, passing tone, chromatic approach) because a note can honestly answer to more than one, and a promoted note is never re-promoted: the second note of an enclosure is a chromatic approach on its own, and letting the simpler rule reach it first would lose the harder thing the player did.
+Nothing that has settled is ever revisited. A note that landed stays landed and a note left hanging stays hanging, so a reading never changes twice under a player who's watching it.
+The window doesn't stop at the barline. Running chromatically into the next chord is idiomatic, so a promotion can change a bar the player has already left — which is why soloPlayNote returns a bars array of everything that moved, not just the bar the note landed in. A shell reading only bar leaves the previous one drawing numbers that stopped being true.
+One note can resolve one open note and strand another, in the same breath. resolvedByLastNote() and strandedByLastNote() are not alternatives, and a shell must read both every time. Play Eb, then F#, then G: the G is the chromatic approach the F# earned, while the Eb is left having enclosed nothing.
+It runs without a take. Notes outside a take go into a three-note recent buffer, resolved and settled there but never counted. Someone who hasn't armed anything is the person most likely to be trying chromatic notes, and telling them those were misses is the lesson the whole window exists to stop — they're told at the same moment an armed player would be. The buffer trims after settling, or a note could drop off the front while still open and take its verdict with it.
+The take
+The take lives in the engine, reached through four entry points in jazz::api (soloStartTake, soloSetBar, soloPlayNote, soloEndTake) — the one stateful corner of that API, deliberately: the alternative is the shell resending every note played so far, which puts the take in the UI.
+endTake() closes whatever is still open, as outside: there will be no more notes, so the resolution isn't coming. A summary carrying "waiting to see" would be waiting for good, which is why every test that reads a colour back ends the take first.
+A take marks the chart, not only the dock. The page keeps bar stats itself from what every soloPlayNote already returns, then replaces the lot with the engine's own breakdown on soloEndTake so a long take can't drift.
+Either static or in time — the clock needed nothing new from the engine, because it moves the bar the same way a click does (see In time below).
+The score, and the shape of a line
+The score is the only judgement in the engine, so every number in it is named. LineStats::score() reads a bar 0–100 over settled notes: chord tones, scale tones and approach notes all land, an outside note is worth a quarter, and what's left is balance — worth fifteen points at most, fading in with the length of the bar. The constants live named at the top of LineAnalyzer.cpp rather than inside the arithmetic, because each is arguable, and the tests are where the argument is held: leaning off the chord costs what leaning onto it does, two notes aren't unbalanced, an outside bar still scores its quarter, and the result never leaves 0–100. Approach notes count as colour rather than chord tones for balance — the opposite of never leaving the chord.
+A line has shape as well as content, and the shape doesn't touch the score. The summary also reads how the line moved: bars it never coloured (LineBar::neverLeftTheChord, per bar rather than per N notes, because the bar is a boundary the player already feels), leaps not followed by a step, and a take that never left a hand's width. All three produce words, none produces points. Mixing motion into the score would make a number nobody could explain out of one that can be.
+Nothing calls a note wrong. A reading of a bar isn't a mark for a player, and the wording on the page has to keep saying so.
+Scale styles
+Scale styles (ScaleStyle in Scale.h) are the soloing vocabularies the Practice menu offers — the modes, melodic minor, harmonic minor, bebop, pentatonics and blues, whole tone and diminished, everything. Built out of ScaleFamily rather than lists of scale names, so a shape added to the catalogue joins its style by itself. A style with nothing for a chord falls back to the whole catalogue and says so; an unknown key widens rather than empties, so a key stored by another version is harmless.
+The dock names the scale, and derives it the way it derives what it sends. Solo practice writes Expecting D Dorian where chord practice writes Expecting Dm7, from state.scales[state.chosenScale] — the same expression that feeds soloChosenScale(), so it's the same answer LineAnalyzer will reach, fallbacks included. Asking the engine separately would be a second path to the same fact; guessing it would be theory in the page. It made a quiet bug loud once: reopening a bar used to reset the chosen scale to the top of the list while the engine kept reading against the old one, which nothing on screen could contradict until something on screen named it.
+In time — the transport
+The switch was a door with nothing behind it for as long as there was nothing behind it — half a transport is worse than none. Behind it now: a tempo, a count-in, the chart moving a bar to the click, and a loop over a range of bars.
+The clock is the page's; the engine has none. LineAnalyzer has no time in it, which is what makes it testable, so the transport calls selectBar() on each downbeat and the engine hears about it through soloSetBar exactly as it would from a mouse click. It can't tell the two apart, and that's the point — arming a take over a roll needed no new code. Nothing in the engine may start depending on when a note arrived.
+Beats are booked, not ticked. A setInterval at the beat drifts, and a metronome that drifts is worse than none, so every tick books the beats falling inside a lookahead window with times computed from one origin. Changing tempo mid-roll has to re-anchor that origin, or the next beat is spaced the new way from an origin that meant the old one.
+The metre is the chart's, and can't be re-anchored the way tempo can. Both the count-in and the bar arithmetic are counted in beats-per-bar, so a metre changed mid-roll would mean two bar lengths measured from one origin — it stops the clock and starts again in the metre just chosen. The value comes off the chart (ChartFormats has always read a time signature; it only reached the page once the sheet head had somewhere to put it). Read transport.beats, never a literal four — the dots, the count-in and the loop arithmetic all do.
+Arming and rolling are one gesture. Two buttons made two states nobody meant — a take over a chart that never moves, a chart rolling with nothing counting — so toggleTake() is both, and the space bar calls it (fenced out of fields where a space is a character, rather than fenced to document.body, because a take starts right after clicking a bar or the button — exactly where focus isn't). The take starts before the clock, so the transport's first selectBar reaches an engine that already has one.
+The count-in is not bar one. The chart doesn't wear the rolling mark until a real beat lands — a bar claiming to be current while the dots are still counting says the player is somewhere they aren't.
+The click is the one place the shells are honestly unequal. Scheduled into Web Audio at an exact time on the page; sent over the event bridge when due in the app (that bridge has no "play this at" argument), so it arrives a message-thread hop later. Both shells read the same clock, so chart and click agree in both. Don't paper over the difference by pretending to schedule in the app — if it matters, give the bridge a time.
+Reading where a note fell
 
-The same chart, the same notes, a different question: where does each one sit.
-`LineAnalyzer` is the whole of the theory; `read()` is pure, and a *take* is that with a
-memory and a window.
+The grid itself (24 ticks/beat, swing, strong beats) is shared with comping and documented once in docs/RHYTHM.md. What's specific to solo practice:
 
-### Reading one note
-- `LineAnalyzer::read()` reads one note against the bar's chord as **chord tone / scale
-  tone / outside**, names its degree, and says which scale accounts for it. Pure, one
-  note, no state - every rule that can be decided without a line lives here.
-- **Forgiving is not the same as accepting everything.** Solo mode was specified to read a
-  note against *every* scale that fits the chord, on the grounds that a player who chose a
-  different valid scale has not made a mistake. Counted, that leaves **nothing outside
-  anything**: Cmaj7, G7 and Bbmaj7 each come out 4 chord tones, 8 scale tones, 0 outside,
-  and Dm7 has exactly one note it will not account for. Three tiers collapse into two and
-  the feature stops saying anything. Against one scale the same chords read 4 / 3 / 5. So
-  the reading is against one scale and the forgiveness lives in *which* one -
-  `Options::chosenScale`, the scale the player picked out of the Scales panel. Before
-  widening a rule in the name of being generous, count what it leaves.
+A position is not a time. BarPosition is a position in a bar the way measureIndex is a position in a chart. The shell owns the clock and converts a moment into one of these before the engine sees it, and back again to play it. Nothing here may start depending on when a note actually arrived.
+It's an overload, not a defaulted argument. There's no position that means "no position," and a made-up downbeat would be read as a real one. soloPlayNote signals it with a negative beat instead. A take played statically is read exactly as it was before any of this existed — every reading below is additive and silent without positions.
+"Passed through" versus "sat on" is the whole reason the grid was wanted. The same pitch against the same chord is what every bebop line is made of at speed and what sounds like a mistake when dwelt on. Only the rhythm separates them. Filled in behind, like resolvesTo, because it's a fact about the gap to the next note — measured through the barline, or every pushed note in the idiom reads as one the line sat on.
+An approach note is left out of it. It stepped home, which is the verdict that matters about it; saying it was also passed through adds nothing and would count the line's best notes among the ones being asked about.
+None of it touches the score, and that's the rule this whole file is built on, not an omission. Where a note sits in a bar doesn't make it a better or worse note, and the moment placement moved the number the number would stop being explainable. There's a test that says so: the same notes score the same whether or not positions were sent.
+Chords in a line
 
-### The window: open, approach, outside
-- **A note outside the harmony is open, not wrong, until the window has passed it.** This
-  is the rule the rest of solo practice hangs off. A chromatic approach, an enclosure and
-  a passing tone are outside by pitch and are the line *working*; nothing tells them apart
-  from a note that did not land until the note after arrives. So `play()` reads the new
-  note, looks back over the two behind it promoting any it resolved, then *settles* every
-  open note the line can no longer reach. A note outside the harmony comes back
-  `NoteColour::unresolved` and becomes `approach` or `outside` once, for good - usually on
-  the very next note. `read()` returns `outside`, because one note has no line around it
-  to be waiting on.
-- **`canStillBeReached()` decides when, and the rule is "could any pattern still promote
-  this", not "have two notes gone by".** A note that lands somewhere else closes the one
-  before it immediately, because the step patterns have had their chance and an enclosure
-  needs that note to be outside too. Only a second outside note with room between the two
-  - two to four semitones, so a target could sit between them a step from each - holds the
-  verdict back a further note. Waiting a fixed two notes meant the one piece of bad news
-  this reads arrived a note late in the commonest case of all.
-- **Nothing is graded on an open note.** `score()` reads `LineStats::settled()`. Counting
-  an open note as outside for the notes before the window decides made the score dip every
-  time a player reached for a chromatic approach and climb back when they landed it, which
-  reads as the app marking someone down for a phrase it is about to approve of. Do not let
-  a percentage, a strip or a tally treat `unresolved` as a verdict.
-- **The instant feedback names the resolution, not a mistake.** `LineNote::wantsToReach`
-  is the nearest note a step away that would close it - root first, then chord tone, then
-  scale tone, semitones before tones. "That was wrong" is a guess at that moment and often
-  the wrong one; "a semitone up lands on D" is true whichever way the line goes, and it is
-  the thing that would have helped. The bad news is delivered late instead, by
-  `strandedByLastNote()`, which is the earliest it is honestly available.
-- **Which gesture got a note home is recorded, and is not a tier.** `ApproachKind` is
-  chromatic / passing / enclosure. All three land, all three count identically in
-  `LineStats`, and the score has no opinion about which - but they are not the same thing
-  to play, and an enclosure especially is deliberate in a way a passing tone is not. The
-  rules are tried **most specific first** (enclosure, passing tone, chromatic approach)
-  because a note can honestly answer to more than one and a promoted note is never
-  re-promoted: the second note of an enclosure *is* a chromatic approach on its own, and
-  letting the simpler rule reach it first would lose the harder thing the player did.
-- **Nothing that has settled is ever revisited.** A note that landed stays landed and a
-  note left hanging stays hanging, so a reading never changes twice under a player who is
-  watching it.
-- **The window does not stop at the barline.** Running chromatically into the next chord
-  is idiomatic, so a promotion can change a bar the player has already left - which is why
-  `soloPlayNote` returns a `bars` array of everything that moved, not just the bar the
-  note landed in. A shell reading only `bar` leaves the previous one drawing numbers that
-  stopped being true.
-- **One note can resolve one open note and strand another, in the same breath.**
-  `resolvedByLastNote()` and `strandedByLastNote()` are not alternatives, and a shell must
-  read both every time. Play Eb, then F#, then G: the G is the chromatic approach the F#
-  earned, while the Eb is left having enclosed nothing. The page took whichever list had
-  something in it first, so the other note's key was never let go of and sat lit and
-  breathing for the rest of the take, asking a question that had been answered.
-- **It runs without a take.** Notes outside a take go into a three-note `recent` buffer,
-  resolved and settled there but never counted. Someone who has not armed anything is the
-  person most likely to be trying chromatic notes, and telling them those were misses is
-  the lesson the whole window exists to stop - and they are told at the same moment an
-  armed player would be. The buffer is trimmed *after* settling, or a note could drop off
-  the front while still open and take its verdict with it.
+Players comp behind themselves and solo in block chords, and the most idiomatic move either makes is sliding a whole voicing chromatically into the next one. G13, the same shape with two voices pushed down a semitone to make a G7alt, then Cmaj7:
 
-### The take
-- The take lives in the engine, reached through four entry points in `jazz::api`
-  (`soloStartTake`, `soloSetBar`, `soloPlayNote`, `soloEndTake`). They are the one
-  stateful corner of that API, and deliberately: the alternative is the shell resending
-  every note played so far, which puts the take in the UI.
-- **`endTake()` closes whatever is still open**, as outside: there will be no more notes,
-  so the resolution is not coming. A summary carrying "waiting to see" would be waiting
-  for good, which is why every test that reads a colour back ends the take first.
-- **A take marks the chart, not only the dock.** Every bar played over carries a four-part
-  strip in the dock's own colours, in proportion, so which bar went wrong is a glance down
-  the chart rather than a read of a panel. The page keeps those numbers itself, from the
-  bar stats every `soloPlayNote` already returns, and replaces the lot with the engine's
-  breakdown on `soloEndTake` so a long take cannot drift.
-- Either static or in time; see *In time* below. The clock needed nothing new from the
-  engine, because it moves the bar the same way a click does.
-
-### The score, and the shape of a line
-- **The score is the only judgement in the engine, so every number in it is named.**
-  `LineStats::score()` reads a bar 0-100 over settled notes: chord tones, scale tones and
-  approach notes all land, an outside note is worth a quarter, and what is left is
-  balance, worth fifteen points at most and fading in with the length of the bar. The
-  constants live at the top of `LineAnalyzer.cpp` with names rather than inside the
-  arithmetic, because each is arguable - and the tests are where the argument is held:
-  that leaning off the chord costs what leaning onto it does, that two notes are not
-  unbalanced, that an outside bar still scores its quarter, and that the result never
-  leaves 0-100. Approach notes count as colour rather than as chord tones for the balance
-  term - they are the opposite of never leaving the chord.
-- **A line has shape as well as content, and the shape does not touch the score.** The
-  summary also reads how the line *moved*: bars it never coloured
-  (`LineBar::neverLeftTheChord`, per bar rather than per N notes, because the bar is a
-  boundary the player already feels and any note count would be invented), leaps that were
-  not followed by a step, and a take that never left a hand's width. All three produce
-  words, none produces points. Mixing advice about motion into the score would make a
-  number nobody could explain out of one that can be.
-- This sits alongside a rule the rest of the file keeps: **nothing calls a note wrong**. A
-  reading of a bar is not a mark for a player, and the wording on the page has to keep
-  saying so.
-
-### Scale styles
-- **Scale styles** (`ScaleStyle` in `Scale.h`) are the soloing vocabularies the Practice
-  menu offers - the modes, melodic minor, harmonic minor, bebop, pentatonics and blues,
-  whole tone and diminished, everything. They are built out of `ScaleFamily` rather than
-  lists of scale names, so a shape added to the catalogue joins its style by itself. A
-  style with nothing for a chord falls back to the whole catalogue and says so; an unknown
-  key widens rather than empties, so a key stored by another version is harmless.
-- **The dock names the scale, and derives it the way it derives what it sends.** Solo
-  practice writes `Expecting D Dorian` where chord practice writes `Expecting Dm7`, and
-  the name comes from `state.scales[state.chosenScale]` - the same expression that feeds
-  `soloChosenScale()` and so the same answer `LineAnalyzer` will reach, fallbacks
-  included. Asking the engine for it separately would be a second path to the same fact
-  and a second thing to go stale; guessing it would be theory in the page. It also made a
-  quiet bug loud: reopening a bar used to reset the chosen scale to the top of the list
-  while the engine kept reading against the old one, which nothing on screen could
-  contradict until something on screen named it.
-
-### In time — the transport
-- The switch was a door with nothing behind it for as long as there was nothing behind it,
-  on the grounds that half a transport is worse than none. What is behind it now is a
-  clock: a tempo, a count-in, the chart moving a bar to the click, and a loop over a range
-  of bars.
-- **The clock is the page's and the engine has none.** `LineAnalyzer` has no time in it,
-  which is what makes it testable, so the transport calls `selectBar()` on each downbeat
-  and the engine hears about it through `soloSetBar` exactly as it would from a mouse
-  click. It cannot tell the two apart, and that is the point: arming a take over a roll
-  needed no new code at all. Nothing in the engine may start depending on when a note
-  arrived.
-- **Beats are booked, not ticked.** A `setInterval` at the beat drifts, and a metronome
-  that drifts is worse than none, so every tick books the beats falling inside a lookahead
-  window with their times computed from one origin. Changing the tempo mid-roll therefore
-  has to re-anchor that origin - otherwise the next beat is spaced the new way from an
-  origin that meant the old one, and the whole line jumps.
-- **The metre is the chart's, and it cannot be re-anchored the way the tempo can.** Both
-  the count-in and the bar arithmetic are counted in beats-per-bar, so a metre changed
-  mid-roll would mean two different bar lengths measured from one origin. It stops the
-  clock and starts it again in the metre just chosen, which is what choosing it meant.
-  The value itself comes off the chart - `ChartFormats` has always read a time signature
-  out of an iReal Pro link and off a PDF, and it reached the page only once the sheet head
-  had somewhere to put it. Read `transport.beats` for it, never a literal four: the dots,
-  the count-in and the loop arithmetic all do.
-- **Arming and rolling are one gesture.** There were two buttons for one intention, and
-  between them two states nobody ever meant: a take counting over a chart that never
-  moved, and a chart rolling with nothing counting. `toggleTake()` is both, and the space
-  bar calls it - fenced out of fields where a space is a character rather than fenced to
-  `document.body`, because a take is started straight after clicking a bar or the button
-  and the body is exactly where the focus is not. The take is started before the clock, so
-  the transport's first `selectBar` reaches an engine that already has one.
-- **The count-in is not bar one.** The chart does not wear the rolling mark until a real
-  beat lands. A bar claiming to be current while the dots are still counting says the
-  player is somewhere they are not, which is the whole thing a count-in exists to prevent.
-- **The click is the one place the shells are honestly unequal.** Scheduled into Web Audio
-  at an exact time on the page; sent over the event bridge when due in the app, because
-  that bridge has no "play this at" argument, and so arriving a message-thread hop later.
-  Both shells read the same clock so chart and click agree in both. Do not paper over the
-  difference by pretending to schedule in the app - if it matters, give the bridge a time.
-### Reading where a note fell
-- **The grid is shared with comping and is in the engine** (`Rhythm.h`), because two grids
-  would disagree about what an eighth is. 24 ticks to the beat: it divides by 2, 3, 4, 6,
-  8 and 12, so eighths, triplets and sixteenths are all exact. The straight-eighth grid
-  that was the obvious choice could not have written a triplet at all.
-- **A position is not a time.** `BarPosition` is a position in a bar the way `measureIndex`
-  is a position in a chart. The shell owns the clock, turns a moment into one of these
-  before the engine sees it, and turns one back into a moment when it plays it. Nothing
-  here may start depending on when a note actually arrived - that rule did not move.
-- **It is an overload, not a defaulted argument.** There is no position that means "no
-  position", and a made-up downbeat would be read as a real one. `soloPlayNote` signals it
-  with a negative beat for the same reason. A take played statically is read exactly as it
-  was before any of this existed: every reading below is additive and silent without
-  positions.
-- **"Passed through" versus "sat on" is the whole reason the grid was wanted.** The same
-  pitch against the same chord is what every bebop line is made of at speed and what sounds
-  like a mistake when dwelt on. Only the rhythm separates them, which is why nothing
-  separated them before. Filled in behind, like `resolvesTo`, because it is a fact about
-  the gap to the *next* note - and measured **through the barline**, or every pushed note
-  in the idiom reads as one the line sat on.
-- **An approach note is left out of it.** It stepped home, which is the verdict that
-  matters about it. Saying it was also passed through adds nothing and would count the
-  line's best notes among the ones being asked about.
-- **Which beats are strong comes from the metre, not a table.** The second strong beat is
-  the one that starts the bar's second half; an odd metre has no second half, so a waltz
-  has only its downbeat. That is the character of three rather than a gap in the table.
-- **None of it touches the score**, and that is the rule this whole file is built on, not
-  an omission. Where a note sits in a bar does not make it a better or worse note, and the
-  moment placement moved the number the number would stop being explainable. There is a
-  test that says so: the same notes score the same whether or not positions were sent.
-
-### Chords in a line
-Players comp behind themselves and solo in block chords, and the most idiomatic move either
-makes is sliding a whole voicing chromatically into the next one. G13, the same shape with
-two voices pushed down a semitone to make a G7alt, then Cmaj7:
-
-```
 G13      F3  A3   B3  E4
 G7alt    F3  Ab3  B3  Eb4      Ab and Eb are outside G mixolydian
 Cmaj7    E3  G3   B3  D4       and both step into it - Ab to G, Eb to D
-```
 
-Read as a stream of single notes, that was `CSCS CXCX CCCS`: two notes that went nowhere.
-The note *after* the Ab is the chord's own B, four semitones away, so the window tried its
-patterns against a note that was never a resolution and could not be one. It now reads
-`CSCS CACA CCCS`, with nothing outside — which is what it sounds like.
+Read as a stream of single notes, that was CSCS CXCX CCCS: two notes that went nowhere. The note after the Ab is the chord's own B, four semitones away, so the window tried its patterns against a note that was never a resolution and couldn't be one. It now reads CSCS CACA CCCS, with nothing outside — which is what it sounds like.
 
-- **An attack is the unit, not a note.** Notes struck together are one attack; they neither
-  resolve nor strand one another, and the window runs attack to attack. Every rule is the
-  rule it always was with "the note before" widened to "any note of the attack before", so
-  each voice finds its own way home and a line with nothing struck together reads exactly
-  as it did. Every test written before any of this existed passed untouched, which is the
-  evidence for that claim rather than the hope behind it.
-- **The shell says which notes were struck together, because nothing else can.** The
-  pitches do not tell a chord from a line — the same notes are both, which is the control
-  case in the tests. This is not the clock coming back: "struck together" is a fact about a
-  gesture, the way a measure index is a fact about a bar, and the engine still has no idea
-  what a second is.
-- **Nothing waits for the chord to be finished.** The flag says a note *joined* an attack,
-  which is knowable the instant it arrives, so no shell buffers and no note is read later
-  than it was. The whole cost is paid in one place: the window cannot tell a chord's first
-  note from an ordinary next note, so it judges on the first, and takes the judgement back
-  when the rest of the same chord answers it. That is the only exception to *nothing that
-  has settled is ever revisited*, and the rule it leaves is the one that was meant —
-  nothing across two gestures is ever revisited.
-- **So the two lists are cleared per attack, not per note.** Otherwise a shell reading them
-  after each note of a chord would show "Ab3 never landed" for the twenty milliseconds
-  between the voicing's lowest note and the one that was actually resolving it. Accumulated
-  across the gesture, the correction happens inside the answer instead of after it.
-- **Forty milliseconds, and MIDI only.** Held keys are the obvious signal and the wrong one:
-  a legato line holds the note before too. Time is right, and the window has to sit between
-  two bad mistakes — wider and sixteenths at 240 (62ms apart) read as chords and stop
-  resolving each other; narrower and a rolled chord comes apart again. A pointer plays one
-  key at a time however fast it is clicked, so the on-screen keyboard never joins an attack
-  at all.
-- **An attack does not cross a barline.** Two notes read against different bars were played
-  against different chords whatever the shell believed, and grouping them would stop each
-  resolving the other — exactly wrong for running into the downbeat of the next chord.
-- **A note struck with three others is still one note.** Counted, coloured, scored and
-  positioned like any other; `chordsPlayed` and `chordVoicesResolved` exist so the summary
-  can say back what the player was doing, not so it can weigh it. The one rhythmic
-  adjustment is that a chord is not passed through by its own notes — what says how long
-  the line stayed there is the next thing *struck*.
-
-### Comping — a band over the same clock
-- **The split is the one the whole project is built on**, and comping is the clearest case
-  of it yet: `compingVoicing()` answers *which notes*, and has no idea a clock exists;
-  every question of *when* is the page's and is answered by the transport that was already
-  there. A comp with a rhythm generator in the engine would have put time into
-  `LineAnalyzer`'s module by the back door.
-- **What it adds over `idiomaticVoicings` is the choice between them.** The shapes are the
-  same two-handed rootless shapes the app already suggests. What comping needs on top is
-  which of them, and in which register, given where the hands just were - so the search is
-  over both shapes across an anchor window, scored by how far the hands travel from
-  `previousNotes`, with a tie-break pulling back to the natural anchor. Dm7 to G7 comes out
-  F3 C4 E4 B4 into F3 B3 E4 A4: two notes held, two moved by a semitone.
-- **Voice leading alone drifts, so the window is not optional.** "Nearest voicing to the
-  last one" has no opinion about register, and a progression that keeps rising takes the
-  hands up with it until they are somewhere nobody comps. The test for this is a tune that
-  climbs, not a ii-V-I - a ii-V-I would pass with no window at all.
-- **The previous voicing is the page's, not the engine's.** The take is the one stateful
-  corner of `jazz::api` and it was made that way deliberately; a comp that remembered its
-  own last chord would be a second one, for no gain - the page has to know what it played
-  anyway, in order to have played it.
-- **The rhythm is the chart's own harmonic rhythm**, not a pattern: each chord struck where
-  it falls, a chord holding the whole bar struck again halfway. That is enough to sound
-  like playing rather than like a pad, and it invents nothing - which matters, because the
-  moment the comp has a pattern of its own it is the rhythmic feature this document says is
-  not built.
-- **Two channels, not one.** Comping E4 under a soloist playing E4 has to be two voices in
-  both shells, or a note-off from either one stops a note the other is still sounding. The
-  browser keeps `audio.compVoices` beside `audio.voices`; the app puts a `comping` flag on
-  the voice, which is why `noteOff`, the pedal and `allNotesOff` all skip them - the last of
-  those being the player's panic button, which should not make the band stop playing.
-- **Engine calls are chained rather than raced.** Booked a bar ahead and awaited
-  concurrently, two bars lead from the same previous voicing and the second one jumps -
-  precisely the thing the feature exists to prevent. One promise chain, so they resolve in
-  the order they were booked.
+An attack is the unit, not a note. Notes struck together are one attack; they neither resolve nor strand one another, and the window runs attack to attack. Every rule is the rule it always was with "the note before" widened to "any note of the attack before," so each voice finds its own way home and a line with nothing struck together reads exactly as it did — every test written before any of this existed passed untouched.
+The shell says which notes were struck together, because nothing else can. The pitches don't tell a chord from a line — the same notes are both, which is the control case in the tests. This isn't the clock coming back: "struck together" is a fact about a gesture, the way a measure index is a fact about a bar, and the engine still has no idea what a second is.
+Nothing waits for the chord to be finished. The flag says a note joined an attack, which is knowable the instant it arrives, so no shell buffers and no note is read later than it was. The one cost: the window can't tell a chord's first note from an ordinary next note, so it judges on the first and takes the judgement back when the rest of the same chord answers it — the only exception to nothing settled is ever revisited, and the rule it leaves is the one that was meant.
+So the two lists are cleared per attack, not per note — otherwise a shell reading them after each note of a chord would show "Ab3 never landed" for the twenty milliseconds between the voicing's lowest note and the one actually resolving it.
+Forty milliseconds, and MIDI only. Held keys are the obvious signal and the wrong one — a legato line holds the note before too. Time is right, and the window sits between two bad mistakes: wider and sixteenths at 240 (62ms apart) read as chords and stop resolving each other; narrower and a rolled chord comes apart again. A pointer plays one key at a time however fast it's clicked, so the on-screen keyboard never joins an attack at all.
+An attack does not cross a barline. Two notes read against different bars were played against different chords whatever the shell believed — grouping them would stop each resolving the other, exactly wrong for running into the downbeat of the next chord.
+A note struck with three others is still one note. Counted, coloured, scored and positioned like any other; chordsPlayed and chordVoicesResolved exist so the summary can say back what the player was doing, not so it can weigh it. The one rhythmic adjustment: a chord isn't passed through by its own notes — what says how long the line stayed there is the next thing struck.
