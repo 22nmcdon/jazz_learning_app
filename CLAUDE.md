@@ -408,6 +408,26 @@ eighth is.
 - **Drums are named in the menu and not built.** A rhythm section is three instruments;
   leaving the last one off the list entirely would say the feature is finished.
 
+#### Where the comping plan got to
+Comping was built to a seven-step plan, of which **1, 2, 3, 5 and the style picker out of
+7 were the agreed scope**. This is what each step actually came to, so that a later session
+neither re-plans a finished one nor assumes an unfinished one is done.
+
+| Step | State | Where it is, or what is missing |
+|---|---|---|
+| 1. The subdivision grid | **done** | `Rhythm.h`. An eighth grid was the plan's suggestion and would not have written a ballad's triplets, so it is 24 ticks to the beat instead. The transport books hits at sub-beat positions inside the lookahead it already used for beats (`compBar`, through `beatsIntoBar`). One grid, two consumers - solo practice's rhythmic reading was built onto the same one rather than given its own. |
+| 2. `CompStyleDefinition` | **done, bar one bullet** | `Comping.h`. Onset slots (`CompSlot`), register (`lowestNote`/`highestNote`), density (`fewestPerBar`/`mostPerBar`) and anticipation across the barline (`CompSlot::anticipates`) are all there, and the shape was proved against four styles that genuinely differ rather than fitted to one. **"Typical durations" is the bullet that has no field.** A hit rings until the next one stops it and the page decides that, so a style cannot yet say it is stabbed rather than held - which is a real difference between styles and the first thing to add if this shape is reopened. |
+| 3. The generator | **done** | `compPlan()` - seeded, planned a range ahead rather than per beat, with `fitsStyle()` written before it and checked from both directions, as the plan asked. Playback walks the plan off the same transport seam as the click. |
+| 4. The evaluator | **not built** | `fitsStyle()` is the slot half of it and is already the invariant the generator is held to. Missing: the register and density half, the `VoicingAnalyzer` reuse for "what was played", and somewhere to show a verdict - which is step 6. |
+| 5. `compStyles()` on the wire | **done** | `EngineApi`, and both shells build the menu from it with no local copy, the same way `scaleStyles()` works. |
+| 6. Where it lives in the mode structure | **decided, not implemented** | The decision is a **third mode, "Comping practice"**. Nothing of it is built. What the plan called the lower-risk piece - comping as backing, generator only - is what shipped, inside solo practice's *In time*, and it needed none of the mode machinery. Read the note above on what the third mode costs before starting it. |
+| 7. UI and menu wiring | **half** | The style picker shipped, and more than was asked: the Comping panel toggles instruments and gives the piano and the bass their own sound pickers. The dock surface for evaluator output did not, and the plan's own rule says not to build it against a guessed mode location. |
+
+Three things were built that were not steps, and should not be read back into the plan as
+though they were: the **walking bass** and the **recorded instruments** (both asked for
+separately, and both documented above), and solo practice reading a **chord as one gesture**
+(`Attack`, above), which came out of a report rather than out of this plan.
+
 ### The band's instruments are recordings
 - **`assets/` holds them, because both shells want them.** The app compiles the WAVs in
   through `juce_add_binary_data`; `web/build.sh` copies the same files next to the page,
@@ -541,8 +561,13 @@ build step passes, that setting is the first thing to check.
   runs of it are the voicings, already on the wire.
 - **Comping as an exercise** - scoring what *you* comp against a `CompStyleDefinition`.
   The style data and `fitsStyle()` are the seam it grows from; what is missing is the
-  register and density half, and the third mode to show it in. See the note on that
-  decision above before starting.
+  register and density half, and the third mode to show it in. This is steps 4, 6 and half
+  of 7 of the comping plan; *Where the comping plan got to* above says what each of those
+  came to, and what the third mode costs. Read it before starting.
+- **How long a comping hit lasts is the page's, not the style's.** `CompStyleDefinition`
+  says where a style puts a hit and says nothing about whether it is stabbed or held, so a
+  voicing rings until the next one stops it. It is the one bullet of the definition's
+  agreed shape that has no field, and the first thing to add if that shape is reopened.
 - **Rhythm in the score.** The readings exist - strong beats, sat on versus passed through
   - and deliberately produce words rather than points. Making rhythm *count* is a separate
   decision, and the argument against it is in `score()`'s own doc comment.

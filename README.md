@@ -294,6 +294,11 @@ The searching is bounded to a register window — voice leading on its own alway
 nearest voicing, so a progression that keeps rising would walk the hands off the top of the
 keyboard.
 
+One thing the style does **not** decide yet is how long a hit lasts: a voicing rings until
+the next one stops it, whatever the style. So the styles differ in where the chords fall and
+not in whether they are stabbed or held, which is a real difference between a Basie punch
+and a ballad's sustain, and is the first thing to add to the style shape.
+
 ### The walking bass
 
 **Bass walking** puts a bass player under the piano, one note to the beat. The line is
@@ -631,9 +636,26 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   Each bar gets a score out of 100 read over settled notes alone, and the whole take gets
   read as a *line* as well: bars that never left the chord, leaps not followed by a step,
   and a range that never left a hand's width. None of those three touches the score.
+- **One rhythm grid** — `Rhythm.h`, 24 ticks to the beat, and it is a *position* rather
+  than a time: which beat and how far into it, the way a measure index is a place in a
+  chart. Comping and solo practice read the same one, because two grids would disagree
+  about what an eighth is. It also says which beats a metre makes strong, derived rather
+  than tabulated, so a waltz has only its downbeat instead of being a special case.
+- **Comping styles, and a comp** — four styles as data (`CompStyleDefinition`: where a
+  style will put a hit, how often, in what register, and which slots push across the
+  barline), a seeded generator that plans a range of bars in one pass so a hit can
+  anticipate the next chord and a voicing can be led from the one before, and the "is this
+  in that style" test the generator is held to from both directions. The style says where
+  the chords fall; how long they ring is still the page's.
+- **A walking bass** — one note to the beat, built in *runs* rather than note by note: a
+  run knows the root it starts on and the approach note it has to reach by its last beat,
+  and everything between is travel. Bounded to a real bass's compass, because a line free
+  to follow the voice leading climbs off the instrument inside a chorus.
 - **Input abstraction** — hardware MIDI and the on-screen keyboard emit identical events;
   `VoicingCollector` groups notes that arrive together into one voicing, so a rolled chord
   or three fingers landing at once both arrive as a chord rather than a stream of notes.
+  Solo practice needs the same fact and does not want it grouped, so it is told per note
+  instead — see *Chords in a line*.
 
 ## Not in this POC
 
@@ -652,6 +674,13 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   and density half of the scoring, and a third mode to show it in. That last part is the
   expensive bit: the app has exactly two modes today and a good deal is built around
   there being two.
+- **Reading a block chord as a chord.** Solo practice now reads chordal playing voice by
+  voice — each note on its own way home — which is what a *line* needs. What it does not do
+  is ask whether the voicing you played said what the bar said; that is chord practice's
+  question, and answering both at once would mean deciding which one a block-chord solo
+  wants. The notes struck together are already marked, so the seam is there.
+- **How long a comped chord is held.** A comping style says where the chords fall and not
+  whether they are stabbed or held, as above.
 - **Rhythm in the score.** The readings exist (above) and deliberately produce words
   rather than points. Making placement *count* toward a number is a separate decision,
   and the argument against it is the same one that keeps a line's shape out of the score.
