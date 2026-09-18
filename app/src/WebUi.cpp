@@ -95,6 +95,14 @@ namespace
             return api::compPlan (text (0).c_str(), text (1).c_str(),
                                   number (2), number (3), number (4));
 
+        if (name == "jazzCompHit")
+            return api::compHit (text (0).c_str(), text (1).c_str(), number (2),
+                                 number (3), number (4), text (5).c_str(), number (6));
+
+        if (name == "jazzCompTake")
+            return api::compTake (text (0).c_str(), text (1).c_str(),
+                                  number (2), number (3), text (4).c_str());
+
         // Solo practice. The take these drive lives in jazz::api, so the app and
         // the browser behave the same way without this shell remembering a thing.
         if (name == "jazzSoloStartTake")     return api::soloStartTake();

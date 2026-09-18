@@ -272,6 +272,13 @@ namespace
     constexpr int lowestCompAnchor = 45;    // A2
     constexpr int highestCompAnchor = 57;   // A3
 
+    /*  How far above its anchor a two-handed voicing reaches. The anchor is the
+        bottom note, so the window a caller states is about the whole voicing
+        while the sweep is about its foot - and the default window has to be the
+        anchors opened out by this much, or bounding the sweep by it would
+        quietly narrow what this function has always returned. */
+    constexpr int twoHandedReach = 24;
+
     /** How far the hands travel between two voicings.
 
         Measured both ways round - every note of each one to the nearest note of
@@ -304,7 +311,15 @@ namespace
 
 Voicing compingVoicing (const ChordSymbol& chord, const std::vector<int>& previousNotes)
 {
-    const auto home = naturalAnchorFor (VoicingType::twoHandedRootless);
+    return compingVoicing (chord, previousNotes, lowestCompAnchor,
+                           highestCompAnchor + twoHandedReach);
+}
+
+Voicing compingVoicing (const ChordSymbol& chord, const std::vector<int>& previousNotes,
+                        int lowestNote, int highestNote)
+{
+    const auto home = std::max (lowestNote, std::min (highestNote,
+                                                      naturalAnchorFor (VoicingType::twoHandedRootless)));
 
     // Nothing to lead from: the shape the suggester offers first, where it
     // naturally sits. That is the voicing the rest of the app would show for
@@ -314,13 +329,29 @@ Voicing compingVoicing (const ChordSymbol& chord, const std::vector<int>& previo
     {
         const auto opening = idiomaticVoicings (chord, VoicingType::twoHandedRootless, home);
 
+        for (const auto& candidate : opening)
+            if (! candidate.isEmpty()
+                  && candidate.lowestNote() >= lowestNote && candidate.highestNote() <= highestNote)
+                return candidate;
+
         return opening.empty() ? Voicing{} : opening.front();
     }
 
     Voicing best;
+    Voicing bestOutside;
     auto bestCost = 0;
+    auto bestOutsideCost = 0;
 
-    for (auto anchor = lowestCompAnchor; anchor <= highestCompAnchor; ++anchor)
+    /*  The sweep is the window's, not this file's - so a style that comps higher
+        searches higher. It stops `twoHandedReach` below the ceiling because an
+        anchor is a voicing's *bottom* note and one anchored any higher cannot
+        fit under it anyway; sweeping to the ceiling would only generate
+        candidates the filter below throws away.
+
+        That relation is also what keeps the two-argument overload exactly as it
+        was: it states the old anchors opened out by the reach, which comes back
+        here as the old anchors. */
+    for (auto anchor = lowestNote; anchor <= highestNote - twoHandedReach; ++anchor)
     {
         for (const auto& candidate : idiomaticVoicings (chord, VoicingType::twoHandedRootless, anchor))
         {
@@ -333,15 +364,26 @@ Voicing compingVoicing (const ChordSymbol& chord, const std::vector<int>& previo
             const auto cost = voiceLeadingDistance (previousNotes, candidate.midiNotes) * 4
                                 + std::abs (candidate.lowestNote() - home);
 
-            if (best.isEmpty() || cost < bestCost)
+            const auto inside = candidate.lowestNote() >= lowestNote
+                                  && candidate.highestNote() <= highestNote;
+
+            if (inside)
             {
-                best = candidate;
-                bestCost = cost;
+                if (best.isEmpty() || cost < bestCost)
+                {
+                    best = candidate;
+                    bestCost = cost;
+                }
+            }
+            else if (bestOutside.isEmpty() || cost < bestOutsideCost)
+            {
+                bestOutside = candidate;
+                bestOutsideCost = cost;
             }
         }
     }
 
-    return best;
+    return best.isEmpty() ? bestOutside : best;
 }
 
 int naturalAnchorFor (VoicingType type)

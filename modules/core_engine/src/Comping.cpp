@@ -1,6 +1,7 @@
 #include "jazz/core/Comping.h"
 
 #include <algorithm>
+#include <map>
 
 namespace jazz::core
 {
@@ -29,6 +30,51 @@ namespace
     int roll (std::uint32_t seed, std::uint32_t salt)
     {
         return static_cast<int> (mix (seed, salt) % 100u);
+    }
+
+    /*  What a comp's fit is made of.
+
+        Placement carries twice the weight of the other two because placement is
+        what a comping style *is*: a comper in the right register playing the
+        wrong figure is not comping in that style, while a comper playing the
+        right figure a little low still is. */
+    constexpr int placementWeight = 2;
+    constexpr int registerWeight  = 1;
+    constexpr int densityWeight   = 1;
+
+    /*  A bar one hit outside what the style plays is a bar that got a little
+        away from the player; four hits outside is a different style. Linear,
+        and steep enough that the second reading is not called the first. */
+    constexpr int densityPointsPerExtraHit = 25;
+
+    /** How many places this style has to put a chord in a bar of this metre.
+
+        `fewestPerBar` and `mostPerBar` are plain counts, and a count does not
+        survive a change of metre the way a slot does: four-to-the-bar is four
+        chords in four and three in three, and holding a waltz to the written
+        four marks the generator's own comp sparse in every bar. So the density
+        window is clamped to what the style actually has room for here - the
+        same move `slotPositions` makes when it returns nothing for a beat the
+        metre has not got. A style has less to say in a metre it was not written
+        for, and asking it for chords it has nowhere to put is not a reading of
+        the player.
+    */
+    int positionsOffered (const CompStyleDefinition& style, int beatsPerBar)
+    {
+        std::vector<BarPosition> positions;
+
+        for (const auto& slot : style.slots)
+            for (const auto& position : slotPositions (slot, beatsPerBar))
+                if (std::none_of (positions.begin(), positions.end(),
+                                  [&position] (const BarPosition& seen) { return seen == position; }))
+                    positions.push_back (position);
+
+        return static_cast<int> (positions.size());
+    }
+
+    std::string countOf (int n, const std::string& singular, const std::string& plural)
+    {
+        return std::to_string (n) + " " + (n == 1 ? singular : plural);
     }
 
     const ChordSymbol* chordStartingBar (const Chart& chart, int measureIndex)
@@ -280,7 +326,12 @@ CompPlan compPlan (const Chart& chart, const CompStyleDefinition& style,
             if (chord == nullptr)
                 continue;
 
-            const auto voicing = compingVoicing (*chord, previous);
+            // In the style's own register, not this file's: the evaluator marks
+            // a player against `lowestNote`/`highestNote`, so the band has to be
+            // held to the same two numbers or the app comps in a style it would
+            // then read as out of that style's register.
+            const auto voicing = compingVoicing (*chord, previous,
+                                                 style.lowestNote, style.highestNote);
 
             if (voicing.isEmpty())
                 continue;
@@ -558,19 +609,371 @@ std::vector<BassNote> walkingBass (const Chart& chart, int fromBar, int toBar,
 }
 
 //==============================================================================
-bool fitsStyle (const CompHit& hit, const CompStyleDefinition& style, int beatsPerBar)
+const CompSlot* slotAt (BarPosition at, const CompStyleDefinition& style, int beatsPerBar)
 {
-    /*  The position has to be one the style offers. Anticipation is checked
-        one way only: a hit that pushed must have come from a slot that pushes,
-        but a slot that pushes may honestly produce a hit that did not - the
-        last bar of a range has no next chord to pull forward, and that is a
-        fact about where the chart ended rather than about the style. */
     for (const auto& slot : style.slots)
         for (const auto& position : slotPositions (slot, beatsPerBar))
-            if (position == hit.at && (slot.anticipates || ! hit.anticipation))
-                return true;
+            if (position == at)
+                return &slot;
 
-    return false;
+    return nullptr;
+}
+
+bool fitsStyle (const CompHit& hit, const CompStyleDefinition& style, int beatsPerBar)
+{
+    const auto* slot = slotAt (hit.at, style, beatsPerBar);
+
+    if (slot == nullptr)
+        return false;
+
+    /*  Anticipation is checked one way only: a hit that pushed must have come
+        from a slot that pushes, but a slot that pushes may honestly produce a
+        hit that did not - the last bar of a range has no next chord to pull
+        forward, and that is a fact about where the chart ended rather than
+        about the style. */
+    return slot->anticipates || ! hit.anticipation;
+}
+
+
+//==============================================================================
+std::string hitPlacementName (HitPlacement placement)
+{
+    switch (placement)
+    {
+        case HitPlacement::inStyle:  return "inStyle";
+        case HitPlacement::pushed:   return "pushed";
+        case HitPlacement::offStyle: return "offStyle";
+        case HitPlacement::unplaced: break;
+    }
+
+    return "unplaced";
+}
+
+PlayedHit inItsOwnBar (PlayedHit hit, int beatsPerBar)
+{
+    if (beatsPerBar <= 0 || ! hit.at.has_value())
+        return hit;
+
+    auto at = *hit.at;
+
+    while (at.beat >= beatsPerBar)
+    {
+        at.beat -= beatsPerBar;
+        hit.measureIndex += 1;
+    }
+
+    while (at.beat < 0)
+    {
+        at.beat += beatsPerBar;
+        hit.measureIndex -= 1;
+    }
+
+    hit.at = at;
+
+    return hit;
+}
+
+CompHitReading readCompHit (const Chart& chart, const CompStyleDefinition& style,
+                            const PlayedHit& played, int hitsAlreadyInBar)
+{
+    const auto beatsPerBar = std::max (1, chart.timeSignature.numerator);
+    const auto hit = inItsOwnBar (played, beatsPerBar);
+    const auto voicing = Voicing::fromNotes (hit.midiNotes);
+
+    CompHitReading reading;
+    reading.measureIndex = hit.measureIndex;
+    reading.at = hit.at;
+    reading.oneTooMany = hitsAlreadyInBar >= style.mostPerBar;
+
+    // The register the style comps in, at last read by something. The excursion
+    // is kept as well as the verdict, so a shell can say "a semitone low"
+    // rather than only "out of register".
+    if (! voicing.isEmpty())
+    {
+        const auto below = std::max (0, style.lowestNote - voicing.lowestNote());
+        const auto above = std::max (0, voicing.highestNote() - style.highestNote);
+
+        reading.outsideRegisterBy = std::max (below, above);
+        reading.inRegister = reading.outsideRegisterBy == 0;
+    }
+
+    const auto* slot = hit.at.has_value() ? slotAt (*hit.at, style, beatsPerBar) : nullptr;
+    const auto* sounding = chordUnder (chart, hit.measureIndex,
+                                       hit.at.value_or (BarPosition {}));
+    const auto* next = chordStartingBar (chart, hit.measureIndex + 1);
+    const auto* chord = sounding;
+
+    /*  Whether this was a push is decided from the notes, because that is the
+        only evidence there is: a player does not declare an anticipation, they
+        play the next chord early. Only ever asked of a slot that anticipates -
+        a chord early on the downbeat is a chord in the wrong bar, not a push.
+
+        A tie is not a push. Over a bar repeating its chord the two readings are
+        identical, and calling that an anticipation would be inventing intent -
+        the mirror of `fitsStyle`'s one-way asymmetry, seen from the player's
+        side. */
+    if (slot != nullptr && slot->anticipates && next != nullptr && ! voicing.isEmpty())
+    {
+        const VoicingAnalyzer analyzer;
+        const auto there = analyzer.analyse (voicing, *next);
+        const auto here = sounding != nullptr ? analyzer.analyse (voicing, *sounding).score : -1;
+
+        if (there.score > here)
+        {
+            chord = next;
+            reading.anticipation = true;
+        }
+    }
+
+    if (! hit.at.has_value())      reading.placement = HitPlacement::unplaced;
+    else if (slot == nullptr)      reading.placement = HitPlacement::offStyle;
+    else if (reading.anticipation) reading.placement = HitPlacement::pushed;
+    else                           reading.placement = HitPlacement::inStyle;
+
+    if (chord != nullptr)
+    {
+        reading.chordSymbol = chord->toString();
+
+        if (! voicing.isEmpty())
+        {
+            reading.voicing = VoicingAnalyzer {}.analyse (voicing, *chord);
+
+            /*  Not `VoicingAnalyzer`'s question. Asking it as one - through
+                `practiseType` - would take points off the voicing's own score
+                for a reason belonging to the comp rather than to the symbol,
+                and would call a shell voicing the wrong shape when it is
+                perfectly good comping. The fault is not the shape, it is that
+                somebody else is already playing that note. */
+            reading.rootAnywhere = voicing.containsPitchClass (chord->root());
+            reading.takesTheBassNote = toPitchClass (voicing.lowestNote()) == chord->root();
+        }
+    }
+
+    const auto where = reading.at.has_value() ? reading.at->describe() : std::string();
+
+    switch (reading.placement)
+    {
+        case HitPlacement::pushed:
+            reading.summary = where + " - pushed into " + reading.chordSymbol
+                            + ", which is what this style is for.";
+            break;
+
+        case HitPlacement::inStyle:
+            reading.summary = where + " - this style puts a chord there.";
+            break;
+
+        case HitPlacement::offStyle:
+            reading.summary = where + " - this style has no hit there.";
+            break;
+
+        case HitPlacement::unplaced:
+            reading.summary = "Nothing is counting, so this is read for its notes "
+                              "and not for where it fell.";
+            break;
+    }
+
+    if (! reading.inRegister && ! voicing.isEmpty())
+        reading.summary += " It sits " + countOf (reading.outsideRegisterBy, "semitone", "semitones")
+                         + (voicing.highestNote() > style.highestNote ? " above" : " below")
+                         + " the register this style comps in.";
+
+    if (reading.takesTheBassNote)
+        reading.summary += " The " + pitchClassName (toPitchClass (voicing.lowestNote()))
+                         + " underneath is the bass player's note.";
+
+    if (reading.oneTooMany)
+        reading.summary += " That is one more chord than this style puts in a bar.";
+
+    return reading;
+}
+
+//==============================================================================
+CompEvaluation evaluateComp (const Chart& chart, const CompStyleDefinition& style,
+                             const std::vector<PlayedHit>& hits, int fromBar, int toBar)
+{
+    CompEvaluation out;
+
+    const auto bars = chart.measureCount();
+    const auto beatsPerBar = std::max (1, chart.timeSignature.numerator);
+
+    // Counted as they are read, so each hit is told how many were already in
+    // its bar - and counted in the bar the hands *played* it, anticipations
+    // included, because that is how the generator trims and tops up.
+    std::map<int, int> perBar;
+
+    for (const auto& played : hits)
+    {
+        const auto placed = inItsOwnBar (played, beatsPerBar);
+        const auto already = perBar[placed.measureIndex]++;
+
+        out.hits.push_back (readCompHit (chart, style, played, already));
+    }
+
+    if (bars > 0 && toBar >= fromBar)
+    {
+        const auto first = std::max (0, std::min (fromBar, bars - 1));
+        const auto last = std::max (first, std::min (toBar, bars - 1));
+
+        const auto room = positionsOffered (style, beatsPerBar);
+        const auto fewest = std::min (style.fewestPerBar, room);
+        const auto most = std::min (style.mostPerBar, room);
+
+        for (auto measureIndex = first; measureIndex <= last; ++measureIndex)
+        {
+            const auto found = perBar.find (measureIndex);
+            const auto played = found != perBar.end() ? found->second : 0;
+
+            out.bars.push_back (CompBarReading { measureIndex, played, fewest, most,
+                                                 played > most, played < fewest });
+        }
+    }
+
+    auto positioned = 0;
+    auto sounded = 0;
+    auto inRegister = 0;
+    auto analysed = 0;
+    auto voicingTotal = 0;
+
+    for (std::size_t i = 0; i < out.hits.size(); ++i)
+    {
+        const auto& reading = out.hits[i];
+
+        // A hit that carried no notes is not a chord anybody played, so it is
+        // counted for its placement and left out of everything about notes.
+        const auto struck = ! hits[i].midiNotes.empty();
+
+        if (reading.at.has_value())
+            ++positioned;
+
+        switch (reading.placement)
+        {
+            case HitPlacement::inStyle:  ++out.hitsInStyle; break;
+            case HitPlacement::pushed:   ++out.hitsPushed; break;
+            case HitPlacement::offStyle: ++out.hitsOffStyle; break;
+            case HitPlacement::unplaced: break;
+        }
+
+        if (reading.takesTheBassNote)
+            ++out.hitsTakingTheBassNote;
+
+        if (! struck)
+            continue;
+
+        ++sounded;
+
+        if (reading.inRegister)
+            ++inRegister;
+
+        if (! reading.chordSymbol.empty())
+        {
+            ++analysed;
+            voicingTotal += reading.voicing.score;
+        }
+    }
+
+    if (positioned > 0)
+        out.placementFit = 100 * (out.hitsInStyle + out.hitsPushed) / positioned;
+
+    if (sounded > 0)
+        out.registerFit = 100 * inRegister / sounded;
+
+    if (! out.bars.empty())
+    {
+        auto total = 0;
+
+        for (const auto& bar : out.bars)
+        {
+            const auto outside = bar.hits > bar.most ? bar.hits - bar.most
+                               : bar.hits < bar.fewest ? bar.fewest - bar.hits
+                                                       : 0;
+
+            total += std::max (0, 100 - densityPointsPerExtraHit * outside);
+        }
+
+        out.densityFit = total / static_cast<int> (out.bars.size());
+    }
+
+    if (analysed > 0)
+        out.voicingScore = voicingTotal / analysed;
+
+    /*  Empty rather than zero. Nothing played is not nought out of a hundred,
+        and neither is a comp nothing was counting behind: placement is two of
+        the four parts of this, so without it there is no fit to report. */
+    if (! out.hits.empty() && positioned > 0)
+        out.fit = std::max (0, std::min (100, (out.placementFit * placementWeight
+                                                 + out.registerFit * registerWeight
+                                                 + out.densityFit * densityWeight)
+                                              / (placementWeight + registerWeight + densityWeight)));
+
+    out.summary = out.hits.empty()
+                    ? "Nothing played, so there is nothing to read."
+                    : style.name + " - " + countOf (static_cast<int> (out.hits.size()), "chord", "chords")
+                        + " over " + countOf (static_cast<int> (out.bars.size()), "bar", "bars") + ".";
+
+    if (! out.hits.empty() && positioned == 0)
+        out.summary = style.name + " - read for the notes. Nothing was counting, "
+                      "so there is no placing them.";
+
+    //  The words half. Everything true of the take that the style does not pin
+    //  down, and everything it does pin down that a number alone does not say.
+    auto busy = 0;
+    auto sparse = 0;
+
+    for (const auto& bar : out.bars)
+    {
+        if (bar.tooBusy)   ++busy;
+        if (bar.tooSparse) ++sparse;
+    }
+
+    // Quoting the bars' own numbers rather than the style's, because in a metre
+    // the style was not written for those are not the same - see the note on
+    // `CompBarReading::fewest`.
+    if (busy > 0)
+        out.observations.push_back (countOf (busy, "bar", "bars") + " had more chords in "
+                                    + (busy == 1 ? "it" : "them") + " than this style plays - it goes up to "
+                                    + countOf (out.bars.front().most, "chord", "chords") + " a bar.");
+
+    if (sparse > 0)
+        out.observations.push_back (countOf (sparse, "bar", "bars")
+                                    + " went quieter than this style does - it plays at least "
+                                    + countOf (out.bars.front().fewest, "chord", "chords") + " a bar.");
+
+    if (out.hitsOffStyle > 0)
+        out.observations.push_back (countOf (out.hitsOffStyle, "chord", "chords")
+                                    + " landed where this style has no hit.");
+
+    if (out.hitsPushed > 0)
+        out.observations.push_back ("You pushed " + countOf (out.hitsPushed, "chord", "chords")
+                                    + " across the barline, which is what this style is for.");
+
+    /*  Only worth saying of a style the push is the *figure* of. Three of the
+        four have an anticipating slot and in two of them it is an occasional
+        colour - Charleston pushes at 30 against a downbeat at 95 - so "you
+        never pushed" would be advice to play a Charleston like a Basie. The
+        test is whether the push is the heaviest thing the style does, which is
+        true of Basie alone and is what its own summary says about it. */
+    const auto heaviest = std::max_element (style.slots.begin(), style.slots.end(),
+                                            [] (const CompSlot& a, const CompSlot& b)
+                                            { return a.weight < b.weight; });
+
+    const auto builtOnThePush = heaviest != style.slots.end() && heaviest->anticipates;
+
+    if (builtOnThePush && out.hitsPushed == 0 && positioned > 0)
+        out.observations.push_back ("Nothing came across a barline. The push is this style's "
+                                    "own figure, so that is the one to reach for next.");
+
+    auto outOfRegister = sounded - inRegister;
+
+    if (outOfRegister > 0)
+        out.observations.push_back (countOf (outOfRegister, "chord", "chords")
+                                    + " sat outside the register this style comps in.");
+
+    if (out.hitsTakingTheBassNote > 0)
+        out.observations.push_back (countOf (out.hitsTakingTheBassNote, "chord", "chords")
+                                    + " had the root underneath - that is the bass player's note, "
+                                    "and a comper's hands are free without it.");
+
+    return out;
 }
 
 } // namespace jazz::core

@@ -401,6 +401,38 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
   background: rgba(164, 85, 63, 0.14);
   color: var(--rust);
 }
+
+/* Where a comped chord landed against the style. The same pill as `.open-note`
+   because it does the same job one mode over - one short answer, beside a line
+   of prose, in the colour of the answer.
+
+   The alphabet is deliberately the one that already exists rather than a new
+   one: rust means "did not land", and a chord on a beat the style never plays
+   is exactly that. A hit that is in style takes the mode accent instead of a
+   semantic colour, because "you played the style" is not one of the five
+   things sage, gold, green, teal and rust say. */
+.comp-place {
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  padding: 2px 10px 3px;
+  border-radius: 20px;
+  border: 1px solid var(--blush-deep);
+  background: var(--wash-strong);
+  color: var(--text);
+  white-space: nowrap;
+}
+.comp-place[data-placement="offStyle"] {
+  border-color: var(--rust);
+  background: rgba(164, 85, 63, 0.14);
+  color: var(--rust);
+}
+/* No clock, nothing to place. Said in the grey an open note waits in, because
+   it is the same kind of statement: not a verdict, an absence of one. */
+.comp-place[data-placement="unplaced"] {
+  border-color: var(--unresolved);
+  background: rgba(182, 175, 164, 0.2);
+  color: var(--text-soft);
+}
 /* Set like `.verdict`, because it is the same line doing the same job one mode
    over: the dock's answer to what you just played. They had drifted to
    different faces and sizes, which made the two modes look like two pages. */
@@ -1383,7 +1415,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           <!-- A switch rather than a checkbox, because it is the same kind of
                choice the one at the top is - and because only one side of it
                exists, which a switch says more honestly than a tick would. -->
-          <div class="menu-group" data-mode="solo">
+          <!-- No `data-mode`: the clock belongs to both modes now. In solo
+               practice In time counts a line; in chord practice it is comping,
+               and the same switch turns it on. -->
+          <div class="menu-group">
             <span class="menu-title">Playing</span>
             <div class="mode-switch" role="radiogroup" aria-label="How the chart moves">
               <button class="mode-option" type="button" id="playStatic" role="radio" aria-checked="true">Static</button>
@@ -1494,14 +1529,23 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
                reharmonising it. Solo practice only - a comp under chord
                practice would be playing the voicing you are being asked to
                play. -->
-          <div class="menu-wrap" data-mode="solo">
+          <!-- Shown whenever there is a band to hear: solo practice, and chord
+               practice once the clock is running. `applyMode` decides, because
+               this depends on the transport as well as the mode and
+               `data-mode` only knows about the mode. -->
+          <div class="menu-wrap" id="compingWrap">
             <button class="link-btn" type="button" id="compingButton"
                     aria-expanded="false" aria-controls="compingPanel">Comping</button>
 
             <div class="menu-panel" id="compingPanel" hidden>
               <div class="menu-group">
                 <span class="menu-title">The band</span>
-                <label class="menu-option">
+                <!-- The piano is yours in chord practice, so it is not on
+                     offer there: a comp under a player being asked to comp
+                     would be playing the very thing they are reaching for. The
+                     bass player stays, which is what makes the root under a
+                     voicing worth mentioning. -->
+                <label class="menu-option" data-mode="solo">
                   <input type="checkbox" id="compPiano"> Piano comping
                 </label>
                 <label class="menu-option">
@@ -1588,6 +1632,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <span class="verdict" id="verdict">Play a chord on the keyboard.</span>
       <span class="played" id="played"></span>
       <span class="expecting">Expecting <b id="expecting">Dm7</b></span>
+
+      <!-- In time the same voicing is asked a second question: not only what it
+           said, but where it landed. The two sit side by side and are never
+           averaged - see `evaluateComp` in the engine. -->
+      <span class="comp-place" id="compPlace" hidden></span>
       <div class="finding-row" id="findingRow"></div>
       <div class="named" id="named" hidden>
         <span class="named-label">These notes</span>
@@ -1597,6 +1646,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         <span class="spotted-label">Reharm spotted</span>
         <span class="spotted-text" id="spottedText"></span>
         <button class="link-btn" type="button" id="useSpotted">Write it into the bar</button>
+      </div>
+
+      <!-- What only the end of a take can say: how the comp sat against the
+           style over bars, rather than how one chord did. -->
+      <div class="solo-summary" id="compSummary" hidden>
+        <span class="solo-summary-head" id="compSummaryHead"></span>
+        <ul class="solo-observations" id="compObservations"></ul>
       </div>
     </div>
     <!-- Solo practice reads a line rather than a chord, so it says different
@@ -1656,7 +1712,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 393 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 419 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -1757,6 +1813,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <li>
         <b>Sustain</b> holds what you have played after the keys lift, and a real pedal on
         a connected keyboard does the same.
+      </li>
+      <li>
+        <b>In time</b>, under <i>Practice &rarr; Playing</i>, puts a clock behind the chart
+        and turns this into comping. The chart moves on its own, a bass player walks under
+        you, and each chord you strike is read twice over: what it said about the bar, and
+        whether it landed where your comping style puts it. The keys stop latching there -
+        a comp is struck rather than held.
       </li>
       <li>
         <b>Solo</b>, at the top, asks a different question of the same notes: not whether a
@@ -2082,6 +2145,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "soloTallies",
    "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
    "armTake", "armLabel", "practising",
+   "compingWrap", "compPlace", "compSummary", "compSummaryHead", "compObservations",
    "scaleStyle", "scaleStyleNote", "chordTabs"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
@@ -2728,6 +2792,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       return;
     }
 
+    // Comping is struck too. A pointer plays one key at a time however fast it
+    // is clicked, so a mouse comp is a one-note hit - and the analyser's own
+    // "play a full voicing" is exactly the right thing to say about it.
+    if (transport.inTime) {
+      playNote(note, 0.8);
+      window.setTimeout(function () { if (!pedal.down) stopNote(note); }, 320);
+      compNotePlayed(note);
+      return;
+    }
+
     var index = state.heldNotes.indexOf(note);
 
     if (index === -1) {
@@ -2773,8 +2847,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // --- voicing feedback ----------------------------------------------------
   async function analyseVoicing() {
     // In solo mode the notes go to the line reader instead, and the panel this
-    // writes into is not on screen.
-    if (state.mode === "solo") return;
+    // writes into is not on screen. In time the same panel is written by
+    // `drawCompHit` instead, one gesture at a time - there are no held notes
+    // to read, because the keys have stopped latching.
+    if (state.mode === "solo" || transport.inTime) return;
 
     var chord = selectedChord();
     el.findingRow.textContent = "";
@@ -2865,6 +2941,25 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
      engine's own breakdown, so a long take cannot drift from it. */
   var solo = { armed: false, bar: null, take: null, bars: {}, open: {},
                lastStruck: 0, lastAt: null, lastBar: -1 };
+
+  /*  Comping practice: what was played, and never what it meant.
+
+      The engine holds no take for this one. A comped chord has no window over
+      it the way a solo note does - its slot, its register and what its notes
+      said are all settled the instant it is struck, and nothing played after
+      revises any of them - so there is nothing for a memory to hold and the
+      solo take stays the one stateful corner of `jazz::api`.
+
+      What that leaves here is a list of events: a bar, a position, some notes.
+      That is the same class of thing as `state.heldNotes`, and the line it must
+      not cross is judgement. Every verdict below, live and final, comes back
+      from the engine.
+
+      `bars` is the bars the take has played *through*, downbeat to downbeat. A
+      bar stopped in the middle was not played to the end, and counting it marks
+      every four-to-the-bar take sparse in its last bar. */
+  var comp = { armed: false, hits: [], counts: {}, bars: [],
+               pending: null, settleTimer: null };
 
   /*  How close together two notes have to be struck to be one chord.
 
@@ -3057,9 +3152,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function setMode(mode) {
     if (state.mode === mode) return;
 
-    // Leaving solo mode with a take running would leave it running: stop it,
-    // and let the summary stand rather than throwing it away unseen.
+    // Leaving a mode with a take running would leave it running: stop it, and
+    // let the summary stand rather than throwing it away unseen. Both modes
+    // have a take now, and they are different takes, so both are checked.
     if (mode !== "solo" && solo.armed) stopTake();
+    if (mode !== "chords" && comp.armed) stopCompTake();
 
     state.mode = mode;
     setMenuOpen(false);
@@ -3080,9 +3177,20 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
       Everything hidden here is hidden because it has no meaning in the other
       mode, not because it is busy: a voicing shape does not apply to a single
-      note, and naming a chord needs a chord. */
+      note, and naming a chord needs a chord.
+
+      Called on a change of mode and on a change of Static/In time, because the
+      two decide this between them now: comping is chord practice with a clock,
+      so half of what follows reads `comping` rather than `soloing`. */
   function applyMode() {
     var soloing = state.mode === "solo";
+
+    // Chord practice with the clock running is comping practice. Not a third
+    // mode: the question is the mode's own - does this voicing say what the bar
+    // says - and the clock adds the half that needs one, which is where it
+    // landed. A voicing has no placing when nothing is counting, in the same
+    // way a solo note has no rhythm to read.
+    var compingNow = !soloing && transport.inTime;
 
     // One class, and the palette follows it: the stylesheet moves the tokens,
     // not the components. Nothing below this line knows the page changed
@@ -3096,30 +3204,48 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.helpButton.title = helpFor;
 
     el.feedback.hidden = soloing;
-    el.meter.hidden = soloing || el.meter.hidden;
+    el.meter.hidden = soloing || compingNow || el.meter.hidden;
     el.soloPanel.hidden = !soloing;
-    el.armTake.hidden = !soloing;
 
-    // The transport belongs to solo practice and to "in time" within it. A
-    // clock running over chord practice would be moving a bar nothing was
-    // reading, and a tempo mark at the head of a chart nothing is counting is
-    // a number with no clock behind it.
-    el.metreRow.hidden = !(soloing && transport.inTime);
-    el.beatRow.hidden = !(soloing && transport.inTime && transport.running);
+    // A take belongs to whichever mode can grade one, and in chord practice
+    // that is the clock's doing rather than the mode's.
+    el.armTake.hidden = !(soloing || compingNow);
 
-    if (!soloing) stopTransport();
+    // The transport is both modes' now. What has not changed is that a tempo
+    // mark at the head of a chart nothing is counting is a number with no clock
+    // behind it, so the metre row still follows In time rather than the mode.
+    el.metreRow.hidden = !transport.inTime;
+    el.beatRow.hidden = !(transport.inTime && transport.running);
 
-    // A comp under chord practice would be playing the very voicing the player
-    // is being asked to find.
-    if (!soloing) stopComping();
+    if (!transport.inTime) stopTransport();
 
-    // The dock's chord controls, and the menu groups that drive them.
-    el.playChord.hidden = soloing || midi.connected;
-    el.nameChord.hidden = soloing;
-    el.showVoicing.textContent = soloing ? "Which scale?" : "Show me one";
-    el.practising.hidden = soloing;
+    // The band plays wherever there is a clock - but never your own instrument.
+    // A generated comp under a player being asked to comp would be sounding the
+    // very voicing they are reaching for, which is the same argument that used
+    // to keep the whole band out of chord practice. The bass player stays, and
+    // is what makes a doubled root worth mentioning.
+    el.compingWrap.hidden = !(soloing || compingNow);
 
-    document.title = "Jazz Learning App: " + (soloing ? "Solo" : "Chords");
+    compingPianoForMode(soloing);
+
+    if (!transport.inTime) stopComping();
+
+    // The dock's chord controls, and the menu groups that drive them. In time
+    // they need held notes that no longer exist - the keys stop latching - and
+    // "Play chord" would be sounding over the clock.
+    el.playChord.hidden = soloing || compingNow || midi.connected;
+    el.nameChord.hidden = soloing || compingNow;
+    el.showVoicing.textContent = soloing ? "Which scale?" : compingNow ? "Show me a comp" : "Show me one";
+    el.practising.hidden = soloing || compingNow;
+
+    // The comping style is the standard in time, so the voicing-shape picker
+    // has nothing to hold anyone to.
+    el.compPlace.hidden = !compingNow || el.compPlace.hidden;
+    if (!compingNow) el.compSummary.hidden = true;
+
+    document.title = "Jazz Learning App: " + (soloing ? "Solo" : compingNow ? "Comping" : "Chords");
+
+    describePlaying();
 
     Array.prototype.forEach.call(document.querySelectorAll("[data-mode]"), function (group) {
       var off = group.dataset.mode !== state.mode;
@@ -3150,10 +3276,49 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       paintTakeMarks();
     } else {
       // Back to chords: whatever is under the hands is read as a voicing again,
-      // and the chart stops carrying a solo take's marks.
+      // and the chart stops carrying a solo take's marks. In time there is
+      // nothing under the hands to read - the keys do not latch - so the dock
+      // waits for a chord to be struck instead.
       paintTakeMarks();
-      analyseVoicing();
+
+      if (transport.inTime) {
+        el.verdict.textContent = "Comp over the chart. Start a take and the clock counts you in.";
+        el.verdict.classList.remove("matches", "wrong-shape");
+        el.played.textContent = "";
+        el.findingRow.textContent = "";
+        el.compPlace.hidden = true;
+      } else {
+        analyseVoicing();
+      }
+
       updateVoicingControls();
+    }
+  }
+
+  /** The band, minus whichever instrument you are.
+
+      Turning the piano off rather than merely hiding its switch, because the
+      switch is what the sound follows: leaving it ticked would comp underneath
+      a player being asked to comp. It is remembered, so going back to solo
+      practice finds the band as it was left. */
+  var pianoWanted = false;
+
+  function compingPianoForMode(soloing) {
+    if (soloing) {
+      if (pianoWanted && !comping.piano) {
+        comping.piano = true;
+        el.compPiano.checked = true;
+      }
+
+      return;
+    }
+
+    if (comping.piano) {
+      pianoWanted = true;
+      comping.piano = false;
+      el.compPiano.checked = false;
+      stopCompVoices();
+      forgetBookedComping();
     }
   }
 
@@ -3280,14 +3445,121 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       anything a player meant. The take is started first so the engine has one
       before the transport's first `selectBar` tells it which bar. */
   async function toggleTake() {
-    if (solo.armed) {
+    // One button, one gesture, whichever mode is asking. Two buttons would be
+    // the two states this comment is about, one mode over.
+    var compingNow = state.mode !== "solo";
+
+    if (compingNow ? comp.armed : solo.armed) {
       stopTransport();
-      await stopTake();
+      await (compingNow ? stopCompTake() : stopTake());
       return;
     }
 
-    await startTake();
+    await (compingNow ? startCompTake() : startTake());
     if (transport.inTime) startTransport();
+  }
+
+  //  --- comping practice: the take ------------------------------------------
+
+  function armedLook(on) {
+    el.armTake.setAttribute("aria-pressed", on ? "true" : "false");
+    el.armLabel.textContent = on ? "Stop the take" : "Start a take";
+    document.querySelector(".dock").classList.toggle("armed", on);
+  }
+
+  function startCompTake() {
+    comp.armed = true;
+    comp.hits = [];
+    comp.counts = {};
+    comp.bars = [];
+    comp.pending = null;
+
+    armedLook(true);
+
+    el.compSummary.hidden = true;
+    el.compPlace.hidden = true;
+    el.findingRow.textContent = "";
+    el.verdict.textContent = "Take running. Comp over the chart as it goes.";
+    el.verdict.classList.remove("matches", "wrong-shape");
+    el.played.textContent = "";
+    el.meter.hidden = true;
+  }
+
+  /** Reads the whole take back, in one call, at the end of it.
+
+      Not because the engine could not have been told as it went - `compHit`
+      was, for every chord - but because the half this adds is the half no
+      single hit can answer. A bar left too quiet leaves no trace in the hits
+      themselves, so the bars have to be named, and only a finished bar counts.
+  */
+  async function stopCompTake() {
+    comp.armed = false;
+    armedLook(false);
+
+    var bars = comp.bars.slice().sort(function (a, b) { return a - b; });
+
+    if (!bars.length || !comp.hits.length) {
+      el.verdict.textContent = comp.hits.length
+        ? "Not a whole bar yet - nothing to read a comp against."
+        : "Nothing comped, so there is nothing to read.";
+      return;
+    }
+
+    var result = await call("jazzCompTake", ["string", "string", "number", "number", "string"],
+                      [state.progression, comping.style, bars[0], bars[bars.length - 1],
+                       comp.hits.map(hitToWire).join(";")]);
+
+    if (result === null || !result.ok) {
+      el.verdict.textContent = "This engine is out of date - reload to read a comp back.";
+      return;
+    }
+
+    drawCompSummary(result);
+  }
+
+  /** "bar:beat:tick:note,note,note" - and -1 for a hit nothing was counting
+      behind, which is the same signal a solo note with no clock carries. */
+  function hitToWire(hit) {
+    return hit.bar + ":" + (hit.at ? hit.at.beat : -1) + ":" + (hit.at ? hit.at.tick : 0)
+             + ":" + hit.notes.join(",");
+  }
+
+  function drawCompSummary(take) {
+    el.verdict.textContent = take.summary;
+    el.verdict.classList.remove("matches", "wrong-shape");
+    el.compPlace.hidden = true;
+    el.findingRow.textContent = "";
+
+    // The fit is the end of a take's business. Live it would be a percentage
+    // jumping on every chord, which is noise rather than feedback.
+    if (take.fit === null) {
+      el.meter.hidden = true;
+      el.played.textContent = "";
+    } else {
+      el.meter.hidden = false;
+      el.meterFill.style.width = take.fit + "%";
+      el.meterFill.className = take.fit >= 80 ? "" : take.fit >= 60 ? "warn" : "bad";
+
+      // The voicings keep their own number rather than being folded in: the
+      // fit is read against the style you chose, the voicings against the
+      // chords the chart wrote, and one number out of two questions stops
+      // being explainable the moment somebody asks which half moved.
+      el.played.textContent = take.fit + "% in style"
+        + (take.voicingScore === null ? "" : "  -  voicings " + take.voicingScore + "%");
+    }
+
+    el.compSummaryHead.textContent = "Placement " + take.placement + "%, register "
+      + take.register + "%, density " + take.density + "%.";
+
+    el.compObservations.textContent = "";
+
+    (take.observations || []).forEach(function (line) {
+      var item = document.createElement("li");
+      item.textContent = line;
+      el.compObservations.appendChild(item);
+    });
+
+    el.compSummary.hidden = false;
   }
 
   el.armTake.addEventListener("click", toggleTake);
@@ -3669,6 +3941,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       // includes - so a bar is still the unit the engine is told about.
       if (inBar !== 0) return;
 
+      /*  A comping take counts the bar it is *leaving*, on the downbeat of the
+          next one. Only a bar played to the end can be called quiet: counting
+          the one a take was stopped in the middle of marks every four-to-the-
+          bar take sparse in its last bar. */
+      if (comp.armed && state.selected !== barIndex && comp.bars.indexOf(state.selected) === -1)
+        comp.bars.push(state.selected);
+
       selectBar(barIndex);
       markRollingBar();
     });
@@ -3705,7 +3984,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   function startTransport() {
-    if (transport.running || state.mode !== "solo") return;
+    /*  Both modes have a clock now, so the clock's own switch is the gate and
+        not the mode - this read `state.mode !== "solo"` when In time was solo
+        practice's alone. */
+    if (transport.running || !transport.inTime) return;
 
     var loop = loopRange();
 
@@ -4293,11 +4575,41 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.countInRow.hidden = !on;
     el.loopRow.hidden = !on;
 
-    el.playingNote.textContent = on
-      ? "The chart moves on its own, a bar to the click. Starting a take starts it rolling."
-      : "Static: the bar you are on is the bar you chose, and nothing is counting time.";
+    /*  In chord practice the two settings hold the keyboard differently -
+        static latches a voicing so it can be read, in time a comp is struck and
+        let go - so a voicing carried across is a chord the other setting will
+        never read. The same argument `applyMode` makes across a change of mode.
+    */
+    if (comp.armed) stopCompTake();
 
+    stopAllNotes();
+    state.heldNotes = [];
+    pedal.holding = [];
+    comp.pending = null;
+    window.clearTimeout(comp.settleTimer);
+    paintKeyboard();
+
+    describePlaying();
     applyMode();
+  }
+
+  /** What In time means in the mode showing.
+
+      It means two different things, and neither is the other's footnote: in
+      solo practice the clock counts a line, and in chord practice it is the
+      difference between holding a voicing and comping one. */
+  function describePlaying() {
+    var soloing = state.mode === "solo";
+
+    el.playingNote.textContent = transport.inTime
+      ? (soloing
+           ? "The chart moves on its own, a bar to the click. Starting a take starts it rolling."
+           : "In time: the chart moves and you comp over it, read against the comping style you "
+             + "picked. The keys stop latching - a comp is struck rather than held.")
+      : (soloing
+           ? "Static: the bar you are on is the bar you chose, and nothing is counting time."
+           : "Static: hold a voicing and it is read against the bar. Nothing is counting time, "
+             + "so nothing is being placed.");
   }
 
   el.playLive.addEventListener("click", function () { setInTime(true); });
@@ -4561,6 +4873,34 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       el.soloNote.appendChild(document.createTextNode(" over " + chord + "."));
 
       el.soloAgainst.textContent = scale.noteNames.join(" ") + ". " + scale.rationale;
+      return;
+    }
+
+    /*  In time the same button asks the same question the mode is now about:
+        not "what could I hold here" but "what would the band play here". The
+        generator already answers it, in the style the player picked, so this
+        sounds one bar of the plan as a model rather than working anything out.
+    */
+    if (transport.inTime) {
+      var plan = await ensureCompPlan();
+
+      if (plan === null) return;
+
+      var bar = plan.hits.filter(function (h) { return h.bar === state.selected; });
+
+      if (!bar.length) {
+        el.verdict.textContent = "This style leaves that bar alone.";
+        return;
+      }
+
+      el.verdict.textContent = "The band would play " + bar.length
+        + (bar.length === 1 ? " chord" : " chords") + " there: "
+        + bar.map(function (h) { return h.at; }).join(", ") + ".";
+      el.played.textContent = bar[0].notes.map(noteName).join(" ");
+      el.findingRow.textContent = "";
+      el.compPlace.hidden = true;
+
+      playCompVoicing(bar[0].notes, 0);
       return;
     }
 
@@ -4984,7 +5324,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   /** Books the walking line for one bar, note by note. */
   function bassBar(measureIndex, barStart, secondsPerBeatNow) {
-    if (!comping.bass || state.mode !== "solo") return;
+    // The bass walks wherever there is a clock. Comping practice against a
+    // metronome alone is not what the styles describe, and a doubled root only
+    // means something when somebody else is playing it.
+    if (!comping.bass || !transport.inTime) return;
 
     ensureBassPlan().then(function (plan) {
       if (plan === null || !comping.bass || !transport.running) return;
@@ -5160,6 +5503,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       a bar of silence nobody asked for.
   */
   function compBar(measureIndex, barStart, secondsPerBeatNow) {
+    // Solo practice only, deliberately. In chord practice the piano is the
+    // player - a generated comp under someone being asked to comp would be
+    // sounding the very voicing they are reaching for.
     if (!comping.piano || state.mode !== "solo") return;
 
     // `ensureCompPlan` is this page's own async function, so it is a promise in
@@ -5227,7 +5573,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       needs three notes to say anything, and a naming answer belongs to the
       notes it was asked about. */
   function updateVoicingControls() {
-    el.playChord.hidden = midi.connected || state.mode === "solo";
+    // In time there are no held notes for either of these to work on - the keys
+    // do not latch - and "Play chord" would be sounding over the clock.
+    el.playChord.hidden = midi.connected || state.mode === "solo" || transport.inTime;
     el.playChord.disabled = state.heldNotes.length === 0 || audio.bank === "silent";
     el.nameChord.disabled = state.heldNotes.length < 3;
     el.named.hidden = true;
@@ -5352,7 +5700,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   document.addEventListener("keydown", function (event) {
     if (event.code !== "Space" || typingInto(event.target)) return;
 
-    if (state.mode === "solo") {
+    if (state.mode === "solo" || transport.inTime) {
       event.preventDefault();
       toggleTake();
       return;
@@ -5558,6 +5906,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       return;
     }
 
+    /*  Comping: struck and let go, not held. Every gesture is its own chord -
+        where the static path below deliberately keeps adding to one, because
+        there a voicing is something you hold while it is read. */
+    if (transport.inTime) {
+      midi.velocities[note] = midi.velocities[note] || 0.8;
+      if (midi.held.indexOf(note) === -1) midi.held.push(note);
+      playNote(note, velocityOf(note));
+      compNotePlayed(note);
+      return;
+    }
+
     // The first note after everything was released starts a new chord; notes
     // that arrive together are gathered into one voicing, as the engine's
     // collector does for the app. Under the pedal nothing has been released,
@@ -5578,6 +5937,101 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       analyseVoicing();
       updateVoicingControls();
     }, 70);
+  }
+
+  //  --- comping practice: one gesture is one chord ---------------------------
+
+  /*  Solo practice never waits for a chord to be finished, and this waits on
+      purpose. The difference is what the unit is.
+
+      In a line the unit is the note, so there is always something honest to say
+      the instant one arrives, and the window takes its judgement back later if
+      the rest of a chord answers it. In a comp the unit is the *chord*: one
+      note is not a voicing, is not in or out of a register, and cannot have the
+      bass player's note underneath it. There is nothing to report until the
+      gesture is there, so the page gathers it and asks once.
+
+      The position is the *first* note's. A chord is one place on paper, and a
+      voicing rolled across two ticks is one chord struck slightly unevenly
+      rather than two chords. */
+  function compNotePlayed(note) {
+    if (comp.pending === null)
+      comp.pending = { bar: state.selected, at: positionNow(), notes: [] };
+
+    if (comp.pending.notes.indexOf(note) === -1) comp.pending.notes.push(note);
+
+    window.clearTimeout(comp.settleTimer);
+    comp.settleTimer = window.setTimeout(compHitPlayed, 70);
+  }
+
+  async function compHitPlayed() {
+    var hit = comp.pending;
+    comp.pending = null;
+
+    if (hit === null || !hit.notes.length) return;
+
+    hit.notes.sort(function (a, b) { return a - b; });
+
+    // Told how many are already in this bar, which is a count rather than a
+    // judgement: the style decides what the count means.
+    var already = comp.counts[hit.bar] || 0;
+
+    var result = await call("jazzCompHit",
+                      ["string", "string", "number", "number", "number", "string", "number"],
+                      [state.progression, comping.style, hit.bar,
+                       hit.at ? hit.at.beat : -1, hit.at ? hit.at.tick : 0,
+                       hit.notes.join(","), already]);
+
+    if (result === null || !result.ok) {
+      // The documented failure mode here is silence: a cached engine from the
+      // last deploy does not export this, `ccall` throws, and the mode simply
+      // grades nothing while the chip still says ready.
+      el.verdict.textContent = "This engine is out of date - reload to have a comp read.";
+      return;
+    }
+
+    if (comp.armed) {
+      comp.counts[hit.bar] = already + 1;
+      comp.hits.push(hit);
+    }
+
+    drawCompHit(result.hit, hit.notes);
+  }
+
+  function drawCompHit(reading, notes) {
+    el.verdict.textContent = reading.summary;
+    el.verdict.classList.toggle("matches", reading.placement !== "offStyle");
+    el.verdict.classList.toggle("wrong-shape", reading.placement === "offStyle");
+
+    el.played.textContent = notes.map(noteName).join(" ") + (reading.chord ? "  -  over " + reading.chord : "");
+
+    el.compPlace.hidden = false;
+    el.compPlace.dataset.placement = reading.placement;
+    el.compPlace.textContent = reading.placement === "pushed" ? "pushed"
+                             : reading.placement === "inStyle" ? "in style"
+                             : reading.placement === "offStyle" ? "off the style"
+                             : "nothing counting";
+
+    el.findingRow.textContent = "";
+
+    // The comp's own faults come first: what the style asked for is the
+    // question this mode is about, and the voicing's findings are the answer to
+    // the other one.
+    var lines = [];
+
+    if (reading.takesTheBassNote)
+      lines.push({ severity: "problem", message: "The root is underneath - that is the bass player's note." });
+
+    (reading.voicing.findings || []).forEach(function (finding) { lines.push(finding); });
+
+    lines.slice(0, 2).forEach(function (finding) {
+      var line = document.createElement("span");
+      line.className = "finding " + finding.severity;
+      line.textContent = finding.message;
+      el.findingRow.appendChild(line);
+    });
+
+    el.compSummary.hidden = true;
   }
 
   function midiNoteOff(note) {

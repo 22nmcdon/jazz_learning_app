@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (393), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (419), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -298,6 +298,34 @@ One thing the style does **not** decide yet is how long a hit lasts: a voicing r
 the next one stops it, whatever the style. So the styles differ in where the chords fall and
 not in whether they are stabbed or held, which is a real difference between a Basie punch
 and a ballad's sustain, and is the first thing to add to the style shape.
+
+### Comping it yourself
+
+The same style data reads the other way round. In **chord practice**, turn *Playing* to
+**In time** under *Practice*: the chart starts moving, a bass player walks under you, the
+piano stands down — it is your instrument now — and every chord you strike is read twice
+over. What the notes said about the bar is the question chord practice always asked, and
+the clock adds the one that needs it: did the chord land where your comping style puts it.
+
+The keys stop latching there. A comp is struck rather than held, so each gesture is its own
+chord, and the dock answers as it lands: *"4 and — pushed into G7, which is what this style
+is for"*, with a chip beside it saying **pushed**, **in style** or **off the style**.
+Whether you pushed is worked out from the notes, not declared — play G7's voicing on the and
+of four over a bar of Dm7 and it reads as the next bar's chord arriving early. Play Dm7's
+there and it does not, because a comper who meant this bar is not anticipating anything.
+
+**Start a take** and the whole thing is read back at the end: one number for how the comping
+sat against the style — where the chords fell, what register they sat in, how many there
+were to a bar — and words for everything the style does not pin down. The root underneath a
+voicing is one of those. It is a real comping fault, because the bass player is already
+playing that note, and it costs the number nothing: a style says nothing about it, so
+neither does the score.
+
+Where a note falls does not score a solo and here it scores a comp, which is not a
+contradiction — a line has no written standard for where its notes go, and a comping style
+*is* one, chosen off a menu, and already the thing the band is held to. The long form of
+that argument, and the two bugs that writing the evaluator turned up in the style data, are
+in [`docs/COMPING.md`](docs/COMPING.md).
 
 ### The walking bass
 
@@ -668,12 +696,9 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   practice loop ship, as In time above.
 - **Licks.** Solo mode tells you the scale; suggesting a *line* to play over a bar needs
   generated or curated patterns, rhythm and register, and is a feature of its own.
-- **Comping as an exercise** — scoring what *you* comp against a comping style, rather
-  than listening to the band play one. The style data and the "is this in style" test are
-  already there and already hold the generator to them; what is missing is the register
-  and density half of the scoring, and a third mode to show it in. That last part is the
-  expensive bit: the app has exactly two modes today and a good deal is built around
-  there being two.
+- **Per-bar comping marks on the chart.** A solo take writes its numbers onto the bars it
+  was played over; a comping take does not yet, though what it needs comes back in the same
+  shape. A page change with no engine in it.
 - **Reading a block chord as a chord.** Solo practice now reads chordal playing voice by
   voice — each note on its own way home — which is what a *line* needs. What it does not do
   is ask whether the voicing you played said what the bar said; that is chord practice's
@@ -681,9 +706,11 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   wants. The notes struck together are already marked, so the seam is there.
 - **How long a comped chord is held.** A comping style says where the chords fall and not
   whether they are stabbed or held, as above.
-- **Rhythm in the score.** The readings exist (above) and deliberately produce words
-  rather than points. Making placement *count* toward a number is a separate decision,
-  and the argument against it is the same one that keeps a line's shape out of the score.
+- **Rhythm in a *solo's* score.** The readings exist (above) and deliberately produce words
+  rather than points: a line has no written standard for where its notes fall, so a number
+  would be one the app invented and then marked you against. Comping is scored on placement
+  for exactly the reason a solo is not — there the standard is the style you picked — and
+  the two are not in tension. See [`docs/COMPING.md`](docs/COMPING.md).
 - **A drummer.** Named in the comping menu and not built. Unlike the bass it needs no
   theory and no engine call at all — a pattern and a kit — which makes it the one piece of
   the rhythm section that is entirely a shell problem. The metronome click is the only

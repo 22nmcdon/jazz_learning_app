@@ -740,7 +740,11 @@ std::string compStyles()
                        return "{\"key\":" + quoted (style.key)
                             + ",\"name\":" + quoted (style.name)
                             + ",\"summary\":" + quoted (style.summary)
-                            + ",\"feel\":" + quoted (subdivisionName (style.feel)) + "}";
+                            + ",\"feel\":" + quoted (subdivisionName (style.feel))
+                            + ",\"fewestPerBar\":" + std::to_string (style.fewestPerBar)
+                            + ",\"mostPerBar\":" + std::to_string (style.mostPerBar)
+                            + ",\"lowestNote\":" + std::to_string (style.lowestNote)
+                            + ",\"highestNote\":" + std::to_string (style.highestNote) + "}";
                    })
                  + "}");
 }
@@ -806,6 +810,197 @@ std::string walkingBass (const char* progressionText, int fromBar, int toBar, in
                             + ",\"chord\":" + quoted (note.chordSymbol)
                             + ",\"role\":" + quoted (bassRoleName (note.role)) + "}";
                    })
+                 + "}");
+}
+
+//==============================================================================
+namespace
+{
+    /** One hit, as "bar:beat:tick:note,note,note".
+
+        Flat text because that is what this wire carries. A beat of -1 is the
+        shell saying it had no clock - the same signal `soloPlayNote` uses, and
+        for the same reason: there is no position that means "no position".
+    */
+    bool readHit (const std::string& text, PlayedHit& into)
+    {
+        std::vector<std::string> fields { "" };
+
+        for (auto c : text)
+        {
+            if (c == ':')
+                fields.push_back ("");
+            else
+                fields.back() += c;
+        }
+
+        if (fields.size() < 4)
+            return false;
+
+        try
+        {
+            into.measureIndex = std::stoi (fields[0]);
+
+            const auto beat = std::stoi (fields[1]);
+            const auto tick = std::stoi (fields[2]);
+
+            into.at = beat >= 0 ? std::optional<BarPosition> (BarPosition { beat, tick })
+                                : std::nullopt;
+        }
+        catch (...)
+        {
+            return false;
+        }
+
+        into.midiNotes = parseNoteList (fields[3]);
+
+        return true;
+    }
+
+    /** Hits separated by ';'. Empty on anything malformed, so a caller can
+        refuse the lot rather than silently grading a shorter take. */
+    bool readHitList (const std::string& text, std::vector<PlayedHit>& into)
+    {
+        std::string current;
+
+        const auto flush = [&current, &into]
+        {
+            if (current.empty())
+                return true;
+
+            PlayedHit hit;
+            const auto ok = readHit (current, hit);
+
+            current.clear();
+
+            if (ok)
+                into.push_back (hit);
+
+            return ok;
+        };
+
+        for (auto c : text)
+        {
+            if (c == ';')
+            {
+                if (! flush())
+                    return false;
+            }
+            else
+            {
+                current += c;
+            }
+        }
+
+        return flush();
+    }
+
+    std::string hitReadingJson (const CompHitReading& reading)
+    {
+        std::string json = "{\"bar\":" + std::to_string (reading.measureIndex);
+
+        if (reading.at.has_value())
+            json += ",\"beat\":" + std::to_string (reading.at->beat)
+                  + ",\"tick\":" + std::to_string (reading.at->tick)
+                  + ",\"at\":" + quoted (reading.at->describe());
+
+        return json + ",\"placement\":" + quoted (hitPlacementName (reading.placement))
+                    + ",\"chord\":" + quoted (reading.chordSymbol)
+                    + ",\"anticipation\":" + (reading.anticipation ? "true" : "false")
+                    + ",\"inRegister\":" + (reading.inRegister ? "true" : "false")
+                    + ",\"outsideBy\":" + std::to_string (reading.outsideRegisterBy)
+                    + ",\"takesTheBassNote\":" + (reading.takesTheBassNote ? "true" : "false")
+                    + ",\"rootAnywhere\":" + (reading.rootAnywhere ? "true" : "false")
+                    + ",\"oneTooMany\":" + (reading.oneTooMany ? "true" : "false")
+                    + ",\"summary\":" + quoted (reading.summary)
+                    + ",\"voicing\":{\"score\":" + std::to_string (reading.voicing.score)
+                    + ",\"summary\":" + quoted (reading.voicing.summary)
+                    + ",\"matches\":" + (reading.voicing.matchesChord ? "true" : "false")
+                    + ",\"voicingType\":" + quoted (voicingTypeName (reading.voicing.type))
+                    + ",\"findings\":" + jsonArray (reading.voicing.findings,
+                                                    [] (const VoicingFinding& finding)
+                      {
+                          return "{\"severity\":" + quoted (severityName (finding.severity))
+                               + ",\"message\":" + quoted (finding.message) + "}";
+                      })
+                    + "}}";
+    }
+
+    /** A number the engine may not have. Null rather than zero: nothing played
+        is not nought out of a hundred, and a page drawing a nought would say
+        exactly the thing the engine was careful not to. */
+    std::string orNull (const std::optional<int>& value)
+    {
+        return value.has_value() ? std::to_string (*value) : std::string ("null");
+    }
+}
+
+std::string compHit (const char* progressionText, const char* styleKey,
+                     int measureIndex, int beat, int tick,
+                     const char* midiNotesCsv, int hitsAlreadyInBar)
+{
+    const auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
+
+    if (! parsed.ok())
+        return hold (jsonError (parsed.error));
+
+    const auto& style = compStyleFor (styleKey != nullptr ? styleKey : "");
+
+    PlayedHit hit;
+    hit.measureIndex = measureIndex;
+    hit.midiNotes = parseNoteList (midiNotesCsv != nullptr ? midiNotesCsv : "");
+
+    if (beat >= 0)
+        hit.at = BarPosition { beat, tick };
+
+    const auto reading = readCompHit (*parsed.chart, style, hit, hitsAlreadyInBar);
+
+    return hold ("{\"ok\":true,\"style\":" + quoted (style.key)
+                 + ",\"ticksPerBeat\":" + std::to_string (ticksPerBeat)
+                 + ",\"hit\":" + hitReadingJson (reading) + "}");
+}
+
+std::string compTake (const char* progressionText, const char* styleKey,
+                      int fromBar, int toBar, const char* hitsText)
+{
+    const auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
+
+    if (! parsed.ok())
+        return hold (jsonError (parsed.error));
+
+    std::vector<PlayedHit> hits;
+
+    if (! readHitList (hitsText != nullptr ? hitsText : "", hits))
+        return hold (jsonError ("Not a list of comped chords"));
+
+    const auto& style = compStyleFor (styleKey != nullptr ? styleKey : "");
+    const auto comp = evaluateComp (*parsed.chart, style, hits, fromBar, toBar);
+
+    return hold ("{\"ok\":true,\"style\":" + quoted (style.key)
+                 + ",\"styleName\":" + quoted (style.name)
+                 + ",\"ticksPerBeat\":" + std::to_string (ticksPerBeat)
+                 + ",\"fit\":" + orNull (comp.fit)
+                 + ",\"placement\":" + std::to_string (comp.placementFit)
+                 + ",\"register\":" + std::to_string (comp.registerFit)
+                 + ",\"density\":" + std::to_string (comp.densityFit)
+                 + ",\"voicingScore\":" + orNull (comp.voicingScore)
+                 + ",\"inStyle\":" + std::to_string (comp.hitsInStyle)
+                 + ",\"pushed\":" + std::to_string (comp.hitsPushed)
+                 + ",\"offStyle\":" + std::to_string (comp.hitsOffStyle)
+                 + ",\"tookTheBassNote\":" + std::to_string (comp.hitsTakingTheBassNote)
+                 + ",\"summary\":" + quoted (comp.summary)
+                 + ",\"hits\":" + jsonArray (comp.hits, hitReadingJson)
+                 + ",\"bars\":" + jsonArray (comp.bars, [] (const CompBarReading& bar)
+                   {
+                       return "{\"bar\":" + std::to_string (bar.measureIndex)
+                            + ",\"hits\":" + std::to_string (bar.hits)
+                            + ",\"fewest\":" + std::to_string (bar.fewest)
+                            + ",\"most\":" + std::to_string (bar.most)
+                            + ",\"tooBusy\":" + (bar.tooBusy ? "true" : "false")
+                            + ",\"tooSparse\":" + (bar.tooSparse ? "true" : "false") + "}";
+                   })
+                 + ",\"observations\":" + jsonArray (comp.observations,
+                                                     [] (const std::string& line) { return quoted (line); })
                  + "}");
 }
 

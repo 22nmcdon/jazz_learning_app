@@ -920,6 +920,103 @@ try {
   check("and the chart stops carrying the take's marks",
         (await page.locator("#systems .bar .bar-take:not([hidden])").count()) === 0);
 
+  //  --- comping practice: chord practice with a clock -----------------------
+  //
+  //  Not a third mode. The question is chord practice's own - does this voicing
+  //  say what the bar says - and the clock adds the half that needs one: did it
+  //  land where the style puts it.
+
+  await page.locator("#menuButton").click();
+  await page.locator("#playLive").click();
+  await page.locator("#menuButton").click();
+
+  check("in time, chord practice gets a clock and a take",
+        (await page.locator("#armTake").isVisible()) && (await page.locator("#metreRow").isVisible()));
+  check("and a band to comp against",
+        await page.locator("#compingButton").isVisible());
+  check("and the same button asks the question this setting is about",
+        (await page.locator("#showVoicing").innerText()).trim().toLowerCase() === "show me a comp");
+
+  // Held notes are static's idea. In time "Play chord" and "Name it" have
+  // nothing to work on, because a comp is struck rather than held.
+  check("the controls that need held notes stand down",
+        !(await page.locator("#playChord").isVisible())
+          && !(await page.locator("#nameChord").isVisible()));
+
+  const compKey = (note) => page.locator(`#keyboard .key[data-note="${note}"]`);
+  const strike = async (notes) => {
+    for (const note of notes) await compKey(note).click();
+    await page.waitForTimeout(150);
+  };
+
+  await strike([53, 57, 60, 65]);
+
+  check("the keys stop latching - a comp is struck, not held",
+        (await page.locator('#keyboard .key[aria-pressed="true"]').count()) === 0);
+
+  // Nothing is counting yet, and the page says exactly that rather than
+  // inventing a downbeat - the same honesty a solo take played statically has.
+  check("with no clock running a comp is read for its notes and not its placing",
+        await page.locator("#compPlace").getAttribute("data-placement") === "unplaced");
+
+  await page.locator("#armTake").click();
+
+  check("arming starts the clock as well, in one gesture",
+        await page.locator("#armTake").getAttribute("aria-pressed") === "true");
+
+  /*  A chord struck during the count-in is honestly unplaced - the count-in is
+      not bar one, and `positionNow` says so rather than inventing a downbeat.
+      So this keeps comping until one lands on the chart, rather than striking
+      once and hoping the count-in is over: the retry is the check, not a
+      workaround for one. */
+  let placement = "unplaced";
+
+  for (let attempt = 0; attempt < 12 && placement === "unplaced"; ++attempt) {
+    await strike([53, 57, 60, 65]);
+    await page.waitForTimeout(250);
+    placement = await page.locator("#compPlace").getAttribute("data-placement");
+  }
+
+  check(`a comped chord is placed against the style (${placement})`,
+        ["inStyle", "pushed", "offStyle"].includes(placement));
+  check("and said in a line that names where it fell",
+        (await page.locator("#verdict").innerText()).trim().length > 0);
+
+  /*  A take is read back over the bars it played *through*, so this has to let
+      one finish. That is not the test being careful, it is the rule: a bar
+      stopped in the middle was not played to the end, and counting it would
+      mark every four-to-the-bar take sparse in its last bar. */
+  const rollingBar = await page.evaluate(() => {
+    const bar = document.querySelector("#systems .bar.rolling");
+    return bar ? bar.dataset.index : null;
+  });
+
+  await page.waitForFunction(
+    (was) => {
+      const bar = document.querySelector("#systems .bar.rolling");
+      return bar !== null && bar.dataset.index !== was;
+    },
+    rollingBar, { timeout: 15000 });
+
+  await strike([53, 57, 60, 65]);
+
+  await page.locator("#armTake").click();
+  await page.waitForSelector("#compSummary:not([hidden])", { timeout: 10000 });
+
+  const compHead = (await page.locator("#compSummaryHead").innerText()).trim();
+  check(`the take is read back as placement, register and density (${compHead})`,
+        /Placement \d+%, register \d+%, density \d+%/.test(compHead));
+
+  await page.locator("#menuButton").click();
+  await page.locator("#playStatic").click();
+  await page.locator("#menuButton").click();
+
+  await strike([53, 57, 60, 65]);
+  check("and static chord practice is exactly as it was",
+        (await page.locator('#keyboard .key[aria-pressed="true"]').count()) === 4
+          && !(await page.locator("#compPlace").isVisible())
+          && !(await page.locator("#compingButton").isVisible()));
+
   // The colophon names the build, which is how anyone looking at the site can
   // tell whether it is serving what was pushed. "development" is the right
   // answer for a copy that was not deployed, so this only asks that it says
@@ -1006,6 +1103,35 @@ try {
           spill.page <= 0 && spill.offscreen.length === 0);
   }
 
+  /*  And in time, where the dock foot carries the take button and the beat dots
+      at the same time as everything else. That is the widest the foot ever
+      gets, so it is the one worth measuring. */
+  await narrow.locator("#modeChords").click();
+  if (await narrow.locator("#helpDialog[open]").count()) await narrow.locator("#helpClose").click();
+
+  await narrow.locator("#menuButton").click();
+  await narrow.locator("#playLive").click();
+  await narrow.locator("#menuButton").click();
+  await narrow.locator("#armTake").click();
+  await narrow.waitForFunction(() => !document.querySelector("#beatRow").hidden, null, { timeout: 10000 });
+
+  const compSpill = await narrow.evaluate(() => {
+    const offscreen = [];
+
+    for (const element of document.querySelectorAll(".masthead-controls > *, .dock-foot > *, .feedback > *")) {
+      const box = element.getBoundingClientRect();
+
+      if (box.width > 0 && (box.right > window.innerWidth + 0.5 || box.left < -0.5))
+        offscreen.push(element.id || element.className);
+    }
+
+    return { page: document.documentElement.scrollWidth - window.innerWidth, offscreen };
+  });
+
+  check("nothing runs off the side at 390px (Chords, in time)",
+        compSpill.page <= 0 && compSpill.offscreen.length === 0);
+
+  await narrow.locator("#armTake").click();
   await narrow.close();
 } catch (error) {
   check(`no exception (${error.message.split("\n")[0]})`, false);

@@ -101,6 +101,28 @@ std::vector<Voicing> idiomaticVoicings (const ChordSymbol& chord,
 Voicing compingVoicing (const ChordSymbol& chord,
                         const std::vector<int>& previousNotes = {});
 
+/** The same, kept inside a stated register.
+
+    Two overloads rather than a defaulted pair, because the numbers belong to
+    whoever asked. The window in the one above is where a comping voicing sits
+    when nobody has said; a `CompStyleDefinition` is a style saying, and comping
+    under a soloist and comping alone are genuinely different registers.
+
+    This is what holds the generator to the same register the evaluator marks a
+    player against. Without it the search reaches wherever the voice leading is
+    cheapest - which was three semitones under Basie's own floor - and the app
+    comps in a style it would then read as out of that style's register.
+
+    A chord with nothing at all inside the window falls back to the best
+    voicing outside it: a comp that goes silent is worse than a comp that
+    stretches, and a style whose window has no room for a chord it will meet is
+    a number that wants changing rather than a rule that wants bending.
+*/
+Voicing compingVoicing (const ChordSymbol& chord,
+                        const std::vector<int>& previousNotes,
+                        int lowestNote,
+                        int highestNote);
+
 /** The register a shape belongs in - the lowest note it should reach for.
 
     A solo left hand lives an octave and a half below a rootless one, so handing

@@ -177,6 +177,12 @@ practice is, what solo practice is, and what the two share. A change that belong
 belongs in the third section, and almost every mistake made here so far was putting
 something in one mode that the other quietly needed too.
 
+Both modes now have a **Static / In time** setting, and in each it means the same kind of
+thing: the same question with a clock behind it, and readings that are simply silent
+without one. In solo practice the clock counts a line; in chord practice it is comping.
+Three things a session keeps wanting to build already exist as that setting - do not
+reach for a third mode, a second keyboard or a second dock.
+
 ## Chord practice — built
 
 The mode the app opens in. It asks whether the voicing you played says what the bar says.
@@ -199,8 +205,46 @@ The mode the app opens in. It asks whether the voicing you played says what the 
 - Names a voicing with no chart and no expected chord (`ChordIdentifier`).
 - Reads a played voicing back as a *substitution* when it spells one, rather than as a
   broken version of the written chord.
-- The keys **latch**: a voicing is something you hold, and `state.heldNotes` is what the
-  analyser is handed.
+- The keys **latch** in *Static*: a voicing is something you hold, and `state.heldNotes` is
+  what the analyser is handed.
+
+### In time — comping
+The same mode with a clock behind it, which is where comping as an exercise lives. Not a
+third mode, deliberately: see the bullet in *The band's instruments are recordings* for why
+that was reversed.
+
+**The reasoning behind every rule below - the argument for scoring placement, the two bugs
+the widened invariant caught and the worked examples - is in
+[`docs/COMPING.md`](docs/COMPING.md). Read it before changing any of this.**
+
+- **In time, the keys do not latch.** A comp is struck, not held, so each gesture is its
+  own hit and `analyseVoicing` stands down in favour of the per-hit path. Switching between
+  Static and In time lets go of the keys for the same reason a change of mode does - the
+  latch rule changed under them.
+- **One gesture is one chord, and here the page waits** - the one place it does. Solo
+  practice never waits for a chord to be finished because a line's unit is the note; a
+  comp's unit is the *chord*, and one note is not a voicing, is not in or out of a register
+  and cannot have the bass player's note underneath it. The position is the **first** note's.
+- **The page may remember what was played; it may never remember what it meant.** `comp.hits`
+  is a list of `{bar, at, notes}` - the same class of thing as `state.heldNotes`. Every
+  verdict, live and final, comes back from the engine, which is why `compHit`/`compTake` are
+  pure and why the solo take is still the only stateful corner of `jazz::api`.
+- **Only a bar played through counts.** A take stopped mid-bar drops it, or every
+  four-to-the-bar take ends marked sparse in its last bar. The page counts a bar on the
+  downbeat of the next one.
+- **Anticipation is read from the notes, and a tie is not a push.** A player does not
+  declare a push; the voicing is analysed against this bar's chord and the next one and the
+  strictly better score wins. Over a bar repeating its chord the two are identical, and
+  promoting a tie would call every hit on an anticipating slot a push.
+- **`inItsOwnBar()` is not optional.** The page quantises a moment, so a chord struck just
+  before a downbeat arrives as beat 4 of a bar of four and one read back from a tick count
+  arrives as beat -1. Both are the neighbouring bar.
+- **The root in the bass is the evaluator's to say, not `VoicingAnalyzer`'s.** Asking through
+  `practiseType` would dock the *voicing's* score for a comping reason and call a shell
+  voicing the wrong shape. The fault is not the shape, it is that somebody else is playing
+  that note - so it produces a chip and words and no points.
+- **Density is clamped to the metre.** `fewestPerBar` is a plain count and a count does not
+  survive a change of metre the way a slot does: four to the bar is three chords in three.
 
 ## Solo practice — built
 
@@ -285,10 +329,18 @@ there because these are the ones that break something when a session has not rea
   and silent without positions. **Nothing in the engine may start depending on when a note
   arrived** - a `BarPosition` is a position, like a measure index, and the shell turns its
   own clock into one before the engine sees it.
-- **Rhythm produces words, never points.** `score()` is untouched by any of it. Where a
-  note sits in a bar does not make it a better or worse note, and the moment it moved the
-  score the score would stop being explainable - the same rule the rest of *A line's shape
-  does not touch the score* is built on.
+- **Rhythm produces words, never points - in solo practice.** `score()` is untouched by
+  any of it. Where a note sits in a bar does not make it a better or worse note, and the
+  moment it moved the score the score would stop being explainable - the same rule the
+  rest of *A line's shape does not touch the score* is built on.
+
+  **Comping scores placement, and that is not a contradiction.** A line has no stated
+  standard for where its notes fall, so a number would be the engine inventing one and
+  then marking a player against it. A `CompStyleDefinition` *is* that standard, written
+  down, chosen off a menu, and already the thing the generator is held to in both
+  directions. The full argument is in [`docs/COMPING.md`](docs/COMPING.md); what matters
+  here is that the two rules are about two different questions and neither may be quoted
+  at the other.
 - **"Sat on" versus "passed through" is the whole reason the grid exists.** The same pitch
   against the same chord is what every bebop line is made of at speed and what sounds like
   a mistake when dwelt on; only the rhythm tells them apart. `LineNote::passedThrough` is
@@ -409,19 +461,21 @@ eighth is.
   leaving the last one off the list entirely would say the feature is finished.
 
 #### Where the comping plan got to
-Comping was built to a seven-step plan, of which **1, 2, 3, 5 and the style picker out of
-7 were the agreed scope**. This is what each step actually came to, so that a later session
-neither re-plans a finished one nor assumes an unfinished one is done.
+Comping was built to a seven-step plan. Steps **1, 2, 3, 5 and the style picker out of 7**
+were the first agreed scope and shipped first; **4, 6 and the rest of 7** were scoped and
+built afterwards, which is when step 6's recorded answer turned out to be wrong and was
+reversed. This is what each step actually came to, so that a later session neither re-plans
+a finished one nor assumes an unfinished one is done.
 
 | Step | State | Where it is, or what is missing |
 |---|---|---|
 | 1. The subdivision grid | **done** | `Rhythm.h`. An eighth grid was the plan's suggestion and would not have written a ballad's triplets, so it is 24 ticks to the beat instead. The transport books hits at sub-beat positions inside the lookahead it already used for beats (`compBar`, through `beatsIntoBar`). One grid, two consumers - solo practice's rhythmic reading was built onto the same one rather than given its own. |
 | 2. `CompStyleDefinition` | **done, bar one bullet** | `Comping.h`. Onset slots (`CompSlot`), register (`lowestNote`/`highestNote`), density (`fewestPerBar`/`mostPerBar`) and anticipation across the barline (`CompSlot::anticipates`) are all there, and the shape was proved against four styles that genuinely differ rather than fitted to one. **"Typical durations" is the bullet that has no field.** A hit rings until the next one stops it and the page decides that, so a style cannot yet say it is stabbed rather than held - which is a real difference between styles and the first thing to add if this shape is reopened. |
 | 3. The generator | **done** | `compPlan()` - seeded, planned a range ahead rather than per beat, with `fitsStyle()` written before it and checked from both directions, as the plan asked. Playback walks the plan off the same transport seam as the click. |
-| 4. The evaluator | **not built** | `fitsStyle()` is the slot half of it and is already the invariant the generator is held to. Missing: the register and density half, the `VoicingAnalyzer` reuse for "what was played", and somewhere to show a verdict - which is step 6. |
+| 4. The evaluator | **done** | `readCompHit()` and `evaluateComp()` in `Comping.cpp`. `fitsStyle()` did not grow - it gained `slotAt()` underneath it and stayed about a *generated* hit, because a `CompHit` knows two things a played one does not. Stateless: a comped chord has no window over it, so nothing needs remembering. The invariant now runs through placement, register **and** density, and it caught two real bugs - see *Where the two numbers had never been read* in `docs/COMPING.md`. |
 | 5. `compStyles()` on the wire | **done** | `EngineApi`, and both shells build the menu from it with no local copy, the same way `scaleStyles()` works. |
-| 6. Where it lives in the mode structure | **decided, not implemented** | The decision is a **third mode, "Comping practice"**. Nothing of it is built. What the plan called the lower-risk piece - comping as backing, generator only - is what shipped, inside solo practice's *In time*, and it needed none of the mode machinery. Read the note above on what the third mode costs before starting it. |
-| 7. UI and menu wiring | **half** | The style picker shipped, and more than was asked: the Comping panel toggles instruments and gives the piano and the bass their own sound pickers. The dock surface for evaluator output did not, and the plan's own rule says not to build it against a guessed mode location. |
+| 6. Where it lives in the mode structure | **done, and not where this table used to say** | **Chord practice's *In time***, not a third mode. The reversal and its reasoning are the bullet above and `docs/COMPING.md`; the short form is that In time already meant "the same mode, with a clock", which is what comping is to chord practice. `state.mode` stays two-valued. |
+| 7. UI and menu wiring | **done** | The style picker, the instrument toggles and their sound pickers shipped first. The verdict surface followed once step 6 was settled, and it **grew `.feedback`** rather than adding a panel beside it - it is the same mode's dock answering two halves of one question. A `.comp-place` chip beside the verdict live, the fit on the existing `#meter` and a summary block at the end of a take. |
 
 Three things were built that were not steps, and should not be read back into the plan as
 though they were: the **walking bass** and the **recorded instruments** (both asked for
@@ -454,12 +508,17 @@ separately, and both documented above), and solo practice reading a **chord as o
   octave apart would otherwise stop each other, and the player's own note-off, pedal and
   panic would reach the band. On the page that is three voice stores; in the app it is
   `Voice::comping` and `Voice::walking`, which every player-facing function skips.
-- **Where the evaluator will live is decided and not built: a third mode.** Scoring a
-  player's *own* comping against a `CompStyleDefinition` is neither of the questions the
-  two modes ask, so it gets its own. Note what that costs before starting it: `state.mode`
-  is two-valued today and `data-mode`, `applyMode`, the palette tokens, the masthead and
-  the per-mode cheat sheets are all built around exactly two. Comping-as-backing, which is
-  what ships, needed none of that and lives inside solo practice's *In time*.
+- **The evaluator lives in chord practice's *In time*, and the third mode was a wrong
+  answer that got reversed.** It was decided once, here, that scoring a player's own
+  comping was "neither of the questions the two modes ask" and so deserved a mode of its
+  own. That did not survive the **Static / In time** axis solo practice already had: In
+  time is not a different mode there, it is the same mode with a clock, adding readings
+  that are silent without one. Which is exactly what comping is to chord practice - the
+  voicing half is `VoicingAnalyzer` on the same chart in the same dock, and the clock adds
+  the half that needs one. So `state.mode` is still two-valued, nothing was built around a
+  third, and the bar dialog's question in comping answered itself: substitutions, because
+  a comper reharmonises. If you are tempted by a third mode again, the counting is in
+  [`docs/COMPING.md`](docs/COMPING.md).
 
 ## Both modes — one page, one chart
 
@@ -481,8 +540,16 @@ separately, and both documented above), and solo practice reading a **chord as o
   substitutions in chord practice, never both: they answer different questions - what to
   play over this bar, and what this bar should be - and showing both meant every visit
   opened with a choice nobody asked for.
-- **Comping belongs to solo practice only.** A band playing under chord practice would be
-  sounding the very voicing the player is being asked to find. `applyMode` stops it.
+- **The generated piano never sounds under someone being asked to play chords.** It would
+  be playing the very voicing they are reaching for - in static chord practice the one the
+  bar asks for, and in time the one they are being read on. `applyMode` stops it in both,
+  and remembers the switch so solo practice finds the band as it was left. The rest of the
+  band is not the same question: the **walking bass plays wherever there is a clock**, and
+  is what makes a doubled root worth mentioning at all.
+- **The Static / In time switch is both modes', not solo practice's.** It used to carry
+  `data-mode="solo"`; it carries none now, because absence is how that menu spells "always
+  shown". What In time *means* differs by mode, so the note under it is written by
+  `describePlaying()` rather than being fixed markup.
 - **Both directions let go of the keys.** A voicing carried into solo practice is a chord
   nothing over there will ever read, and a line carried back into chord practice would be
   analysed as a voicing nobody played. `applyMode` clears held notes, the pedal's held
@@ -559,11 +626,9 @@ build step passes, that setting is the first thing to check.
   bar said - that is `VoicingAnalyzer`'s question, and joining the two would mean deciding
   which answer a block-chord solo wants. `LineNote::struckWithPrevious` is the seam: the
   runs of it are the voicings, already on the wire.
-- **Comping as an exercise** - scoring what *you* comp against a `CompStyleDefinition`.
-  The style data and `fitsStyle()` are the seam it grows from; what is missing is the
-  register and density half, and the third mode to show it in. This is steps 4, 6 and half
-  of 7 of the comping plan; *Where the comping plan got to* above says what each of those
-  came to, and what the third mode costs. Read it before starting.
+- **Per-bar comping marks on the chart.** `paintTakeMarks()` draws a solo take's numbers
+  on the bars and is still solo practice's alone. A comping take's `bars` come back in the
+  same shape, so this is a page change with no engine in it.
 - **How long a comping hit lasts is the page's, not the style's.** `CompStyleDefinition`
   says where a style puts a hit and says nothing about whether it is stabbed or held, so a
   voicing rings until the next one stops it. It is the one bullet of the definition's

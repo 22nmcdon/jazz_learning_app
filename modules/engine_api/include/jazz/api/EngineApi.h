@@ -47,6 +47,42 @@ std::string compPlan (const char* progressionText, const char* styleKey,
     come back the same way a comp plan's do: a beat and a tick, never a time. */
 std::string walkingBass (const char* progressionText, int fromBar, int toBar, int seed);
 
+/** One chord the player comped, read against the style they chose.
+
+    Stateless, and on purpose. A comping hit has no window over it the way a
+    solo note does - its slot, its register and what its notes said are all
+    settled the instant it is struck, and nothing played afterwards revises any
+    of them. So there is nothing here for a memory to hold, and the solo take
+    stays the one stateful corner of this API.
+
+    What that leaves the shell is a record of what was *played* - a bar, a
+    position and some notes - which is the same class of thing as a list of held
+    notes. Every verdict still comes from here.
+
+    @param beat  negative when the shell has no clock and cannot say where the
+                 hit fell, exactly as `soloPlayNote` means it. The notes and the
+                 register still read; the placing does not.
+    @param hitsAlreadyInBar  how many chords are already in this bar. A count,
+                 not a judgement - the style decides what it means.
+*/
+std::string compHit (const char* progressionText, const char* styleKey,
+                     int measureIndex, int beat, int tick,
+                     const char* midiNotesCsv, int hitsAlreadyInBar);
+
+/** A stretch of comping, read back against the style it was played in.
+
+    @param hitsText  the hits, as "bar:beat:tick:note,note,note", separated by
+                     ';' - one string because that is what this wire carries. A
+                     beat of -1 is a hit with no clock behind it.
+    @param fromBar,toBar  the bars the take covered, silent ones included: a bar
+                     with no hits leaves no trace in @p hitsText, and a bar left
+                     empty is exactly what a dense style's density reading is
+                     about. A bar the take stopped part-way through belongs
+                     outside this range.
+*/
+std::string compTake (const char* progressionText, const char* styleKey,
+                      int fromBar, int toBar, const char* hitsText);
+
 //==============================================================================
 /** Solo practice: reading a line rather than a chord.
 

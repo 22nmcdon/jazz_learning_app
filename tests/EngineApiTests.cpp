@@ -467,6 +467,85 @@ TEST ("a bar with no chord in it is comped with silence, not with a guess")
     CHECK (contains (json, "\"hits\":[]"));
 }
 
+TEST ("the comping styles carry the register and the density they expect")
+{
+    /*  A page showing what a style asks for must not hold its own copy of the
+        numbers, for the same reason it holds no copy of the scale styles. */
+    const auto json = compStyles();
+
+    CHECK (contains (json, "\"fewestPerBar\":"));
+    CHECK (contains (json, "\"mostPerBar\":"));
+    CHECK (contains (json, "\"lowestNote\":"));
+    CHECK (contains (json, "\"highestNote\":"));
+
+    // Not the slots. Placing a hit is the engine's job, and a copy of the slot
+    // table in a shell is where a second theory starts.
+    CHECK (! contains (json, "\"slots\""));
+}
+
+TEST ("a comped chord is read back over the wire")
+{
+    // The and of two, in the Charleston, voicing Dm7 rootless - F A C E.
+    const auto json = compHit ("| Dm7 | G7 |", "charleston", 0, 1, 12, "53,57,60,64", 0);
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"placement\":\"inStyle\""));
+    CHECK (contains (json, "\"chord\":\"Dm7\""));
+    CHECK (contains (json, "\"inRegister\":true"));
+    CHECK (contains (json, "\"voicing\":{"));
+    CHECK (contains (json, "\"findings\":["));
+}
+
+TEST ("a comped chord with no clock behind it says so rather than claiming the downbeat")
+{
+    /*  The same signal `soloPlayNote` uses, and the same reason: a made-up
+        downbeat would be read as a real one. */
+    const auto json = compHit ("| Dm7 |", "charleston", 0, -1, 0, "53,57,60,64", 0);
+
+    CHECK (contains (json, "\"placement\":\"unplaced\""));
+    CHECK (! contains (json, "\"beat\":"));
+
+    // The notes still read - only the placing is silent.
+    CHECK (contains (json, "\"chord\":\"Dm7\""));
+    CHECK (contains (json, "\"inRegister\":true"));
+}
+
+TEST ("a comping take goes over as positions, never as times")
+{
+    const auto json = compTake ("| Dm7 | G7 |", "four", 0, 1,
+                                "0:0:0:53,57,60,65;0:1:0:53,57,60,65;"
+                                "0:2:0:53,57,60,65;0:3:0:53,57,60,65");
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"ticksPerBeat\":24"));
+    CHECK (contains (json, "\"fit\":"));
+    CHECK (contains (json, "\"placement\":"));
+    CHECK (contains (json, "\"bars\":["));
+    CHECK (contains (json, "\"observations\":["));
+    CHECK (! contains (json, "\"seconds\""));
+    CHECK (! contains (json, "\"when\""));
+}
+
+TEST ("a take with nothing comped in it reports no fit rather than nought per cent")
+{
+    const auto json = compTake ("| Dm7 | G7 |", "four", 0, 1, "");
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"fit\":null"));
+    CHECK (contains (json, "\"voicingScore\":null"));
+    CHECK (contains (json, "\"hits\":[]"));
+}
+
+TEST ("a list of comped chords that is not one is refused")
+{
+    CHECK (contains (compTake ("| Dm7 |", "four", 0, 0, "nonsense"), "\"ok\":false"));
+    CHECK (contains (compTake ("not a chart", "four", 0, 0, ""), "\"ok\":false"));
+
+    // A hit naming a bar and a position but no notes is still a hit somebody
+    // struck - it is the text that has to be well formed, not the playing.
+    CHECK (contains (compTake ("| Dm7 |", "four", 0, 0, "0:0:0:"), "\"ok\":true"));
+}
+
 TEST ("a note played with no clock says so rather than claiming the downbeat")
 {
     soloStartTake();

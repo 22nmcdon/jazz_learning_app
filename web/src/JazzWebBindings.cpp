@@ -133,6 +133,27 @@ JAZZ_EXPORT const char* jazzWalkingBass (const char* progressionText, int fromBa
 }
 
 //==============================================================================
+// Comping as an exercise. No take here and none in jazz::api either: a comped
+// chord is settled the moment it is struck, so there is nothing for a memory
+// to hold.
+
+JAZZ_EXPORT const char* jazzCompHit (const char* progressionText, const char* styleKey,
+                                     int measureIndex, int beat, int tick,
+                                     const char* midiNotesCsv, int hitsAlreadyInBar)
+{
+    return hold (jazz::api::compHit (orEmpty (progressionText), orEmpty (styleKey),
+                                     measureIndex, beat, tick, orEmpty (midiNotesCsv),
+                                     hitsAlreadyInBar));
+}
+
+JAZZ_EXPORT const char* jazzCompTake (const char* progressionText, const char* styleKey,
+                                      int fromBar, int toBar, const char* hitsText)
+{
+    return hold (jazz::api::compTake (orEmpty (progressionText), orEmpty (styleKey),
+                                      fromBar, toBar, orEmpty (hitsText)));
+}
+
+//==============================================================================
 // Solo practice. These four carry a take, which lives in jazz::api rather than
 // here - a transport remembers nothing.
 
