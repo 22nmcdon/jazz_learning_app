@@ -93,6 +93,13 @@ bool operator< (const BarPosition& a, const BarPosition& b) noexcept
     return a.inTicks() < b.inTicks();
 }
 
+bool onTheGrid (BarPosition position, Subdivision subdivision)
+{
+    const auto step = ticksFor (subdivision);
+
+    return step > 0 && position.tick % step == 0;
+}
+
 BeatStrength strengthAt (BarPosition position, int beatsPerBar)
 {
     if (position.tick != 0)

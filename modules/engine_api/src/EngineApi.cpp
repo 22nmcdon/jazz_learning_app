@@ -743,6 +743,7 @@ std::string compStyles()
                             + ",\"feel\":" + quoted (subdivisionName (style.feel))
                             + ",\"fewestPerBar\":" + std::to_string (style.fewestPerBar)
                             + ",\"mostPerBar\":" + std::to_string (style.mostPerBar)
+                            + ",\"variation\":" + std::to_string (style.variation)
                             + ",\"lowestNote\":" + std::to_string (style.lowestNote)
                             + ",\"highestNote\":" + std::to_string (style.highestNote) + "}";
                    })
@@ -984,7 +985,8 @@ std::string compTake (const char* progressionText, const char* styleKey,
                  + ",\"register\":" + std::to_string (comp.registerFit)
                  + ",\"density\":" + std::to_string (comp.densityFit)
                  + ",\"voicingScore\":" + orNull (comp.voicingScore)
-                 + ",\"inStyle\":" + std::to_string (comp.hitsInStyle)
+                 + ",\"onTheFigure\":" + std::to_string (comp.hitsOnTheFigure)
+                 + ",\"idiomatic\":" + std::to_string (comp.hitsIdiomatic)
                  + ",\"pushed\":" + std::to_string (comp.hitsPushed)
                  + ",\"offStyle\":" + std::to_string (comp.hitsOffStyle)
                  + ",\"tookTheBassNote\":" + std::to_string (comp.hitsTakingTheBassNote)
@@ -996,8 +998,7 @@ std::string compTake (const char* progressionText, const char* styleKey,
                             + ",\"hits\":" + std::to_string (bar.hits)
                             + ",\"fewest\":" + std::to_string (bar.fewest)
                             + ",\"most\":" + std::to_string (bar.most)
-                            + ",\"tooBusy\":" + (bar.tooBusy ? "true" : "false")
-                            + ",\"tooSparse\":" + (bar.tooSparse ? "true" : "false") + "}";
+                            + ",\"tooBusy\":" + (bar.tooBusy ? "true" : "false") + "}";
                    })
                  + ",\"observations\":" + jsonArray (comp.observations,
                                                      [] (const std::string& line) { return quoted (line); })

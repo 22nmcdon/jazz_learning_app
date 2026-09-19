@@ -85,6 +85,18 @@ struct CompStyleDefinition
         that difference is written down. */
     int lowestNote { 45 };
     int highestNote { 84 };
+
+    /** How often the band steps off its own figure onto the feel's grid, 0-100.
+
+        A style is a characteristic figure, not the only thing a player of it
+        ever plays - which is the rule the evaluator reads, and the band has to
+        be held to the same one or it loops. Without this the Charleston picks
+        from three slots at weights 95, 90 and 30, so nearly every bar comes out
+        the same two chords and eight bars of one chord sound like a stuck tape.
+
+        Zero for four-to-the-bar, which really is exactly four to the bar.
+    */
+    int variation { 25 };
 };
 
 /** Every style the engine knows, in menu order. */
@@ -204,17 +216,25 @@ constexpr int highestBassNote = 55;   // G3, where a walking line stops walking
 
 /** Whether a hit is one this style could have played.
 
-    The slot half of the evaluator, and the half the generator is held to: a
-    style that generates what it would then mark as out of style is broken in
-    one of the two directions, and this is what catches it. The rest of the
-    evaluator - register, density and what the notes said - is `readCompHit`
-    and `evaluateComp` below, and the invariant now runs through all of it.
+    The invariant the generator is held to: a style that generates what it would
+    then mark as out of style is broken in one of the two directions, and this
+    is what catches it. The rest of the evaluator - register, density and what
+    the notes said - is `readCompHit` and `evaluateComp` below, and the
+    invariant runs through all of it.
 
-    This one stays about a *generated* hit, deliberately. A `CompHit` carries
-    two things it already knows: which chord it voices and whether it pushed.
-    For a hit somebody played, both of those are answers rather than inputs,
-    which is why `PlayedHit` is a type of its own and why this signature did
-    not grow to serve them both.
+    **This asks about the style's vocabulary, not its figure.** The narrow
+    question - is this one of the style's own slots - is `slotAt`. The two
+    parted company when the band learned to vary (`variation`): it plays its
+    figure most of the time and the feel's grid the rest, and holding it to its
+    slots alone would have made it fail its own test.
+
+    It stays about a *generated* hit, deliberately. A `CompHit` carries two
+    things it already knows: which chord it voices and whether it pushed. For a
+    hit somebody played both are answers rather than inputs, which is why
+    `PlayedHit` is a type of its own and why this signature did not grow to
+    serve them both.
+
+    Anticipation is still checked one way only - see the note in the body.
 */
 bool fitsStyle (const CompHit& hit, const CompStyleDefinition& style, int beatsPerBar);
 
@@ -273,13 +293,29 @@ struct PlayedHit
     std::vector<int> midiNotes;   ///< as played, any order; sorted on the way in
 };
 
-/** Where a hit sits against the style. Settled the moment it is played. */
+/** Where a hit sits against the style. Settled the moment it is played.
+
+    Three tiers rather than two, and the reason is the whole of this reading. A
+    style's slots are the figure **the band** plays; they were once also the set
+    of places a player was allowed to put a chord, which is a different claim
+    and a much narrower one. Counted over the eight positions a swing comper
+    actually uses - the four beats and the four ands - the Charleston accepted
+    three, and no style in the catalogue accepted the and of one or the and of
+    three at all. Both are bread-and-butter comping.
+
+    So the standard is the feel's grid (`onTheGrid`), and the slots keep their
+    own tier for what they honestly are: this style's own figure, worth saying
+    and not worth scoring. What stays outside is a real set - in an eighth feel
+    a sixteenth is outside, and in the ballad's triplet feel a straight eighth
+    is, which is the "you are playing this ballad like a swing tune" mismatch
+    the old reading could not express.
+*/
 enum class HitPlacement
 {
-    inStyle,    ///< the style offers this position
-    pushed,     ///< an anticipating slot, and the notes say the next bar's chord
-    offStyle,   ///< no slot here
-    unplaced    ///< no clock behind it, so there is no placement to read
+    theFigure,   ///< one of the style's own slots - what the band would play here
+    idiomatic,   ///< on the feel's grid: the style's vocabulary, not its figure
+    offStyle,    ///< off that grid altogether
+    unplaced     ///< no clock behind it, so there is no placement to read
 };
 
 std::string hitPlacementName (HitPlacement placement);
@@ -292,7 +328,15 @@ struct CompHitReading
 
     HitPlacement placement { HitPlacement::unplaced };
     std::string chordSymbol;      ///< the chord it was judged against, as written
-    bool anticipation {};         ///< it read as the next bar's chord, early
+
+    /** It read as the next bar's chord, played early.
+
+        Orthogonal to `placement`, and that is the point: a push can come from
+        the style's own figure or from anywhere else in its vocabulary. It used
+        to be a placement value of its own, which quietly said that only the
+        figure could push.
+    */
+    bool anticipation {};
 
     bool inRegister { true };
     int outsideRegisterBy {};     ///< semitones past the nearer edge, 0 when inside
@@ -363,8 +407,17 @@ struct CompBarReading
     */
     int fewest {};
     int most {};
+
+    /** Busier than the style ever is.
+
+        The only direction density is graded in. Leaving a bar alone is one of
+        the most idiomatic things a comper does, so a bar quieter than the
+        style's own floor is not a fault and does not appear here - the floor
+        stays a statement about what the *band* plays. That asymmetry is
+        deliberate and has a precedent: `fitsStyle` checks anticipation one way
+        only, for the same kind of reason.
+    */
     bool tooBusy {};
-    bool tooSparse {};
 };
 
 /** A stretch of comping, read back against the style it was played in. */
@@ -395,7 +448,16 @@ struct CompEvaluation
     std::vector<CompHitReading> hits;   ///< in the order they were played
     std::vector<CompBarReading> bars;   ///< every bar covered, silent ones included
 
-    int hitsInStyle {};
+    /** Hits on the style's own figure, and hits merely in its vocabulary.
+
+        Both score. The split is here so the words can say what the number
+        deliberately does not - "you played the Charleston's own figure twice,
+        and the rest was your own" is worth telling a player and is not worth
+        marking them for.
+    */
+    int hitsOnTheFigure {};
+    int hitsIdiomatic {};
+
     int hitsPushed {};
     int hitsOffStyle {};
     int hitsTakingTheBassNote {};

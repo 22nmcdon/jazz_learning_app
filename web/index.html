@@ -407,10 +407,15 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
    of prose, in the colour of the answer.
 
    The alphabet is deliberately the one that already exists rather than a new
-   one: rust means "did not land", and a chord on a beat the style never plays
-   is exactly that. A hit that is in style takes the mode accent instead of a
-   semantic colour, because "you played the style" is not one of the five
-   things sage, gold, green, teal and rust say. */
+   one: rust means "did not land", and a chord off the grid its style is counted
+   in is exactly that. Everything in style takes the mode accent instead of a
+   semantic colour, because "you played the style" is not one of the five things
+   sage, gold, green, teal and rust say.
+
+   The style's own figure and the rest of its vocabulary share that accent on
+   purpose. They are both in style and they score the same; giving the figure a
+   colour of its own would say with paint what the score was deliberately
+   stopped from saying with points. */
 .comp-place {
   font-size: 12px;
   letter-spacing: 0.03em;
@@ -1712,7 +1717,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 419 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 429 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -5369,9 +5374,28 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     return /swing/i.test(state.chartStyle || el.sheetStyle.textContent || "");
   }
 
+  /** Whether the chosen comping style is counted in eighths.
+
+      Swing is a ratio an *eighth* is played at, and nothing else - the engine's
+      own rule, one layer up. A style counted in triplets already writes its
+      notes where they are played, so folding the swung eighth back onto the
+      straight one would rewrite the ballad's own figure into a position its
+      grid does not have, and every triplet a player landed on would read as
+      outside the style that asked for triplets.
+
+      Defaults to true, because that is what every style but the ballad is and
+      because it is also what the page did before it knew to ask. */
+  function compFeelIsEighths() {
+    var chosen = (comping.styles || []).filter(function (style) {
+      return style.key === comping.style;
+    })[0];
+
+    return !chosen || chosen.feel === "eighths";
+  }
+
   /** A position on the engine's grid, as an offset in beats from the downbeat. */
   function beatsIntoBar(beat, tick) {
-    var played = swinging() && tick === ENGINE_TICKS_PER_BEAT / 2
+    var played = swinging() && compFeelIsEighths() && tick === ENGINE_TICKS_PER_BEAT / 2
                    ? SWUNG_EIGHTH_TICK : tick;
 
     return beat + played / ENGINE_TICKS_PER_BEAT;
@@ -5400,7 +5424,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     });
 
     if (tick === ENGINE_TICKS_PER_BEAT) { beat += 1; tick = 0; }
-    if (swinging() && tick === SWUNG_EIGHTH_TICK) tick = ENGINE_TICKS_PER_BEAT / 2;
+
+    // Only where the eighth is what is being swung - see `compFeelIsEighths`.
+    if (swinging() && compFeelIsEighths() && tick === SWUNG_EIGHTH_TICK)
+      tick = ENGINE_TICKS_PER_BEAT / 2;
 
     return { beat: beat, tick: tick };
   }
@@ -6005,10 +6032,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     el.played.textContent = notes.map(noteName).join(" ") + (reading.chord ? "  -  over " + reading.chord : "");
 
+    /*  A push is a fact about the hit rather than a fourth tier, so it is said
+        first when it applies and the tier underneath it still decides the
+        colour. Only `offStyle` is rust - the style's own figure and the rest of
+        its vocabulary are both in style, and colouring them differently would
+        put back the thing this reading was rewritten to stop saying. */
     el.compPlace.hidden = false;
     el.compPlace.dataset.placement = reading.placement;
-    el.compPlace.textContent = reading.placement === "pushed" ? "pushed"
-                             : reading.placement === "inStyle" ? "in style"
+    el.compPlace.textContent = reading.anticipation ? "pushed"
+                             : reading.placement === "figure" ? "the figure"
+                             : reading.placement === "idiomatic" ? "in style"
                              : reading.placement === "offStyle" ? "off the style"
                              : "nothing counting";
 

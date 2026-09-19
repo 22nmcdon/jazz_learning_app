@@ -478,6 +478,10 @@ TEST ("the comping styles carry the register and the density they expect")
     CHECK (contains (json, "\"lowestNote\":"));
     CHECK (contains (json, "\"highestNote\":"));
 
+    // How far the band strays from its own figure, which a shell shows and
+    // never decides.
+    CHECK (contains (json, "\"variation\":"));
+
     // Not the slots. Placing a hit is the engine's job, and a copy of the slot
     // table in a shell is where a second theory starts.
     CHECK (! contains (json, "\"slots\""));
@@ -489,7 +493,7 @@ TEST ("a comped chord is read back over the wire")
     const auto json = compHit ("| Dm7 | G7 |", "charleston", 0, 1, 12, "53,57,60,64", 0);
 
     CHECK (contains (json, "\"ok\":true"));
-    CHECK (contains (json, "\"placement\":\"inStyle\""));
+    CHECK (contains (json, "\"placement\":\"figure\""));
     CHECK (contains (json, "\"chord\":\"Dm7\""));
     CHECK (contains (json, "\"inRegister\":true"));
     CHECK (contains (json, "\"voicing\":{"));
@@ -625,4 +629,21 @@ TEST ("a note with no attack given starts one of its own")
     CHECK (contains (soloPlayNote (64, 1, 0), "\"withPrevious\":false"));
 
     soloEndTake();
+}
+
+TEST ("a comp that varies still comes back in style over the wire")
+{
+    /*  The report, through the wire this time: one and the and of one, which
+        used to come back off style in every catalogue entry. */
+    const auto json = compTake ("| Dm7 | G7 |", "charleston", 0, 1,
+                                "0:0:0:53,57,60,65;0:0:12:53,57,60,65");
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"placement\":100"));
+    CHECK (contains (json, "\"offStyle\":0"));
+
+    // And the two tiers are both reported, so a shell can say what the figure
+    // contributed without the number having said it.
+    CHECK (contains (json, "\"onTheFigure\":1"));
+    CHECK (contains (json, "\"idiomatic\":1"));
 }

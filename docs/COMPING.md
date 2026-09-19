@@ -90,6 +90,23 @@ plan in hand, there's nothing left to race.
   one each chorus. The hash is hand-rolled because `std::mt19937`'s
   *distributions* aren't specified across standard libraries — a plan that
   differed between browser and app would be two bands playing.
+- **It varies, because a style is a figure and not a loop.** `variation` is how
+  often the band steps off its own slots onto the feel's grid — the same rule the
+  evaluator reads, pointed at the band. Without it the Charleston picked from
+  three slots at 95, 90 and 30, so eight bars of one chord came out as very
+  nearly the same two chords eight times over; with it, six distinct figures.
+  **It sits below the style's lightest slot on purpose**: the density trim takes
+  the heaviest candidates, so a variation weight above the figure's own would
+  quietly replace the figure with the vocabulary and the band would stop sounding
+  like the style it was asked for. Four-to-the-bar has none, and its feel is the
+  beat rather than the eighth — it plays every beat and nothing else, which is
+  the whole of what it is.
+- **The density trim drops by weight, not by position.** It used to sort by
+  position and resize, keeping the *earliest* hits — a front-loading bias that
+  got much worse once the whole vocabulary was on offer. Stable, so equal weights
+  keep the order they were offered in and a plan is the same everywhere;
+  `std::sort` promises nothing about ties, which is the same reason the hash is
+  hand-rolled.
 - **Engine calls are chained, not raced.** Each bar is booked a bar ahead. If
   two bars were awaited concurrently instead, both would lead from the same
   previous voicing and the second would jump — precisely what the anchor
@@ -104,9 +121,16 @@ side. Anticipation is checked one way only: a hit that pushed must come from a
 slot that pushes, but a slot that pushes may honestly produce a hit that
 didn't, because the last bar of a range has no next chord to pull forward.
 
-`fitsStyle()` did **not** grow when the evaluator arrived. It gained `slotAt()`
-underneath it — the one answer to "which slot is this", so the generator, this
-and the evaluator cannot disagree — and stayed about a *generated* hit. A
+**It asks about the style's vocabulary, not its figure.** The narrow question —
+is this one of the style's own slots — is `slotAt()`. The two parted company when
+the band learned to vary: `compPlan()` plays its figure most of the time and the
+feel's grid the rest, so holding it to its slots alone would have made it fail
+its own test. Inside the bar, too: `onTheGrid()` knows nothing of the metre, so a
+beat the metre hasn't got would otherwise pass on the strength of its tick.
+
+`fitsStyle()` gained `slotAt()` underneath it — the one answer to "which slot is
+this", so the generator, this and the evaluator cannot disagree — and stayed
+about a *generated* hit. A
 `CompHit` carries two things it already knows, the chord it voices and whether
 it pushed, and for a hit somebody played both of those are **answers** rather
 than inputs. A signature taking both kinds would mean two different things
@@ -209,6 +233,65 @@ Two rules narrowed rather than disappearing, and both got better for it:
 - *"The keys latch"* became chord practice **static**. In time they don't: a
   comp is struck, not held.
 
+### The style is a figure, not a fence
+
+The first version of this reading took a style's slots as the set of places a
+player might put a chord. That was wrong, and measurably so. Over the eight
+positions a swing comper actually uses in a bar — the four beats and the four
+swung ands — here is what the catalogue accepted:
+
+| | four | basie | charleston | ballad |
+|---|---|---|---|---|
+| `1` | in style | in style | in style | in style |
+| `1&` | **OFF** | **OFF** | **OFF** | **OFF** |
+| `2` | in style | OFF | **OFF** | OFF |
+| `2&` | OFF | in style | in style | OFF |
+| `3` | in style | OFF | **OFF** | in style |
+| `3&` | **OFF** | **OFF** | **OFF** | **OFF** |
+| `4` | in style | OFF | **OFF** | OFF |
+| `4&` | OFF | in style | in style | OFF |
+
+The Charleston accepted three of eight, and **no style in the catalogue accepted
+the and of one or the and of three at all** — both bread-and-butter comping. A
+player reporting it put it plainly: *"when I am comping over a swing tune I don't
+only hit on the 1 and the 2&2/3 like Charleston does."* Their example, one and
+the and of one, scored nought for placement in every style shipped.
+
+A `CompSlot` says where **the band** puts its chords. It never said anything
+about where a player may put theirs, and reading it as though it did is a much
+narrower claim than the data makes. So placement has three tiers, and the
+standard is the style's **feel**:
+
+- **`theFigure`** — one of the style's own slots. What the band would play here.
+- **`idiomatic`** — on the grid the feel implies (`onTheGrid`): the style's
+  vocabulary rather than its figure. Eighths for an eighth feel, the three notes
+  of the beat for a triplet one.
+- **`offStyle`** — off that grid altogether.
+
+The first two score identically. What the figure contributed is said in words,
+because a comper who varies is not making a mistake and the number had been
+saying they were.
+
+#### Counting what that leaves outside
+
+*Before widening a rule in the name of being generous, count what it leaves* —
+the lesson solo practice paid for, where reading a note against every scale that
+fit left nothing outside anything. So, counted. `positionFromBeats` snaps a
+played moment to ticks `{0, 6, 8, 12, 16, 18}`, folding 16 onto 12 when swinging.
+
+| feel | accepted | reachable | still outside |
+|---|---|---|---|
+| eighth, swinging | `0, 12` | `0, 6, 8, 12, 18` | **3 of 5** |
+| eighth, straight | `0, 12` | all six | **4 of 6** |
+| triplet (ballad) | `0, 8, 16` | all six | **3 of 6** |
+
+It does not collapse. Sixteenths stay outside an eighth feel, and a straight
+eighth stays outside the ballad's triplet feel — which is the real "you're
+playing this ballad like a swing tune" mismatch, and something the old reading
+could not express at all. Four-to-the-bar is counted in *beats*, so it still
+accepts only the four downbeats: an "and" in Freddie Green's part is not that
+style played loosely, it is a different style.
+
 ### Where a note falls doesn't score a solo, and here it scores a comp
 
 This is the one place the repo argues against a rule it states elsewhere, so the
@@ -238,9 +321,9 @@ line, whether it varied, whether the root was doubled.
 #### What the number is made of
 
 ```
-placementFit = 100 x hits in one of the style's slots  /  hits carrying a position
+placementFit = 100 x (theFigure + idiomatic)          /  hits carrying a position
 registerFit  = 100 x hits wholly inside the register   /  hits struck
-densityFit   = mean over bars of clamp(100 - 25 x (hits outside [fewest, most]), 0, 100)
+densityFit   = mean over bars of clamp(100 - 25 x (hits ABOVE most), 0, 100)
 
 fit = (placementFit x 2 + registerFit + densityFit) / 4
 ```
@@ -248,6 +331,16 @@ fit = (placementFit x 2 + registerFit + densityFit) / 4
 - **Placement carries twice the weight** because placement is what a comping
   style *is*. A comper in the right register playing the wrong figure isn't
   comping in that style; a comper playing the right figure a little low still is.
+- **The figure and the vocabulary score the same**, per the tiers above. A comper
+  who never plays the style's literal figure but lands everything on the feel's
+  grid is comping in that style.
+- **Density is graded one way only.** Leaving a bar alone is one of the most
+  idiomatic things a comper does, so only the busy direction costs anything —
+  `fewestPerBar` stays a statement about what the *band* plays. The asymmetry is
+  deliberate and has a precedent in `fitsStyle()`, which checks anticipation one
+  way only. The one style whose floor is genuinely dense, four-to-the-bar, still
+  gets a *word* when a take goes quiet under it, because four to the bar is the
+  one thing four to the bar is — but never a point.
 - **Register is binary per hit.** Partial credit by distance is a number nobody
   can explain, so the excursion is kept (`outsideRegisterBy`) and said in words
   instead — "a semitone low" rather than 94%.
@@ -343,7 +436,7 @@ actually collides with the bass player — is worth a chip. `VoicingAnalyzer` is
 reused exactly as it is.
 
 ### Density is a count, and a count doesn't survive a change of metre
-The second bug the widened invariant caught. `CompSlot` was designed carefully so
+One of two bugs the widened invariant caught. `CompSlot` was designed carefully so
 a figure means the same thing in three as in four — an empty `beat` is every
 beat, a negative one counts back from the end. `fewestPerBar` has no such
 protection: four-to-the-bar is four chords in four and *three* in three, and
@@ -380,7 +473,7 @@ finished step or assume an unfinished one is done:
 | Step | State | Notes |
 |---|---|---|
 | 1. Subdivision grid | done | `docs/RHYTHM.md`. |
-| 2. `CompStyleDefinition` | done, bar one bullet | Onset slots, register, density, cross-barline anticipation all present. "Typical duration" has no field — see above. |
+| 2. `CompStyleDefinition` | done, bar one bullet | Onset slots, register, density, cross-barline anticipation and `variation` all present. "Typical duration" is still the one bullet with no field — see above. |
 | 3. The generator | done | `compPlan()` — seeded, planned ahead, `fitsStyle()`-checked. |
 | 4. The evaluator | **done** | `readCompHit()` and `evaluateComp()` in `Comping.cpp`. Stateless, and `fitsStyle()` didn't grow — see above. The widened invariant caught two bugs in the style data that had gone unseen because nothing read those fields. |
 | 5. `compStyles()` on the wire | done | `EngineApi`; both shells build the menu from it, no local copy. |

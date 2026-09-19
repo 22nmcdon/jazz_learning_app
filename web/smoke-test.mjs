@@ -978,7 +978,7 @@ try {
   }
 
   check(`a comped chord is placed against the style (${placement})`,
-        ["inStyle", "pushed", "offStyle"].includes(placement));
+        ["figure", "idiomatic", "offStyle"].includes(placement));
   check("and said in a line that names where it fell",
         (await page.locator("#verdict").innerText()).trim().length > 0);
 

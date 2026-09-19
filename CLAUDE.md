@@ -132,8 +132,13 @@ something finished or assume something unfinished is done:
   mode; that decision was recorded as a third mode for a long time and was
   reversed, because In time already meant "the same mode, with a clock, adding
   readings that are silent without one" — which is exactly what comping is to
-  chord practice. `state.mode` is still two-valued. See `docs/COMPING.md` before
-  touching any of it.
+  chord practice. `state.mode` is still two-valued.
+  **A style's slots are the figure the band plays, never a fence around the
+  player**: placement is read against the grid the style's `feel` implies, and
+  the slots keep a tier of their own for words rather than points. Reading the
+  two as one was a real bug — the Charleston accepted three of the eight
+  positions a swing comper uses, and nothing in the catalogue accepted the and
+  of one at all. See `docs/COMPING.md` before touching any of it.
 - **Drums** — named in the menu, not built (pure shell problem: pattern + kit,
   no engine call needed).
 - **Not built, deliberately open**: voice-leading visualizer, personal voicing

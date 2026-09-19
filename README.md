@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (419), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (429), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -265,6 +265,11 @@ A4, then E3 B3 D4 A4: two notes held each time and two moving by a semitone, whi
 pianist's hands actually do. A fixed register would re-spell each chord and leap between
 them.
 
+The band **varies rather than looping one figure**: a style is a characteristic figure, and
+a player of it reaches for the rest of the feel's vocabulary too, so the generator does the
+same. Held to its slots alone, the Charleston played very nearly the same two chords in
+every bar of a chorus. Four to the bar is the exception and is one on purpose.
+
 The rhythm comes from the style, worked out for the whole loop in one pass rather than
 decided beat by beat — a hit that anticipates the next bar has to know what the next chord
 is, and a voicing has to be led from the one before, and neither is knowable in the moment
@@ -305,21 +310,35 @@ The same style data reads the other way round. In **chord practice**, turn *Play
 **In time** under *Practice*: the chart starts moving, a bass player walks under you, the
 piano stands down — it is your instrument now — and every chord you strike is read twice
 over. What the notes said about the bar is the question chord practice always asked, and
-the clock adds the one that needs it: did the chord land where your comping style puts it.
+the clock adds the one that needs it: did the chord land where this style is counted.
+
+**A style's slots are the figure the band plays, not a fence around you.** Charleston is one
+and the and of two; you are not out of it for playing the and of one, or beat three, or
+nothing at all in a bar. So placement is read against the **grid the style's feel implies** —
+the beats and the ands in a swing style, the three notes of the beat in the ballad — and
+anything on it scores full marks. What stays outside is real: a sixteenth is outside a swing
+feel, and a straight eighth is outside the ballad's triplet one, which is the app's way of
+saying you are playing a ballad like a swing tune. Four to the bar is the strict one, and
+deliberately: it is counted in beats, and an "and" in Freddie Green's part is a different
+style rather than his played loosely.
 
 The keys stop latching there. A comp is struck rather than held, so each gesture is its own
-chord, and the dock answers as it lands: *"4 and — pushed into G7, which is what this style
-is for"*, with a chip beside it saying **pushed**, **in style** or **off the style**.
-Whether you pushed is worked out from the notes, not declared — play G7's voicing on the and
-of four over a bar of Dm7 and it reads as the next bar's chord arriving early. Play Dm7's
-there and it does not, because a comper who meant this bar is not anticipating anything.
+chord, and the dock answers as it lands: *"4 and — pushed into G7"*, with a chip beside it
+saying **pushed**, **the figure**, **in style** or **off the style**. Whether you pushed is
+worked out from the notes, not declared — play G7's voicing on the and of four over a bar of
+Dm7 and it reads as the next bar's chord arriving early. Play Dm7's there and it does not,
+because a comper who meant this bar is not anticipating anything.
 
 **Start a take** and the whole thing is read back at the end: one number for how the comping
-sat against the style — where the chords fell, what register they sat in, how many there
-were to a bar — and words for everything the style does not pin down. The root underneath a
-voicing is one of those. It is a real comping fault, because the bass player is already
-playing that note, and it costs the number nothing: a style says nothing about it, so
-neither does the score.
+sat against the style — where the chords fell, what register they sat in, whether any bar
+got busier than the style ever does — and words for everything the style does not pin down.
+Which of your chords were the style's own figure is one of those, and so is the root
+underneath a voicing: a real comping fault, because the bass player is already playing that
+note, and it costs the number nothing.
+
+**Leaving a bar alone is never a fault.** Density is graded in the busy direction only,
+because space is what a comper gives a soloist. The one exception is four to the bar, which
+says something when a take goes quiet under it — and still takes nothing off.
 
 Where a note falls does not score a solo and here it scores a comp, which is not a
 contradiction — a line has no written standard for where its notes go, and a comping style

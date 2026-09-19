@@ -845,7 +845,7 @@ TEST ("a comp on positions the style never uses is marked off style, and nothing
     CHECK_EQ (comp.placementFit, 0);
     CHECK_EQ (comp.registerFit, 100);
     CHECK_EQ (comp.densityFit, 100);
-    CHECK (saysOf (comp, "landed where this style has no hit"));
+    CHECK (saysOf (comp, "off the grid"));
 }
 
 TEST ("a comp outside the style's register is marked out of it, in either direction")
@@ -902,10 +902,27 @@ TEST ("a bar a dense style never leaves empty, left empty, is marked sparse")
                                     { playedAt (0, { 0, 0 }, { 53, 57, 60, 65 }) }, 0, 1);
 
     CHECK_EQ (static_cast<int> (comp.bars.size()), 2);
-    CHECK (comp.bars.front().tooSparse);
-    CHECK (comp.bars.back().tooSparse);
-    CHECK (comp.densityFit < 100);
-    CHECK (saysOf (comp, "went quieter than this style does"));
+
+    // Said, and not scored. Leaving space is what a comper does, so density is
+    // graded in the busy direction only - but four to the bar is the one style
+    // that means it, so it is still worth a word.
+    CHECK_EQ (comp.densityFit, 100);
+    CHECK (saysOf (comp, "Not a fault"));
+}
+
+TEST ("and a quiet bar under any other style is not even mentioned")
+{
+    const auto chart = chartOf ("| Dm7 | G7 |");
+
+    for (const auto& style : { compStyleFor ("charleston"), compStyleFor ("basie"),
+                               compStyleFor ("ballad") })
+    {
+        const auto comp = evaluateComp (chart, style,
+                                        { playedAt (0, { 0, 0 }, { 53, 57, 60, 65 }) }, 0, 1);
+
+        CHECK_EQ (comp.densityFit, 100);
+        CHECK (! saysOf (comp, "Not a fault"));
+    }
 }
 
 TEST ("a push is read as the next bar's chord")
@@ -920,7 +937,7 @@ TEST ("a push is read as the next bar's chord")
     const auto& hit = comp.hits.front();
 
     CHECK (hit.anticipation);
-    CHECK_EQ (static_cast<int> (hit.placement), static_cast<int> (HitPlacement::pushed));
+    CHECK_EQ (static_cast<int> (hit.placement), static_cast<int> (HitPlacement::theFigure));
     CHECK_EQ (hit.chordSymbol, std::string ("G7"));
     CHECK_EQ (comp.hitsPushed, 1);
     CHECK (saysOf (comp, "across the barline"));
@@ -941,7 +958,7 @@ TEST ("the same position played as this bar's chord is not called a push")
     const auto& hit = comp.hits.front();
 
     CHECK (! hit.anticipation);
-    CHECK_EQ (static_cast<int> (hit.placement), static_cast<int> (HitPlacement::inStyle));
+    CHECK_EQ (static_cast<int> (hit.placement), static_cast<int> (HitPlacement::theFigure));
     CHECK_EQ (hit.chordSymbol, std::string ("Dm7"));
     CHECK_EQ (comp.placementFit, 100);
 }
@@ -1120,9 +1137,11 @@ TEST ("a comp in three is judged in three")
 
     CHECK_EQ (comp.placementFit, 100);
 
-    // Three to the bar is not sparse in three, whatever it would be in four.
-    CHECK (! comp.bars.front().tooSparse);
+    // Three to the bar is the whole bar in three, whatever it would be in four -
+    // so nothing is said about it either way.
+    CHECK_EQ (comp.bars.front().fewest, 3);
     CHECK (! comp.bars.front().tooBusy);
+    CHECK (! saysOf (comp, "Not a fault"));
 }
 
 TEST ("only a style built on the push is told it never pushed")
@@ -1144,4 +1163,215 @@ TEST ("only a style built on the push is told it never pushed")
                      "own figure"));
     CHECK (! saysOf (evaluateComp (chart, compStyleFor ("four"), onTheBeat, 0, 1),
                      "own figure"));
+}
+
+//==============================================================================
+// The style is a figure, not a fence.
+//
+// Reported, and true: a swing comper varies far more than any one style's
+// slots. Counted over the eight positions one actually uses - the four beats
+// and the four ands - the Charleston accepted three, and no style in the
+// catalogue accepted the and of one or the and of three at all. The slots are
+// what the *band* plays; the feel's grid is what a player of that style may.
+
+TEST ("every swung eighth is in style in a style counted in eighths")
+{
+    const auto chart = chartOf ("| Dm7 | G7 |");
+    const BarPosition ands[] = { { 0, 12 }, { 1, 12 }, { 2, 12 }, { 3, 12 } };
+    const BarPosition beats[] = { { 0, 0 }, { 1, 0 }, { 2, 0 }, { 3, 0 } };
+
+    for (const auto& key : { "basie", "charleston" })
+    {
+        const auto& style = compStyleFor (key);
+
+        for (const auto& at : ands)
+            CHECK (onTheGrid (at, style.feel));
+
+        for (const auto& at : beats)
+            CHECK (onTheGrid (at, style.feel));
+
+        // And none of them reads as outside once it is actually played.
+        for (const auto& at : ands)
+        {
+            const auto comp = evaluateComp (chart, style,
+                                            { playedAt (0, at, { 53, 57, 60, 65 }) }, 0, 1);
+
+            CHECK (comp.hits.front().placement != HitPlacement::offStyle);
+            CHECK_EQ (comp.placementFit, 100);
+        }
+    }
+}
+
+TEST ("one and the and of one is a comp, not a mistake")
+{
+    /*  The report, as a test. This scored nought for placement in every style
+        the app shipped, because `1&` is in nobody's slots. */
+    const auto chart = chartOf ("| Dm7 | G7 |");
+
+    const auto figure = std::vector<PlayedHit> { playedAt (0, { 0, 0 }, { 53, 57, 60, 65 }),
+                                                 playedAt (0, { 0, 12 }, { 53, 57, 60, 65 }) };
+
+    for (const auto& key : { "basie", "charleston", "ballad" })
+    {
+        const auto comp = evaluateComp (chart, compStyleFor (key), figure, 0, 1);
+
+        // The ballad is counted in triplets, so a straight eighth is genuinely
+        // outside it - which is the point of the tier, not an exception to it.
+        if (std::string (key) == "ballad")
+        {
+            CHECK_EQ (comp.hitsOffStyle, 1);
+            continue;
+        }
+
+        CHECK_EQ (comp.placementFit, 100);
+        CHECK_EQ (comp.hitsOffStyle, 0);
+        CHECK (comp.fit.has_value());
+        CHECK_EQ (*comp.fit, 100);
+    }
+}
+
+TEST ("the style's own figure is counted, and said, and not scored")
+{
+    const auto chart = chartOf ("| Dm7 | G7 |");
+
+    // The Charleston's own downbeat, then the and of one, which is not its
+    // figure and is perfectly good comping.
+    const auto comp = evaluateComp (chart, compStyleFor ("charleston"),
+                                    { playedAt (0, { 0, 0 }, { 53, 57, 60, 65 }),
+                                      playedAt (0, { 0, 12 }, { 53, 57, 60, 65 }) },
+                                    0, 1);
+
+    CHECK_EQ (comp.hitsOnTheFigure, 1);
+    CHECK_EQ (comp.hitsIdiomatic, 1);
+    CHECK_EQ (comp.placementFit, 100);
+    CHECK (saysOf (comp, "own figure"));
+}
+
+TEST ("widening the grid did not leave everything inside it")
+{
+    /*  The count the rule has to survive - the same one that killed solo
+        practice's "read against every scale". A sixteenth and the first triplet
+        of a beat are both still outside an eighth feel, and a straight eighth
+        is outside the ballad's triplet feel. */
+    const auto chart = chartOf ("| Dm7 |");
+    const auto& charleston = compStyleFor ("charleston");
+    const auto& ballad = compStyleFor ("ballad");
+
+    for (const auto& at : { BarPosition { 1, 6 }, BarPosition { 1, 8 }, BarPosition { 1, 18 } })
+    {
+        const auto comp = evaluateComp (chart, charleston,
+                                        { playedAt (0, at, { 53, 57, 60, 65 }) }, 0, 0);
+
+        CHECK_EQ (static_cast<int> (comp.hits.front().placement),
+                  static_cast<int> (HitPlacement::offStyle));
+        CHECK_EQ (comp.placementFit, 0);
+        CHECK (saysOf (comp, "off the grid"));
+    }
+
+    // Playing a ballad like a swing tune, which the old reading could not say.
+    const auto swung = evaluateComp (chart, ballad,
+                                     { playedAt (0, { 1, 12 }, { 53, 57, 60, 65 }) }, 0, 0);
+
+    CHECK_EQ (static_cast<int> (swung.hits.front().placement),
+              static_cast<int> (HitPlacement::offStyle));
+
+    // While the beat's own triplets are its vocabulary.
+    for (const auto& at : { BarPosition { 1, 8 }, BarPosition { 1, 16 } })
+    {
+        const auto comp = evaluateComp (chart, ballad,
+                                        { playedAt (0, at, { 53, 57, 60, 65 }) }, 0, 0);
+
+        CHECK (comp.hits.front().placement != HitPlacement::offStyle);
+    }
+}
+
+TEST ("a push is read from anywhere in the last beat, not only from a slot")
+{
+    /*  A player leaning into the next chord from the and of three is pushing,
+        whether or not the style lists that position. Reading them by the slots
+        was the same mistake one level down. */
+    const auto chart = chartOf ("| Dm7 | G7 |");
+    const auto& charleston = compStyleFor ("charleston");
+
+    // Beat four, voicing G7 - not one of the Charleston's slots.
+    CHECK (slotAt ({ 3, 0 }, charleston, 4) == nullptr);
+
+    const auto comp = evaluateComp (chart, charleston,
+                                    { playedAt (0, { 3, 0 }, { 59, 65, 69, 76 }) }, 0, 1);
+
+    CHECK (comp.hits.front().anticipation);
+    CHECK_EQ (comp.hits.front().chordSymbol, std::string ("G7"));
+    CHECK_EQ (static_cast<int> (comp.hits.front().placement),
+              static_cast<int> (HitPlacement::idiomatic));
+    CHECK_EQ (comp.hitsPushed, 1);
+}
+
+TEST ("a chord early in the bar is a chord in the wrong bar, not a push")
+{
+    const auto chart = chartOf ("| Dm7 | G7 |");
+
+    // A G7 voicing on beat one of the Dm7 bar. Nothing about that is a push.
+    const auto comp = evaluateComp (chart, compStyleFor ("charleston"),
+                                    { playedAt (0, { 0, 0 }, { 59, 65, 69, 76 }) }, 0, 1);
+
+    CHECK (! comp.hits.front().anticipation);
+    CHECK_EQ (comp.hits.front().chordSymbol, std::string ("Dm7"));
+}
+
+TEST ("the band varies rather than looping one figure")
+{
+    /*  The other half of the same rule. Held to its slots alone the Charleston
+        picks from three at 95, 90 and 30, so eight bars of one chord came out
+        as very nearly the same two chords eight times. */
+    const auto chart = chartOf ("| Dm7 | Dm7 | Dm7 | Dm7 | Dm7 | Dm7 | Dm7 | Dm7 |");
+
+    for (const auto& key : { "charleston", "basie", "ballad" })
+    {
+        const auto plan = compPlan (chart, compStyleFor (key), 0, 7, 5);
+
+        std::set<std::string> figures;
+
+        for (auto bar = 0; bar < 8; ++bar)
+        {
+            std::string figure;
+
+            for (const auto& hit : plan.hits)
+                if (hit.measureIndex == bar)
+                    figure += hit.at.describe() + " ";
+
+            figures.insert (figure);
+        }
+
+        CHECK (figures.size() > 1);
+    }
+
+    // Four to the bar is the exception, and it is one on purpose: it plays
+    // every beat and nothing else, which is the whole of what it is.
+    const auto even = compPlan (chart, compStyleFor ("four"), 0, 7, 5);
+
+    for (auto bar = 0; bar < 8; ++bar)
+        CHECK_EQ (hitsInBar (even, bar), 4);
+}
+
+TEST ("trimming a busy bar keeps what the style likes most")
+{
+    /*  It used to sort by position and resize, which kept the *earliest* hits -
+        a bias that gets much worse once the whole vocabulary is on offer. */
+    const auto chart = chartOf ("| Dm7 | Dm7 | Dm7 | Dm7 | Dm7 | Dm7 | Dm7 | Dm7 |");
+    const auto& basie = compStyleFor ("basie");
+
+    // Basie's heaviest slot is the and of the last beat, at 75 - the latest
+    // position in the bar, and the first thing a position-ordered trim dropped.
+    auto onTheHeaviestSlot = 0;
+
+    for (std::uint32_t seed = 0; seed < 24; ++seed)
+        for (const auto& hit : compPlan (chart, basie, 0, 7, seed).hits)
+            if (hit.at == BarPosition { 3, 12 })
+                ++onTheHeaviestSlot;
+
+    CHECK (onTheHeaviestSlot > 0);
+
+    for (std::uint32_t seed = 0; seed < 24; ++seed)
+        for (auto bar = 0; bar < 8; ++bar)
+            CHECK (hitsInBar (compPlan (chart, basie, 0, 7, seed), bar) <= basie.mostPerBar);
 }

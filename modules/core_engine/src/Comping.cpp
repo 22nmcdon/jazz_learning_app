@@ -32,6 +32,19 @@ namespace
         return static_cast<int> (mix (seed, salt) % 100u);
     }
 
+    /** One place the band might put a chord in a bar, and how much it wants to.
+
+        The weight is carried rather than looked up again because it comes from
+        two places now - a slot's own, and `variation` for the rest of the feel's
+        vocabulary - and both ends of the density clamp read it.
+    */
+    struct Candidate
+    {
+        BarPosition at;
+        bool anticipates;
+        int weight;
+    };
+
     /*  What a comp's fit is made of.
 
         Placement carries twice the weight of the other two because placement is
@@ -132,6 +145,11 @@ std::vector<CompStyleDefinition> compStyles()
         four.mostPerBar = 8;
         four.lowestNote = 45;
         four.highestNote = 76;
+
+        // No variation, and its feel is the beat rather than the eighth: four to
+        // the bar is exactly four to the bar, and an "and" in it is not this
+        // style being played loosely, it is a different style.
+        four.variation = 0;
         styles.push_back (four);
     }
 
@@ -155,6 +173,12 @@ std::vector<CompStyleDefinition> compStyles()
         basie.mostPerBar = 2;
         basie.lowestNote = 48;
         basie.highestNote = 79;
+
+        /*  Under its lightest slot (20), on purpose. The trim takes the heaviest
+            candidates, so a variation weight above the style's own figure would
+            quietly replace the figure with the vocabulary - the band would stop
+            sounding like the style it was asked for. */
+        basie.variation = 15;
         styles.push_back (basie);
     }
 
@@ -172,10 +196,13 @@ std::vector<CompStyleDefinition> compStyles()
             CompSlot { 1, ticksPerBeat / 2, 90, false },
             CompSlot { -1, ticksPerBeat / 2, 30, true }
         };
-        charleston.fewestPerBar = 1;
+        // Nought, so the band can leave a bar alone the way a player does. Its
+        // two main slots fire almost always, so an empty bar stays rare.
+        charleston.fewestPerBar = 0;
         charleston.mostPerBar = 3;
         charleston.lowestNote = 48;
         charleston.highestNote = 79;
+        charleston.variation = 20;
         styles.push_back (charleston);
     }
 
@@ -195,10 +222,15 @@ std::vector<CompStyleDefinition> compStyles()
             CompSlot { 1,  2 * ticksPerBeat / 3, 30, false },
             CompSlot { -1, 2 * ticksPerBeat / 3, 35, true  }
         };
-        ballad.fewestPerBar = 1;
+        ballad.fewestPerBar = 0;
         ballad.mostPerBar = 3;
         ballad.lowestNote = 45;
         ballad.highestNote = 81;
+
+        // Its vocabulary is the triplet, so varying means the other two notes of
+        // the beat - never a straight eighth, which is what makes playing this
+        // like a swing tune something the reading can actually say.
+        ballad.variation = 20;
         styles.push_back (ballad);
     }
 
@@ -267,30 +299,69 @@ CompPlan compPlan (const Chart& chart, const CompStyleDefinition& style,
         // same loop is planned the same way every time round.
         const auto barSeed = mix (seed, static_cast<std::uint32_t> (measureIndex));
 
-        std::vector<std::pair<BarPosition, bool>> chosen;   // where, and whether it anticipates
-        std::vector<std::pair<BarPosition, bool>> offered;  // everything the style could have taken
+        std::vector<Candidate> chosen;    // what this bar came out as
+        std::vector<Candidate> offered;   // everything the style could have taken
 
         std::uint32_t salt = 0;
 
+        // The style's own figure, at its own weights.
         for (const auto& slot : style.slots)
         {
             for (const auto& position : slotPositions (slot, beatsPerBar))
             {
-                offered.push_back ({ position, slot.anticipates });
+                offered.push_back ({ position, slot.anticipates, slot.weight });
 
                 if (roll (barSeed, salt++) < slot.weight)
-                    chosen.push_back ({ position, slot.anticipates });
+                    chosen.push_back ({ position, slot.anticipates, slot.weight });
             }
         }
 
-        std::sort (chosen.begin(), chosen.end(),
-                   [] (const auto& a, const auto& b) { return a.first < b.first; });
-        std::sort (offered.begin(), offered.end(),
-                   [] (const auto& a, const auto& b) { return a.first < b.first; });
+        /*  And the rest of the feel's vocabulary, at `variation`. A style is a
+            characteristic figure rather than the only thing a player of it ever
+            plays, which is the rule the evaluator reads - and a band held to its
+            slots alone repeats itself: the Charleston's three slots at 95, 90
+            and 30 produce nearly the same two chords every bar.
 
-        // A run of unlucky rolls should not empty a bar the style says is never
-        // empty, nor fill one it says is sparse. Topping up takes the slots the
-        // style likes most; trimming drops the ones it likes least.
+            Never anticipating. Stating the next chord early is the figure doing
+            something particular, and `fitsStyle` holds the band to its own
+            pushing slots for it. */
+        if (style.variation > 0)
+        {
+            const auto step = ticksFor (style.feel);
+
+            for (auto beat = 0; beat < beatsPerBar; ++beat)
+            {
+                for (auto tick = 0; tick < ticksPerBeat; tick += step)
+                {
+                    const BarPosition at { beat, tick };
+
+                    if (slotAt (at, style, beatsPerBar) != nullptr)
+                        continue;   // already offered, at the figure's own weight
+
+                    offered.push_back ({ at, false, style.variation });
+
+                    if (roll (barSeed, salt++) < style.variation)
+                        chosen.push_back ({ at, false, style.variation });
+                }
+            }
+        }
+
+        /*  A run of unlucky rolls should not empty a bar the style says is never
+            empty, nor fill one it says is sparse. Both ends work by weight: the
+            trim drops what the style likes least and the top-up takes what it
+            likes most.
+
+            By weight rather than by position, which is what this did before the
+            vocabulary was on offer - sorting by position and resizing kept the
+            *earliest* hits, so a trimmed bar was always front-loaded. Stable, so
+            equal weights keep the order they were offered in and the plan stays
+            the same everywhere; `std::sort` would not promise that. */
+        const auto byWeight = [] (const Candidate& a, const Candidate& b)
+                              { return a.weight > b.weight; };
+
+        std::stable_sort (chosen.begin(), chosen.end(), byWeight);
+        std::stable_sort (offered.begin(), offered.end(), byWeight);
+
         if (static_cast<int> (chosen.size()) > style.mostPerBar)
             chosen.resize (static_cast<std::size_t> (style.mostPerBar));
 
@@ -300,18 +371,20 @@ CompPlan compPlan (const Chart& chart, const CompStyleDefinition& style,
                 break;
 
             const auto already = std::any_of (chosen.begin(), chosen.end(),
-                                              [&candidate] (const auto& taken)
-                                              { return taken.first == candidate.first; });
+                                              [&candidate] (const Candidate& taken)
+                                              { return taken.at == candidate.at; });
 
             if (! already)
                 chosen.push_back (candidate);
         }
 
         std::sort (chosen.begin(), chosen.end(),
-                   [] (const auto& a, const auto& b) { return a.first < b.first; });
+                   [] (const Candidate& a, const Candidate& b) { return a.at < b.at; });
 
-        for (const auto& [position, anticipates] : chosen)
+        for (const auto& [position, anticipates, weight] : chosen)
         {
+            (void) weight;
+
             // An anticipation is the next bar's chord arriving early. At the
             // end of the range there is no next bar, so it voices this one -
             // a push into silence is just a hit.
@@ -623,15 +696,27 @@ bool fitsStyle (const CompHit& hit, const CompStyleDefinition& style, int beatsP
 {
     const auto* slot = slotAt (hit.at, style, beatsPerBar);
 
-    if (slot == nullptr)
-        return false;
-
     /*  Anticipation is checked one way only: a hit that pushed must have come
         from a slot that pushes, but a slot that pushes may honestly produce a
         hit that did not - the last bar of a range has no next chord to pull
         forward, and that is a fact about where the chart ended rather than
-        about the style. */
-    return slot->anticipates || ! hit.anticipation;
+        about the style.
+
+        A push is the band stating the next chord early, which is the style's
+        own figure doing something particular. So it is held to the slots even
+        though everything else here is held to the vocabulary. */
+    if (hit.anticipation)
+        return slot != nullptr && slot->anticipates;
+
+    if (slot != nullptr)
+        return true;
+
+    /*  The vocabulary, and only inside the bar. `onTheGrid` is a question about
+        a tick and knows nothing of the metre, so a position past the end of the
+        bar would otherwise pass it on the strength of its tick alone - and a
+        style written around a fourth beat, played in three, would come back
+        fitting a beat that does not exist. */
+    return hit.at.beat >= 0 && hit.at.beat < beatsPerBar && onTheGrid (hit.at, style.feel);
 }
 
 
@@ -640,10 +725,10 @@ std::string hitPlacementName (HitPlacement placement)
 {
     switch (placement)
     {
-        case HitPlacement::inStyle:  return "inStyle";
-        case HitPlacement::pushed:   return "pushed";
-        case HitPlacement::offStyle: return "offStyle";
-        case HitPlacement::unplaced: break;
+        case HitPlacement::theFigure: return "figure";
+        case HitPlacement::idiomatic: return "idiomatic";
+        case HitPlacement::offStyle:  return "offStyle";
+        case HitPlacement::unplaced:  break;
     }
 
     return "unplaced";
@@ -705,14 +790,22 @@ CompHitReading readCompHit (const Chart& chart, const CompStyleDefinition& style
 
     /*  Whether this was a push is decided from the notes, because that is the
         only evidence there is: a player does not declare an anticipation, they
-        play the next chord early. Only ever asked of a slot that anticipates -
-        a chord early on the downbeat is a chord in the wrong bar, not a push.
+        play the next chord early.
+
+        Asked of anything in the bar's **last beat**, not only of a slot that
+        anticipates. A player leaning into the next chord from the and of three
+        is pushing whether or not the style lists that position - the slots are
+        the band's figure, and reading a player by them was the mistake this
+        whole tier system exists to undo. Earlier in the bar it is not asked at
+        all: a chord early on the downbeat is a chord in the wrong bar.
 
         A tie is not a push. Over a bar repeating its chord the two readings are
         identical, and calling that an anticipation would be inventing intent -
         the mirror of `fitsStyle`'s one-way asymmetry, seen from the player's
         side. */
-    if (slot != nullptr && slot->anticipates && next != nullptr && ! voicing.isEmpty())
+    const auto inTheLastBeat = hit.at.has_value() && hit.at->beat == beatsPerBar - 1;
+
+    if (inTheLastBeat && next != nullptr && ! voicing.isEmpty())
     {
         const VoicingAnalyzer analyzer;
         const auto there = analyzer.analyse (voicing, *next);
@@ -725,10 +818,12 @@ CompHitReading readCompHit (const Chart& chart, const CompStyleDefinition& style
         }
     }
 
-    if (! hit.at.has_value())      reading.placement = HitPlacement::unplaced;
-    else if (slot == nullptr)      reading.placement = HitPlacement::offStyle;
-    else if (reading.anticipation) reading.placement = HitPlacement::pushed;
-    else                           reading.placement = HitPlacement::inStyle;
+    // The style's own figure, then its vocabulary, then outside. Anticipation
+    // is a separate fact about the hit and does not decide which of these it is.
+    if (! hit.at.has_value())                    reading.placement = HitPlacement::unplaced;
+    else if (slot != nullptr)                    reading.placement = HitPlacement::theFigure;
+    else if (onTheGrid (*hit.at, style.feel))    reading.placement = HitPlacement::idiomatic;
+    else                                         reading.placement = HitPlacement::offStyle;
 
     if (chord != nullptr)
     {
@@ -751,25 +846,32 @@ CompHitReading readCompHit (const Chart& chart, const CompStyleDefinition& style
 
     const auto where = reading.at.has_value() ? reading.at->describe() : std::string();
 
-    switch (reading.placement)
+    if (reading.anticipation)
     {
-        case HitPlacement::pushed:
-            reading.summary = where + " - pushed into " + reading.chordSymbol
-                            + ", which is what this style is for.";
-            break;
+        reading.summary = where + " - pushed into " + reading.chordSymbol + ".";
+    }
+    else
+    {
+        switch (reading.placement)
+        {
+            case HitPlacement::theFigure:
+                reading.summary = where + " - this style's own figure.";
+                break;
 
-        case HitPlacement::inStyle:
-            reading.summary = where + " - this style puts a chord there.";
-            break;
+            case HitPlacement::idiomatic:
+                reading.summary = where + " - in the style's vocabulary, "
+                                          "though not its own figure.";
+                break;
 
-        case HitPlacement::offStyle:
-            reading.summary = where + " - this style has no hit there.";
-            break;
+            case HitPlacement::offStyle:
+                reading.summary = where + " - off the grid this style is counted in.";
+                break;
 
-        case HitPlacement::unplaced:
-            reading.summary = "Nothing is counting, so this is read for its notes "
-                              "and not for where it fell.";
-            break;
+            case HitPlacement::unplaced:
+                reading.summary = "Nothing is counting, so this is read for its notes "
+                                  "and not for where it fell.";
+                break;
+        }
     }
 
     if (! reading.inRegister && ! voicing.isEmpty())
@@ -824,7 +926,7 @@ CompEvaluation evaluateComp (const Chart& chart, const CompStyleDefinition& styl
             const auto played = found != perBar.end() ? found->second : 0;
 
             out.bars.push_back (CompBarReading { measureIndex, played, fewest, most,
-                                                 played > most, played < fewest });
+                                                 played > most });
         }
     }
 
@@ -847,11 +949,16 @@ CompEvaluation evaluateComp (const Chart& chart, const CompStyleDefinition& styl
 
         switch (reading.placement)
         {
-            case HitPlacement::inStyle:  ++out.hitsInStyle; break;
-            case HitPlacement::pushed:   ++out.hitsPushed; break;
-            case HitPlacement::offStyle: ++out.hitsOffStyle; break;
-            case HitPlacement::unplaced: break;
+            case HitPlacement::theFigure: ++out.hitsOnTheFigure; break;
+            case HitPlacement::idiomatic: ++out.hitsIdiomatic; break;
+            case HitPlacement::offStyle:  ++out.hitsOffStyle; break;
+            case HitPlacement::unplaced:  break;
         }
+
+        // Counted beside the tiers rather than instead of one, because a push
+        // can come from the figure or from anywhere else in the vocabulary.
+        if (reading.anticipation)
+            ++out.hitsPushed;
 
         if (reading.takesTheBassNote)
             ++out.hitsTakingTheBassNote;
@@ -871,8 +978,13 @@ CompEvaluation evaluateComp (const Chart& chart, const CompStyleDefinition& styl
         }
     }
 
+    /*  The figure and the vocabulary score the same. A comper who never plays
+        the style's literal figure but lands everything on the feel's grid is
+        comping in that style, and marking them down for varying was the bug
+        this reading was rewritten to fix. What the figure contributed is said
+        in words instead. */
     if (positioned > 0)
-        out.placementFit = 100 * (out.hitsInStyle + out.hitsPushed) / positioned;
+        out.placementFit = 100 * (out.hitsOnTheFigure + out.hitsIdiomatic) / positioned;
 
     if (sounded > 0)
         out.registerFit = 100 * inRegister / sounded;
@@ -881,13 +993,13 @@ CompEvaluation evaluateComp (const Chart& chart, const CompStyleDefinition& styl
     {
         auto total = 0;
 
+        // The busy direction only - see `CompBarReading::tooBusy`. A bar left
+        // alone is one of the most idiomatic things a comper does.
         for (const auto& bar : out.bars)
         {
-            const auto outside = bar.hits > bar.most ? bar.hits - bar.most
-                               : bar.hits < bar.fewest ? bar.fewest - bar.hits
-                                                       : 0;
+            const auto over = std::max (0, bar.hits - bar.most);
 
-            total += std::max (0, 100 - densityPointsPerExtraHit * outside);
+            total += std::max (0, 100 - densityPointsPerExtraHit * over);
         }
 
         out.densityFit = total / static_cast<int> (out.bars.size());
@@ -917,12 +1029,12 @@ CompEvaluation evaluateComp (const Chart& chart, const CompStyleDefinition& styl
     //  The words half. Everything true of the take that the style does not pin
     //  down, and everything it does pin down that a number alone does not say.
     auto busy = 0;
-    auto sparse = 0;
+    auto quiet = 0;
 
     for (const auto& bar : out.bars)
     {
-        if (bar.tooBusy)   ++busy;
-        if (bar.tooSparse) ++sparse;
+        if (bar.tooBusy)              ++busy;
+        if (bar.hits < bar.fewest)    ++quiet;
     }
 
     // Quoting the bars' own numbers rather than the style's, because in a metre
@@ -933,14 +1045,30 @@ CompEvaluation evaluateComp (const Chart& chart, const CompStyleDefinition& styl
                                     + (busy == 1 ? "it" : "them") + " than this style plays - it goes up to "
                                     + countOf (out.bars.front().most, "chord", "chords") + " a bar.");
 
-    if (sparse > 0)
-        out.observations.push_back (countOf (sparse, "bar", "bars")
-                                    + " went quieter than this style does - it plays at least "
-                                    + countOf (out.bars.front().fewest, "chord", "chords") + " a bar.");
+    /*  Said, and never scored - and only of a style whose floor is genuinely
+        dense, which is four-to-the-bar alone. Leaving space is what a comper
+        does, so a Charleston with empty bars in it hears nothing about them;
+        but four to the bar means four to the bar, and a take that goes quiet
+        under it is not doing the thing it asked to practise. */
+    if (quiet > 0 && ! out.bars.empty() && out.bars.front().fewest >= 3)
+        out.observations.push_back (countOf (quiet, "bar", "bars") + " had fewer than the "
+                                    + countOf (out.bars.front().fewest, "chord", "chords")
+                                    + " a bar this style puts down. Not a fault - but it is the "
+                                      "one thing four to the bar is.");
 
     if (out.hitsOffStyle > 0)
         out.observations.push_back (countOf (out.hitsOffStyle, "chord", "chords")
-                                    + " landed where this style has no hit.");
+                                    + " landed off the grid this style is counted in.");
+
+    /*  What the figure contributed, which is the thing the number deliberately
+        stopped saying. Only worth a line when the two genuinely differ - a take
+        that was all figure or all vocabulary says so on its own. */
+    if (out.hitsOnTheFigure > 0 && out.hitsIdiomatic > 0)
+        out.observations.push_back ("You played this style's own figure "
+                                    + countOf (out.hitsOnTheFigure, "time", "times")
+                                    + "; the other "
+                                    + countOf (out.hitsIdiomatic, "chord", "chords")
+                                    + " were your own, and in the style either way.");
 
     if (out.hitsPushed > 0)
         out.observations.push_back ("You pushed " + countOf (out.hitsPushed, "chord", "chords")

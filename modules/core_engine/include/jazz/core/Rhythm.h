@@ -75,6 +75,21 @@ bool operator== (const BarPosition& a, const BarPosition& b) noexcept;
 bool operator!= (const BarPosition& a, const BarPosition& b) noexcept;
 bool operator<  (const BarPosition& a, const BarPosition& b) noexcept;
 
+/** Whether a position falls on the grid a subdivision implies.
+
+    The **vocabulary** a feel makes available, as against the particular figure
+    played out of it: an eighth feel offers the beats and the ands, a triplet
+    feel offers the three notes of the beat. Derived from `ticksFor` rather than
+    tabulated, for the same reason `strengthAt` is derived from the metre - a
+    table is a second place for the answer to live.
+
+    Comping leans on the distinction hardest. A style's slots say where the band
+    puts its chords; this says where a player of that style could put one and
+    still be playing it, which is a much wider set and the honest standard to
+    read someone against.
+*/
+bool onTheGrid (BarPosition position, Subdivision subdivision);
+
 /** How much weight a position carries in the bar.
 
     Shared by both consumers on purpose: a comping style says which of these it
