@@ -89,6 +89,16 @@
    One rule, stated once, so hiding something needs no CSS at all. */
 [hidden] { display: none !important; }
 
+/* --- the frame ----------------------------------------------------------- */
+/* Three zones: the head, the chart, the dock. The page used to be a document -
+   masthead, article, footer, all scrolling together - and was read like one
+   instrument: a chart and a keyboard, both wanted on screen at once while your
+   hands are busy. Laid out as a document, the chart got whatever was left over
+   and lost. At 1280x860 four bars of twelve were readable; at 430x860 the first
+   bar began *below* the dock, so none of them were.
+
+   So the head and the dock are furniture at their own height, and the chart
+   takes the rest. */
 body {
   margin: 0;
   background: var(--cream);
@@ -98,6 +108,32 @@ body {
   font-size: 16px;
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
+
+  display: flex;
+  flex-direction: column;
+  /* Dynamic, not `100vh`. On a phone `vh` is the viewport with the browser's
+     own chrome collapsed, which is taller than what you can actually see - and
+     the part that goes under it is the bottom of the frame, which is the dock. */
+  height: 100dvh;
+
+  /* Per axis, and deliberately not `overflow: hidden`. Vertical is clipped
+     because the frame's whole job is that the page does not scroll as a page -
+     the chart zone does. Horizontal is left alone: `overflow: hidden` here
+     propagates to the viewport and clips `documentElement.scrollWidth` to the
+     window, which is what the narrow-layout check reads. Hidden on both axes,
+     a control running off the side at a phone width stops being something the
+     test can see and starts being something it silently crops. */
+  overflow-y: hidden;
+  overflow-x: auto;
+}
+
+.chart-zone {
+  flex: 1 1 auto;
+  /* Load-bearing. A flex child's `min-height` is `auto`, which means "never
+     smaller than my content" - so without this the zone grows to fit the whole
+     chart, the body overflows, and the frame silently does nothing at all. */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 h1, h2, h3 {
@@ -131,6 +167,11 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 /* --- masthead ------------------------------------------------------------ */
+/* The top of the frame. `flex: 0 0 auto` on its wrap rather than on the header,
+   because the stale-engine banner shares that wrap and has to push the chart
+   down rather than paint over it. */
+body > .wrap { flex: 0 0 auto; }
+
 .masthead {
   padding-block: 26px 18px;
   border-bottom: 1px solid var(--line);
@@ -583,7 +624,7 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
   text-align: left;
 
   /* The menu is taller than a laptop window once the chart group is in it. */
-  max-height: calc(100vh - 120px);
+  max-height: calc(100dvh - 120px);
   overflow-y: auto;
 }
 .menu-group + .menu-group { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
@@ -890,8 +931,11 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 
 /* --- dock: feedback above, keyboard below, always in reach --------------- */
 .dock {
-  position: sticky;
-  bottom: 0;
+  /* The bottom of the frame rather than something that sticks to the bottom of
+     a scroll. Sticky meant it *overlaid* the chart, so the bars underneath it
+     were drawn and unreadable - which is how a chart with all twelve bars "on
+     screen" still only showed four. `z-index` stays: the dialogs sit over it. */
+  flex: 0 0 auto;
   background: var(--cream-2);
   border-top: 1px solid var(--line);
   padding-block: 14px 16px;
@@ -1136,7 +1180,7 @@ dialog {
   color: var(--text);
   padding: 0;
   width: min(620px, calc(100vw - 32px));
-  max-height: min(78vh, 720px);
+  max-height: min(78dvh, 720px);
   box-shadow: 0 24px 60px rgba(36, 31, 29, 0.24);
 }
 dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
@@ -1194,7 +1238,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 .tab-body {
   padding: 22px 26px 26px;
   overflow-y: auto;
-  max-height: calc(78vh - 150px);
+  max-height: calc(78dvh - 150px);
 }
 
 .scale-name { font-family: var(--serif); font-size: 24px; color: var(--charcoal); }
@@ -1444,7 +1488,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   dialog {
     width: 100vw;
     max-width: 100vw;
-    max-height: 86vh;
+    max-height: 86dvh;
     margin: 0;
     position: fixed;
     bottom: 0;
@@ -1452,7 +1496,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     top: auto;
     transform: none;
   }
-  .tab-body { max-height: calc(86vh - 150px); }
+  .tab-body { max-height: calc(86dvh - 150px); }
 }
 
 @media print {
@@ -1460,8 +1504,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   .masthead, .sheet-tools, .editor, .dock, .colophon, dialog,
   .stale-engine { display: none !important; }
 
-  body { background: #fff; color: #000; }
-  .shell, .wrap { max-width: none; padding: 0; }
+  /* The frame comes off first. A printer has no viewport to fit, and a chart
+     laid out inside a `100dvh` box with a scrolling middle prints the one
+     screenful that happens to be showing. */
+  body {
+    background: #fff;
+    color: #000;
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .chart-zone { overflow: visible; }
+
+  .wrap { max-width: none; padding: 0; }
   .sheet-section { padding: 0; }
   .sheet {
     background: #fff;
@@ -1690,7 +1745,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       </div>
     </div>
   </header>
+</div>
 
+<!-- The middle of the frame, and the only part of it that scrolls. Everything
+     above and below is furniture at a fixed height; this takes what is left and
+     keeps the chart as big as the window allows. -->
+<main class="chart-zone">
+  <div class="wrap">
   <section class="sheet-section">
     <div class="sheet">
       <div class="sheet-head">
@@ -1832,7 +1893,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       </div>
     </div>
   </section>
-</div>
+
+  <!-- Inside the scrolling zone, because a fixed dock has nothing under it. It
+       is a build stamp rather than something read while playing, so the bottom
+       of the scroll is where it belongs. -->
+  <footer class="colophon">
+    <span>Engine: <code>modules/core_engine</code> - 451 unit tests, no JUCE.</span>
+    <span id="colophonEngine"></span>
+    <span id="colophonFraming"></span>
+    <span id="colophonBuild"></span>
+    <span><a href="https://github.com/22nmcdon/jazz_learning_app" id="repoLink">Source on GitHub</a></span>
+  </footer>
+  </div>
+</main>
 
 <div class="dock">
   <div class="wrap">
@@ -1921,20 +1994,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <button class="link-btn" type="button" id="clearKeys" style="margin-left:auto">Clear keys</button>
     </div>
   </div>
-</div>
-
-<div class="wrap">
-  <!-- Filled in once the engine is up, because half of it depends on which
-       engine answered. A page that says em++ while running natively in the app
-       is wrong in the one place a reader goes to find out what they are
-       looking at. -->
-  <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 451 unit tests, no JUCE.</span>
-    <span id="colophonEngine"></span>
-    <span id="colophonFraming"></span>
-    <span id="colophonBuild"></span>
-    <span><a href="https://github.com/22nmcdon/jazz_learning_app" id="repoLink">Source on GitHub</a></span>
-  </footer>
 </div>
 
 <dialog id="ioDialog">
@@ -5113,11 +5172,31 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       already is. Two highlights for one bar would be two things to keep in
       step; this is one thing wearing two marks. */
   function markRollingBar() {
+    var rolling = null;
+
     Array.prototype.forEach.call(el.systems.querySelectorAll(".bar"), function (bar) {
-      bar.classList.toggle("rolling",
-        transport.running && !transport.counting
-          && Number(bar.dataset.index) === state.selected);
+      var isRolling = transport.running && !transport.counting
+                        && Number(bar.dataset.index) === state.selected;
+
+      bar.classList.toggle("rolling", isRolling);
+      if (isRolling) rolling = bar;
     });
+
+    /*  And bring it into view, which nothing on this page used to do for
+        anything. A tune longer than the chart zone rolled its mark off the
+        bottom and left it there - and the one moment you cannot scroll a page
+        by hand is the one where both hands are on the keys.
+
+        By the *system* rather than the bar: a line of music is the unit you
+        read, and scrolling to a bar can leave the three beside it half cut off.
+        `nearest` so a chart that already fits never moves at all - the bar
+        marches across a still chart, which is what it should look like, rather
+        than the chart twitching under every downbeat. */
+    if (rolling === null) return;
+
+    var system = rolling.closest(".system");
+
+    if (system && system.scrollIntoView) system.scrollIntoView({ block: "nearest" });
   }
 
   function startTransport() {

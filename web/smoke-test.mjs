@@ -1730,6 +1730,89 @@ try {
   check("the page still starts with the network gone", true);
   await offline.close();
 
+  /*  The frame. The page is three zones - head, chart, dock - and only the
+      middle one scrolls. Read on its own page so the careful ordering of the
+      sections above is left alone.
+
+      What this is really protecting is the thing the layout was changed for:
+      the dock used to be `position: sticky`, so it *overlaid* the chart rather
+      than sitting under it, and a bar scrolled beneath it was drawn and
+      unreadable. A chart with all twelve bars "on screen" showed four. */
+  {
+    const framed = await browser.newPage({ viewport: { width: 1100, height: 700 } });
+    await framed.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await framed.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await framed.locator("#helpDialog[open]").count()) await framed.locator("#helpClose").click();
+
+    const zone = await framed.evaluate(() => {
+      const z = document.querySelector(".chart-zone");
+      return { pageScrolls: document.documentElement.scrollHeight > window.innerHeight + 0.5,
+               chartScrolls: z.scrollHeight > z.clientHeight };
+    });
+
+    check(`the page does not scroll, the chart does `
+          + `(page ${zone.pageScrolls}, chart ${zone.chartScrolls})`,
+          zone.pageScrolls === false && zone.chartScrolls === true);
+
+    // Scrolled to the very end, the last bar is still above the dock rather
+    // than behind it.
+    const clear = await framed.evaluate(() => {
+      const z = document.querySelector(".chart-zone");
+      z.scrollTop = z.scrollHeight;
+      const floor = document.querySelector(".dock").getBoundingClientRect().top;
+      const bars = [...document.querySelectorAll("#systems .bar[data-index]")];
+      const last = bars[bars.length - 1].getBoundingClientRect();
+      return { covered: last.bottom > floor + 0.5, bars: bars.length };
+    });
+
+    check(`and the dock never covers a bar (${clear.bars} bars)`, clear.covered === false);
+
+    /*  And the rolling bar brings itself into view. Nothing on this page
+        scrolled anything at all before the frame, so on a tune longer than the
+        chart zone the mark simply rolled off the bottom and stayed there - at
+        the one moment a player cannot reach for the scrollbar. */
+    await framed.evaluate(() => document.querySelector(".chart-zone").scrollTop = 0);
+    await framed.locator("#menuButton").click();
+    await framed.locator("#playLive").click();
+    await framed.selectOption("#loopFrom", "0");
+    await framed.selectOption("#loopTo", { index: 11 });   // the whole twelve bars
+    await framed.locator("#menuButton").click();
+    await framed.fill("#tempo", "300");
+    await framed.dispatchEvent("#tempo", "change");
+    await framed.locator("#armTake").click();
+
+    // Watched all the way to the last system rather than sampled once: a mark
+    // that is in view at the top of the form and gone by the end of it is
+    // exactly the failure this replaces.
+    let strayed = null;
+    let reached = 0;
+
+    for (let tick = 0; tick < 80 && reached < 8; tick += 1) {
+      const at = await framed.evaluate(() => {
+        const rolling = document.querySelector("#systems .bar.rolling");
+        if (!rolling) return null;
+        const zone = document.querySelector(".chart-zone").getBoundingClientRect();
+        const line = rolling.closest(".system").getBoundingClientRect();
+        return { index: Number(rolling.dataset.index),
+                 inView: line.top >= zone.top - 1 && line.bottom <= zone.bottom + 1 };
+      });
+
+      if (at !== null) {
+        reached = Math.max(reached, at.index);
+        if (!at.inView && strayed === null) strayed = at.index;
+      }
+
+      await framed.waitForTimeout(200);
+    }
+
+    check(`the rolling bar keeps itself in view (reached bar ${reached + 1}`
+          + `${strayed === null ? "" : `, lost it at bar ${strayed + 1}`})`,
+          reached >= 8 && strayed === null);
+
+    await framed.locator("#armTake").click();
+    await framed.close();
+  }
+
   // A phone-sized window, in both modes. Everything that has ever overlapped
   // here looked perfect on a desktop one, and the masthead ran off the right
   // edge the moment a fourth control was added to it.
