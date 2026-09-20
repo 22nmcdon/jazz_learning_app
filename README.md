@@ -245,11 +245,31 @@ find yourself in.
 
 **Reharmonise as you play** is the other way to make a take harder, and it is the one that
 is about *listening* rather than about speed. A chart is a fixed thing to practise against
-and a real one is not: a band calls a substitution and everybody follows. Turn it on and one
-bar of the loop is reharmonised as each chorus comes round - the chart redraws, the bar is
-marked the way one you chose by hand would be, and the band plays the new changes from the
-next pass. How far out it goes is yours: no further than safe, into advanced moves, or out
-to risky ones.
+and a real one is not: a band calls a substitution and everybody follows. Turn it on and the
+tune is reharmonised as each chorus comes round - the chart redraws, the bars are marked the
+way ones you chose by hand would be, and the band plays the new changes from the next pass.
+
+Two questions decide what happens, and they are separate because they are independent - a
+single bar can go out to a risky substitution, and the whole tune can be nudged by the
+lightest plan there is. **How much**: one bar a chorus, a few bars a chorus, or the whole
+tune. **How far**, for the bar amounts: no further than safe, into advanced moves, or out to
+risky ones. Over a short tune that is between fifteen and fifty-five substitutions to draw
+on, and a take never calls the same one twice while it has an unused one left.
+
+**The whole tune** follows one of the same six plans *Reharmonise the tune* offers - and it
+is applied to the chart as it stands each time rather than to the one you started from, so
+the tune goes further out every pass instead of landing somewhere and staying. Modal colour
+keeps finding new moves for four passes and more; Adventurous has `| Dm7 | G7 |` reading
+`| Dm7b5 A7 | DmMaj7 A7 |` by the third chorus. A plan that runs out of things to change
+hands over to moving a bar, because a chorus where the exercise quietly did nothing would
+read as broken.
+
+**In time, *Reharmonise the tune* asks a different question.** The same six plans, the same
+descriptions, but with a clock behind the chart and the exercise armed, picking one says
+which plan this take should follow rather than rewriting the tune now. It is the Static / In
+time split the rest of the app works to, applied to the one dialog where the plans are
+already written up - a second list of them in the menu would be a second set of descriptions
+to go stale.
 
 It is in **both modes**, because both read the same chart. In solo practice the scale you
 are held to moves with the chord; in chord practice the voicing you are asked for does.

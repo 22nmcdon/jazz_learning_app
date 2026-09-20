@@ -214,7 +214,15 @@ that's easy to miss in review:
   synchronously. At the boundary the first bar of the new chorus still plays
   the old chord. A bar early, everything is the new tune by the downbeat. It
   restores `reharm.before` when the transport stops — an exercise, not an edit
-  — and clears only the `reharmonised` marks it put there itself.
+  — and clears only the `reharmonised` marks it put there itself. **How much**
+  (`reharm.amount`: a bar / a few bars / the whole tune) and **how far**
+  (`reharm.reach`) are separate questions, and a plan carries its own reach so
+  the second is hidden for the whole-tune amount. The whole-tune amount applies
+  a named plan to the chart *as it stands*, which is what makes it escalate;
+  a plan with nothing left to change falls through to moving a bar. **In time
+  with the exercise armed, `planDialog` chooses the take's plan instead of
+  rewriting the chart** — same dialog, same six write-ups, the clock decides
+  which question is being asked.
 - **The engine has no clock and must never get one.** Time/position enters as
   data (a `BarPosition`, a beat+tick on the shared grid in `docs/RHYTHM.md`)
   that the shell computed from its own clock — never as something the engine

@@ -761,8 +761,88 @@ try {
   check("leaving no mark on the chart behind it",
         (await page.locator("#systems .bar.reharmonised").count()) === 0);
 
+  /*  The same dialog, asked a different question.
+
+      With a clock behind the chart and the exercise armed, the six plans stop
+      being "rewrite the tune now" and become "which one should this take
+      follow". Same list, same descriptions - listing them again in the menu
+      would be a second copy of six write-ups to go stale - and the Static /
+      In time split decides which question is being asked. */
+  await page.locator("#planButton").click();
+  await page.waitForSelector("#planDialog[open]", { timeout: 10000 });
+
+  const planTitle = (await page.locator("#planTitle").innerText()).trim();
+
+  check(`the plan dialog asks about the take instead (${planTitle})`,
+        planTitle === "Reharmonise as you play");
+
+  // Picking one sets the take's plan rather than rewriting the chart, which is
+  // the whole difference: nothing on screen may move yet.
+  const beforePicking = await chartNow();
+
+  await page.locator(".plan-name").first().click();
+  await page.waitForFunction(() => !document.querySelector("#planDialog[open]"), null,
+                             { timeout: 10000 });
+
+  check("and choosing one arms the take rather than rewriting the chart",
+        (await chartNow()) === beforePicking
+        && (await page.locator("#reharmAmount").inputValue()) === "tune");
+
+  /*  And the whole-tune mode really does move more than a bar. Escalating, so
+      it is reharmonising what the last chorus left rather than the chart the
+      take started from - which is what makes the tune go further out pass by
+      pass instead of landing somewhere and staying. */
   await page.locator("#menuButton").click();
+  await page.selectOption("#reharmAmount", "tune");
+  await page.locator("#menuButton").click();
+  await page.evaluate(() => document.activeElement.blur());
+
+  const barsOf = (chart) => chart.split(" | ");
+  const wholeBefore = await chartNow();
+
+  await page.keyboard.press("Space");
+  await page.waitForFunction(
+    (was) => [...document.querySelectorAll("#systems .bar")]
+               .map((bar) => (bar.dataset.label || "").replace(/^Bar \d+, /, "")).join(" | ") !== was,
+    wholeBefore, { timeout: 20000 });
+
+  const wholeDuring = await chartNow();
+  const moved = barsOf(wholeBefore).filter((bar, i) => bar !== barsOf(wholeDuring)[i]).length;
+
+  check(`the whole tune moves, not one bar of it (${moved} bars)`, moved > 1);
+
+  await page.keyboard.press("Space");
+  await page.waitForFunction(
+    () => document.querySelector("#armTake").getAttribute("aria-pressed") === "false",
+    null, { timeout: 10000 });
+  await page.waitForFunction(
+    (was) => [...document.querySelectorAll("#systems .bar")]
+               .map((bar) => (bar.dataset.label || "").replace(/^Bar \d+, /, "")).join(" | ") === was,
+    wholeBefore, { timeout: 10000 });
+
+  check("and a whole-tune take puts every bar of it back", true);
+
+  await page.locator("#menuButton").click();
+  // Back to a bar before switching off: the amount goes away with the
+  // exercise, and a hidden select is one nothing can choose from.
+  await page.selectOption("#reharmAmount", "bar");
   await page.uncheck("#reharmLive");
+  await page.locator("#menuButton").click();
+  await page.evaluate(() => document.activeElement.blur());
+
+  // Off the clock the dialog goes back to meaning what it always meant.
+  await page.locator("#menuButton").click();
+  await page.locator("#playStatic").click();
+  await page.locator("#menuButton").click();
+  await page.locator("#planButton").click();
+  await page.waitForSelector("#planDialog[open]", { timeout: 10000 });
+
+  check("and means rewrite-it-now again once the clock is off",
+        (await page.locator("#planTitle").innerText()).trim() === "Reharmonise");
+
+  await page.locator("#planClose").click();
+  await page.locator("#menuButton").click();
+  await page.locator("#playLive").click();
   await page.locator("#menuButton").click();
   await page.evaluate(() => document.activeElement.blur());
 
