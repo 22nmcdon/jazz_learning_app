@@ -67,6 +67,13 @@ means CSS, not per-platform builds.
   time** setting meaning the same kind of thing in each — the same question with
   a clock behind it, and readings that are silent without one. Reach for that
   before reaching for a third mode, a second keyboard or a second dock.
+- **The bar dialog has three panels and shows two.** Scales (solo), Reharmonise
+  (chord practice) and **This bar's take**, which appears only when the last
+  take covered that bar. The tab strip is hidden whenever there is only one
+  panel to show, which is what it has always done — a bar with take data is
+  simply the first case where there are two. The other mode's tab is *hidden*,
+  not disabled: it is a question this mode is not about, which is why the
+  panels were split by mode in the first place.
 - **The on-screen keyboard is first-class**, not a fallback: 2 octaves by
   default, widens with a connected MIDI keyboard or an out-of-range note. No
   octave-shift control.

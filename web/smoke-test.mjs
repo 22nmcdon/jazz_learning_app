@@ -1191,6 +1191,52 @@ try {
   check("and a screen reader is told it too",
         (await page.locator("#systems .bar").first().getAttribute("aria-label")).includes(scored));
 
+  /*  And the bar has more to say when you stop to ask it. The strip says how
+      the bar went at a glance; clicking the bar you are already on opens the
+      same reading with its working out - which tier every note landed in, and
+      in chord practice every chord struck there and how it read.
+
+      The tab strip has been hidden since each mode had one panel; a bar the
+      take covered gives it something to switch between, which is exactly when
+      it comes back. */
+  await page.locator("#systems .bar").first().click();
+  await page.waitForSelector("#chordDialog[open]", { timeout: 10000 });
+
+  check("a bar the take covered offers what it made of it",
+        (await page.locator("#chordTabs").isVisible())
+        && !(await page.locator("#tabTake").isHidden()));
+
+  await page.locator("#tabTake").click();
+
+  const takeHead = (await page.locator("#takeHead").innerText()).trim();
+  const takeTiers = await page.evaluate(() =>
+    [...document.querySelectorAll("#takeRows li")].map((row) => row.innerText.replace(/\s+/g, " ")));
+
+  check(`and reads the bar out tier by tier (${takeHead}: ${takeTiers.length} tiers)`,
+        /^\d{1,3}%\s+-\s+\d+ notes?$/.test(takeHead)
+        && takeTiers.length > 0
+        // Every row is a tier with a count and a share of the bar.
+        && takeTiers.every((row) => /\d+\s+-\s+\d+%$/.test(row)));
+
+  // The other mode's panel is not offered here. Reharmonising is not something
+  // solo practice prevents, it is a question this mode is not about.
+  check("without offering the other mode's question",
+        await page.locator("#tabReharm").isHidden());
+
+  await page.locator("#dialogClose").click();
+
+  // A bar nothing was played over has nothing extra to say, so the strip stays
+  // away rather than offering an empty panel.
+  await page.locator("#systems .bar").nth(7).click();
+  await page.locator("#systems .bar").nth(7).click();
+  await page.waitForSelector("#chordDialog[open]", { timeout: 10000 });
+
+  check("a bar the take never reached says nothing extra",
+        !(await page.locator("#chordTabs").isVisible()));
+
+  await page.locator("#dialogClose").click();
+  await page.locator("#systems .bar").first().click();
+
   // Walking to another bar during a take must not end it. Bar two is not the
   // bar we are on, so this moves rather than opening it.
   await page.locator("#systems .bar").nth(1).click();

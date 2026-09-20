@@ -180,6 +180,12 @@ after you stop, so the bar that got away is one you can see at a glance down the
 than one you have to read about underneath it. The exact counts are on the bar's tooltip, and
 in its name for a screen reader.
 
+**Clicking a bar you have played over asks it for the whole reading.** The strip is a
+glance; the bar's own dialog gains a **This bar's take** tab beside the scales, and that is
+the same reading with its working shown - how many notes landed in each tier, what share of
+the bar each was, and the one line about what the score does and does not count. A bar the
+take never reached has nothing extra to say and does not offer the tab.
+
 The percentage is the one number in this app that is a judgement rather than a count, so it
 is worth saying what it judges. It reads the notes whose reading is final, and nothing else.
 Of those: chord tones, scale tones and approach notes all count as landing - the difference
@@ -387,6 +393,11 @@ when the bar was busier than the style ever gets. A count rather than a percenta
 deliberately: the engine scores a take's placement and does not score a bar's, so a
 percentage here would be the page inventing a second version of a number the engine
 already owns.
+
+Clicking one of those bars again opens **This bar's take** beside the substitutions: every
+chord you struck there, in order, with the sentence the dock gave you as it landed - where
+it fell, whether it pushed, whether it was the style's own figure - and the notes you played
+it with. It is the one place the whole bar is laid out rather than summarised.
 
 **Leaving a bar alone is never a fault.** Density is graded in the busy direction only,
 because space is what a comper gives a soloist. The one exception is four to the bar, which

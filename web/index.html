@@ -1288,6 +1288,57 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 .option-tag .verdict-flag { font-weight: 600; }
 .option-why { font-size: 13.5px; color: var(--text-soft); margin: 5px 0 0; }
 
+/* --- what the last take made of this bar --------------------------------- */
+/* The same reading the strip on the bar shows, with its working out. Quiet
+   like the rest of the dialog: it is a reading, not a verdict. */
+.take-head {
+  font-family: var(--serif);
+  font-size: 17px;
+  color: var(--charcoal);
+  margin: 0 0 14px;
+}
+.take-head b { font-weight: 500; color: var(--blush-deep); }
+
+.take-rows { list-style: none; margin: 0 0 16px; padding: 0; }
+.take-rows li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  color: var(--text);
+}
+.take-rows li:last-child { border-bottom: 0; }
+
+/* The left of a row names the thing, the right counts or places it. */
+.take-rows .what { flex: 1 1 auto; }
+.take-rows .how {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+/* A swatch for the tier a row is about, so the panel and the strip on the bar
+   say the same thing in the same colours. */
+.take-rows .swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 9px;
+  vertical-align: baseline;
+}
+.take-rows .ct { background: var(--sage); }
+.take-rows .st { background: var(--gold); }
+.take-rows .ap { background: var(--approach); }
+.take-rows .un { background: var(--unresolved); }
+.take-rows .out { background: var(--rust); }
+.take-rows .is { background: var(--blush-deep); }
+
 .scale-rows { list-style: none; margin: 0; padding: 0; }
 .scale-rows li { border-bottom: 1px solid var(--line); }
 .scale-rows button {
@@ -2021,9 +2072,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     <button class="close-btn" type="button" id="dialogClose" aria-label="Close">&times;</button>
   </div>
 
+  <!-- The strip was hidden for as long as each mode had one panel. A bar the
+       last take was played over has a second thing to say about it, and that
+       is what brings the strip back - so it appears exactly when there is a
+       choice to make. -->
   <div class="tabs" role="tablist" id="chordTabs">
     <button class="tab" type="button" role="tab" id="tabScales" aria-selected="true" aria-controls="panelScales">Scales</button>
     <button class="tab" type="button" role="tab" id="tabReharm" aria-selected="false" aria-controls="panelReharm">Reharmonise</button>
+    <button class="tab" type="button" role="tab" id="tabTake" aria-selected="false" aria-controls="panelTake" hidden>This bar's take</button>
   </div>
 
   <div class="tab-body">
@@ -2051,6 +2107,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         <input type="checkbox" id="risky">
         Include risky ones, judged bar by bar
       </label>
+    </section>
+
+    <!-- What the last take made of this bar. The strip on the bar says it at a
+         glance and the dock says it while you play; this is the same reading
+         with its working shown, for the bar you have stopped to ask about. -->
+    <section class="tab-panel" id="panelTake" role="tabpanel" aria-labelledby="tabTake" hidden>
+      <p class="take-head" id="takeHead"></p>
+      <ul class="take-rows" id="takeRows"></ul>
+      <p class="voicing-note" id="takeNote"></p>
     </section>
 
   </div>
@@ -2223,7 +2288,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "armTake", "armLabel", "practising",
    "compingWrap", "compPlace", "compSummary", "compSummaryHead", "compObservations",
    "voicingStyle", "voicingColour", "soundBank",
-   "scaleStyle", "scaleStyleNote", "chordTabs"].forEach(function (id) {
+   "scaleStyle", "scaleStyleNote", "chordTabs",
+   "tabTake", "panelTake", "takeHead", "takeRows", "takeNote"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
 
@@ -2233,8 +2299,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   var tabs = [
     { button: document.getElementById("tabScales"), panel: document.getElementById("panelScales") },
-    { button: document.getElementById("tabReharm"), panel: document.getElementById("panelReharm") }
+    { button: document.getElementById("tabReharm"), panel: document.getElementById("panelReharm") },
+    { button: document.getElementById("tabTake"), panel: document.getElementById("panelTake") }
   ];
+
+  var TAKE_TAB = 2;
 
   var STYLE_NAMES = {
     any: "any shape",
@@ -2660,13 +2729,146 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.dialogBar.textContent = "Bar " + (state.selected + 1) + (soloing ? " - scales" : " - reharmonise");
     writeChord(el.dialogChord, chord);
 
-    // One panel, so the strip that switches between them has nothing to do.
-    el.chordTabs.hidden = true;
+    /*  The strip comes back when there is a choice to make. Each mode has one
+        panel of its own, so for as long as that was all there was the strip had
+        nothing to switch between; a bar the last take was played over has a
+        second thing to say about it, and that is what brings it back.
+
+        The other mode's tab is hidden rather than disabled. Reharmonising in
+        solo practice is not a thing you are prevented from doing, it is a
+        question this mode is not about - the same reason the two panels were
+        split by mode in the first place. */
+    var detail = takeDetailFor(state.selected);
+
+    tabs[0].button.hidden = !soloing;
+    tabs[1].button.hidden = soloing;
+    tabs[TAKE_TAB].button.hidden = detail === null;
+    el.chordTabs.hidden = detail === null;
+
+    renderTakeDetail(detail);
     showTab(soloing ? 0 : 1);
 
     if (soloing) await renderScales(); else renderSubstitutions();
 
     if (!el.chordDialog.open) el.chordDialog.showModal();
+  }
+
+  /** What the last take had to say about one bar, or null if it never played it.
+
+      One function for both modes, because the dialog asks one question - "what
+      happened here" - and which mode is showing decides only what the answer is
+      made of.
+  */
+  function takeDetailFor(index) {
+    if (state.mode === "solo") {
+      var stats = solo.bars[index];
+      return stats && stats.total ? { kind: "solo", stats: stats } : null;
+    }
+
+    var mark = comp.marks[index];
+    return mark && mark.hits ? { kind: "comp", mark: mark } : null;
+  }
+
+  function takeRow(what, how, tier) {
+    var row = document.createElement("li");
+    var left = document.createElement("span");
+
+    left.className = "what";
+
+    if (tier) {
+      var swatch = document.createElement("i");
+      swatch.className = "swatch " + tier;
+      left.appendChild(swatch);
+    }
+
+    left.appendChild(document.createTextNode(what));
+    row.appendChild(left);
+
+    if (how) {
+      var right = document.createElement("span");
+      right.className = "how";
+      right.textContent = how;
+      row.appendChild(right);
+    }
+
+    return row;
+  }
+
+  /** Fills the take panel for the bar the dialog is open on. */
+  function renderTakeDetail(detail) {
+    el.takeHead.textContent = "";
+    el.takeRows.textContent = "";
+    el.takeNote.textContent = "";
+
+    if (detail === null) return;
+
+    var score = document.createElement("b");
+
+    if (detail.kind === "solo") {
+      var stats = detail.stats;
+
+      // The same two reasons the number is left off the bar itself: an engine
+      // older than this page has none, and a bar whose notes are all still open
+      // has nothing settled to score yet.
+      var scored = typeof stats.score === "number"
+                && !(typeof stats.settled === "number" && stats.settled === 0);
+
+      score.textContent = scored ? stats.score + "%" : String(stats.total);
+      el.takeHead.appendChild(score);
+      el.takeHead.appendChild(document.createTextNode(
+        scored ? "  -  " + stats.total + (stats.total === 1 ? " note" : " notes")
+               : (stats.total === 1 ? "  note" : "  notes")));
+
+      [["Chord tones", stats.chordTones, stats.percentChordTones, "ct"],
+       ["Scale tones", stats.scaleTones, stats.percentScaleTones, "st"],
+       ["Approach notes", stats.approachTones, stats.percentApproachTones, "ap"],
+       ["Still open when the take ended", stats.unresolved, stats.percentUnresolved, "un"],
+       ["Outside the scale", stats.outside, stats.percentOutside, "out"]]
+        .forEach(function (tier) {
+          // A row reading nought of something is a row nobody finishes.
+          if (!tier[1]) return;
+
+          el.takeRows.appendChild(takeRow(tier[0], tier[1] + "  -  " + tier[2] + "%", tier[3]));
+        });
+
+      el.takeNote.textContent = stats.neverLeftTheChord
+        ? "Every note here was a chord tone. Nothing is wrong with that, and a bar "
+          + "of it is a bar with no colour in it - the score counts balance for exactly "
+          + "this reason."
+        : "Chord tones, scale tones and approach notes all count as landing; the "
+          + "difference between them is colour, not correctness. A note left outside "
+          + "counts a quarter rather than nothing.";
+      return;
+    }
+
+    var mark = detail.mark;
+
+    score.textContent = mark.hits + (mark.hits === 1 ? " chord" : " chords");
+    el.takeHead.appendChild(score);
+    el.takeHead.appendChild(document.createTextNode(
+      "  -  " + mark.figure + " the figure, " + mark.idiomatic + " in style, "
+      + mark.offStyle + " off it"
+      + (mark.unplaced ? ", " + mark.unplaced + " with nothing counting" : "")));
+
+    /*  One row per chord, in the order they were struck, saying what the dock
+        said as each one landed. The engine's own sentence rather than one the
+        page assembles: it already names the position, the push and the fault,
+        and a second wording of the same reading is a second wording to go
+        stale. */
+    (mark.readings || []).forEach(function (hit) {
+      el.takeRows.appendChild(takeRow(hit.summary,
+                                      (hit.notes || []).map(noteName).join(" "),
+                                      hit.placement === "offStyle" ? "out"
+                                        : hit.placement === "unplaced" ? "un" : "is"));
+    });
+
+    el.takeNote.textContent = mark.tooBusy
+      ? "That is more chords than this style ever puts in a bar - it goes up to "
+        + mark.most + ". Density is read in the busy direction only: leaving a bar "
+        + "alone is one of the most idiomatic things a comper does, and is never a fault."
+      : "Where a chord falls is read against the grid this style's feel implies, "
+        + "not against its own figure - the figure is what the band plays, not a "
+        + "fence around you.";
   }
 
   el.dialogClose.addEventListener("click", function () { el.chordDialog.close(); });
@@ -3828,7 +4030,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     (take.bars || []).forEach(function (bar) {
       comp.marks[bar.bar] = { hits: bar.hits, most: bar.most,
                               tooBusy: bar.tooBusy,
-                              figure: 0, idiomatic: 0, offStyle: 0, unplaced: 0 };
+                              figure: 0, idiomatic: 0, offStyle: 0, unplaced: 0,
+
+                              // Every chord struck in this bar, as the engine
+                              // read it. The strip says how the bar went; this
+                              // is what it was made of, for the bar somebody
+                              // stops to ask about.
+                              readings: [] };
     });
 
     (take.hits || []).forEach(function (hit) {
@@ -3844,6 +4052,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       else if (hit.placement === "idiomatic") mark.idiomatic += 1;
       else if (hit.placement === "offStyle") mark.offStyle += 1;
       else mark.unplaced += 1;
+
+      /*  The reading comes back without the notes - the engine was handed them
+          and has no reason to say them again. The page still has what it sent,
+          in the order it sent it, so the two line up bar by bar. */
+      var played = comp.hits.filter(function (one) { return one.bar === hit.bar; });
+
+      mark.readings.push({ summary: hit.summary, placement: hit.placement,
+                           notes: (played[mark.readings.length] || {}).notes || [] });
     });
 
     paintTakeMarks();
