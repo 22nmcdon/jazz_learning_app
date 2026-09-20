@@ -1145,6 +1145,31 @@ try {
   check(`the take is read back as placement, register and density (${compHead})`,
         /Placement \d+%, register \d+%, density \d+%/.test(compHead));
 
+  /*  ...and onto the bars it was played over, the way a solo take's numbers
+      are. The dock says which bar got away; the chart says it where a player's
+      eyes already are. A count rather than a percentage, because the engine
+      scores a take's placement and not a bar's - see `compBarMark`. */
+  const compMarks = await page.evaluate(() =>
+    [...document.querySelectorAll("#systems .bar")]
+      .filter((bar) => !bar.querySelector(".bar-take").hidden)
+      .map((bar) => ({
+        tiers: [...bar.querySelectorAll(".bar-take i")].map((tier) => tier.className),
+        number: bar.querySelector(".bar-score").textContent,
+        words: bar.dataset.take || ""
+      })));
+
+  check(`a comping take marks the bars it covered (${compMarks.length} bars)`,
+        compMarks.length > 0
+        && compMarks.every((m) => m.tiers.length > 0
+                                  && /^\d+$/.test(m.number)
+                                  && /chords?: .* the figure/.test(m.words)));
+
+  // Only comping's own tiers, never the solo strip's. The two modes share one
+  // drawing path, and the way that goes wrong is one mode's colours meaning
+  // the other mode's thing.
+  check("and in comping's own tiers, not a solo strip's",
+        compMarks.every((m) => m.tiers.every((t) => ["is", "un", "out"].includes(t))));
+
   await page.locator("#menuButton").click();
   await page.locator("#playStatic").click();
   await page.locator("#menuButton").click();

@@ -350,6 +350,14 @@ Which of your chords were the style's own figure is one of those, and so is the 
 underneath a voicing: a real comping fault, because the bass player is already playing that
 note, and it costs the number nothing.
 
+**Every bar you comped over keeps its own mark**, the way a bar you soloed over does: a
+strip in comping's own colours - in the style, off it, and the grey that means nothing was
+counting - and in the corner the **number of chords** you put in the bar, which goes rust
+when the bar was busier than the style ever gets. A count rather than a percentage, and
+deliberately: the engine scores a take's placement and does not score a bar's, so a
+percentage here would be the page inventing a second version of a number the engine
+already owns.
+
 **Leaving a bar alone is never a fault.** Density is graded in the busy direction only,
 because space is what a comper gives a soloist. The one exception is four to the bar, which
 says something when a take goes quiet under it — and still takes nothing off.
@@ -777,9 +785,6 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   practice loop ship, as In time above.
 - **Licks.** Solo mode tells you the scale; suggesting a *line* to play over a bar needs
   generated or curated patterns, rhythm and register, and is a feature of its own.
-- **Per-bar comping marks on the chart.** A solo take writes its numbers onto the bars it
-  was played over; a comping take does not yet, though what it needs comes back in the same
-  shape. A page change with no engine in it.
 - **Reading a block chord as a chord.** Solo practice now reads chordal playing voice by
   voice — each note on its own way home — which is what a *line* needs. What it does not do
   is ask whether the voicing you played said what the bar said; that is chord practice's

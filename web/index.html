@@ -851,6 +851,17 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 .bar-take .un { background: var(--unresolved); }
 .bar-take .out { background: var(--rust); }
 
+/* Comping's own tier: a chord that was in the style, figure or vocabulary.
+   The accent rather than one of the five semantic colours, because those say
+   chord tone, scale tone, approach, enclosure and outside in both modes and
+   this is not any of them. Off the style shares `.out` and a hit with no clock
+   behind it shares `.un`, which already means "nothing has been decided". */
+.bar-take .is { background: var(--blush-deep); }
+
+/* A bar busier than the style ever is. The only direction density is graded
+   in, so nothing here ever marks a bar for being quiet. */
+.bar-score.too-busy { color: var(--rust); }
+
 /* How the bar went, over the strip that shows what it was made of. Quiet on
    purpose: it is a reading of a bar, not a mark out of ten, and a number in
    the chart's own ink beside the chord would read as part of the tune. */
@@ -3138,7 +3149,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       bar stopped in the middle was not played to the end, and counting it marks
       every four-to-the-bar take sparse in its last bar. */
   var comp = { armed: false, hits: [], counts: {}, bars: [],
-               pending: null, settleTimer: null };
+               pending: null, settleTimer: null,
+
+               /*  What the last take made of each bar, keyed by bar index -
+                   the comping half of `solo.bars`, and kept for the same
+                   reason: the chart goes on saying it after the dock has
+                   moved on. Filled when a take is read back, because that is
+                   when the engine has an answer; a bar's marks appearing one
+                   chord at a time would be a percentage jumping under the
+                   player's hands, which is what the dock is for. */
+               marks: {} };
 
   /*  How close together two notes have to be struck to be one chord.
 
@@ -3166,11 +3186,102 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       them would only find chords nobody played. */
   var CHORD_WINDOW_MS = 40;
 
+  /** What a solo take made of one bar: tiers, a score, and the words for both.
+
+      The shape both modes answer in, so that the drawing below is one thing
+      rather than two. `tiers` are class and percentage, in the order they are
+      laid out; `number` is the corner figure or null when there is honestly
+      none; `words` is the whole of it in a sentence, for the tooltip and for a
+      screen reader, which cannot see a coloured strip.
+  */
+  function soloBarMark(index) {
+    var stats = solo.bars[index];
+
+    if (!stats || !stats.total) return null;
+
+    // Two reasons to leave the number off. An engine older than this page has
+    // no score in its stats, and writing "undefined%" across the chart is
+    // worse than writing nothing. And a bar whose notes are all still open
+    // has nothing settled to score yet - a bar that reads 0% while the player
+    // is midway through a phrase is the thing this tier exists to stop.
+    var scored = typeof stats.score === "number"
+              && !(typeof stats.settled === "number" && stats.settled === 0);
+
+    return {
+      tiers: [["ct", stats.percentChordTones], ["st", stats.percentScaleTones],
+              ["ap", stats.percentApproachTones], ["un", stats.percentUnresolved],
+              ["out", stats.percentOutside]],
+      number: scored ? stats.score + "%" : null,
+      warn: false,
+
+      // The approach share is left out when there is none of it, because a
+      // reading with a 0% in it is a reading nobody finishes.
+      words: (scored ? stats.score + "% - " : "")
+           + stats.total + " notes: " + stats.percentChordTones + "% chord, "
+           + stats.percentScaleTones + "% scale, "
+           + (stats.percentApproachTones ? stats.percentApproachTones + "% approach, " : "")
+           + (stats.percentUnresolved ? stats.percentUnresolved + "% still open, " : "")
+           + stats.percentOutside + "% outside"
+           + (stats.neverLeftTheChord ? " - never left the chord" : "")
+    };
+  }
+
+  /** The same, for a comping take.
+
+      Where a solo bar carries a score, a comping bar carries a **count**, and
+      the difference is not an oversight. The engine scores a take's placement
+      and does not score a bar's, and working one out here would be the page
+      inventing a second definition of a number the engine already owns - the
+      thing that drifts the first time the engine's changes. So the strip draws
+      the hits it was handed, in proportion, and the corner says how many
+      chords went in the bar, which is a fact rather than a reading.
+
+      It goes rust when the bar was busier than the style ever is. Density is
+      graded in the busy direction only - leaving a bar alone is one of the most
+      idiomatic things a comper does - so a quiet bar is never marked.
+  */
+  function compBarMark(index) {
+    var reading = comp.marks[index];
+
+    if (!reading || !reading.hits) return null;
+
+    var share = function (n) { return Math.round(100 * n / reading.hits); };
+
+    return {
+      /*  Two tiers where the dock has three chips, and for the dock's own
+          reason: the figure and the rest of the style's vocabulary both score
+          full marks, and coming apart here would say on the chart what the
+          reading deliberately does not say in the number. What the figure
+          contributed is in the words. */
+      tiers: [["is", share(reading.figure + reading.idiomatic)],
+              ["un", share(reading.unplaced)],
+              ["out", share(reading.offStyle)]],
+      number: String(reading.hits),
+      warn: !!reading.tooBusy,
+      words: reading.hits + (reading.hits === 1 ? " chord: " : " chords: ")
+           + reading.figure + " the figure, " + reading.idiomatic + " in style, "
+           + reading.offStyle + " off it"
+           + (reading.unplaced ? ", " + reading.unplaced + " unplaced" : "")
+           /*  The ceiling only, never the floor. The floor is a statement about
+               what the *band* plays, not a rule the player is held to - leaving
+               a bar alone is one of the most idiomatic things a comper does -
+               so quoting it as a range would put a number under someone for the
+               one thing the reading refuses to mark. */
+           + (reading.tooBusy ? " - busier than this style ever gets (at most "
+                                + reading.most + ")" : "")
+    };
+  }
+
   /** Draws what the take made of each bar, on the bars.
 
       A summary in the dock says which bar went wrong; the chart says it while
       you are still looking at the chart, which is where a player's eyes are.
-      Nothing is drawn outside a take, and nothing for a bar not played over. */
+      Nothing is drawn outside a take, and nothing for a bar not played over.
+
+      One drawing path for both modes. A second strip for comping would be a
+      second implementation of the same screen, and would have gone out of step
+      the first time either one was touched.
+  */
   function paintTakeMarks() {
     Array.prototype.forEach.call(el.systems.querySelectorAll(".bar"), function (bar) {
       var mark = bar.querySelector(".bar-take");
@@ -3178,13 +3289,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
       if (!mark) return;
 
-      var stats = state.mode === "solo" ? solo.bars[bar.dataset.index] : null;
+      var index = bar.dataset.index;
+      var reading = state.mode === "solo" ? soloBarMark(index) : compBarMark(index);
 
-      if (!stats || !stats.total) {
+      if (!reading) {
         mark.hidden = true;
         mark.textContent = "";
         score.hidden = true;
         score.textContent = "";
+        score.classList.remove("too-busy");
         bar.removeAttribute("data-take");
         bar.setAttribute("aria-label", bar.dataset.label || "");
         return;
@@ -3193,18 +3306,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       mark.hidden = false;
       mark.textContent = "";
 
-      // Two reasons to leave the number off. An engine older than this page has
-      // no score in its stats, and writing "undefined%" across the chart is
-      // worse than writing nothing. And a bar whose notes are all still open
-      // has nothing settled to score yet - a bar that reads 0% while the player
-      // is midway through a phrase is the thing this tier exists to stop.
-      score.hidden = typeof stats.score !== "number"
-                  || (typeof stats.settled === "number" && stats.settled === 0);
-      score.textContent = score.hidden ? "" : stats.score + "%";
+      score.hidden = reading.number === null;
+      score.textContent = reading.number === null ? "" : reading.number;
+      score.classList.toggle("too-busy", !!reading.warn);
 
-      [["ct", stats.percentChordTones], ["st", stats.percentScaleTones],
-       ["ap", stats.percentApproachTones], ["un", stats.percentUnresolved],
-       ["out", stats.percentOutside]].forEach(function (part) {
+      reading.tiers.forEach(function (part) {
         if (!part[1]) return;
 
         var span = document.createElement("i");
@@ -3214,22 +3320,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       });
 
       // The numbers themselves, for anyone who wants them and for a screen
-      // reader, which cannot see three coloured strips.
-      // The approach share is left out when there is none of it, because a
-      // reading with a 0% in it is a reading nobody finishes.
-      bar.dataset.take = (score.hidden ? "" : stats.score + "% - ")
-                       + stats.total + " notes: " + stats.percentChordTones + "% chord, "
-                       + stats.percentScaleTones + "% scale, "
-                       + (stats.percentApproachTones ? stats.percentApproachTones + "% approach, " : "")
-                       + (stats.percentUnresolved ? stats.percentUnresolved + "% still open, " : "")
-                       + stats.percentOutside + "% outside"
-                       + (stats.neverLeftTheChord ? " - never left the chord" : "");
-      mark.title = bar.dataset.take;
-      score.title = bar.dataset.take;
+      // reader, which cannot see a coloured strip.
+      bar.dataset.take = reading.words;
+      mark.title = reading.words;
+      score.title = reading.words;
 
-      // Three coloured strips and a small number say nothing to a screen
-      // reader, so the bar's own name carries them.
-      bar.setAttribute("aria-label", (bar.dataset.label || "") + ". " + bar.dataset.take);
+      bar.setAttribute("aria-label", (bar.dataset.label || "") + ". " + reading.words);
     });
   }
 
@@ -3421,6 +3517,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // has nothing to hold anyone to.
     el.compPlace.hidden = !compingNow || el.compPlace.hidden;
     if (!compingNow) el.compSummary.hidden = true;
+
+    /*  The bars are marked by whichever mode is showing, and `paintTakeMarks`
+        already asks which that is - but it is only ever called when a take
+        says something, so switching away would leave the other mode's marks
+        on the chart until the next one did. A solo score sitting on a bar in
+        chord practice is a number about a question nobody asked. */
+    paintTakeMarks();
 
     document.title = "Jazz Learning App: " + (soloing ? "Solo" : compingNow ? "Comping" : "Chords");
 
@@ -3655,6 +3758,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     comp.bars = [];
     comp.pending = null;
 
+    // Last take's marks come off the chart the moment this one arms. Leaving
+    // them would read as this take's, which is the one thing a mark on a bar
+    // must never be wrong about.
+    comp.marks = {};
+    paintTakeMarks();
+
     armedLook(true);
 
     el.compSummary.hidden = true;
@@ -3705,7 +3814,43 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
              + ":" + hit.notes.join(",");
   }
 
+  /** Turns a comping take into one reading per bar, for the chart to wear.
+
+      Everything here is a tally of what came back rather than a judgement
+      about it: `bars` already carries the density and the window the style
+      allows, and the placements are counted off the hits, which carry the bar
+      they fell in. No number is worked out that the engine did not already
+      work out - see `compBarMark`.
+  */
+  function rememberCompMarks(take) {
+    comp.marks = {};
+
+    (take.bars || []).forEach(function (bar) {
+      comp.marks[bar.bar] = { hits: bar.hits, most: bar.most,
+                              tooBusy: bar.tooBusy,
+                              figure: 0, idiomatic: 0, offStyle: 0, unplaced: 0 };
+    });
+
+    (take.hits || []).forEach(function (hit) {
+      var mark = comp.marks[hit.bar];
+
+      /*  A pushed hit is counted in the bar the hands played it, which is what
+          `hit.bar` already is - the same rule the engine's own density reading
+          works to, so the strip and the count cannot disagree about which bar
+          a chord belongs to. */
+      if (!mark) return;
+
+      if (hit.placement === "figure") mark.figure += 1;
+      else if (hit.placement === "idiomatic") mark.idiomatic += 1;
+      else if (hit.placement === "offStyle") mark.offStyle += 1;
+      else mark.unplaced += 1;
+    });
+
+    paintTakeMarks();
+  }
+
   function drawCompSummary(take) {
+    rememberCompMarks(take);
     el.verdict.textContent = take.summary;
     el.verdict.classList.remove("matches", "wrong-shape");
     el.compPlace.hidden = true;
