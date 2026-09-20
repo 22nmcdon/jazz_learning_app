@@ -163,10 +163,11 @@ await page.addInitScript(() => {
 // a broken handler still looks fine in a screenshot, and this is the only
 // place that difference gets caught.
 //
-// Only what came from this origin counts. The webfonts and the PDF library are
-// both allowed to be unreachable - the page is built to work without either,
-// and a smoke test that goes red when a CDN is slow teaches everyone to ignore
-// it.
+// Only what came from this origin counts. The webfonts are allowed to be
+// unreachable - the page is built to work without them, and a smoke test that
+// goes red when a CDN is slow teaches everyone to ignore it. The PDF reader is
+// not in that class any more: it is served from beside the page, so a failure
+// to fetch it is this build's failure and is meant to be loud.
 const complaints = [];
 const ours = (url) => !url || url.startsWith(origin);
 
@@ -179,6 +180,60 @@ page.on("console", (message) => {
 page.on("requestfailed", (request) => {
   if (ours(request.url())) complaints.push(`failed: ${request.url()}`);
 });
+
+/*  Every script the page asks for, so a check can say where its code came from.
+
+    This page used to pull its PDF reader off a public CDN with a <script src>,
+    which put a third party in a position to run code here - and the desktop app
+    hosts this same page, with the bridge to the native side in it. Nothing in
+    the interface looks different when that changes, so nothing would have
+    caught it coming back. This does.
+*/
+const scriptsFrom = [];
+
+page.on("request", (request) => {
+  if (request.resourceType() === "script") scriptsFrom.push(request.url());
+});
+
+/** A one-page PDF with @p lines drawn down it, as text rather than as pictures.
+
+    Made here rather than kept as a fixture because what it is proving is that
+    the reader loaded and ran at all - the readers themselves are tested against
+    a real export, in the engine's own suite, where a chart's shape is the
+    question. This one only has to be a PDF.
+*/
+function pdfOf(lines) {
+  const drawn = lines
+    .map((line, row) => `BT /F1 12 Tf 72 ${700 - row * 20} Td (${line}) Tj ET`)
+    .join("\n");
+
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+      + "/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    `<< /Length ${drawn.length} >>\nstream\n${drawn}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+  ];
+
+  // Byte offsets, which is the one part of a PDF that cannot be written by
+  // hand: the cross-reference table says where each object starts.
+  let pdf = "%PDF-1.4\n";
+  const offsets = [];
+
+  objects.forEach((body, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+
+  const xref = pdf.length;
+
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
+       + offsets.map((at) => `${String(at).padStart(10, "0")} 00000 n \n`).join("")
+       + `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+
+  return Buffer.from(pdf, "latin1");
+}
 
 const checks = [];
 const check = (what, ok) => {
@@ -301,6 +356,69 @@ try {
           exported.includes("[T34"));
 
     await third.close();
+  }
+
+  /*  A PDF, read by a library that came from here.
+
+      In its own page, because a chart that arrives replaces the one every check
+      below is written against. What is being proved is the whole path: the
+      reader is fetched from beside the page rather than from a CDN, it runs
+      under the page's Content-Security-Policy, its worker is same-origin enough
+      to be a real one, and what it pulls off the page reaches the engine as
+      positioned text.
+  */
+  {
+    const reading = await browser.newPage();
+    const asked = [];
+
+    reading.on("request", (request) => {
+      if (request.resourceType() === "script") asked.push(request.url());
+    });
+
+    await reading.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await reading.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+
+    if (await reading.locator("#helpDialog[open]").count())
+      await reading.locator("#helpClose").click();
+
+    check("the PDF reader is not fetched until a PDF is opened",
+          !asked.some((url) => url.includes("pdf.min.js")));
+
+    await reading.locator("#menuButton").click();
+    await reading.locator("#ioButton").click();
+    await reading.waitForSelector("#ioDialog[open]", { timeout: 10000 });
+
+    await reading.locator("#chartFile").setInputFiles({
+      name: "chart.pdf",
+      mimeType: "application/pdf",
+      buffer: pdfOf(["Bar 1, c Major 7", "Bar 2, d Minor 7"])
+    });
+
+    await reading.waitForFunction(() => {
+      const said = document.querySelector("#importStatus").textContent.trim();
+
+      return said !== "" && !said.startsWith("Reading");
+    }, null, { timeout: 30000 });
+
+    const said = (await reading.locator("#importStatus").innerText()).trim();
+
+    check(`a PDF is read off the page it is drawn on (${said})`, said.startsWith("Read 2 bars"));
+
+    const read = await reading.evaluate(
+      () => Array.from(document.querySelectorAll("#systems .bar"), (bar) => bar.innerText.replace(/\s/g, "")));
+
+    // The written bars only: a short chart is padded out to fill its line, and
+    // how many empties that takes is a layout question, not this one.
+    const written = read.filter(Boolean);
+
+    check(`and arrives as the chart it describes (${written.join(" ") || "nothing"})`,
+          written.length === 2 && written[0] === "Cmaj7" && written[1] === "Dm7");
+
+    check("and the reader itself came from this origin",
+          asked.some((url) => url === `${origin}/pdf.min.js`)
+            && asked.every((url) => ours(url)));
+
+    await reading.close();
   }
 
   await page.locator("#ioClose").click();
@@ -1752,6 +1870,13 @@ try {
 } catch (error) {
   check(`no exception (${error.message.split("\n")[0]})`, false);
 } finally {
+  // Every line of script this page ran came with it. A CDN tag reintroduced
+  // anywhere in the document fails here rather than in someone's browser.
+  const elsewhere = scriptsFrom.filter((url) => !ours(url));
+
+  check(`nothing runs script from another origin (${elsewhere[0] || "none did"})`,
+        elsewhere.length === 0);
+
   check("the page reported nothing broken", complaints.length === 0);
   console.log(checks.join("\n"));
   complaints.slice(0, 10).forEach((c) => console.log(`     ${c}`));

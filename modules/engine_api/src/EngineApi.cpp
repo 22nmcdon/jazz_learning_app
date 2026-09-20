@@ -19,6 +19,8 @@
 #include "jazz/core/VoicingAnalyzer.h"
 
 #include <algorithm>
+#include <cctype>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -85,6 +87,33 @@ namespace
         return std::move (json);
     }
 
+    /** One MIDI note out of a field of the list below, when the field holds one.
+
+        `std::stoi` throws on anything that is not a number and on a number too
+        long for an int, and it is not this layer's place to take the process
+        down over a malformed argument - nothing above catches it. A note is
+        0 to 127 by the standard the wire format is describing, so a field
+        outside that says as little as a field of letters does, and both are
+        dropped the same way.
+    */
+    std::optional<int> parseNote (const std::string& field)
+    {
+        if (field.empty() || field.size() > 3)
+            return std::nullopt;
+
+        auto value = 0;
+
+        for (auto c : field)
+        {
+            if (std::isdigit (static_cast<unsigned char> (c)) == 0)
+                return std::nullopt;
+
+            value = value * 10 + (c - '0');
+        }
+
+        return value <= 127 ? std::optional<int> (value) : std::nullopt;
+    }
+
     std::vector<int> parseNoteList (const std::string& csv)
     {
         std::vector<int> notes;
@@ -92,11 +121,10 @@ namespace
 
         const auto flush = [&notes, &current]
         {
-            if (! current.empty())
-            {
-                notes.push_back (std::stoi (current));
-                current.clear();
-            }
+            if (const auto note = parseNote (current))
+                notes.push_back (*note);
+
+            current.clear();
         };
 
         for (auto c : csv)

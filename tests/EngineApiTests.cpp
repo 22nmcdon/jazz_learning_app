@@ -736,3 +736,42 @@ TEST ("a chart that will not parse gives no guide tones")
 {
     CHECK (contains (guideTones ("| not a chord |"), "\"ok\":false"));
 }
+
+//==============================================================================
+// A note list is an argument, not a promise.
+//
+// The four calls that take MIDI notes took them as text and converted each
+// field with std::stoi, which throws on a field that is not a number and on one
+// too big for an int. Nothing catches it in either shell, so a malformed
+// argument ended the process rather than the call. A note is 0 to 127 by the
+// standard this wire format is describing; a field saying anything else is a
+// field this layer has nothing to do with, and dropping it is the answer.
+
+TEST ("a note list that is not numbers is answered, not thrown at")
+{
+    for (const char* csv : { "abc,def", "99999999999999999999", "60,,64", "-1", "" })
+    {
+        CHECK (contains (identifyChord (csv), "\"ok\":"));
+        CHECK (contains (analyseVoicing ("Cmaj7", csv, "rootless"), "\"ok\":"));
+        CHECK (contains (compingVoicing ("Cmaj7", csv), "\"ok\":"));
+        CHECK (contains (compHit ("| Cmaj7 |", "charleston", 0, 0, 0, csv, 0), "\"ok\":"));
+    }
+}
+
+TEST ("a note outside the MIDI range is not a note")
+{
+    /*  128 and up used to reach the naming code, which named an octave by
+        dividing a number that was never a note - "E178956969" came back from a
+        field of twenty digits. Anything outside 0 to 127 is dropped, so what is
+        left is the chord the real notes spell. */
+    CHECK (contains (identifyChord ("60,64,67,128,9999"), "\"played\":\"C4 E4 G4\""));
+}
+
+TEST ("a note list that is notes still reads as the chord it spells")
+{
+    // The guard above must not cost the ordinary case: these are the same
+    // arguments the page sends on every keypress.
+    CHECK (contains (identifyChord ("60,64,67"), "\"played\":\"C4 E4 G4\""));
+    CHECK (contains (identifyChord ("0,127"), "\"ok\":true"));
+    CHECK (contains (analyseVoicing ("Cmaj7", "60,64,67,71", "rootless"), "\"ok\":true"));
+}

@@ -4,6 +4,22 @@
      what I pushed?" is a question you answer by looking rather than by
      digging through deploy logs - which is exactly how it was asked once. -->
 <meta name="jazz-build" content="__JAZZ_BUILD__">
+<!-- Only this page's own scripts may run in it.
+
+     The PDF reader below used to be a <script src> pointing at a public CDN,
+     which meant a third party could put code in this page - and in the desktop
+     app, where that page holds the bridge to the native side. It is served from
+     here now, and this says so: nothing from anywhere else executes, in either
+     shell, whatever gets into the document.
+
+     'unsafe-inline' because the whole interface is one inline script, and
+     'wasm-unsafe-eval' because the engine is WebAssembly. Deliberately no
+     default-src: the app runs this page from a file:// URL over a native
+     bridge, and a directive written for the web that quietly cut that bridge
+     would look exactly like the app being broken. What is here is what can be
+     checked in both. -->
+<meta http-equiv="Content-Security-Policy"
+      content="script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'">
 <!-- The webfonts are requested by script rather than written here with an href,
      and only when this page is served over the web. The desktop app runs it in a
      webview that may have no route to the internet, and a webview waiting on a
@@ -1917,7 +1933,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 446 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 455 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -2206,8 +2222,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
 <!-- Reading a PDF is the one job the engine cannot do: pdf.js pulls the text
      and its positions off the page, and the engine works out which of it is a
-     chord chart. If the library is blocked, the paste box still works. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+     chord chart. It is fetched by `pdfLibrary()` below, the first time someone
+     actually opens a PDF - not here as a tag. A tag was a third party's script
+     running in this page on every visit, including in the app, where this page
+     talks to the native side; and being a tag, it blocked the script below it
+     on a network the app may not even have. If it will not load, the paste box
+     still works. -->
 <script>
 (function () {
   "use strict";
@@ -5472,25 +5492,61 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     });
   });
 
+  /** Fetches pdf.js, once, and answers with it.
+
+      From beside this page rather than from a CDN. The library is 300-odd KB
+      that only someone importing a PDF ever needs, so it is asked for when that
+      happens and not before: a visitor who never opens one never pays for it,
+      and the app - where this is unreachable, because the shell owns the file
+      picker there - never asks at all.
+  */
+  var pdfjs = null;
+
+  function pdfLibrary() {
+    if (pdfjs === null) {
+      pdfjs = new Promise(function (resolve, reject) {
+        var script = document.createElement("script");
+        script.src = "pdf.min.js";
+        script.onload = function () { resolve(window.pdfjsLib); };
+        script.onerror = function () { reject(new Error("pdf.min.js did not load")); };
+        document.head.appendChild(script);
+      }).then(function (library) {
+        if (!library) throw new Error("pdf.min.js loaded without pdfjsLib");
+
+        /*  Beside the page too, which is what lets it be a real worker: a
+            worker script has to be same-origin, so the CDN copy could only ever
+            run as pdf.js's fallback on this thread. A PDF is now read off it. */
+        try {
+          library.GlobalWorkerOptions.workerSrc = "pdf.worker.min.js";
+        } catch (error) { /* the fake worker will take over */ }
+
+        return library;
+      });
+
+      // A failed fetch must not be remembered as a failure for ever: someone
+      // who lost the network mid-visit can try the same file again.
+      pdfjs.catch(function () { pdfjs = null; });
+    }
+
+    return pdfjs;
+  }
+
   /** Pulls the text off every page of a PDF and hands it to the engine. */
-  function readPdf(file) {
-    if (typeof window.pdfjsLib === "undefined") {
+  async function readPdf(file) {
+    setImportStatus("Reading " + file.name + "...");
+
+    var pdfjsLib;
+
+    try {
+      pdfjsLib = await pdfLibrary();
+    } catch (error) {
       setImportStatus("The PDF reader did not load here. Paste an iReal Pro link or the chords "
                       + "instead.", "bad");
       return;
     }
 
-    setImportStatus("Reading " + file.name + "...");
-
-    // Without a worker pdf.js runs on this thread, which is slower but works
-    // where a cross-origin worker is not allowed.
-    try {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-    } catch (error) { /* the fake worker will take over */ }
-
     file.arrayBuffer().then(function (buffer) {
-      return window.pdfjsLib.getDocument({ data: buffer, isEvalSupported: false }).promise;
+      return pdfjsLib.getDocument({ data: buffer, isEvalSupported: false }).promise;
     }).then(function (pdf) {
       var rows = [];
       var pageTop = 0;

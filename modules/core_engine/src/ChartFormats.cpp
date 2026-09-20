@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -164,6 +165,60 @@ bool looksLikeIRealPro (std::string_view text)
 
 namespace
 {
+    /** A whole number out of text, when the text really is one.
+
+        Every number this file reads was written by something else - an iReal
+        Pro link pasted out of a forum, a PDF exported by a program that is not
+        iReal Pro - and `std::stoi` answers a word, or a run of digits too long
+        to fit an int, by throwing. Nothing above catches it: on the web the
+        engine aborts and every later call fails, and in the app the process
+        goes down. A file this reader cannot read is a thing it already knows
+        how to say, so it says that instead.
+    */
+    std::optional<int> asNumber (std::string_view text)
+    {
+        // Nine digits fit an int whatever they spell, which is the whole reason
+        // to count them rather than convert and hope.
+        if (text.empty() || text.size() > 9)
+            return std::nullopt;
+
+        auto value = 0;
+
+        for (auto c : text)
+        {
+            if (std::isdigit (static_cast<unsigned char> (c)) == 0)
+                return std::nullopt;
+
+            value = value * 10 + (c - '0');
+        }
+
+        return value;
+    }
+
+    /** Takes a metre the two numbers describe, and says whether they described
+        one at all.
+
+        Zero is the reading that matters: "T04" is a bar of no beats, which is
+        not a metre any tune is in, and it travels to the page as one. A metre
+        that cannot be true is no metre, and the chart keeps the 4/4 it started
+        with - the same answer this reader gives any bar it cannot read.
+    */
+    bool readTimeSignature (Chart& chart, std::optional<int> numerator,
+                            std::optional<int> denominator)
+    {
+        const auto sane = [] (std::optional<int> value)
+        {
+            return value.has_value() && *value >= 1 && *value <= 32;
+        };
+
+        if (! sane (numerator) || ! sane (denominator))
+            return false;
+
+        chart.timeSignature.numerator = *numerator;
+        chart.timeSignature.denominator = *denominator;
+        return true;
+    }
+
     std::string urlDecoded (std::string_view text)
     {
         std::string out;
@@ -422,12 +477,9 @@ ChartParseResult importIRealPro (std::string_view text)
                 // A tune that changes metre writes several of these. A Chart holds
                 // one, so it holds the one the tune opens in.
                 if (! sawTimeSignature)
-                {
-                    chart.timeSignature.numerator
-                        = std::stoi (body.substr (i + 1, digits - 1));
-                    chart.timeSignature.denominator = body[i + digits] - '0';
-                    sawTimeSignature = true;
-                }
+                    sawTimeSignature = readTimeSignature (chart,
+                                                          asNumber (body.substr (i + 1, digits - 1)),
+                                                          asNumber (body.substr (i + digits, 1)));
 
                 i += digits;
             }
@@ -774,20 +826,24 @@ namespace
         if (text.rfind ("Bar ", 0) != 0)
             return false;
 
-        std::size_t i = 4;
-        auto digits = 0;
-        number = 0;
+        const auto start = std::size_t { 4 };
+        auto i = start;
 
         while (i < text.size() && std::isdigit (static_cast<unsigned char> (text[i])) != 0)
-        {
-            number = number * 10 + (text[i] - '0');
             ++i;
-            ++digits;
-        }
 
-        if (digits == 0 || i >= text.size() || text[i] != ',')
+        if (i == start || i >= text.size() || text[i] != ',')
             return false;
 
+        // Counted rather than accumulated in place: a bar number long enough to
+        // overflow an int is not a bar number, and reading it as one wrapped it
+        // round into a bar the page never had.
+        const auto read = asNumber (text.substr (start, i - start));
+
+        if (! read.has_value())
+            return false;
+
+        number = *read;
         description = trimmed (text.substr (i + 1));
         return true;
     }
@@ -857,11 +913,8 @@ namespace
                 const auto numbers = spokenWords (item.text.substr (15));
 
                 if (numbers.size() >= 2)
-                {
-                    chart.timeSignature.numerator = std::stoi (numbers[0]);
-                    chart.timeSignature.denominator = std::stoi (numbers[1]);
-                    sawTimeSignature = true;
-                }
+                    sawTimeSignature = readTimeSignature (chart, asNumber (numbers[0]),
+                                                          asNumber (numbers[1]));
             }
         }
 

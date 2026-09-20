@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (446), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (455), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -684,8 +684,9 @@ that iReal Pro opens directly.
 
 Two things are the browser page's alone, and both for the same reason - they need something
 the JUCE shell has no library for. The page reads a **PDF lead sheet** (iReal Pro exports
-one, and so does the page) using pdf.js; the app says so and points you at the link instead
-of reading a PDF as gibberish. And **Print or save as PDF** prints the lead sheet alone,
+one, and so does the page) using pdf.js, served from beside the page and fetched the first
+time someone actually opens a PDF rather than on every visit; the app says so and points you
+at the link instead of reading a PDF as gibberish. And **Print or save as PDF** prints the lead sheet alone,
 menus and keyboard left off the page, which is the browser's print pipeline doing the work.
 The chart reader itself is in the engine either way: what the app is missing is a way to get
 text out of a PDF, not a way to understand one.
@@ -722,6 +723,11 @@ sudo apt install emscripten   # or install the emsdk
 ./web/build.sh                # -> web/dist/jazz-engine.js, wasm included, 415 KB
 python3 -m http.server -d web 8000
 ```
+
+`build.sh` also puts pdf.js next to the engine, from npm, at the version pinned in the
+script - the page loads its PDF reader from its own origin rather than from a CDN. With no
+network it warns and carries on; the built page then reads iReal Pro links and pasted chords
+as it always did, and says so if a PDF is opened.
 
 Then open <http://localhost:8000>. The published copy lives on GitHub Pages:
 

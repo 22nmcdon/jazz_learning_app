@@ -594,3 +594,109 @@ TEST ("a chart written with sharps goes back out written with sharps")
     CHECK (link.find ("F#^9/B") != std::string::npos);
     CHECK (link.find ("Gb") == std::string::npos);
 }
+
+//==============================================================================
+// Numbers out of a file someone else wrote.
+//
+// Both readers take their metre off text they did not produce: an iReal Pro
+// link, which travels in a URL and so arrives from anywhere a link does, and a
+// PDF, which is a file from a stranger by definition. Both converted it with
+// `std::stoi`, which throws on a word and on a run of digits too long to fit an
+// int - and no caller anywhere above catches that. On the web it aborted the
+// WebAssembly engine, leaving a page whose every later call failed; in the app
+// it took the process down. A chart that cannot be read is an answer, not an
+// exit, and these say so in both directions.
+
+TEST ("a metre of too many digits does not take the reader down with it")
+{
+    const auto result = importIRealPro (
+        "irealbook://T=C=S=C=n=*A[T99999999999999999999999999999999C^7 |D-7 ]Z");
+
+    // The digits are still skipped rather than read as music: a metre that
+    // cannot be true leaves the chart in four, not in whatever the digits spell.
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->timeSignature.numerator, 4);
+    CHECK_EQ (result.chart->timeSignature.denominator, 4);
+    CHECK_EQ (result.chart->measureCount(), 2);
+}
+
+TEST ("a bar of no beats is not a metre")
+{
+    // "T04" reads as a bar of no beats. It divided by nothing further down and
+    // went out on the wire as beatsPerBar: 0, which is not a tune anyone is in.
+    const auto result = importIRealPro ("irealbook://T=C=S=C=n=*A[T04C^7 |D-7 ]Z");
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->timeSignature.numerator, 4);
+    CHECK_EQ (result.chart->timeSignature.denominator, 4);
+}
+
+TEST ("the metres iReal Pro really writes still read")
+{
+    struct Case { const char* body; int numerator; int denominator; };
+
+    const Case cases[] = {
+        { "T44", 4, 4 }, { "T34", 3, 4 }, { "T24", 2, 4 }, { "T54", 5, 4 },
+        { "T68", 6, 8 }, { "T78", 7, 8 }, { "T98", 9, 8 }, { "T128", 12, 8 },
+        { "T22", 2, 2 }, { "T32", 3, 2 }
+    };
+
+    for (const auto& one : cases)
+    {
+        const auto result = importIRealPro ("irealbook://T=C=S=C=n=*A["
+                                            + std::string (one.body) + "C^7 |D-7 ]Z");
+
+        CHECK (result.ok());
+
+        if (result.ok())
+        {
+            CHECK_EQ (result.chart->timeSignature.numerator, one.numerator);
+            CHECK_EQ (result.chart->timeSignature.denominator, one.denominator);
+        }
+    }
+}
+
+TEST ("a page whose metre is not a number is still a page")
+{
+    // An ordinary PDF is enough for this: "Time Signature:" followed by
+    // anything that is not two numbers was a word handed straight to std::stoi.
+    for (const char* spoken : { "Time Signature: many, lots",
+                                "Time Signature: 0Z",
+                                "Time Signature: 99999999999999999999, 4",
+                                "Time Signature:" })
+    {
+        const auto result = chartFromPlacedText ({ { 18.0, 40.0, spoken },
+                                                   { 18.0, 100.0, "Bar 1, c Major 7" },
+                                                   { 18.0, 140.0, "Bar 2, d Minor 7" } });
+
+        CHECK (result.ok());
+
+        if (result.ok())
+        {
+            CHECK_EQ (result.chart->timeSignature.numerator, 4);
+            CHECK_EQ (result.chart->measureCount(), 2);
+        }
+    }
+}
+
+TEST ("a page that does say its metre is still read in it")
+{
+    const auto result = chartFromPlacedText ({ { 18.0, 40.0, "Time Signature: 3, 4" },
+                                               { 18.0, 100.0, "Bar 1, c Major 7" } });
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->timeSignature.numerator, 3);
+    CHECK_EQ (result.chart->timeSignature.denominator, 4);
+}
+
+TEST ("a bar number too long to be one is not read as a bar")
+{
+    // It used to be accumulated a digit at a time into an int, which overflowed
+    // and wrapped round into a bar the page never described.
+    const auto result = chartFromPlacedText ({ { 18.0, 100.0, "Bar 99999999999999999999, c Major 7" },
+                                               { 18.0, 140.0, "Bar 2, d Minor 7" } });
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->measureCount(), 1);
+    CHECK_EQ (result.chart->measures[0].slots[0].chord.toString(), std::string ("Dm7"));
+}

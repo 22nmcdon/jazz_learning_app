@@ -35,3 +35,29 @@ echo "Built $out/jazz-engine.js ($(du -h "$out/jazz-engine.js" | cut -f1))"
 mkdir -p "$out/assets"
 cp "$here"/../assets/*.wav "$out/assets/"
 echo "Copied $(ls "$out/assets" | wc -l | tr -d ' ') samples into $out/assets"
+
+# The PDF reader, put beside the page rather than fetched from a CDN when
+# someone opens a PDF.
+#
+# It used to be a <script src> pointing at cdnjs, which is a third party able to
+# put code in this page - and the desktop app hosts the same page, with the
+# bridge to the native side in it. Served from here, the only script that can
+# run in the page is one that shipped with it, which is what the page's own
+# Content-Security-Policy now says.
+#
+# npm rather than a CDN because npm is the source cdnjs itself builds from, and
+# it verifies what it downloads. The version is pinned; moving it is a decision,
+# not a deploy. Best-effort: a build with no npm or no network still produces a
+# page, and one without pdf.js says so where a PDF is opened and points at the
+# paste box, which reads the same charts. CI checks the file is there, so a
+# skip cannot reach the deployed site quietly.
+pdfjs="3.11.174"
+
+if pack="$(cd "$out" && npm pack "pdfjs-dist@$pdfjs" --silent 2>/dev/null)" && [[ -n $pack ]]; then
+  tar xzf "$out/$pack" -C "$out" package/build/pdf.min.js package/build/pdf.worker.min.js
+  mv "$out/package/build/pdf.min.js" "$out/package/build/pdf.worker.min.js" "$out"
+  rm -rf "$out/package" "$out/$pack"
+  echo "Fetched pdf.js $pdfjs into $out"
+else
+  echo "warning: could not fetch pdf.js $pdfjs - the built page will not read PDFs" >&2
+fi

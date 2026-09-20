@@ -233,6 +233,18 @@ that's easy to miss in review:
   with the exercise armed, `planDialog` chooses the take's plan instead of
   rewriting the chart** — same dialog, same six write-ups, the clock decides
   which question is being asked.
+- **A number in a file is not a number until it has been read as one.** Every
+  reader here takes text somebody else wrote — an iReal Pro link, which travels
+  in a URL and so arrives from wherever a link does, and a PDF, which is a file
+  from a stranger by definition. `std::stoi` answers a word, or a run of digits
+  too long for an int, by throwing, and **nothing above catches it in either
+  shell**: it aborted the WebAssembly engine on the web and took the process
+  down in the app, from a link or an ordinary PDF saying `Time Signature: 0Z`.
+  Read numbers with the bounded helpers (`asNumber` in `ChartFormats.cpp`,
+  `parseNote` in `EngineApi.cpp`) and answer a file you cannot read with the
+  error the reader already has. The same goes for what the number then means:
+  a metre of no beats and a MIDI note of 300 are not readings, they are the
+  absence of one.
 - **The engine has no clock and must never get one.** Time/position enters as
   data (a `BarPosition`, a beat+tick on the shared grid in `docs/RHYTHM.md`)
   that the shell computed from its own clock — never as something the engine
@@ -279,6 +291,16 @@ that's easy to miss in review:
 - **The app's UI must never block on the network** — a render-blocking resource
   that never arrives leaves the whole webview invisible (backgrounds paint, no
   text does). Webfonts are requested by script, only when served over the web.
+- **Only the page's own scripts run in the page.** `web/index.html` carries a
+  `Content-Security-Policy` saying so, and `web/build.sh` puts pdf.js beside the
+  page from npm rather than letting the page fetch it from a CDN. It was a
+  `<script src>` pointing at cdnjs for a while, which is a third party able to
+  run code in this page — and the app hosts this same page, with the bridge to
+  the native side in it. It was also parser-blocking, above the script that is
+  the entire interface, which is the invariant above. **A library the page needs
+  is fetched by `build.sh` and loaded from our own origin, lazily** — never a tag
+  pointing somewhere else. The smoke test fails on any script from another
+  origin, which is the only way this stays true.
 - **The service worker (`web/sw.js`) never sees the visit that registers it** —
   registration happens on `load`, after both the page and engine are already
   fetched, so it fetches them itself on install. Test offline behavior by
