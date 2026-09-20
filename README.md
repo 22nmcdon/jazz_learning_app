@@ -243,6 +243,26 @@ starting again carries on from where you got to, and starting over means putting
 number back. Off unless you ask for it - this is practice you set up, not practice you
 find yourself in.
 
+**Reharmonise as you play** is the other way to make a take harder, and it is the one that
+is about *listening* rather than about speed. A chart is a fixed thing to practise against
+and a real one is not: a band calls a substitution and everybody follows. Turn it on and one
+bar of the loop is reharmonised as each chorus comes round - the chart redraws, the bar is
+marked the way one you chose by hand would be, and the band plays the new changes from the
+next pass. How far out it goes is yours: no further than safe, into advanced moves, or out
+to risky ones.
+
+It is in **both modes**, because both read the same chart. In solo practice the scale you
+are held to moves with the chord; in chord practice the voicing you are asked for does.
+
+**The tune goes back when the take stops**, and the take's summary says what it did - which
+bar, from what, to what. This is an exercise, not an edit: quietly keeping a substitution
+nobody chose would be the app rewriting your tune behind your back. A substitution you
+picked yourself out of a bar's own dialog stays exactly where you put it.
+
+The change lands on the **last bar of a chorus** rather than at the top of the next one, so
+that everything - the chart, the band's next plan, the scale a line is read against - is
+already the new tune by the downbeat.
+
 The **tempo and the metre are at the head of the chart**, where a lead sheet writes them,
 rather than in the menu - they belong to the tune, not to the practice session, which is also
 why an imported one brings its own. iReal Pro links and PDF lead sheets have always carried a

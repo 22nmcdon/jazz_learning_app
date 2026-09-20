@@ -709,6 +709,63 @@ try {
   await page.dispatchEvent("#tempo", "change");
   await page.evaluate(() => document.activeElement.blur());
 
+  /*  The tune changing under you while you play it.
+
+      A chart is a fixed thing to practise against and a real one is not - a
+      band calls a substitution and everybody follows. One bar of the loop is
+      reharmonised as each chorus comes round, and the point of the exercise is
+      that you find out by reading the chart.
+
+      Two halves, and the second matters as much as the first: it is an
+      exercise, not an edit, so stopping the take has to put the tune back
+      exactly as it was. */
+  const chartNow = () => page.evaluate(() =>
+    [...document.querySelectorAll("#systems .bar")]
+      .map((bar) => (bar.dataset.label || "").replace(/^Bar \d+, /, "")).join(" | "));
+
+  const before = await chartNow();
+
+  await page.locator("#menuButton").click();
+  await page.check("#reharmLive");
+  await page.selectOption("#reharmReach", "advanced");
+  await page.locator("#menuButton").click();
+  await page.evaluate(() => document.activeElement.blur());
+
+  await page.keyboard.press("Space");
+  await page.waitForFunction(
+    (was) => [...document.querySelectorAll("#systems .bar")]
+               .map((bar) => (bar.dataset.label || "").replace(/^Bar \d+, /, "")).join(" | ") !== was,
+    before, { timeout: 15000 });
+
+  const during = await chartNow();
+
+  check("the tune is reharmonised under you as a chorus comes round",
+        during !== before);
+
+  // And the bar it changed says so on the chart, the way one you chose by hand
+  // does - a change you cannot see is one you cannot play.
+  check("and the bar that moved is marked",
+        (await page.locator("#systems .bar.reharmonised").count()) > 0);
+
+  await page.keyboard.press("Space");
+  await page.waitForFunction(
+    () => document.querySelector("#armTake").getAttribute("aria-pressed") === "false",
+    null, { timeout: 10000 });
+  await page.waitForFunction(
+    (was) => [...document.querySelectorAll("#systems .bar")]
+               .map((bar) => (bar.dataset.label || "").replace(/^Bar \d+, /, "")).join(" | ") === was,
+    before, { timeout: 10000 });
+
+  check("and put back exactly as it was when the take stops", true);
+
+  check("leaving no mark on the chart behind it",
+        (await page.locator("#systems .bar.reharmonised").count()) === 0);
+
+  await page.locator("#menuButton").click();
+  await page.uncheck("#reharmLive");
+  await page.locator("#menuButton").click();
+  await page.evaluate(() => document.activeElement.blur());
+
 
   // --- comping ------------------------------------------------------------
   // The band behind the soloist. The engine says which notes; everything the

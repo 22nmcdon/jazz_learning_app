@@ -1543,6 +1543,24 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
               <input class="tempo-input" id="rampTo" type="number" min="40" max="300" step="5" value="200">
               <span class="tempo-unit">bpm</span>
             </div>
+
+            <!-- Last of the three things that happen *to* a take rather than
+                 that happens *to* a take rather than a setting of it, and like
+                 them it needs a clock: a chorus is the unit, and static there
+                 is no such thing. -->
+            <label class="menu-option" id="reharmRow" hidden>
+              <input type="checkbox" id="reharmLive"> Reharmonise as you play
+            </label>
+
+            <div class="tempo-row" id="reharmHow" hidden>
+              <label class="tempo-label" for="reharmReach">Going</label>
+              <select class="menu-select tempo-select" id="reharmReach">
+                <option value="safe">no further than safe</option>
+                <option value="advanced">into advanced moves</option>
+                <option value="risky">out to risky ones</option>
+              </select>
+            </div>
+
           </div>
 
           <div class="menu-group" data-mode="solo">
@@ -2281,6 +2299,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "playStatic", "playLive", "playingNote", "metreRow", "tempo", "timeSig", "countInRow", "countIn",
    "loopRow", "loopFrom", "loopTo", "beatRow",
    "rampRow", "ramp", "rampHow", "rampBy", "rampTo",
+   "reharmRow", "reharmLive", "reharmHow", "reharmReach",
    "colophonEngine", "colophonFraming", "colophonBuild",
    "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloScale", "soloOpen",
    "soloTallies",
@@ -2748,9 +2767,30 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     renderTakeDetail(detail);
     showTab(soloing ? 0 : 1);
 
-    if (soloing) await renderScales(); else renderSubstitutions();
+    if (soloing) await renderScales(); else await renderSubstitutions();
 
     if (!el.chordDialog.open) el.chordDialog.showModal();
+  }
+
+  /** Adds what the tune did during the take, if it did anything.
+
+      One writer for both summaries. A solo take and a comping take read
+      different things, but "the chart changed under you and here is what it
+      became" is the same sentence to both, and a second copy of it is a second
+      copy to go stale.
+  */
+  function sayWhatChanged(list) {
+    if (!reharm.changed.length) return;
+
+    var item = document.createElement("li");
+
+    item.textContent = "The tune moved under you: "
+      + reharm.changed.map(function (one) {
+          return "bar " + (one.bar + 1) + ", " + one.from + " became " + one.to;
+        }).join("; ")
+      + ". It is back as it was now the take has stopped.";
+
+    list.appendChild(item);
   }
 
   /** What the last take had to say about one bar, or null if it never played it.
@@ -2967,8 +3007,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   // --- reharmonisation -----------------------------------------------------
-  function renderSubstitutions() {
-    var result = call(
+  async function renderSubstitutions() {
+    /*  Awaited, like every other engine call on this page. It was not, and the
+        funnel's own comment says what that costs: `call` hands back a value on
+        the web and a promise in the app, so this read `.ok` off a promise,
+        found undefined and returned - and reharmonising, the feature this
+        panel is, did nothing at all in the desktop app while working perfectly
+        in a browser. Exactly the silent failure that comment warns about. */
+    var result = await call(
       "jazzReharmonise",
       ["string", "number", "number", "number"],
       [state.progression, state.selected, el.advanced.checked ? 1 : 0, el.risky.checked ? 1 : 0]
@@ -3275,18 +3321,21 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       el.findingRow.appendChild(line);
     });
 
-    showSpottedSubstitution();
+    await showSpottedSubstitution();
   }
 
   /** Tells the player when what they just voiced is one of this bar's
       substitutions - they have found a reharmonisation, not made a mistake. */
-  function showSpottedSubstitution() {
+  async function showSpottedSubstitution() {
     state.spotted = null;
     el.spotted.hidden = true;
 
     if (state.heldNotes.length < 3) return;
 
-    var result = call(
+    // Awaited for the same reason, and it was silently dead in the app for the
+    // same one: spotting a substitution by ear is a browser-only feature until
+    // this is a promise the caller waits on.
+    var result = await call(
       "jazzRecogniseSubstitution",
       ["string", "number", "string", "number"],
       [state.progression, state.selected, state.heldNotes.join(","), el.advanced.checked ? 1 : 0]
@@ -3350,6 +3399,28 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       `bars` is the bars the take has played *through*, downbeat to downbeat. A
       bar stopped in the middle was not played to the end, and counting it marks
       every four-to-the-bar take sparse in its last bar. */
+  /*  The tune changing under you while you play it.
+
+      A chart is a fixed thing to practise against and a real one is not: a
+      band calls a substitution and everybody follows. This turns that into an
+      exercise - at the top of each chorus one bar of the loop is reharmonised,
+      the chart redraws, and the band plays the new changes from the next pass.
+      Both modes, because both are reading the same chart: in solo practice the
+      scale you are held to moves with the chord, and in chord practice the
+      voicing you are asked for does.
+
+      It puts the tune back when the take stops. This is an exercise, not an
+      edit - quietly keeping a substitution nobody chose would be the app
+      rewriting somebody's tune behind their back.
+  */
+  var reharm = {
+    on: false,
+    reach: "safe",
+
+    before: null,    // the progression as it stood when the take began
+    changed: []      // { bar, from, to }, in the order they happened
+  };
+
   var comp = { armed: false, hits: [], counts: {}, bars: [],
                pending: null, settleTimer: null,
 
@@ -4101,6 +4172,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       el.compObservations.appendChild(item);
     });
 
+    sayWhatChanged(el.compObservations);
+
     el.compSummary.hidden = false;
   }
 
@@ -4439,6 +4512,98 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       `nextBeat` counts from the start of the count-in, so beat zero is the
       first click a player hears and the arithmetic below never has to know
       whether it is still counting in. */
+  /** Reharmonises one bar of the loop, for the chorus about to start.
+
+      The engine offers the substitutions and this picks one - the same
+      division as everywhere else: which chords could stand in for this one is
+      theory, and *when the tune changes under a player* is a fact about a take
+      and belongs to the clock.
+
+      A bar that has not been touched yet is preferred, so a chorus changes
+      something new rather than worrying at one bar; once every bar in the loop
+      has been through it, any of them may go again.
+  */
+  async function reharmoniseForTheChorus() {
+    if (!reharm.on || !transport.running) return;
+
+    var loop = loopRange();
+
+    // Seeded like the comp plan, and off the same chorus - so a take played
+    // twice is the same exercise twice rather than a different tune each time.
+    var already = reharm.changed.map(function (one) { return one.bar; });
+    var fresh = [];
+
+    for (var bar = loop.from; bar <= loop.to; ++bar)
+      if (already.indexOf(bar) === -1) fresh.push(bar);
+
+    var pool = fresh.length ? fresh : [];
+
+    for (var i = loop.from; !pool.length && i <= loop.to; ++i) pool.push(i);
+
+    var chosen = pool[Math.floor(spread([comping.seed, comping.chorus, loop.from]) * pool.length)
+                        % pool.length];
+
+    var was = (state.measures[chosen] || {}).chords;
+    var wasSymbol = was && was.length ? was[0].symbol : "";
+
+    var result = await call("jazzReharmonise", ["string", "number", "number", "number"],
+                            [state.progression, chosen,
+                             reharm.reach === "safe" ? 0 : 1,
+                             reharm.reach === "risky" ? 1 : 0]);
+
+    if (result === null || !result.ok || !result.substitutions
+          || !result.substitutions.length) return;
+
+    /*  One of them, by seed, rather than the first. The engine ranks from the
+        closest to the original harmony outwards, so always taking the top of
+        the list would mean the same substitution every time a bar came round -
+        which is the thing the band's voicings were just opened up to stop. */
+    var picked = result.substitutions[
+      Math.floor(spread([comping.seed, comping.chorus, chosen, 7])
+                   * result.substitutions.length) % result.substitutions.length];
+
+    // Taken before the chart moves, so the take's summary can say what changed
+    // from what even after the tune has been put back.
+    reharm.changed.push({ bar: chosen, from: wasSymbol, to: picked.replacement });
+
+    state.progression = picked.progression;
+    el.progression.value = picked.progression;
+    state.reharmonised[chosen] = true;
+
+    await parseChart();
+
+    // The chart was rebuilt, so whatever the take had written on it has to go
+    // back on: the marks live on the bars and the bars are new elements.
+    paintTakeMarks();
+  }
+
+  /** Puts the tune back the way it was before the take.
+
+      An exercise rather than an edit. Nothing here asks first, because nothing
+      here was chosen - a substitution somebody picked out of the bar's own
+      dialog stays exactly as it did.
+  */
+  async function restoreAfterReharm() {
+    if (reharm.before === null) return;
+
+    var was = reharm.before;
+
+    reharm.before = null;
+
+    // The marks this put on the bars go with it; ones from a substitution
+    // chosen by hand before the take are not ours to clear, and the take
+    // started from a chart that already had them.
+    reharm.changed.forEach(function (one) { delete state.reharmonised[one.bar]; });
+
+    if (was === state.progression) return;
+
+    state.progression = was;
+    el.progression.value = was;
+
+    await parseChart();
+    paintTakeMarks();
+  }
+
   /** Whether the beat about to be booked opens a new pass of the loop, with a
       faster tempo waiting for it.
 
@@ -4531,6 +4696,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (! isCountIn && inBar === 0 && barsIn > 0 && barsIn % loop.bars === 0)
       comping.chorus += 1;
 
+    /*  The tune changes on the *last* bar of a chorus rather than at the top of
+        the next one, and that is not a detail. Reharmonising asks the engine
+        and redraws the chart, which is a turn of the event loop; the band is
+        booked a bar ahead and synchronously. Done at the boundary, the first
+        bar of the new chorus would still be playing the old chord and the
+        change would arrive a bar late. A bar early, everything - the chart,
+        the band's next plan, the scale the line is read against - is already
+        the new tune by the downbeat. */
+    if (! isCountIn && inBar === 0 && barsIn % loop.bars === loop.bars - 1)
+      reharmoniseForTheChorus();
+
     if (! isCountIn && inBar === 0)
     {
       compBar(barIndex, when, secondsPerBeat());
@@ -4616,6 +4792,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // Back to the top: a take played again is the same exercise, so it starts
     // on the chorus the last one started on rather than wherever it got to.
     comping.chorus = 0;
+
+    // What to put back afterwards. Taken whether or not the setting is on, so
+    // switching it on mid-take still has somewhere to return to.
+    reharm.before = state.progression;
+    reharm.changed = [];
     transport.countInBeats = transport.countIn ? transport.beats : 0;
     transport.origin = transportNow() + 0.12;   // a moment to get the first click out
 
@@ -4638,6 +4819,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // The band stops with the clock. Comp voicings are booked a bar ahead, so
     // without this the accompaniment plays on into the silence after a take.
     stopComping();
+
+    // And the tune goes back to the one the take started from. An exercise,
+    // not an edit.
+    restoreAfterReharm();
     transport.timer = null;
     transport.running = false;
     transport.counting = false;
@@ -4802,6 +4987,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       item.textContent = line;
       el.soloObservations.appendChild(item);
     });
+
+    sayWhatChanged(el.soloObservations);
 
     // No bar-by-bar list here any more: the chart carries it, on the bars
     // themselves, which is both where a player is looking and where "which bar
@@ -5209,6 +5396,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // climbs when it is not climbing is two controls answering nothing.
     el.rampHow.hidden = !on || !transport.ramp;
 
+    // A chorus is the unit, so this needs a clock like the rest of them.
+    el.reharmRow.hidden = !on;
+    el.reharmHow.hidden = !on || !reharm.on;
+
     /*  In chord practice the two settings hold the keyboard differently -
         static latches a voicing so it can be read, in time a comp is struck and
         let go - so a voicing carried across is a chord the other setting will
@@ -5248,6 +5439,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // Said here rather than beside the two boxes, because what matters is what
     // it will do to the take rather than what the numbers are - and it is the
     // one setting in this panel that changes something while you play.
+    if (transport.inTime && reharm.on)
+      el.playingNote.textContent += " One bar of the loop is reharmonised as each chorus "
+                                  + "comes round, "
+                                  + (reharm.reach === "safe" ? "keeping to safe moves"
+                                     : reharm.reach === "advanced" ? "going into advanced ones"
+                                     : "out as far as risky ones")
+                                  + " - the tune goes back when the take stops.";
+
     if (transport.inTime && transport.ramp)
       el.playingNote.textContent += " The tempo goes up " + transport.rampBy
                                   + " bpm each time the loop comes round, to " + transport.rampTo
@@ -5296,6 +5495,22 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   el.tempo.addEventListener("change", function () {
     setTempo(el.tempo.value);
     if (transport.running) reanchorClock();
+  });
+
+  el.reharmLive.addEventListener("change", function () {
+    reharm.on = el.reharmLive.checked;
+    el.reharmHow.hidden = !transport.inTime || !reharm.on;
+
+    // Switched off mid-take, the tune goes back at once rather than staying
+    // wherever the exercise had got to.
+    if (!reharm.on && transport.running) restoreAfterReharm();
+
+    describePlaying();
+  });
+
+  el.reharmReach.addEventListener("change", function () {
+    reharm.reach = el.reharmReach.value;
+    describePlaying();
   });
 
   el.ramp.addEventListener("change", function () {

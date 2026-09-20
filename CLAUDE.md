@@ -208,6 +208,13 @@ that's easy to miss in review:
   again. The tempo ramp changes tempo only at a chorus boundary, and does it
   while beats are being *booked* rather than when one sounds, so every beat in
   the diary was written down at the tempo it will be played at.
+- **Reharmonise as you play changes the chart on the *last* bar of a chorus,
+  not at the top of the next one.** Reharmonising asks the engine and redraws,
+  which is a turn of the event loop; the band is booked a bar ahead and
+  synchronously. At the boundary the first bar of the new chorus still plays
+  the old chord. A bar early, everything is the new tune by the downbeat. It
+  restores `reharm.before` when the transport stops — an exercise, not an edit
+  — and clears only the `reharmonised` marks it put there itself.
 - **The engine has no clock and must never get one.** Time/position enters as
   data (a `BarPosition`, a beat+tick on the shared grid in `docs/RHYTHM.md`)
   that the shell computed from its own clock — never as something the engine
