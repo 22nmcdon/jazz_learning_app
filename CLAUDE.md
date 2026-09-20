@@ -164,6 +164,14 @@ something finished or assume something unfinished is done:
 These aren't stylistic preferences — violating them breaks something in a way
 that's easy to miss in review:
 
+- **Every beat time is an origin plus a beat count at one spacing**, so anything
+  that changes the spacing mid-roll must move the origin to the beat the change
+  takes effect on — and must reset `transport.countInBeats`, which is a fact
+  about *this roll* rather than about the count-in checkbox. Worked out from the
+  checkbox instead, a tempo change halfway through a take counted the player in
+  again. The tempo ramp changes tempo only at a chorus boundary, and does it
+  while beats are being *booked* rather than when one sounds, so every beat in
+  the diary was written down at the tempo it will be played at.
 - **The engine has no clock and must never get one.** Time/position enters as
   data (a `BarPosition`, a beat+tick on the shared grid in `docs/RHYTHM.md`)
   that the shell computed from its own clock — never as something the engine

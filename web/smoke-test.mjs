@@ -602,6 +602,66 @@ try {
   check("and the space bar stops it again",
         (await page.locator("#systems .bar.rolling").count()) === 0);
 
+  /*  Start slow and work up. What is worth asserting is not that a number in a
+      box went up - it is that the clock followed it, and that it changed where
+      a chorus begins rather than under a phrase. So this measures the beats:
+      the gaps have to come in runs, one run per pass of the loop, each shorter
+      than the last. */
+  await page.locator("#menuButton").click();
+  await page.check("#ramp");
+  await page.fill("#rampBy", "20");
+  await page.dispatchEvent("#rampBy", "change");
+  await page.fill("#rampTo", "300");
+  await page.dispatchEvent("#rampTo", "change");
+  await page.selectOption("#loopTo", "0");      // one bar, so a chorus is four beats
+  await page.locator("#menuButton").click();
+
+  await page.fill("#tempo", "200");
+  await page.dispatchEvent("#tempo", "change");
+  await page.evaluate(() => document.activeElement.blur());
+
+  // Inline rather than `forgetSounds`, which is declared below this point.
+  await page.evaluate(() => { window.__sounded = []; });
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(3000);
+  await page.keyboard.press("Space");
+  await page.waitForFunction(
+    () => document.querySelector("#armTake").getAttribute("aria-pressed") === "false",
+    null, { timeout: 10000 });
+
+  const rampBeats = await page.evaluate(() =>
+    window.__sounded.filter((s) => s.type === "square").map((s) => s.when).sort((a, b) => a - b));
+
+  const rampGaps = rampBeats.slice(1).map((w, i) => w - rampBeats[i]);
+  const rampTempi = [...new Set(rampGaps.map((g) => Math.round(60 / g)))];
+
+  check(`the tempo ramp steps the clock, not just the box (${rampTempi.join(" -> ")})`,
+        rampTempi.length > 1
+        && rampTempi.every((t, i) => i === 0 || t > rampTempi[i - 1])
+        && (await page.locator("#tempo").inputValue()) === String(rampTempi[rampTempi.length - 1]));
+
+  // Each step lands on a chorus, never inside one: every run of equal gaps is
+  // a whole number of bars long. A ramp that moved mid-phrase would pass the
+  // check above and be the thing nobody could play against.
+  const runs = rampGaps.reduce((out, gap) => {
+    const last = out[out.length - 1];
+    if (last && Math.abs(last.gap - gap) < 0.01) last.beats += 1;
+    else out.push({ gap, beats: 1 });
+    return out;
+  }, []);
+
+  check(`and steps on a chorus, not inside one (${runs.map((r) => r.beats).join("+")} beats)`,
+        runs.slice(0, -1).every((run) => run.beats % 4 === 0));
+
+  await page.locator("#menuButton").click();
+  await page.uncheck("#ramp");
+  await page.selectOption("#loopTo", "1");
+  await page.locator("#menuButton").click();
+  await page.fill("#tempo", "300");
+  await page.dispatchEvent("#tempo", "change");
+  await page.evaluate(() => document.activeElement.blur());
+
+
   // --- comping ------------------------------------------------------------
   // The band behind the soloist. The engine says which notes; everything the
   // page does is when - so these checks read the notes that actually sounded.

@@ -227,6 +227,16 @@ on wears a line across its top. The take and the clock are the same take: the cl
 walking the chart instead of your mouse, and the engine cannot tell the difference, which is
 the point. Everything else works exactly as it does static.
 
+**Speed up each chorus**, under the loop, is the practice-room exercise: start under
+tempo and let it climb. It goes up by however many beats to the minute you say each time
+the loop comes round, and stops at a ceiling you set. It changes **only at the top of the
+form** - a tempo that moved under a phrase would be unplayable, and the chart is going
+back to the first bar of the loop at that moment anyway. The box at the head of the chart
+is always the tempo being played, so it is also where the ramp shows: stopping and
+starting again carries on from where you got to, and starting over means putting the
+number back. Off unless you ask for it - this is practice you set up, not practice you
+find yourself in.
+
 The **tempo and the metre are at the head of the chart**, where a lead sheet writes them,
 rather than in the menu - they belong to the tune, not to the practice session, which is also
 why an imported one brings its own. iReal Pro links and PDF lead sheets have always carried a

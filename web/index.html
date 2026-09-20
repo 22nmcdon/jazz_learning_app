@@ -1465,6 +1465,22 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
               <span class="tempo-unit">to</span>
               <select class="menu-select tempo-select" id="loopTo"></select>
             </div>
+
+            <!-- Under the loop, because a chorus is what it counts. Off by
+                 default and hidden with the rest of what a clock needs: this
+                 is practice you set up deliberately, not practice you should
+                 find yourself in. -->
+            <label class="menu-option" id="rampRow" hidden>
+              <input type="checkbox" id="ramp"> Speed up each chorus
+            </label>
+
+            <div class="tempo-row" id="rampHow" hidden>
+              <label class="tempo-label" for="rampBy">by</label>
+              <input class="tempo-input" id="rampBy" type="number" min="1" max="20" step="1" value="4">
+              <span class="tempo-unit">bpm, up to</span>
+              <input class="tempo-input" id="rampTo" type="number" min="40" max="300" step="5" value="200">
+              <span class="tempo-unit">bpm</span>
+            </div>
           </div>
 
           <div class="menu-group" data-mode="solo">
@@ -2188,6 +2204,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "compStyle", "compStyleNote", "compBass", "bassSound", "compDrums",
    "playStatic", "playLive", "playingNote", "metreRow", "tempo", "timeSig", "countInRow", "countIn",
    "loopRow", "loopFrom", "loopTo", "beatRow",
+   "rampRow", "ramp", "rampHow", "rampBy", "rampTo",
    "colophonEngine", "colophonFraming", "colophonBuild",
    "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloScale", "soloOpen",
    "soloTallies",
@@ -3948,6 +3965,23 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     beatUnit: 4,
     countIn: true,
     counting: false,   // in the count-in bar, which is not yet bar one
+
+    /*  How many beats of this roll were the count-in, rather than whether a
+        count-in was asked for. They are the same number at the start and stop
+        being the same the moment the clock re-anchors mid-roll: every beat
+        time is measured from one origin at one spacing, so changing the
+        spacing means moving the origin, and a beat index measured from a new
+        origin has no count-in in front of it. Counted from the old setting
+        alone, a tempo change halfway through a take counted the player in
+        again. */
+    countInBeats: 0,
+
+    /*  Start slow and work up - off, because it is the kind of practice you
+        set up rather than the kind you get. `by` is how much faster each time
+        the loop comes round, `upTo` is where it stops climbing. */
+    ramp: false,
+    rampBy: 4,
+    rampTo: 200,
     from: 0,
 
     // -1 until a chart has been seen, which is what makes the first
@@ -4044,28 +4078,74 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       `nextBeat` counts from the start of the count-in, so beat zero is the
       first click a player hears and the arithmetic below never has to know
       whether it is still counting in. */
+  /** Whether the beat about to be booked opens a new pass of the loop, with a
+      faster tempo waiting for it.
+
+      Only ever true on the first beat of a chorus, which is the only place a
+      tempo may change: a player working up to speed wants to arrive at the top
+      of the form at the new tempo, not to find it shifting under a phrase. It
+      is also the only place the change is cheap - the chart is going back to
+      the first bar of the loop anyway, so re-anchoring the clock there costs
+      nothing that was not already happening.
+  */
+  function rampDue(index) {
+    if (!transport.ramp || transport.bpm >= transport.rampTo) return false;
+
+    var chorus = transport.beats * loopRange().bars;
+
+    return index > transport.countInBeats
+        && (index - transport.countInBeats) % chorus === 0;
+  }
+
+  function stepTempo() {
+    setTempo(Math.min(transport.rampTo, transport.bpm + transport.rampBy));
+  }
+
   function pumpTransport() {
     if (!transport.running) return;
 
-    var beat = secondsPerBeat();
-    var countInBeats = transport.countIn ? transport.beats : 0;
     var horizon = transportNow() + transportLookahead();
 
-    while (transport.origin + transport.nextBeat * beat <= horizon) {
+    while (true) {
+      var beat = secondsPerBeat();
       var index = transport.nextBeat;
       var when = transport.origin + index * beat;
+
+      if (when > horizon) return;
+
+      /*  The ramp, and this is the only honest place for it. A beat time is an
+          origin plus a number of beats at a spacing, so changing the spacing
+          means moving the origin to the beat the change takes effect on -
+          otherwise every beat after it is computed at the new spacing from an
+          origin that meant the old one, and the line jumps.
+
+          Done here, while beats are being *booked*, rather than when one
+          sounds: every beat already in the diary was written down at the tempo
+          it will be played at. Done a moment later, the first beat of the new
+          chorus would be the last one at the old tempo. */
+      if (rampDue(index)) {
+        stepTempo();
+
+        transport.origin = when;
+        transport.nextBeat = 0;
+        transport.countInBeats = 0;   // counted in once, at the top of the take
+
+        beat = secondsPerBeat();
+        index = 0;
+      }
+
       var inBar = index % transport.beats;
 
       clickAt(when, inBar === 0);
-      bookBeat(when, index, inBar, index < countInBeats);
+      bookBeat(when, index, inBar, index < transport.countInBeats);
 
-      transport.nextBeat += 1;
+      transport.nextBeat = index + 1;
     }
   }
 
   /** The visual half of one beat: which bar the chart is on, and which dot. */
   function bookBeat(when, index, inBar, isCountIn) {
-    var countInBeats = transport.countIn ? transport.beats : 0;
+    var countInBeats = transport.countInBeats;
     var loop = loopRange();
 
     // Worked out here rather than inside the callback, because the comp needs
@@ -4159,6 +4239,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     transport.running = true;
     transport.counting = transport.countIn;
     transport.nextBeat = 0;
+    transport.countInBeats = transport.countIn ? transport.beats : 0;
     transport.origin = transportNow() + 0.12;   // a moment to get the first click out
 
     selectBar(loop.from);
@@ -4745,6 +4826,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     el.countInRow.hidden = !on;
     el.loopRow.hidden = !on;
+    el.rampRow.hidden = !on;
+
+    // The two numbers appear only once the ramp is on. Asking how fast it
+    // climbs when it is not climbing is two controls answering nothing.
+    el.rampHow.hidden = !on || !transport.ramp;
 
     /*  In chord practice the two settings hold the keyboard differently -
         static latches a voicing so it can be read, in time a comp is struck and
@@ -4781,25 +4867,85 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
            ? "Static: the bar you are on is the bar you chose, and nothing is counting time."
            : "Static: hold a voicing and it is read against the bar. Nothing is counting time, "
              + "so nothing is being placed.");
+
+    // Said here rather than beside the two boxes, because what matters is what
+    // it will do to the take rather than what the numbers are - and it is the
+    // one setting in this panel that changes something while you play.
+    if (transport.inTime && transport.ramp)
+      el.playingNote.textContent += " The tempo goes up " + transport.rampBy
+                                  + " bpm each time the loop comes round, to " + transport.rampTo
+                                  + ", and the box at the head of the chart says where it has got to.";
   }
 
   el.playLive.addEventListener("click", function () { setInTime(true); });
   el.playStatic.addEventListener("click", function () { setInTime(false); });
 
-  el.tempo.addEventListener("change", function () {
-    var wanted = Math.round(Number(el.tempo.value));
+  /** The tempo, and the box that shows it, and nothing else.
 
-    transport.bpm = Math.max(40, Math.min(300, isFinite(wanted) ? wanted : 120));
+      Two things set the tempo now - the box and the ramp - and they re-anchor
+      the clock differently, so this does not re-anchor at all. The box means
+      "from now"; the ramp means "from the beat the new chorus starts on", and
+      that beat has a time of its own that `pumpTransport` already knows.
+
+      The box always shows the tempo being played, ramp or no ramp. That is
+      also the whole of the ramp's memory: a take started again climbs from
+      whatever the box says, so starting over means putting the number back
+      rather than finding out which of two tempos the app was keeping.
+  */
+  function setTempo(wanted) {
+    var rounded = Math.round(Number(wanted));
+
+    transport.bpm = Math.max(40, Math.min(300, isFinite(rounded) ? rounded : 120));
     el.tempo.value = String(transport.bpm);
+  }
 
-    // The origin is where every beat time is measured from, so changing the
-    // tempo mid-roll has to re-anchor it - otherwise the next beat is computed
-    // at the new spacing from an origin that meant the old one, and the whole
-    // line jumps.
-    if (transport.running) {
-      transport.origin = transportNow();
-      transport.nextBeat = 0;
-    }
+  /** Puts beat zero here, now.
+
+      The origin is what every beat time is measured from, so a spacing that
+      changes without it computes the next beat at the new spacing from an
+      origin that meant the old one, and the whole line jumps.
+
+      The count-in goes with it. Beats before the new origin do not exist, so a
+      take already under way must not be counted in again - which is what it
+      did while this number was worked out from the checkbox on every beat
+      rather than remembered for the roll.
+  */
+  function reanchorClock() {
+    transport.origin = transportNow();
+    transport.nextBeat = 0;
+    transport.countInBeats = transport.counting ? transport.beats : 0;
+  }
+
+  el.tempo.addEventListener("change", function () {
+    setTempo(el.tempo.value);
+    if (transport.running) reanchorClock();
+  });
+
+  el.ramp.addEventListener("change", function () {
+    transport.ramp = el.ramp.checked;
+    el.rampHow.hidden = !transport.inTime || !transport.ramp;
+    describePlaying();
+  });
+
+  /*  Read back rather than trusted: a number box hands back whatever was typed
+      into it, `min` and `max` being advice to the person rather than a rule on
+      the value. The clamp is the same one `setTempo` applies, because a ceiling
+      the tempo can never reach is a ramp that stops climbing without saying so.
+  */
+  el.rampBy.addEventListener("change", function () {
+    var by = Math.round(Number(el.rampBy.value));
+
+    transport.rampBy = Math.max(1, Math.min(20, isFinite(by) && by > 0 ? by : 4));
+    el.rampBy.value = String(transport.rampBy);
+    describePlaying();
+  });
+
+  el.rampTo.addEventListener("change", function () {
+    var to = Math.round(Number(el.rampTo.value));
+
+    transport.rampTo = Math.max(40, Math.min(300, isFinite(to) ? to : 200));
+    el.rampTo.value = String(transport.rampTo);
+    describePlaying();
   });
 
   el.timeSig.addEventListener("change", function () {
@@ -5866,8 +6012,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     var beat = secondsPerBeat();
     var elapsed = transportNow() - transport.origin;
-    var countIn = transport.countIn ? transport.beats : 0;
-    var beatsIn = elapsed / beat - countIn;
+    var beatsIn = elapsed / beat - transport.countInBeats;
 
     if (beatsIn < 0) return null;
 
