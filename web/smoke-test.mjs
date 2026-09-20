@@ -626,12 +626,11 @@ try {
   check(`the bass has its own recorded instruments (${bassSounds.join(", ")})`,
         bassSounds.some((name) => /upright/i.test(name))
         && bassSounds.some((name) => /electric/i.test(name))
-        && !(await page.locator("input[name=soundBank][value=upright]").count()));
+        && !(await page.locator("#soundBank option[value=upright]").count()));
 
   // One registry of sounds, not a second copy of the list.
   const compSounds = await page.locator("#compSound option").allInnerTexts();
-  const menuSounds = await page.locator("input[name=soundBank]").evaluateAll(
-    (radios) => radios.map((r) => r.parentElement.textContent.trim()));
+  const menuSounds = await page.locator("#soundBank option").allInnerTexts();
 
   check(`the band is offered the same sounds as the player (${compSounds.join(", ")})`,
         compSounds.length === menuSounds.length
@@ -926,9 +925,19 @@ try {
   //  say what the bar says - and the clock adds the half that needs one: did it
   //  land where the style puts it.
 
+  /*  The pedal is shown where there is something for it to hold: a MIDI
+      keyboard's key releases, which is the whole reason it exists, and the
+      auto-release in solo practice and comping. A keyboard is connected by
+      now, so static chord practice is exactly where it earns its place. */
+  check("the sustain pedal is there for a connected keyboard",
+        await page.locator("#sustainPedal").isVisible());
+
   await page.locator("#menuButton").click();
   await page.locator("#playLive").click();
   await page.locator("#menuButton").click();
+
+  check("and stays in time, where notes are let go of for you",
+        await page.locator("#sustainPedal").isVisible());
 
   check("in time, chord practice gets a clock and a take",
         (await page.locator("#armTake").isVisible()) && (await page.locator("#metreRow").isVisible()));

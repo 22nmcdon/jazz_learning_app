@@ -582,7 +582,6 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
   cursor: pointer;
 }
 .menu-option input { accent-color: var(--blush-deep); margin: 0; }
-.menu-option .hint { color: var(--text-soft); font-size: 12.5px; }
 .menu-note { font-size: 12.5px; color: var(--text-soft); margin: 10px 0 0; }
 .menu-note.warn { color: var(--rust); }
 .menu-note.good { color: var(--sage); }
@@ -1456,29 +1455,46 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <p class="menu-note" id="scaleStyleNote"></p>
           </div>
 
-          <div class="menu-group" role="radiogroup" aria-label="Voicing style" data-mode="chords">
+          <!-- A list of one-of-these choices is a dropdown, not a stack of
+               radios. Six voicing shapes, three sounds and two colour settings
+               came to eleven rows of the menu between them, which is most of
+               its height for three answers - and the two pickers that were
+               already selects (scale style, comping style) are the same kind of
+               choice. What stays a switch is the pair at the top of this panel
+               and the mode switch in the masthead: those are two-state and read
+               as one thing with a side chosen, which a dropdown does not. -->
+          <div class="menu-group" data-mode="chords">
             <span class="menu-title">Voicing style</span>
-            <label class="menu-option"><input type="radio" name="voicingStyle" value="any" checked> Any shape</label>
-            <label class="menu-option"><input type="radio" name="voicingStyle" value="root"> Root position</label>
-            <label class="menu-option"><input type="radio" name="voicingStyle" value="shell"> Shell <span class="hint">root, 3rd, 7th</span></label>
-            <label class="menu-option"><input type="radio" name="voicingStyle" value="rootless"> Rootless, left hand</label>
-            <label class="menu-option"><input type="radio" name="voicingStyle" value="twohanded"> Two-handed rootless</label>
-            <label class="menu-option"><input type="radio" name="voicingStyle" value="solo"> Solo <span class="hint">root in the left hand</span></label>
+            <label class="sr-only" for="voicingStyle">Voicing style</label>
+            <select class="menu-select" id="voicingStyle">
+              <option value="any" selected>Any shape</option>
+              <option value="root">Root position</option>
+              <option value="shell">Shell - root, 3rd, 7th</option>
+              <option value="rootless">Rootless, left hand</option>
+              <option value="twohanded">Two-handed rootless</option>
+              <option value="solo">Solo - root in the left hand</option>
+            </select>
             <p class="menu-note">Everything you play is checked against this shape, on every bar.</p>
           </div>
 
-          <div class="menu-group" role="radiogroup" aria-label="How much colour" data-mode="chords">
+          <div class="menu-group" data-mode="chords">
             <span class="menu-title">Show me</span>
-            <label class="menu-option"><input type="radio" name="voicingColour" value="plain" checked> The base shape</label>
-            <label class="menu-option"><input type="radio" name="voicingColour" value="rich"> With the tensions</label>
+            <label class="sr-only" for="voicingColour">How much colour</label>
+            <select class="menu-select" id="voicingColour">
+              <option value="plain" selected>The base shape</option>
+              <option value="rich">With the tensions</option>
+            </select>
             <p class="menu-note">Show me one keeps going: press it again for the next shape.</p>
           </div>
 
-          <div class="menu-group" role="radiogroup" aria-label="Sound">
+          <div class="menu-group">
             <span class="menu-title">Sound</span>
-            <label class="menu-option"><input type="radio" name="soundBank" value="ep" checked> Electric piano</label>
-            <label class="menu-option"><input type="radio" name="soundBank" value="grand"> Grand piano</label>
-            <label class="menu-option"><input type="radio" name="soundBank" value="silent"> Silent</label>
+            <label class="sr-only" for="soundBank">Sound</label>
+            <select class="menu-select" id="soundBank">
+              <option value="ep" selected>Electric piano</option>
+              <option value="grand">Grand piano</option>
+              <option value="silent">Silent</option>
+            </select>
             <p class="menu-note" id="soundNote">Browsers start audio on the first click, so the first key you press may be quiet.</p>
           </div>
 
@@ -1817,7 +1833,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       </li>
       <li>
         <b>Sustain</b> holds what you have played after the keys lift, and a real pedal on
-        a connected keyboard does the same.
+        a connected keyboard does the same. It shows up once there is something for it to
+        hold - these drawn keys stay down on their own, so it waits for a keyboard.
       </li>
       <li>
         <b>In time</b>, under <i>Practice &rarr; Playing</i>, puts a clock behind the chart
@@ -2151,6 +2168,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
    "armTake", "armLabel", "practising",
    "compingWrap", "compPlace", "compSummary", "compSummaryHead", "compObservations",
+   "voicingStyle", "voicingColour", "soundBank",
    "scaleStyle", "scaleStyleNote", "chordTabs"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
@@ -3295,9 +3313,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       } else {
         analyseVoicing();
       }
-
-      updateVoicingControls();
     }
+
+    // Both ways round, not only back to chords: it decides the pedal too, and
+    // the pedal belongs to solo practice as much as to this side.
+    updateVoicingControls();
   }
 
   /** The band, minus whichever instrument you are.
@@ -4839,18 +4859,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     analyseVoicing();
   }
 
-  Array.prototype.forEach.call(document.querySelectorAll("input[name=voicingStyle]"), function (radio) {
-    radio.addEventListener("change", function () {
-      if (radio.checked) applyStyle(radio.value);
-    });
+  el.voicingStyle.addEventListener("change", function () {
+    applyStyle(el.voicingStyle.value);
   });
 
-  Array.prototype.forEach.call(document.querySelectorAll("input[name=voicingColour]"), function (radio) {
-    radio.addEventListener("change", function () {
-      if (!radio.checked) return;
-      state.colour = radio.value;
-      state.shownFor = "";   // start the walk again at the first shape
-    });
+  el.voicingColour.addEventListener("change", function () {
+    state.colour = el.voicingColour.value;
+    state.shownFor = "";   // start the walk again at the first shape
   });
 
   /** Puts an idiomatic voicing of the chosen shape on the keyboard - the
@@ -5603,6 +5618,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // In time there are no held notes for either of these to work on - the keys
     // do not latch - and "Play chord" would be sounding over the clock.
     el.playChord.hidden = midi.connected || state.mode === "solo" || transport.inTime;
+
+    /*  The pedal is shown where there is something for it to hold, which is
+        wherever a note is let go of by something other than a decision to stop
+        playing it: a MIDI keyboard's key releases - the whole reason it exists,
+        since holding them back is what lets a chord played one note at a time
+        read as one voicing - and the auto-release in solo practice and comping.
+
+        In static chord practice on the on-screen keys there is nothing: they
+        latch, so a note sounds until it is clicked off, and a pedal over that
+        only makes the sound outlast the voicing the app thinks you are playing.
+        A control that does nothing you can see is one nobody can learn, and it
+        read as dead to the person it was built for. */
+    el.sustainPedal.hidden = ! (midi.connected || state.mode === "solo" || transport.inTime);
     el.playChord.disabled = state.heldNotes.length === 0 || audio.bank === "silent";
     el.nameChord.disabled = state.heldNotes.length < 3;
     el.named.hidden = true;
@@ -5741,20 +5769,18 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     playChord(state.heldNotes);
   });
 
-  Array.prototype.forEach.call(document.querySelectorAll("input[name=soundBank]"), function (radio) {
-    radio.addEventListener("change", function () {
-      if (!radio.checked) return;
-      audio.bank = radio.value;
+  el.soundBank.addEventListener("change", function () {
+    audio.bank = el.soundBank.value;
 
-      // The app has the same recordings compiled in, so one word across the
-      // bridge puts both shells on the same instrument.
-      if (native !== null)
-        native.send("jazz.sound", { what: "bank", bank: sampledName(radio.value) });
+    // The app has the same recordings compiled in, so one word across the
+    // bridge puts both shells on the same instrument.
+    if (native !== null)
+      native.send("jazz.sound", { what: "bank", bank: sampledName(audio.bank) });
 
-      if (radio.value === "silent") stopAllNotes();
-      else loadBankSample(SOUND_BANKS[radio.value]);
-      updateVoicingControls();
-    });
+    if (audio.bank === "silent") stopAllNotes();
+    else loadBankSample(SOUND_BANKS[audio.bank]);
+
+    updateVoicingControls();
   });
 
   // --- MIDI keyboard -------------------------------------------------------
@@ -6111,8 +6137,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   var savedStyle = recallStyle();
 
   if (savedStyle !== null && STYLE_NAMES[savedStyle]) {
-    var saved = document.querySelector('input[name=voicingStyle][value="' + savedStyle + '"]');
-    if (saved) saved.checked = true;
+    el.voicingStyle.value = savedStyle;
     state.style = savedStyle;
     el.styleLabel.textContent = STYLE_NAMES[savedStyle];
   }

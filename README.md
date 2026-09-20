@@ -461,10 +461,16 @@ pianist actually plays one. Controller 64 from a hardware pedal and the on-scree
 control are the same thing by the time anything downstream sees them, so the on-screen one is
 there for the many people who have a keyboard but no pedal.
 
-The Practice menu carries the sound bank: an **electric piano**, or silent. Both shells
-synthesise the same voice rather than sampling it - one sine ringing another, with the
-modulation dying away faster than the note, so the attack barks and the tail settles - the
-page through Web Audio and the app through its own audio device. A mouse can only press one
+It appears where it has work to do: with a keyboard connected, and in solo practice and in
+time, where a note is let go of for you a moment after it sounds. In static chord practice on
+the drawn keys it does not, because they latch — a note sounds until you click it off, so
+there is nothing for a pedal to hold, and a control that does nothing you can see is one
+nobody can learn.
+
+The Practice menu carries the sound bank: an **electric piano**, a **grand**, or silent. The
+electric piano is synthesised the same way in both shells rather than sampled - one sine
+ringing another, with the modulation dying away faster than the note, so the attack barks and
+the tail settles - the page through Web Audio and the app through its own audio device. A mouse can only press one
 key at a time, so **Play chord** (or the space bar) sounds every key currently down at once.
 Connecting a MIDI keyboard widens the drawn keyboard to four octaves, and anything played
 outside that widens it further, so a two-handed voicing is never partly off the end; both
