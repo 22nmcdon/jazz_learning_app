@@ -90,9 +90,9 @@ JAZZ_EXPORT const char* jazzReharmPlans (const char* progressionText)
     return hold (jazz::api::reharmPlans (orEmpty (progressionText)));
 }
 
-JAZZ_EXPORT const char* jazzGuideTones (const char* progressionText)
+JAZZ_EXPORT const char* jazzVoicedGuideTones (const char* symbol, const char* midiNotesCsv)
 {
-    return hold (jazz::api::guideTones (orEmpty (progressionText)));
+    return hold (jazz::api::voicedGuideTones (orEmpty (symbol), orEmpty (midiNotesCsv)));
 }
 
 JAZZ_EXPORT const char* jazzIdentifyChord (const char* midiNotesCsv)

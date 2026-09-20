@@ -687,52 +687,35 @@ TEST ("a comp that varies still comes back in style over the wire")
 }
 
 //==============================================================================
-// The guide-tone line: the 3rd and the 7th walked across a whole chart. A chord
-// chart cannot show this, and it is most of what makes a progression work.
+// The guide tones of the chord that is coming, voiced for the hand that is
+// playing now. A chord chart cannot show this, and it is most of what makes a
+// progression work.
 
-TEST ("the guide tones of a tune come back as two continuous strands")
+TEST ("the next chord's guide tones cross the wire voiced for the hand")
 {
-    const auto json = guideTones ("| Dm7 | G7 | Cmaj7 |");
+    // A rootless Dm7 in the left hand, asking where G7 is.
+    const auto json = voicedGuideTones ("G7", "53,57,60,64");
 
     CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"chord\":\"G7\""));
 
-    // The classic ii-V-I: the 7th of Dm7 falls a semitone to the 3rd of G7,
-    // and the 7th of G7 falls a semitone to the 3rd of Cmaj7.
-    CHECK (contains (json, "\"fromLabel\":\"b7\",\"toLabel\":\"3\",\"semitones\":-1"));
-
-    // And the last bar has tones with nowhere to go, which is not the same as
-    // no tones: a shell drawing the line needs somewhere to end it.
-    CHECK (contains (json, "\"chord\":\"Cmaj7\""));
-    CHECK (contains (json, "\"motions\":[]"));
+    // The 7th of Dm7 falls a semitone to the 3rd of G7, and the F stays put -
+    // and both are given as notes to play, not as degrees to work out.
+    CHECK (contains (json, "{\"note\":59,\"label\":\"3\",\"from\":60,\"semitones\":-1}"));
+    CHECK (contains (json, "{\"note\":53,\"label\":\"b7\",\"from\":53,\"semitones\":0}"));
 }
 
-TEST ("a guide-tone line does not climb away over a long chart")
+TEST ("a hand playing nothing gets no guide tones over the wire")
 {
-    /*  The octave is carried rather than reset, so the strands are continuous -
-        but carrying it must not let them drift off the keyboard either. Every
-        move is to the *nearest* target, so a whole tune of fourths has to stay
-        inside about an octave of where it started. */
-    const auto json = guideTones ("| Dm7 | G7 | Cmaj7 | F7 | Bbmaj7 | Eb7 | Abmaj7 | Db7 |");
+    // Not an error: there is no chord to be wrong about, only no hand to
+    // measure from. A shell shows nothing rather than a banner.
+    const auto json = voicedGuideTones ("G7", "");
 
     CHECK (contains (json, "\"ok\":true"));
-
-    auto lowest = 200;
-    auto highest = 0;
-
-    for (std::size_t at = json.find ("\"note\":"); at != std::string::npos;
-         at = json.find ("\"note\":", at + 1))
-    {
-        const auto note = std::stoi (json.substr (at + 7, 4));
-
-        lowest = std::min (lowest, note);
-        highest = std::max (highest, note);
-    }
-
-    CHECK (highest > 0);
-    CHECK (highest - lowest <= 18);
+    CHECK (contains (json, "\"tones\":[]"));
 }
 
-TEST ("a chart that will not parse gives no guide tones")
+TEST ("a chord that will not parse gives no guide tones")
 {
-    CHECK (contains (guideTones ("| not a chord |"), "\"ok\":false"));
+    CHECK (contains (voicedGuideTones ("not a chord", "60"), "\"ok\":false"));
 }

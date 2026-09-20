@@ -1095,7 +1095,7 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
   user-select: none;
   touch-action: manipulation;
 }
-.key { border: 0; padding: 0; font: inherit; }
+.key { position: relative; border: 0; padding: 0; font: inherit; }
 .key.white {
   flex: 1 1 0;
   background: var(--paper);
@@ -1297,42 +1297,46 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 .option-tag .verdict-flag { font-weight: 600; }
 .option-why { font-size: 13.5px; color: var(--text-soft); margin: 5px 0 0; }
 
-/* --- the guide-tone line ------------------------------------------------- */
-/* Drawn over the chart rather than beside it. The 3rd and the 7th are what
-   carry a progression, and where they go is the one thing a chord chart cannot
-   show you - so it is drawn on the chart, where a player is already looking.
+/* --- guide tones, on the keys -------------------------------------------- */
+/* The 3rd and the 7th are what carry a progression, and the question a player
+   has at the end of a bar is not where they are but where the fingers go. So
+   the answer is put on the fingers' own keys rather than on the chart.
+
+   A badge, not a wash. The pressed state is already a key filled in this
+   colour, and a target painted the same way would read as a key that is down -
+   where the whole point is that it is a key that is not down yet. On a key that
+   *is* down the badge inverts, which says the one thing left to say about a
+   guide tone already under a finger: keep it.
 
    The accent, which means it follows the mode the way the rest of the page
    does. Deliberately not one of the five semantic colours: those say chord
    tone, scale tone, approach, enclosure and outside in both modes, and a guide
-   tone is none of them. */
-.guide-layer {
+   tone is none of them - it is not a reading of a note that was played. */
+.key.leads::after {
+  content: attr(data-lead);
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: visible;
-}
-
-/* The bars grow to make room. A guide-tone line drawn in the space a bar
-   already had was three pixels of travel for a semitone - which is the one
-   thing the picture exists to show, drawn too small to see. A visualisation
-   that needs height can ask for it; nothing else on the bar moves. */
-.systems.guiding .bar { min-height: 132px; }
-.guide-layer .strand {
-  fill: none;
-  stroke: var(--blush-deep);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  opacity: 0.75;
-}
-.guide-layer .node { fill: var(--blush-deep); }
-.guide-layer .degree {
-  fill: var(--blush-deep);
+  left: 50%;
+  /* Clear of the scale dot, which sits near the foot of the key. Placed as a
+     fraction rather than in pixels because the keyboard is shorter on a phone
+     and the dot moves with it. */
+  bottom: 22%;
+  transform: translateX(-50%);
+  padding: 2.5px 3.5px;
+  border-radius: 8px;
+  background: var(--blush-deep);
+  color: var(--paper);
   font-family: var(--sans);
-  font-size: 9.5px;
-  letter-spacing: 0.06em;
-  opacity: 0.9;
+  /*  Small enough for the longest label there is - `maj7` and `sus4` - to sit
+      on a white key at a phone width. The badge is centred and floating, so a
+      black key's overflows a little into the keys either side; two guide tones
+      are never a semitone apart, so it never overflows into another badge. */
+  font-size: 8.5px;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
 }
+.key.leads[aria-pressed="true"]::after { background: var(--paper); color: var(--blush-deep); }
+.dock-foot .lead-legend b { color: var(--blush-deep); font-weight: 600; }
 
 /* --- what the last take made of this bar --------------------------------- */
 /* The same reading the strip on the bar shows, with its working out. Quiet
@@ -1791,7 +1795,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             </div>
           </div>
 
-          <button class="link-btn" type="button" id="guideButton" aria-pressed="false">Guide tones</button>
           <button class="link-btn" type="button" id="planButton">Reharmonise the tune</button>
           <button class="link-btn" type="button" id="editToggle">Edit chart</button>
           <button class="link-btn" type="button" id="restoreChart">Restore original</button>
@@ -1902,10 +1905,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <button class="play-btn" type="button" id="playChord" disabled>Play chord</button>
       <button class="link-btn" type="button" id="nameChord" disabled>Name it</button>
       <button class="link-btn" type="button" id="showVoicing">Show me one</button>
+      <!-- Beside "Show me one" rather than over the chart, because what it
+           writes on is the keyboard. A control for the keys belongs with the
+           keys; the buttons above the chart are the ones that change the tune. -->
+      <button class="link-btn" type="button" id="guideButton" aria-pressed="false"
+              title="Marks the keys the next chord's 3rd and 7th are on, voiced from whatever you just played.">Guide tones</button>
       <button class="link-btn" type="button" id="sustainPedal" aria-pressed="false"
               title="Holds notes after the keys lift, as a sustain pedal does. A pedal on a connected MIDI keyboard works this too.">Sustain</button>
       <span class="legend"><span class="dot"></span> scale tone</span>
       <span class="legend"><span class="ring"></span> passing tone</span>
+      <!-- Which chord the badges on the keys are for. Without it the marks are
+           two keys with no name on them, and the next chord is exactly the
+           thing a player has not looked at yet. -->
+      <span class="legend lead-legend" id="leadLegend" hidden>next <b id="leadChord"></b></span>
       <button class="link-btn" type="button" id="clearKeys" style="margin-left:auto">Clear keys</button>
     </div>
   </div>
@@ -1917,7 +1929,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 446 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 451 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -2028,6 +2040,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         a comp is struck rather than held.
       </li>
       <li>
+        <b>Guide tones</b> marks the keys the next chord's 3rd and 7th are on, voiced from
+        whatever you just played - so the answer is in the octave your hand is already in.
+        One already under a finger keeps its badge, which means it does not move.
+      </li>
+      <li>
         <b>Solo</b>, at the top, asks a different question of the same notes: not whether a
         voicing fits the bar, but where each note you play sits against it. The page turns
         its light down when you go, so you always know which one you are in.
@@ -2109,6 +2126,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       </li>
       <li class="help-midi">
         <b>A MIDI keyboard</b> is better than clicking. Connect one under <i>Practice</i>.
+      </li>
+      <li>
+        <b>Guide tones</b> marks the keys the next chord's 3rd and 7th are on, voiced from
+        the note you just played - the two notes a line aims at on the way into a chord.
       </li>
       <li>
         <b>Chords</b>, at the top, asks the other question of the same notes: not where a
@@ -2355,7 +2376,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "menuButton", "menuPanel", "connectMidi", "midiStatus", "styleLabel",
    "showVoicing", "playChord", "nameChord", "named", "namedText",
    "planButton", "planDialog", "planClose", "planList", "planTitle", "planIntro",
-   "guideButton",
+   "guideButton", "leadLegend", "leadChord",
    "ioButton", "ioDialog", "ioClose", "chartFile", "importStatus", "pasteBox",
    "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink",
    "shareRow", "copyShare", "shareStatus", "shareLink",
@@ -2470,7 +2491,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   */
   var ENGINE_CALLS = [
     "jazzParseChart", "jazzScalesForChord", "jazzScaleStyles", "jazzReharmonise",
-    "jazzReharmPlans", "jazzGuideTones", "jazzAnalyseVoicing", "jazzIdiomaticVoicings",
+    "jazzReharmPlans", "jazzVoicedGuideTones", "jazzAnalyseVoicing", "jazzIdiomaticVoicings",
     "jazzIdentifyChord", "jazzRecogniseSubstitution",
     "jazzImportIRealPro", "jazzExportIRealPro", "jazzChartFromPage",
     "jazzCompStyles", "jazzCompingVoicing", "jazzCompPlan", "jazzCompHit",
@@ -2723,6 +2744,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     compSelectedBar();
 
     if (state.mode === "solo") soloMoveToBar(); else analyseVoicing();
+
+    // The chord that is coming is a different chord now, for the same hand.
+    // In time this is the downbeat arriving, which is the moment the hint is
+    // for; static, it is a bar being clicked.
+    updateGuideHint();
   }
 
   function makeBarHandler(index) {
@@ -2772,12 +2798,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     renderSheet();
     updateExpecting();
 
-    /*  A different chart is a different line, and `renderSheet` has just
-        replaced every bar the old one was drawn over. This is also what makes
-        the reharm exercise show its work: the tune moves under you and the
-        strands move with it. */
-    guide.bars = null;
-    paintGuideTones();
+    /*  A different chart is a different chord coming. This is also what makes
+        the reharm exercise show its work: the tune moves under you, and the
+        keys the hint is on move with it before you get to the bar. */
+    updateGuideHint();
 
     // A chart of a different length is a different loop. Kept if it still
     // fits, widened to the whole tune if it does not.
@@ -3273,15 +3297,36 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   function paintKeyboard() {
+    /*  By note rather than by pitch class, unlike the scale dots: this is a
+        voicing, and the octave is the half of it a chart cannot tell you. */
+    var leading = {};
+
+    if (guide.showing)
+      guide.tones.forEach(function (tone) { leading[tone.note] = tone.label; });
+
     Array.prototype.forEach.call(el.keyboard.querySelectorAll(".key"), function (key) {
       var note = Number(key.dataset.note);
       var held = state.heldNotes.indexOf(note) !== -1;
       var inScale = state.scalePitchClasses.indexOf(pitchClass(note)) !== -1;
       var avoid = state.avoidPitchClasses.indexOf(pitchClass(note)) !== -1;
+      var leads = Object.prototype.hasOwnProperty.call(leading, note);
 
       key.setAttribute("aria-pressed", held ? "true" : "false");
       key.classList.toggle("scale", !held && inScale && !avoid);
       key.classList.toggle("avoid", !held && avoid);
+
+      // Badged whether or not the key is down. A guide tone already under a
+      // finger is the most useful thing this can say - that one does not move -
+      // and dropping the mark there would say it by saying nothing.
+      key.classList.toggle("leads", leads);
+
+      /*  The badge's text rather than the engine's label: a flat is written
+          with the flat sign everywhere else on this page, and CSS cannot
+          rewrite it on the way through `content: attr()`. Every `b` in this
+          vocabulary is an accidental - the only letters in it are `maj` and
+          `sus` - which is the same thing `writeChord` relies on. */
+      if (leads) key.dataset.lead = leading[note].replace(/b/g, FLAT);
+      else delete key.dataset.lead;
     });
   }
 
@@ -3360,6 +3405,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // `drawCompHit` instead, one gesture at a time - there are no held notes
     // to read, because the keys have stopped latching.
     if (state.mode === "solo" || transport.inTime) return;
+
+    // Held, not struck: in this mode the hand is whatever is still latched
+    // down, which is exactly what the hint should be measured from.
+    await updateGuideHint(state.heldNotes);
 
     var chord = selectedChord();
     el.findingRow.textContent = "";
@@ -3630,163 +3679,112 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   //==========================================================================
-  //  The guide-tone line.
+  //  Guide tones, on the keys.
   //
   //  The 3rd and the 7th are what carry a progression - a chart is two lines
   //  moving a semitone at a time with the roots underneath - and where they go
-  //  is the one thing a chord chart cannot show you. So it is drawn *on* the
-  //  chart, over the bars, where a player is already looking.
+  //  is the one thing a chord chart cannot show you.
   //
-  //  The engine answers it: `jazzGuideTones` walks the whole tune, carrying the
-  //  octave so the strands are continuous and folding them back when they leave
-  //  the band a guide tone is played in. This end is geometry alone.
+  //  Drawn where the hands are. The question a player has at the end of a bar
+  //  is not "where are the guide tones of the next chord" but "where do my
+  //  fingers go", and those are the same question only for a player who already
+  //  knows the answer. So the two keys are badged with their degree, and the
+  //  engine is handed the notes that were just played so it can voice them for
+  //  the hand that is actually on the keyboard rather than for a reference
+  //  octave - the answer for a left hand at the bottom of the keys is an octave
+  //  away from the answer for two hands in the middle of it, and both are right.
+  //
+  //  One call per gesture, not one per tune. There is nothing to show until
+  //  something has been played, which is also why the marks appear the moment a
+  //  chord goes down and not before.
 
-  var guide = { showing: false, bars: null, forChart: "" };
+  var guide = { showing: false, hand: [], tones: [], asked: "" };
 
-  /** The band of each bar the strands are drawn in, as a fraction of its height.
+  /** The chord the hand is heading into.
 
-      Under the chord symbol and above the take strip, which is what is left of
-      a bar once the two things that were already there have had their room. */
-  /*  Clear of the chord symbol at the top and the take strip at the bottom.
-      The top figure is what it is because a bar is narrow at a phone width and
-      the highest strand's label was landing beside the chord it belongs to -
-      the picture reading as part of the symbol rather than as a line under it. */
-  var GUIDE_TOP = 0.46;
-  var GUIDE_BOTTOM = 0.88;
+      The next bar that says something *different*, not simply the next bar. On
+      two bars of the same chord the literal next bar is the chord already under
+      the fingers, which is a hint that reads "stay where you are" for as long
+      as the chord lasts and then says nothing at all on the bar where it
+      changes - the one bar it was wanted. Skipping to the change gives the
+      warning a bar early, which is when a comper wants it.
 
-  async function ensureGuideTones() {
-    if (guide.bars !== null && guide.forChart === state.progression) return guide.bars;
+      Within the loop, because the loop is what plays next; falling back to the
+      chart when the selected bar is outside it, which it can be in static
+      practice, where a bar is clicked rather than arrived at. */
+  function chordComing() {
+    var here = selectedChord();
+    var loop = loopRange();
+    var inLoop = state.selected >= loop.from && state.selected <= loop.to;
+    var from = inLoop ? loop.from : 0;
+    var count = inLoop ? loop.bars : state.measures.length;
 
-    var result = await call("jazzGuideTones", ["string"], [state.progression]);
+    if (count < 1) return null;
 
-    if (result === null || !result.ok) return null;
+    for (var step = 1; step <= count; ++step) {
+      var measure = state.measures[from + (state.selected - from + step) % count];
+      var chord = measure && measure.chords.length ? measure.chords[0].symbol : null;
 
-    guide.bars = result.bars;
-    guide.forChart = state.progression;
-    return guide.bars;
+      if (chord && chord !== here) return chord;
+    }
+
+    return null;
   }
 
-  /** Draws the strands over every system, or clears them.
+  function clearGuideHint() {
+    guide.tones = [];
+    guide.asked = "";
+    el.leadLegend.hidden = true;
+    paintKeyboard();
+  }
 
-      Rebuilt rather than moved, because the thing it is drawn over is rebuilt:
-      a chart that is reharmonised mid-take replaces every bar element, and the
-      lines have to find the new ones. Cheap enough to do on every redraw - it
-      is two dozen line segments over a tune.
+  /** Re-asks where the next chord's guide tones are, for @p hand.
+
+      Called with no hand to mean "the same hand, something else moved" - the
+      bar advanced under a comper whose fingers have not left the keys, or the
+      chart was reharmonised beneath them.
   */
-  async function paintGuideTones() {
-    Array.prototype.forEach.call(el.systems.querySelectorAll(".guide-layer"),
-                                 function (layer) { layer.remove(); });
+  async function updateGuideHint(hand) {
+    if (hand !== undefined)
+      guide.hand = hand.filter(function (note, at) { return hand.indexOf(note) === at; })
+                       .sort(function (a, b) { return a - b; });
 
     el.guideButton.setAttribute("aria-pressed", guide.showing ? "true" : "false");
 
-    /*  Before a single box is read. The bars grow when this is on, and
-        measuring them first would draw the whole line for the height the chart
-        is about to stop being. */
-    el.systems.classList.toggle("guiding", guide.showing);
+    var coming = guide.showing ? chordComing() : null;
 
-    if (!guide.showing) return;
+    if (coming === null || !guide.hand.length) {
+      clearGuideHint();
+      return;
+    }
 
-    var bars = await ensureGuideTones();
-    if (bars === null) return;
+    var asking = coming + "|" + guide.hand.join(",");
 
-    var byIndex = {};
-    var notes = [];
+    // Every note of a block chord asks this, and a bar advancing asks it of a
+    // hand that has not moved. The answer to a question already answered is on
+    // the keys already.
+    if (asking === guide.asked) return;
 
-    bars.forEach(function (bar) {
-      byIndex[bar.index] = bar;
-      bar.tones.forEach(function (tone) { notes.push(tone.note); });
-    });
+    guide.asked = asking;
 
-    if (!notes.length) return;
+    var result = await call("jazzVoicedGuideTones", ["string", "string"],
+                            [coming, guide.hand.join(",")]);
 
-    /*  One scale for the whole tune rather than one per system, so a strand
-        that climbs across a line break reads as climbing. Padded, because a
-        tune whose guide tones happen to span a single semitone would otherwise
-        divide by nothing and draw both strands on top of each other. */
-    var lowest = Math.min.apply(null, notes);
-    var highest = Math.max.apply(null, notes);
-    var span = Math.max(4, highest - lowest);
+    // Over the app's bridge this is a promise, so a faster question asked after
+    // this one can come back first. The hand that is on the keys now is the one
+    // the keys should be showing.
+    if (result === null || !result.ok || guide.asked !== asking) return;
 
-    Array.prototype.forEach.call(el.systems.querySelectorAll(".system"), function (system) {
-      var inSystem = Array.prototype.filter.call(system.querySelectorAll(".bar"),
-                                                 function (bar) { return bar.dataset.index; });
+    guide.tones = result.tones;
 
-      if (!inSystem.length) return;
+    el.leadChord.textContent = "";
+    el.leadChord.appendChild(chordText(result.chord));
+    el.leadLegend.hidden = false;
 
-      var box = system.getBoundingClientRect();
-
-      if (!box.width || !box.height) return;
-
-      var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("class", "guide-layer");
-      svg.setAttribute("aria-hidden", "true");
-
-      /** Where a bar's dot sits, in the system's own coordinates. */
-      var place = function (bar, note) {
-        var at = bar.getBoundingClientRect();
-
-        return {
-          x: at.left - box.left + at.width / 2,
-          y: at.top - box.top
-               + at.height * (GUIDE_BOTTOM - (note - lowest) / span * (GUIDE_BOTTOM - GUIDE_TOP))
-        };
-      };
-
-      inSystem.forEach(function (barEl, i) {
-        var bar = byIndex[Number(barEl.dataset.index)];
-        if (!bar) return;
-
-        var nextEl = inSystem[i + 1];
-        var next = nextEl ? byIndex[Number(nextEl.dataset.index)] : null;
-
-        bar.tones.forEach(function (tone) {
-          var from = place(barEl, tone.note);
-
-          var dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          dot.setAttribute("class", "node");
-          dot.setAttribute("cx", from.x);
-          dot.setAttribute("cy", from.y);
-          dot.setAttribute("r", "2.6");
-          svg.appendChild(dot);
-
-          var label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-          label.setAttribute("class", "degree");
-          label.setAttribute("x", from.x + 5);
-          label.setAttribute("y", from.y - 4);
-          label.textContent = tone.label;
-          svg.appendChild(label);
-        });
-
-        if (!next) return;
-
-        /*  Drawn per *motion*, not per strand index. The 3rd of one chord
-            resolves to the 7th of the next as often as not, so the two lines
-            cross - and matching them up by position in the list would draw two
-            lines that never cross and are both wrong.
-
-            The target is the next bar's own note rather than the motion's, so
-            an octave fold comes out as the jump it is. A guide-tone line that
-            has run out of room does jump, and drawing it as a smooth glide
-            through notes nobody plays would be the picture lying. */
-        bar.motions.forEach(function (motion) {
-          var landing = next.tones.filter(function (tone) {
-            return tone.label === motion.toLabel;
-          })[0];
-
-          if (!landing) return;
-
-          var from = place(barEl, motion.from);
-          var to = place(nextEl, landing.note);
-
-          var line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-          line.setAttribute("class", "strand");
-          line.setAttribute("d", "M" + from.x + " " + from.y + " L" + to.x + " " + to.y);
-          svg.appendChild(line);
-        });
-      });
-
-      system.appendChild(svg);
-    });
+    // A guide tone can land outside the two octaves that are drawn - which is
+    // the one case where the hint would otherwise be a mark on no key at all.
+    ensureNotesVisible(guide.tones.map(function (tone) { return tone.note; }));
+    paintKeyboard();
   }
 
   /** Draws what the take made of each bar, on the bars.
@@ -4008,6 +4006,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // behind it, so the metre row still follows In time rather than the mode.
     el.metreRow.hidden = !transport.inTime;
     el.beatRow.hidden = !(transport.inTime && transport.running);
+
+    /*  The hand the hint was measured from belongs to whichever of these four
+        corners has just been left, and they do not even hold their notes the
+        same way - latched in static chord practice, struck in the other three.
+        Cleared rather than carried across: the marks are back on the keys the
+        moment anything is played. */
+    updateGuideHint([]);
 
     if (!transport.inTime) stopTransport();
 
@@ -4458,6 +4463,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     solo.lastAt = at;
     solo.lastBar = state.selected;
+
+    /*  A line is played, so the hand the hint is measured from is the gesture
+        rather than anything latched: one note, or the block chord `joining`
+        has just said this note belongs to. Guide tones are target notes to a
+        soloist, which is the same question a comper asks of the same two
+        notes - so it is the same hint, not a second one. */
+    await updateGuideHint(joining ? guide.hand.concat([midiNote]) : [midiNote]);
 
     var result = await call("jazzSoloPlayNote", ["number", "number", "number", "number"],
                             [midiNote, at === null ? -1 : at.beat, at === null ? 0 : at.tick,
@@ -5726,20 +5738,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.guideButton.addEventListener("click", function () {
     guide.showing = !guide.showing;
-    paintGuideTones();
-  });
 
-  /*  The strands are drawn in pixels, so a chart that reflows has to be drawn
-      again - the 760px breakpoint moves four bars to a line, and a window
-      dragged narrower moves them one at a time. Debounced, because a resize is
-      a stream of events and this reads every bar's box. */
-  var guideRedraw = null;
-
-  window.addEventListener("resize", function () {
-    if (!guide.showing) return;
-
-    window.clearTimeout(guideRedraw);
-    guideRedraw = window.setTimeout(paintGuideTones, 120);
+    // Nothing to ask again on the way off, and nothing to wait for on the way
+    // on beyond the one call: the marks are on the keys themselves, so they
+    // survive a reflow that the line over the chart had to be redrawn for.
+    updateGuideHint();
   });
 
   el.planClose.addEventListener("click", function () { el.planDialog.close(); });
@@ -7821,6 +7824,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   function drawCompHit(reading, notes) {
+    // Struck and let go, so the hint follows the gesture rather than the keys:
+    // in time nothing is still down by the time this is read.
+    updateGuideHint(notes);
+
     el.verdict.textContent = reading.summary;
     el.verdict.classList.toggle("matches", reading.placement !== "offStyle");
     el.verdict.classList.toggle("wrong-shape", reading.placement === "offStyle");

@@ -305,63 +305,106 @@ try {
 
   await page.locator("#ioClose").click();
 
-  /*  The guide-tone line, drawn over the chart.
+  /*  Guide tones, marked on the keys.
 
       The 3rd and the 7th are what carry a progression and where they go is the
-      one thing a chord chart cannot show, so it is drawn on the chart. What is
-      worth asserting is not that an SVG appeared: it is that the line *tracks
-      the tune*. A picture of the harmony that did not change when the harmony
-      did would be worse than no picture. */
+      one thing a chord chart cannot show, so the next chord's two are badged on
+      the keys they are actually played on. What is worth asserting is not that
+      a class appeared: it is that the marks are *voiced* - they follow the hand
+      up the keyboard and follow the chart when the bar moves. A hint that named
+      the right two notes in the wrong octave would be a hint a player has to
+      work out, which is the work it exists to save.
+
+      `Show me one` has already put a voicing under the hands, and bar two is
+      the bar we are on - so the chord coming is bar three's Cmaj7. */
+  const ledTo = () => page.evaluate(() =>
+    [...document.querySelectorAll("#keyboard .key.leads")]
+      .map((key) => `${key.dataset.note}:${key.dataset.lead}`).sort().join(" "));
+
   await page.locator("#guideButton").click();
-  await page.waitForFunction(() => document.querySelectorAll(".guide-layer .strand").length > 0,
+  await page.waitForFunction(() => document.querySelectorAll("#keyboard .key.leads").length > 0,
                              null, { timeout: 10000 });
 
-  const strandsOf = () => page.evaluate(() =>
-    [...document.querySelectorAll(".guide-layer .strand")].map((s) => s.getAttribute("d")));
+  const badged = await ledTo();
 
-  const firstLine = await strandsOf();
-
-  check(`the guide-tone line is drawn over the chart (${firstLine.length} strands)`,
-        firstLine.length > 0
+  check(`the next chord's guide tones are marked on the keys (${badged})`,
+        badged.length > 0
         && (await page.locator("#guideButton").getAttribute("aria-pressed")) === "true"
-        && (await page.locator(".guide-layer .node").count()) > 0);
+        && await page.locator("#leadLegend").isVisible()
+        && (await page.locator("#leadChord").innerText()).trim().length > 0);
 
-  // Reharmonising a bar moves its guide tones, so the line has to move with it.
-  //
-  // Opened defensively: it takes one click on the bar you are already on and
-  // two on any other, and a second click while the dialog is up lands on the
-  // modal rather than on the chart.
-  for (let attempt = 0; attempt < 2; attempt += 1)
-    if (!(await page.locator("#chordDialog[open]").count()))
-      await bars.nth(1).click();
+  // The 3rd and the 7th of Cmaj7 and nothing else: E and B, whatever octave
+  // this particular hand puts them in.
+  const degrees = await page.evaluate(() =>
+    [...document.querySelectorAll("#keyboard .key.leads")]
+      .map((key) => Number(key.dataset.note) % 12).sort((a, b) => a - b));
 
-  await page.waitForSelector("#chordDialog[open]", { timeout: 10000 });
-  await page.locator("#subs details.family").first().click();
-  const barTwoWas = await bars.nth(1).getAttribute("data-label");
+  check(`and they are that chord's 3rd and 7th (${degrees.join(", ")})`,
+        JSON.stringify(degrees) === JSON.stringify([4, 11]));
 
-  await page.locator("#subs button.option").first().click();
+  /*  Nothing under the hands is not a chord to be wrong about - it is nothing
+      to lead from, so there is nothing to mark. */
+  await page.locator("#clearKeys").click();
+  await page.waitForFunction(() => document.querySelectorAll("#keyboard .key.leads").length === 0,
+                             null, { timeout: 10000 });
+  check("nothing under the hands, nothing marked", true);
 
-  /*  Choosing one reopens the dialog on the bar it just rewrote rather than
-      closing it - so what says the change landed is the bar's own label, not
-      the dialog going away. */
-  await page.waitForFunction(
-    (was) => document.querySelectorAll("#systems .bar")[1].dataset.label !== was,
-    barTwoWas, { timeout: 10000 });
+  /*  The half a chart cannot tell you. One note down, and both guide tones are
+      voiced to it; the same note an octave up, and both move an octave with it.
+      C4 puts Cmaj7's 3rd at E4 and its 7th at the B *below* - the nearer B -
+      which is the answer a player's hand actually wants. */
+  const keyAt = (note) => page.locator(`#keyboard .key[data-note="${note}"]`);
 
-  await page.locator("#dialogClose").click();
-  await page.waitForTimeout(400);
+  await keyAt(60).click();
+  await page.waitForFunction(() => document.querySelectorAll("#keyboard .key.leads").length === 2,
+                             null, { timeout: 10000 });
 
-  check("and follows the tune when a bar is reharmonised",
-        JSON.stringify(await strandsOf()) !== JSON.stringify(firstLine));
+  const fromC4 = await ledTo();
 
-  await page.locator("#restoreChart").click();
-  await page.waitForTimeout(400);
+  await page.locator("#clearKeys").click();
+  await keyAt(72).click();
+  await page.waitForFunction(() => document.querySelectorAll("#keyboard .key.leads").length === 2,
+                             null, { timeout: 10000 });
 
+  const fromC5 = await ledTo();
+
+  check(`the marks are voiced for the hand, not for a reference octave `
+        + `(${fromC4} -> ${fromC5})`,
+        fromC4 === "59:maj7 64:3" && fromC5 === "71:maj7 76:3");
+
+  /*  And the bar moving under a hand that has not moved asks about a different
+      chord. In time this is the downbeat arriving, which is the moment the
+      whole thing is for: bar five is Cm7, so what is coming is bar six's F7 -
+      its 3rd at A3 and its 7th at Eb5, from the same single C5. */
+  await bars.nth(4).click();
+  await page.waitForFunction(() => document.querySelectorAll("#keyboard .key.leads").length === 2
+                                   && !document.querySelector('#keyboard .key[data-note="71"]')
+                                        .classList.contains("leads"),
+                             null, { timeout: 10000 });
+
+  // A flat is a flat sign on the badge, as it is everywhere else on the page.
+  check(`and follow the chart when the bar moves (${await ledTo()})`,
+        (await ledTo()) === "69:3 75:\u266d7");
+
+  await page.locator("#clearKeys").click();
   await page.locator("#guideButton").click();
 
-  check("and comes off the chart when it is switched off",
-        (await page.locator(".guide-layer").count()) === 0
-        && (await page.locator("#guideButton").getAttribute("aria-pressed")) === "false");
+  check("and come off the keys when it is switched off",
+        (await page.locator("#keyboard .key.leads").count()) === 0
+        && (await page.locator("#guideButton").getAttribute("aria-pressed")) === "false"
+        && await page.locator("#leadLegend").isHidden());
+
+  /*  Put the page back the way this section found it, because the next one
+      reads both: bar *two* selected, so that its click on bar one moves rather
+      than opens it, and a voicing under the hands for it to let go of. Scrolled
+      back up by hand as well - clicking a bar in the second system scrolled the
+      chart, and what comes next measures where things sit on screen. */
+  await bars.nth(1).click();
+  await page.locator("#showVoicing").click();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForFunction(
+    () => document.querySelectorAll("#keyboard .key[aria-pressed=\"true\"]").length > 2,
+    null, { timeout: 10000 });
 
 
   // --- solo practice ------------------------------------------------------

@@ -63,7 +63,7 @@ namespace
         if (name == "jazzImportIRealPro")    return api::importIRealPro (text (0).c_str());
         if (name == "jazzChartFromPage")     return api::chartFromPage (text (0).c_str());
         if (name == "jazzReharmPlans")       return api::reharmPlans (text (0).c_str());
-        if (name == "jazzGuideTones")        return api::guideTones (text (0).c_str());
+        if (name == "jazzVoicedGuideTones")  return api::voicedGuideTones (text (0).c_str(), text (1).c_str());
         if (name == "jazzIdentifyChord")     return api::identifyChord (text (0).c_str());
 
         if (name == "jazzReharmonise")

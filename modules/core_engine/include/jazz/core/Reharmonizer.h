@@ -133,6 +133,41 @@ std::vector<GuideToneMotion> guideToneMotion (const ChordSymbol& from,
 /** Total absolute guide-tone movement between two chords. */
 int voiceLeadingCost (const ChordSymbol& from, const ChordSymbol& to);
 
+/** One guide tone of a chord, voiced where the hand already playing can reach it. */
+struct VoicedGuideTone
+{
+    int note {};            ///< the MIDI note to play
+    std::string label;      ///< "3", "b7", "6"
+    int from {};            ///< the note under the hand it leads from
+    int semitones {};       ///< signed movement from that note
+};
+
+/** Voices the guide tones of @p chord for a hand already on @p playedNotes.
+
+    `guideToneMotion` answers this for two chord *symbols*: the 3rd and 7th of
+    an idealised voicing of one resolving into an idealised voicing of the next.
+    This answers it for the notes actually under a player's hands, which is a
+    different question whenever what they played is not what the engine would
+    have played - a rootless voicing, an inversion, a left hand on its own, or
+    in solo practice a single note.
+
+    Each guide tone is placed in the octave nearest the note it leads from, and
+    the notes are paired to the tones so that the hand as a whole moves least -
+    not tone by tone, which lets both of them claim the same finger and leaves
+    the other voice stranded. Two voices that would swap places are a swap the
+    hand does not need, so an assignment that crosses loses a tie.
+
+    The played notes are used up before any is used twice, unless there are
+    fewer of them than there are guide tones - one note can lead into both, and
+    in solo practice usually has to.
+
+    Empty in, empty out: a hand playing nothing is not leading anywhere, and a
+    guide tone voiced for it would be voiced for a reference octave this has no
+    business inventing.
+*/
+std::vector<VoicedGuideTone> voiceGuideTones (const ChordSymbol& chord,
+                                              const std::vector<int>& playedNotes);
+
 /** Rule-based reharmonisation suggestions for one measure of a chart.
 
     Every rule is a music-theory heuristic with an explanation attached; nothing

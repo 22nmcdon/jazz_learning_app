@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (446), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (451), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -115,33 +115,43 @@ rewrites the bar.
 
 ### Seeing the voice leading
 
-**Guide tones**, above the chart, draws the thing a chord chart cannot show you. A
+**Guide tones**, beside the keyboard, marks the thing a chord chart cannot show you. A
 progression is two lines moving a semitone at a time with the roots underneath - the 3rd
 and the 7th of each chord, each resolving into the nearest guide tone of the next - and
 that is what carries the harmony. The symbols say where the chords are; they say nothing
 about how they join up.
 
-So it is drawn **on the chart**, over the bars, where you are already looking: a dot per
-guide tone at the height of its pitch, its degree beside it, and a line into wherever it
-goes next. Over `| Dm7 | G7 | Cmaj7 |` you see the classic straight away - one line holds
-while the other falls a semitone, twice.
+Switch it on and play something. The two keys the **next** chord's guide tones are on light
+up with their degree on them, and the legend names the chord they are for. Over
+`| Dm7 | G7 | Cmaj7 |` you play a Dm7 and the answer is in front of you: the F under your
+hand keeps its badge - it is G7's 7th too, it does not move - and the C you are holding
+lights the B a semitone below it. That is the ii-V, on the keys you play it on.
 
-The strands **cross**, and are drawn to. The 3rd of one chord resolves to the 7th of the
-next as often as not, and a picture that paired them up by position would draw two lines
-that never cross and are both wrong.
+They are **voiced**, not named. The same G7 asked of a left hand at the bottom of the
+keyboard and of two hands in the middle of it gives marks an octave apart, and both are
+right - which half of the answer a chart cannot give you is the octave, and a hint that
+made you work it out would be doing none of the work. The engine is handed the notes you
+actually played, so it is leading from your voicing rather than from an idealised one:
+each guide tone goes in the octave nearest the note it leads from, and the notes are
+paired to the tones so the hand as a whole moves least. With fewer notes down than there
+are guide tones - a single note in solo practice - one note leads into both.
 
-The octave is **carried** bar to bar so the line is continuous, and **folded back** when it
-leaves the band a guide tone is played in. That is the same problem the comp's register
-window and the walking bass's compass solve: resolving to the nearest target only ever
-drifts one way, and a cycle of fourths resolves downwards every single bar - eight bars of
-it took the line four octaves below anything anybody plays. A line that has run out of room
-jumps, which is what a player does with it and what an engraved one shows.
+A guide tone already **under a finger** keeps its badge, inverted. That is the most useful
+thing the hint can say about it: this one does not move.
 
-It is in **both modes** and follows the tune wherever it goes - including when *Reharmonise
-as you play* moves the chart under you, which is the one place you can watch voice leading
-change as it happens. The bars grow a little to make room: a semitone drawn in the space a
-bar already had was three pixels, which is the one thing the picture exists to show, drawn
-too small to see.
+It follows the chart as well as the hand. In time, the downbeat arriving asks about the
+next chord for the hand that has not moved; and it follows the tune wherever it goes -
+including when *Reharmonise as you play* moves the chart under you, which is the one place
+you can watch voice leading change as it happens.
+
+What it points at is the next bar that says something **different**, not simply the next
+bar. Two bars of the same chord would otherwise read "stay where you are" for as long as
+the chord lasts and then say nothing at all on the bar where it changes - the one bar it
+was wanted.
+
+It is in **both modes**. Guide tones are target notes to a soloist and a voicing to a
+comper, which is the same two notes asked about twice, so it is the same hint rather than
+a second one.
 
 ### Solo practice
 
@@ -861,11 +871,14 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   PDF needs a PDF library and belongs to the shell; deciding which of that text is a chord
   chart needs none and belongs here. Every reader reports the chord symbols it could not
   understand instead of handing back a chart that looks complete and is not.
-- **The guide-tone line** — `guideToneMotion` walked across a whole chart rather than
-  asked about one pair, with the octave carried so the strands are continuous and folded
-  back when they leave the band a guide tone is played in. Nearest-target resolution only
-  ever drifts one way, and a cycle of fourths drifted four octaves before it was bounded -
-  the same reason the comp has a register window and the bass a compass.
+- **Voicing the guide tones for a hand** — `guideToneMotion` answers where the 3rd and 7th
+  of one chord symbol go in the next. `voiceGuideTones` asks it of the notes actually under
+  a player's hands, which is a different question whenever what they played is not what the
+  engine would have played — a rootless voicing, an inversion, a left hand on its own, or a
+  single note. Each guide tone is placed in the octave nearest the note it leads from, and
+  the notes are paired to the tones so the hand as a whole moves least; tone by tone, both
+  claim the same finger and the other voice is left stranded. Two voices that would swap
+  places lose a tie, because that is a swap the hand does not need.
 - **Soloing styles** — the scale catalogue grouped into the vocabularies a player actually
   practises out of, built from scale families rather than lists of names so that a shape
   added to the catalogue joins its style without anyone remembering to add it. The engine

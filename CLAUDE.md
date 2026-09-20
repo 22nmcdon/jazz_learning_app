@@ -188,16 +188,23 @@ something finished or assume something unfinished is done:
   everything else, so the ride and the comp agree about where the and of two
   is. The pattern follows the **metre**, not the comping style, and needs the
   clock — there is no figure to play to a bar you are sitting on.
-- **Voice-leading visualiser** — done. `guideTones()` walks `guideToneMotion`
-  across a chart; the page draws it as an SVG layer per `.system`, over the
-  bars. Two things are easy to get wrong and are tested: the strands are drawn
-  **per motion, not per strand index** (a 3rd resolving to a 7th means the
-  lines cross, and pairing by position draws two lines that never cross and are
-  both wrong), and the octave is **bounded** — nearest-target resolution drifts
-  one way only, and a cycle of fourths fell four octaves before the fold was
-  added. Same problem the comp's register window and the bass's compass solve.
-  `.systems.guiding` grows the bars, and the class goes on **before** any box
-  is measured.
+- **Voice-leading visualiser** — done, **on the keys, not on the chart**. It was
+  drawn over the bars first and that was the wrong place: a picture of where the
+  guide tones are answers a question a player having it explained already knows
+  the answer to, and the one they actually have — where do my fingers go — it
+  leaves them to work out. So `voiceGuideTones()` takes the chord that is coming
+  *and the notes just played*, and the two keys are badged with their degree.
+  **Voiced, not named**: the same chord asked of a left hand low down and of two
+  hands in the middle gives marks an octave apart, and the octave is the half a
+  chart cannot give you. The notes are **paired** to the tones so the hand moves
+  least overall — tone by tone, both claim the same finger and the other voice is
+  stranded — and one note leads into both when there is no second one, which is
+  the ordinary case in solo practice. A guide tone already under a finger keeps
+  its badge, inverted: that one does not move. The page points at the next bar
+  that says something **different**, not simply the next bar, or two bars of one
+  chord read "stay where you are" and then say nothing on the bar it changes.
+  `guideToneMotion` is still what answers it for two chord *symbols* and is
+  untouched.
 - **Not built, deliberately open**: personal voicing
   library, ear training, progress tracking beyond current per-take/session
   stats, licks/line suggestions, chordal (not line) reading in solo practice,

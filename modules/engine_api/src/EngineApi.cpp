@@ -613,138 +613,25 @@ std::string reharmPlans (const char* progressionText)
                  + "}");
 }
 
-namespace
+std::string voicedGuideTones (const char* symbol, const char* midiNotesCsv)
 {
-    /** The chord a bar opens on, or nullptr for a bar with nothing written in it.
+    const auto chord = ChordSymbol::parse (symbol != nullptr ? symbol : "");
 
-        A bar of two chords has two, and the strand takes the first: a guide-tone
-        line is drawn bar to bar, and a bar that changes halfway through is one
-        place on it rather than two.
-    */
-    const core::ChordSymbol* barOpensOn (const core::Chart& chart, int index)
-    {
-        if (index < 0 || index >= chart.measureCount())
-            return nullptr;
+    if (! chord.has_value())
+        return hold (jsonError (std::string ("Not a chord symbol: ") + (symbol != nullptr ? symbol : "")));
 
-        const auto& measure = chart.measures[static_cast<std::size_t> (index)];
+    const auto played = parseNoteList (midiNotesCsv != nullptr ? midiNotesCsv : "");
+    const auto voiced = core::voiceGuideTones (*chord, played);
 
-        return measure.slots.empty() ? nullptr : &measure.slots.front().chord;
-    }
-
-    /** The octave of @p pitchClass nearest @p near. */
-    int guideToneNear (core::PitchClass pitchClass, int near)
-    {
-        auto note = static_cast<int> (pitchClass) + 12 * (near / 12);
-
-        while (note - near > 6)  note -= 12;
-        while (near - note > 6)  note += 12;
-
-        return note;
-    }
-}
-
-std::string guideTones (const char* progressionText)
-{
-    auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
-
-    if (! parsed.ok())
-        return hold (jsonError (parsed.error));
-
-    const auto& chart = *parsed.chart;
-
-    std::string bars;
-
-    /*  Carried rather than reset per bar. `guideToneMotion` resolves each tone
-        to the *nearest* target, so handing it where the line actually is keeps
-        the strands continuous - reset to one reference every bar, a chart that
-        walks up a fourth at a time comes back as a row of unrelated pairs that
-        happen to sit near middle C.
-
-        And bounded, for the reason the comp's register window and the walking
-        bass's compass exist: nearest-target on its own only ever drifts one
-        way. A cycle of fourths resolves downwards every single bar - never 0,
-        -1 or -2 by accident - and eight bars of it took the line from F4 to
-        F0, four octaves below where a guide tone is ever played or drawn. The
-        strand folds back an octave when it leaves the band, which is what a
-        player does with it and what an engraved one shows. */
-    constexpr auto lowestStrand = 54;    // F#3
-    constexpr auto highestStrand = 66;   // F#4
-
-    auto carried = 60;   // C4, until the first chord says otherwise
-
-    for (auto index = 0; index < chart.measureCount(); ++index)
-    {
-        const auto* chord = barOpensOn (chart, index);
-
-        if (chord == nullptr)
-            continue;
-
-        const auto* next = index + 1 < chart.measureCount()
-                             ? barOpensOn (chart, index + 1)
-                             : nullptr;
-
-        /*  The motion carries the tones with it, so the two are asked for
-            together: `guideToneMotion` already says where each one starts, and
-            asking the chord separately would be a second answer to the same
-            question with its own idea of which octave. */
-        const auto motions = next != nullptr
-                               ? guideToneMotion (*chord, *next, carried)
-                               : std::vector<GuideToneMotion>{};
-
-        std::string tones;
-        std::string moved;
-
-        if (! motions.empty())
-        {
-            auto landed = 0;
-
-            for (const auto& motion : motions)
-            {
-                if (! tones.empty()) tones += ",";
-                if (! moved.empty()) moved += ",";
-
-                tones += "{\"note\":" + std::to_string (motion.fromNote)
-                       + ",\"label\":" + quoted (motion.fromLabel) + "}";
-
-                moved += "{\"from\":" + std::to_string (motion.fromNote)
-                       + ",\"to\":" + std::to_string (motion.toNote)
-                       + ",\"fromLabel\":" + quoted (motion.fromLabel)
-                       + ",\"toLabel\":" + quoted (motion.toLabel)
-                       + ",\"semitones\":" + std::to_string (motion.semitones) + "}";
-
-                landed += motion.toNote;
-            }
-
-            // Where the line as a whole got to, rather than either strand -
-            // following the lower of the two is itself a downward bias.
-            carried = landed / static_cast<int> (motions.size());
-
-            while (carried > highestStrand) carried -= 12;
-            while (carried < lowestStrand)  carried += 12;
-        }
-        else
-        {
-            // The last bar: tones with nowhere to go. Asked of the chord
-            // itself, at wherever the line had got to.
-            for (const auto& tone : chord->guideTones())
-            {
-                if (! tones.empty()) tones += ",";
-
-                tones += "{\"note\":" + std::to_string (
-                             guideToneNear (toPitchClass (chord->root() + tone.semitones), carried))
-                       + ",\"label\":" + quoted (tone.label) + "}";
-            }
-        }
-
-        if (! bars.empty()) bars += ",";
-
-        bars += "{\"index\":" + std::to_string (index)
-              + ",\"chord\":" + quoted (chord->toString())
-              + ",\"tones\":[" + tones + "]"
-              + ",\"motions\":[" + moved + "]}";
-    }
-
-    return hold ("{\"ok\":true,\"bars\":[" + bars + "]}");
+    return hold ("{\"ok\":true,\"chord\":" + quoted (chord->toString())
+                 + ",\"tones\":" + jsonArray (voiced, [] (const core::VoicedGuideTone& tone)
+                   {
+                       return "{\"note\":" + std::to_string (tone.note)
+                            + ",\"label\":" + quoted (tone.label)
+                            + ",\"from\":" + std::to_string (tone.from)
+                            + ",\"semitones\":" + std::to_string (tone.semitones) + "}";
+                   })
+                 + "}");
 }
 
 /** Names the notes currently held down, with no chart and no expected chord. */

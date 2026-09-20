@@ -178,6 +178,78 @@ TEST ("guide tones of a ii-V-I move by a semitone or stay put")
     CHECK_EQ (voiceLeadingCost (dm7, g7), 1);
 }
 
+//==============================================================================
+// The same guide tones asked of a hand rather than of a chord symbol: where the
+// next chord's 3rd and 7th are for the fingers that are already down.
+
+TEST ("the next chord's guide tones land under the hand that is playing")
+{
+    const auto g7 = *ChordSymbol::parse ("G7");
+
+    // A rootless Dm7 in the left hand: F3 A3 C4 E4.
+    const auto voiced = voiceGuideTones (g7, { 53, 57, 60, 64 });
+
+    CHECK_EQ (voiced.size(), std::size_t (2));
+
+    // The 3rd of G7 is B, and the note it comes from is the C the hand is
+    // already holding - the 7th of Dm7 falling a semitone, which is the whole
+    // of what a ii-V does.
+    CHECK_EQ (voiced[0].label, std::string ("3"));
+    CHECK_EQ (voiced[0].note, 59);
+    CHECK_EQ (voiced[0].from, 60);
+    CHECK_EQ (voiced[0].semitones, -1);
+
+    // And the 7th is the F already under the hand, which does not move at all.
+    CHECK_EQ (voiced[1].label, std::string ("b7"));
+    CHECK_EQ (voiced[1].note, 53);
+    CHECK_EQ (voiced[1].from, 53);
+    CHECK_EQ (voiced[1].semitones, 0);
+}
+
+TEST ("the hint follows the hand up the keyboard")
+{
+    const auto g7 = *ChordSymbol::parse ("G7");
+
+    // The same voicing an octave up. Nothing about G7 has changed; where its
+    // guide tones are for this player has.
+    const auto voiced = voiceGuideTones (g7, { 65, 69, 72, 76 });
+
+    CHECK_EQ (voiced.size(), std::size_t (2));
+    CHECK_EQ (voiced[0].note, 71);
+    CHECK_EQ (voiced[1].note, 65);
+}
+
+TEST ("a hand with fingers to spare uses a different one for each guide tone")
+{
+    const auto g7 = *ChordSymbol::parse ("G7");
+    const auto voiced = voiceGuideTones (g7, { 53, 57, 60, 64 });
+
+    CHECK_EQ (voiced.size(), std::size_t (2));
+    CHECK (voiced[0].from != voiced[1].from);
+}
+
+TEST ("one note leads into both guide tones when it is the only one")
+{
+    const auto g7 = *ChordSymbol::parse ("G7");
+
+    // Solo practice: the hand is one note. Both guide tones are measured from
+    // it, because there is nothing else to measure them from.
+    const auto voiced = voiceGuideTones (g7, { 60 });
+
+    CHECK_EQ (voiced.size(), std::size_t (2));
+    CHECK_EQ (voiced[0].from, 60);
+    CHECK_EQ (voiced[1].from, 60);
+    CHECK_EQ (voiced[0].note, 59);
+    CHECK_EQ (voiced[1].note, 65);
+}
+
+TEST ("a hand playing nothing is not leading anywhere")
+{
+    const auto g7 = *ChordSymbol::parse ("G7");
+
+    CHECK (voiceGuideTones (g7, {}).empty());
+}
+
 TEST ("a measure index outside the chart yields nothing")
 {
     const Reharmonizer reharmonizer;

@@ -251,6 +251,102 @@ int voiceLeadingCost (const ChordSymbol& from, const ChordSymbol& to)
     return cost;
 }
 
+std::vector<VoicedGuideTone> voiceGuideTones (const ChordSymbol& chord,
+                                              const std::vector<int>& playedNotes)
+{
+    const auto targets = chord.guideTones();
+
+    if (targets.empty() || playedNotes.empty())
+        return {};
+
+    /*  Where each guide tone would sit if it took each played note as its
+        starting point. Worked out once: the search below reads every one of
+        these several times over, and `nearestNote` is the only music in it. */
+    std::vector<std::vector<int>> landing (targets.size(),
+                                           std::vector<int> (playedNotes.size()));
+
+    for (std::size_t tone = 0; tone < targets.size(); ++tone)
+        for (std::size_t note = 0; note < playedNotes.size(); ++note)
+            landing[tone][note] = nearestNote (toPitchClass (chord.root() + targets[tone].semitones),
+                                               playedNotes[note]);
+
+    /*  Movement dominates; a crossing breaks a tie. Scaled rather than added to
+        so the two never trade: no arrangement of crossings is worth a semitone
+        of extra travel, and a swap is only ever the tidier of two hands that
+        move the same distance. */
+    constexpr auto perSemitone = 4;
+
+    const auto scoreOf = [&] (const std::vector<std::size_t>& from)
+    {
+        auto cost = 0;
+
+        for (std::size_t tone = 0; tone < targets.size(); ++tone)
+            cost += perSemitone * std::abs (landing[tone][from[tone]] - playedNotes[from[tone]]);
+
+        for (std::size_t a = 0; a < targets.size(); ++a)
+            for (auto b = a + 1; b < targets.size(); ++b)
+            {
+                const auto arrives = landing[a][from[a]] - landing[b][from[b]];
+                const auto left = playedNotes[from[a]] - playedNotes[from[b]];
+
+                if ((arrives > 0 && left < 0) || (arrives < 0 && left > 0))
+                    ++cost;
+            }
+
+        return cost;
+    };
+
+    // One note can lead into two guide tones only when there is no second note
+    // to do it: a hand with fingers to spare uses them.
+    const auto oneEach = playedNotes.size() >= targets.size();
+
+    std::vector<std::size_t> chosen (targets.size(), 0);
+    std::vector<bool> taken (playedNotes.size(), false);
+    std::vector<std::size_t> best;
+    auto bestCost = 0;
+
+    const auto search = [&] (const auto& self, std::size_t tone) -> void
+    {
+        if (tone == targets.size())
+        {
+            const auto cost = scoreOf (chosen);
+
+            if (best.empty() || cost < bestCost)
+            {
+                best = chosen;
+                bestCost = cost;
+            }
+
+            return;
+        }
+
+        for (std::size_t note = 0; note < playedNotes.size(); ++note)
+        {
+            if (oneEach && taken[note])
+                continue;
+
+            taken[note] = true;
+            chosen[tone] = note;
+            self (self, tone + 1);
+            taken[note] = false;
+        }
+    };
+
+    search (search, 0);
+
+    std::vector<VoicedGuideTone> voiced;
+
+    for (std::size_t tone = 0; tone < targets.size(); ++tone)
+    {
+        const auto note = landing[tone][best[tone]];
+        const auto from = playedNotes[best[tone]];
+
+        voiced.push_back ({ note, targets[tone].label, from, note - from });
+    }
+
+    return voiced;
+}
+
 namespace
 {
     /** Says, in plain language, whether this bar is one of the times the

@@ -38,19 +38,19 @@ std::string exportIRealPro (const char* progressionText, const char* title, cons
 std::string chartFromPage (const char* tabSeparatedItems);
 std::string reharmPlans (const char* progressionText);
 
-/** The tune's guide tones, bar by bar, and where each one goes next.
+/** Where @p symbol's guide tones are for a hand already holding @p midiNotesCsv.
 
     The 3rd and the 7th are what carry a progression - a chart is two lines
     moving a semitone at a time with the roots underneath - and that is the one
-    thing a chord chart cannot show you. This is `guideToneMotion` walked across
-    a whole chart rather than asked about one pair, with the octave *carried*:
-    each bar's tones are where the last bar's resolved to, so the answer is two
-    continuous strands rather than a row of unrelated pairs.
+    thing a chord chart cannot show you. What a player needs to know about them
+    is not where they are in the abstract but where they are *for the hand they
+    have got*, which is why the notes go over with the chord: the answer for a
+    rootless left hand at the bottom of the keyboard is an octave away from the
+    answer for two hands in the middle of it, and both are right.
 
-    The last bar has tones and no motion. Nothing to move to is not the same as
-    nowhere to go, and a shell drawing this needs the tones either way.
+    Empty tones for an empty hand. See `core::voiceGuideTones`.
 */
-std::string guideTones (const char* progressionText);
+std::string voicedGuideTones (const char* symbol, const char* midiNotesCsv);
 std::string identifyChord (const char* midiNotesCsv);
 std::string recogniseSubstitution (const char* progressionText, int measureIndex, const char* midiNotesCsv, int includeAdvanced);
 std::string idiomaticVoicings (const char* symbol, int anchorNote, const char* practiseStyle, int rich);
