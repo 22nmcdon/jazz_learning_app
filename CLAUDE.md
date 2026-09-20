@@ -139,8 +139,13 @@ something finished or assume something unfinished is done:
   two as one was a real bug — the Charleston accepted three of the eight
   positions a swing comper uses, and nothing in the catalogue accepted the and
   of one at all. See `docs/COMPING.md` before touching any of it.
-- **Drums** — named in the menu, not built (pure shell problem: pattern + kit,
-  no engine call needed).
+- **Drums** — done. The one member of the band with no engine call: the page
+  owns the pattern, each shell owns the sound (synthesised in both, like the
+  click — there is no kit in `assets/` and four unpitched one-shots would not
+  earn one). Written on the shared grid and swung through `beatsIntoBar` like
+  everything else, so the ride and the comp agree about where the and of two
+  is. The pattern follows the **metre**, not the comping style, and needs the
+  clock — there is no figure to play to a bar you are sitting on.
 - **Not built, deliberately open**: voice-leading visualizer, personal voicing
   library, ear training, progress tracking beyond current per-take/session
   stats, licks/line suggestions, chordal (not line) reading in solo practice,

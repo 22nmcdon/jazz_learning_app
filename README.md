@@ -365,6 +365,34 @@ next root.
 The whole line stays inside a real bass's compass. Voice leading on its own climbs, and a
 tune that keeps rising would take the line off the top of the instrument inside a chorus.
 
+### The drummer
+
+**Drums** is the one member of the band that asks the engine nothing. The piano has to
+know what the chord is and the bass has to know where it is going; a ride pattern needs
+neither, so there is no call to make and no theory to keep a second copy of. The page
+owns the pattern and each shell owns the sound, which is the division the metronome
+click already worked to.
+
+What it plays is a ride cymbal on every beat with a skip off the backbeats, the hi-hat
+closing under those same beats, a **feathered** bass drum on every beat - just under the
+threshold of being picked out of the texture, which is what feathering means - and a
+snare that comps rather than keeps time, on about half the bars. The snare is seeded off
+the bar and the take the way the piano's comp is, so a chorus that comes round again
+comes round the same: the backdrop is the one thing here that should not improvise.
+
+It is written on the same grid as everything else and swung through the same function, so
+the ride's skip note and the piano's *and of two* are the same moment rather than two
+opinions about it. The pattern follows the **metre** rather than the comping style - a
+waltz gets a waltz ride - because a drummer keeping time is answering the bar, not the
+chart. That is also why it needs the clock and does nothing static: there is no figure to
+play to a bar you are sitting on.
+
+The kit is **synthesised in both shells**, unlike the piano and the basses. Those are each
+one well-recorded note stretched across a range, which is what earns a recording its
+megabyte; a kit is four unpitched sounds that are never transposed, and a shaped burst of
+noise is as good as a recording of one. There is no sound picker beside it for the same
+reason - a menu with one entry is a question with one answer.
+
 ### The band's instruments are recordings
 
 The piano offers a synthesised **electric piano** and a recorded **grand piano**; the bass
@@ -746,10 +774,6 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   would be one the app invented and then marked you against. Comping is scored on placement
   for exactly the reason a solo is not — there the standard is the style you picked — and
   the two are not in tension. See [`docs/COMPING.md`](docs/COMPING.md).
-- **A drummer.** Named in the comping menu and not built. Unlike the bass it needs no
-  theory and no engine call at all — a pattern and a kit — which makes it the one piece of
-  the rhythm section that is entirely a shell problem. The metronome click is the only
-  percussion either shell can make today.
 - **A metre that survives export.** The readers bring a time signature in; the iReal Pro
   writer does not put one back out, so a waltz imported and exported comes back in four.
   One line in `ChartFormats`, once someone wants it.

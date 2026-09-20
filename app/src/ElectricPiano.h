@@ -87,6 +87,28 @@ public:
     */
     void click (bool accented);
 
+    /** The drummer, one struck piece at a time.
+
+        The one member of the band with nothing to ask the engine: the piano
+        needs the chord and the bass needs where it is going, and a ride
+        pattern needs neither. So the page owns the pattern and this owns the
+        sound, which is the same division the click already works to.
+
+        Synthesised, like the click and unlike the grand piano and the basses.
+        Those are each one well-recorded note stretched across a range, which
+        is what buys a sample its megabyte; a kit is four unpitched sounds that
+        are never transposed, and a shaped burst of noise is as good as a
+        recording of one.
+
+        @param level  how hard, 0 to 1, against the piece's own weight. The
+                      page sends this because the pattern knows which strikes
+                      are the feel and which are underneath it - a feathered
+                      kick is the same kick played quietly.
+    */
+    enum class DrumPiece { ride, hiHat, snare, kick };
+
+    void drum (DrumPiece piece, float level);
+
     /** The comping piano: one chord replacing whatever it last played.
 
         It is a channel of its own rather than a set of ordinary notes, because
@@ -165,6 +187,22 @@ private:
         const Sample* sample { nullptr };
         double samplePosition { 0.0 };
         double sampleStep { 1.0 };
+
+        /*  A third kind of voice, beside the recording and the pair of sines:
+            noise through a band, which is what a cymbal and a snare are. The
+            filter is a two-pole state variable, held here because its state
+            has to survive between callbacks - a filter reset every block rings
+            at the block rate rather than at the frequency it was tuned to. */
+        bool noise { false };
+        float bandLow { 0.0f };
+        float bandMid { 0.0f };
+        float bandF { 0.5f };      ///< tuning, as a fraction of the sample rate
+        float bandDamping { 1.0f };
+
+        /*  Per-sample multiplier on the carrier, so a pitched voice can fall as
+            it decays. One for every other voice; a kick is the reason it is
+            here, because a bass drum held at one pitch reads as a low beep. */
+        double carrierDeltaDecay { 1.0 };
     };
 
     void audioDeviceIOCallbackWithContext (const float* const* inputChannelData,
@@ -191,6 +229,12 @@ private:
     std::vector<std::pair<std::string, std::unique_ptr<Sample>>> samples;
 
     std::string playerBank;
+
+    /*  Touched by the audio thread alone, which is the whole of what makes it
+        safe to share between voices: one callback, one thread, and no voice
+        cares which numbers it got so long as they are not the same ones every
+        block. */
+    juce::Random noiseSource;
 
     juce::AudioDeviceManager devices;
     std::array<Voice, 16> voices;

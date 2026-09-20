@@ -120,6 +120,15 @@ void ElectricPiano::startVoice (Voice& voice, int midiNote, float level, const S
     voice.midiNote = midiNote;
     voice.carrierPhase = 0.0;
     voice.modulatorPhase = 0.0;
+
+    // Cleared here rather than only where they are set, because the pool is
+    // reused: a voice that last played a ride cymbal is still noise, and still
+    // falling in pitch, unless the next thing to take it says otherwise.
+    voice.noise = false;
+    voice.carrierDeltaDecay = 1.0;
+    voice.bandLow = 0.0f;
+    voice.bandMid = 0.0f;
+
     voice.sample = sample;
     voice.samplePosition = 0.0;
     voice.amplitude = 0.0f;
@@ -236,6 +245,8 @@ void ElectricPiano::click (bool accented)
     voice->comping = false;
     voice->walking = false;
     voice->sample = nullptr;
+    voice->noise = false;
+    voice->carrierDeltaDecay = 1.0;
     voice->carrierPhase = 0.0;
     voice->modulatorPhase = 0.0;
     voice->carrierDelta = juce::MathConstants<double>::twoPi * frequency / sampleRate;
@@ -256,6 +267,95 @@ void ElectricPiano::click (bool accented)
     voice->amplitudeDecay = decayFactor (0.001, 0.055, sampleRate);
     voice->pedalled = false;
 
+    voice->active = true;
+}
+
+void ElectricPiano::drum (DrumPiece piece, float level)
+{
+    if (! running.load())
+        return;
+
+    const juce::SpinLock::ScopedLockType lock (voiceLock);
+
+    auto* voice = findFreeVoice();
+
+    if (voice == nullptr)
+        return;
+
+    // Never a real note's pitch, for the reason the click is not: a voice the
+    // pool could hand back to a key would let a note-off silence a cymbal.
+    voice->midiNote = -1;
+    voice->comping = false;
+    voice->walking = false;
+    voice->sample = nullptr;
+    voice->pedalled = false;
+    voice->carrierPhase = 0.0;
+    voice->modulatorPhase = 0.0;
+    voice->modulationDepth = 0.0f;
+    voice->modulationDecay = 1.0f;
+    voice->carrierDeltaDecay = 1.0;
+    voice->bandLow = 0.0f;
+    voice->bandMid = 0.0f;
+
+    // Struck, so there is no attack stage: a cymbal that takes six
+    // milliseconds to reach full is a cymbal being faded in.
+    voice->stage = Voice::Stage::decay;
+
+    /*  The same four recipes the page has, and deliberately the same numbers:
+        one kit played by two shells that disagreed about what a ride sounds
+        like would be two kits. Where the page writes a bandpass frequency and
+        a Q, this writes the state-variable's tuning and damping, which are the
+        same two quantities in the form this filter wants them. */
+    const auto tune = [this] (double hz)
+    {
+        // The usual two-pole SVF tuning, and clamped: at a high sample rate
+        // nothing here comes near instability, but a device opened at 8 kHz
+        // would put the hi-hat's band above Nyquist and blow the filter up.
+        return static_cast<float> (juce::jlimit (0.0, 0.9,
+                                                 2.0 * std::sin (juce::MathConstants<double>::pi
+                                                                 * juce::jmin (hz, sampleRate * 0.45)
+                                                                 / sampleRate)));
+    };
+
+    switch (piece)
+    {
+        case DrumPiece::ride:
+            voice->noise = true;
+            voice->bandF = tune (5200.0);
+            voice->bandDamping = 1.0f / 0.6f;
+            voice->amplitudeTarget = 0.26f * level;
+            voice->amplitudeDecay = decayFactor (0.001, 0.85, sampleRate);
+            break;
+
+        case DrumPiece::hiHat:
+            voice->noise = true;
+            voice->bandF = tune (9000.0);
+            voice->bandDamping = 1.0f / 1.1f;
+            voice->amplitudeTarget = 0.30f * level;
+            voice->amplitudeDecay = decayFactor (0.001, 0.09, sampleRate);
+            break;
+
+        case DrumPiece::snare:
+            voice->noise = true;
+            voice->bandF = tune (1900.0);
+            voice->bandDamping = 1.0f / 0.85f;
+            voice->amplitudeTarget = 0.22f * level;
+            voice->amplitudeDecay = decayFactor (0.001, 0.13, sampleRate);
+            break;
+
+        case DrumPiece::kick:
+            // The one piece with a pitch rather than a band, and the one that
+            // needs the carrier to fall: held at 92 Hz it is a low beep, and
+            // the drop to somewhere near 48 is what makes it a drum.
+            voice->noise = false;
+            voice->carrierDelta = juce::MathConstants<double>::twoPi * 92.0 / sampleRate;
+            voice->carrierDeltaDecay = decayFactor (48.0 / 92.0, 0.12, sampleRate);
+            voice->amplitudeTarget = 0.34f * level;
+            voice->amplitudeDecay = decayFactor (0.001, 0.20, sampleRate);
+            break;
+    }
+
+    voice->amplitude = voice->amplitudeTarget;
     voice->active = true;
 }
 
@@ -486,6 +586,24 @@ void ElectricPiano::audioDeviceIOCallbackWithContext (const float* const*,
                     voice.amplitude = 0.0f;
                 }
             }
+            else if (voice.noise)
+            {
+                /*  A cymbal and a snare are noise with the top and the bottom
+                    taken off it, which is what this two-pole state variable
+                    does in four operations. Its state lives on the voice
+                    rather than here, so the filter goes on ringing across the
+                    block boundary instead of being restarted forty times a
+                    second at the block rate. */
+                const auto input = noiseSource.nextFloat() * 2.0f - 1.0f;
+
+                voice.bandLow += voice.bandF * voice.bandMid;
+
+                const auto high = input - voice.bandLow - voice.bandDamping * voice.bandMid;
+
+                voice.bandMid += voice.bandF * high;
+
+                value = voice.bandMid * voice.amplitude * masterGain;
+            }
             else
             {
                 voice.modulationDepth *= voice.modulationDecay;
@@ -494,6 +612,10 @@ void ElectricPiano::audioDeviceIOCallbackWithContext (const float* const*,
 
                 value = static_cast<float> (std::sin (voice.carrierPhase)) * voice.amplitude
                           * masterGain;
+
+                // A kick falls as it decays; everything else has a decay of 1
+                // and does not move.
+                voice.carrierDelta *= voice.carrierDeltaDecay;
 
                 voice.carrierPhase += voice.carrierDelta
                                       + juce::MathConstants<double>::twoPi * modulation / sampleRate;

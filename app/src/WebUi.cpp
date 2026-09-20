@@ -280,6 +280,24 @@ void WebUi::handleSound (const var& request)
     {
         sound.click (static_cast<bool> (object->getProperty ("accented")));
     }
+    else if (what == "drum")
+    {
+        /*  The page owns the pattern and names the piece; this shell owns the
+            sound. Named rather than numbered so the two halves can be read
+            side by side - the page sends "hiHat" and this looks for "hiHat".
+
+            An unknown piece is silence rather than a substitute: a kit that
+            answered a name it did not know with the nearest thing it had would
+            hide exactly the mismatch worth seeing. */
+        const auto piece = object->getProperty ("piece").toString();
+        const auto level = static_cast<float> (static_cast<double> (object->getProperty ("level")));
+        const auto struck = level > 0.0f ? level : 1.0f;
+
+        if (piece == "ride")        sound.drum (ElectricPiano::DrumPiece::ride, struck);
+        else if (piece == "hiHat")  sound.drum (ElectricPiano::DrumPiece::hiHat, struck);
+        else if (piece == "snare")  sound.drum (ElectricPiano::DrumPiece::snare, struck);
+        else if (piece == "kick")   sound.drum (ElectricPiano::DrumPiece::kick, struck);
+    }
     else if (what == "silence")
     {
         sound.allNotesOff();

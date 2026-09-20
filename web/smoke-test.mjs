@@ -614,10 +614,13 @@ try {
   };
 
   await page.locator("#compingButton").click();
-  check("comping offers a band, one of whom is not built yet",
+  // Three instruments, all three of them playable. This asserted that one was
+  // disabled for as long as the drummer was named and not built; the kit is
+  // the thing that changed, not the test's opinion of it.
+  check("comping offers a band of three, all of them playable",
         (await page.locator("#compingPanel").isVisible())
         && (await page.locator("#compingPanel input[type=checkbox]").count()) === 3
-        && (await page.locator("#compingPanel input:disabled").count()) === 1);
+        && (await page.locator("#compingPanel input:disabled").count()) === 0);
 
   // Two recorded basses, and neither is on the player's own sound menu: nobody
   // practises voicings on a double bass.
@@ -804,6 +807,50 @@ try {
 
   await page.locator("#compingButton").click();
   await page.locator("#compBass").uncheck();
+  await page.locator("#compingButton").click();
+
+  /*  The drummer. The one member of the band that asks the engine nothing, so
+      what is worth checking is not that a call came back but that the kit
+      actually keeps time - and keeps it the way a ride pattern does rather
+      than the way a metronome does.
+
+      Two signatures, and they are distinct by construction: the cymbals and
+      the snare are noise read out of a buffer, so they arrive as samples, and
+      the kick is a falling sine, which nothing else on this page is. */
+  await page.locator("#compingButton").click();
+  await page.locator("#compDrums").check();
+  await page.locator("#compingButton").click();
+
+  await forgetSounds();
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(2600);
+  await page.keyboard.press("Space");
+  await page.waitForFunction(
+    () => document.querySelector("#armTake").getAttribute("aria-pressed") === "false",
+    null, { timeout: 10000 });
+
+  const kit = await page.evaluate(() => ({
+    cymbals: window.__sounded.filter((s) => s.type === "sample").map((s) => s.when),
+    kicks: window.__sounded.filter((s) => s.type === "sine" && s.hz > 80 && s.hz < 110).length,
+    beats: window.__sounded.filter((s) => s.type === "square").map((s) => s.when).sort((a, b) => a - b)
+  }));
+
+  check(`the kit plays (${kit.cymbals.length} cymbals, ${kit.kicks} kicks)`,
+        kit.cymbals.length > 0 && kit.kicks > 0);
+
+  /*  A ride pattern is not a metronome: it strikes on every beat *and* skips
+      off the backbeats, so it has to be denser than the click it plays over.
+      A kit that only ever landed on the beat would pass every check above this
+      one and still be a metronome with a cymbal on it. */
+  const skips = kit.cymbals
+    .map((w) => (w - kit.beats[0]) / 0.25)
+    .filter((b) => Math.abs(b - Math.round(b)) > 0.1);
+
+  check(`the ride skips off the beat rather than marking it (${skips.length} off)`,
+        skips.length > 0);
+
+  await page.locator("#compingButton").click();
+  await page.locator("#compDrums").uncheck();
   await page.locator("#compingButton").click();
 
   /*  The grid's other consumer, over the same clock. A note played while the

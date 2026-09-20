@@ -731,18 +731,6 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 .play-btn:disabled { opacity: 0.35; cursor: default; }
 .tools-right { margin-left: auto; display: flex; align-items: center; gap: 18px; }
 
-/* An instrument named but not built. Quieter than the label it follows, so the
-   list reads as three instruments of which one is ready. */
-.later {
-  font-style: normal;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--text-soft);
-  border: 1px solid var(--line);
-  padding: 1px 5px;
-  margin-left: 6px;
-}
 .menu-option:has(input:disabled) { color: var(--text-soft); }
 
 /* The button says whether anyone is playing without the panel being opened. */
@@ -1603,15 +1591,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
                 <label class="menu-option">
                   <input type="checkbox" id="compBass"> Bass walking
                 </label>
-                <!-- Named but not offered. A rhythm section is three
-                     instruments; leaving the last one off the list entirely
-                     would say the feature is finished. -->
-                <label class="menu-option" title="Not built yet">
-                  <input type="checkbox" disabled> Drums <em class="later">later</em>
+                <!-- No sound picker beside this one, unlike the two above it:
+                     the piano and the bass each offer a recording *or* a synth
+                     and the choice is a real one, while the kit is
+                     synthesised and there is only the one. A menu offering a
+                     single option is a menu asking a question with one
+                     answer. -->
+                <label class="menu-option">
+                  <input type="checkbox" id="compDrums"> Drums
                 </label>
                 <p class="menu-note" id="compingNote">Two-handed rootless voicings, led from the
                   chord before rather than spelled afresh. The clock plays them in time; without
-                  it, each bar sounds as you land on it.</p>
+                  it, each bar sounds as you land on it. The kit keeps time rather than
+                  following the chart, so it needs the clock and nothing else.</p>
               </div>
 
               <div class="menu-group">
@@ -1936,7 +1928,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         rootless voicings, each led from the chord before rather than spelled afresh, and a bass
         player walking one note to the beat under it. Pick a comping style and a sound for each -
         the grand piano and both basses are recordings. In time they play along with the clock;
-        static, each bar sounds as you land on it. A drummer is named there and not built yet.
+        static, each bar sounds as you land on it. A drummer rides underneath both, in time only -
+        the kit keeps time rather than reading the chart, so there is nothing for it to play to a
+        bar you are sitting on.
       </li>
       <li>
         <b>Every bar keeps its own score.</b> A bar you have played over carries a strip in
@@ -2191,7 +2185,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "shareRow", "copyShare", "shareStatus", "shareLink",
    "helpButton", "helpDialog", "helpClose",
    "compingButton", "compingPanel", "compPiano", "compSound", "compingNote",
-   "compStyle", "compStyleNote", "compBass", "bassSound",
+   "compStyle", "compStyleNote", "compBass", "bassSound", "compDrums",
    "playStatic", "playLive", "playingNote", "metreRow", "tempo", "timeSig", "countInRow", "countIn",
    "loopRow", "loopFrom", "loopTo", "beatRow",
    "colophonEngine", "colophonFraming", "colophonBuild",
@@ -4088,6 +4082,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     {
       compBar(barIndex, when, secondsPerBeat());
       bassBar(barIndex, when, secondsPerBeat());
+      drumsBar(barIndex, when, secondsPerBeat());
     }
 
     bookVisual(when, function () {
@@ -4900,7 +4895,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   /** The button wears whether anyone at all is playing, not just the piano. */
   function updateCompingButton() {
     el.compingButton.setAttribute("aria-pressed",
-                                  comping.piano || comping.bass ? "true" : "false");
+                                  comping.piano || comping.bass || comping.drums ? "true" : "false");
   }
 
   el.compPiano.addEventListener("change", function () {
@@ -4988,6 +4983,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     }
 
     loadBankSample(BASS_BANKS[comping.bassBank]);
+  });
+
+  /*  Nothing to stop and no sample to fetch: the kit is four one-shots, each
+      of which has already finished by the time anyone could turn it off, and
+      the strikes already booked are cleared with the rest of the band when the
+      clock stops. So this is only the flag and the button. */
+  el.compDrums.addEventListener("change", function () {
+    comping.drums = el.compDrums.checked;
+    updateCompingButton();
   });
 
   el.bassSound.addEventListener("change", function () {
@@ -5106,7 +5110,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // `voices` is the player's, keyed by note so a key retriggers its own note.
   // `compVoices` is the band's, a plain list because nothing ever asks it for
   // one note back - a comp only ever replaces itself, all of it at once.
-  var audio = { ctx: null, master: null, voices: {}, compVoices: [], bassVoice: null, bank: "ep" };
+  var audio = { ctx: null, master: null, voices: {}, compVoices: [], bassVoice: null,
+                bank: "ep", noise: null };
 
   /*  Two kinds of bank, one registry. A synthesised bank builds a voice from
       oscillators; a recorded one names a file, the note it was played at, and
@@ -5366,6 +5371,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         the whole plan in hand there is nothing left to race. */
     bass: false,
     bassBank: "upright",
+    drums: false,
 
     plan: null,
     planFor: "",     // the chart, style and range the plan was made for
@@ -5511,6 +5517,188 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
         playBassNote(note.midi, when);
       });
+    });
+  }
+
+  //==========================================================================
+  //  The drummer.
+  //
+  //  The one member of the band that asks the engine nothing. The piano needs
+  //  to know what the chord is and the bass needs to know where it is going;
+  //  a ride pattern needs neither, so there is no call to make and no theory
+  //  to keep one copy of. What it does share is the grid: the kit is written
+  //  in beats and ticks like everything else here, and swung through
+  //  `beatsIntoBar` like everything else here, so the ride and the comp agree
+  //  about where the and of two is rather than each having an opinion.
+  //
+  //  Synthesised rather than recorded, for a reason that is about the assets
+  //  and not about taste: the piano and the basses are each *one* well-recorded
+  //  note stretched across a range, which is what makes a sample worth its
+  //  megabyte. A kit is four unpitched sounds that are never transposed, so a
+  //  recording of one buys nothing a shaped burst of noise does not.
+
+  /** White noise, made once and struck many times.
+
+      Every cymbal and the snare are this buffer read through a different
+      filter with a different envelope - which is most of what a kit is, and is
+      why one buffer does for all of them. A second and a bit, so nothing ever
+      runs off the end of it. */
+  function noiseBuffer(ctx) {
+    if (audio.noise !== null) return audio.noise;
+
+    var buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 1.2), ctx.sampleRate);
+    var data = buffer.getChannelData(0);
+
+    for (var i = 0; i < data.length; ++i) data[i] = Math.random() * 2 - 1;
+
+    audio.noise = buffer;
+    return buffer;
+  }
+
+  /** The kit, as four recipes.
+
+      `hz` and `q` are where the noise is filtered, `decay` how long it rings,
+      `level` how loud it sits against the rest of the band. The ride is bright
+      and long because a ride cymbal is the loudest thing a jazz drummer plays
+      and the thing that states the feel; the kick is a thump rather than a
+      burst, and is quiet because feathering a bass drum means playing it just
+      under the threshold of being heard. */
+  var KIT = {
+    ride:  { hz: 5200, q: 0.6,  decay: 0.85, level: 0.26 },
+    hiHat: { hz: 9000, q: 1.1,  decay: 0.09, level: 0.30 },
+    snare: { hz: 1900, q: 0.85, decay: 0.13, level: 0.22 },
+
+    // The one piece with a pitch rather than a band. A kick is a sine that
+    // falls as it decays - flat, it reads as a low beep.
+    kick:  { thump: 92, to: 48, decay: 0.20, level: 0.34 }
+  };
+
+  /** Strikes one piece of the kit, at @p when on the page's own clock. */
+  function playDrum(piece, when, level) {
+    var recipe = KIT[piece];
+    if (!recipe || audio.bank === "silent") return;
+
+    if (native !== null) {
+      native.send("jazz.sound", { what: "drum", piece: piece, level: level });
+      return;
+    }
+
+    var ctx = audioContext();
+    if (ctx === null) return;
+
+    if (ctx.state === "suspended") ctx.resume();
+
+    var at = when || ctx.currentTime;
+    var peak = recipe.level * (level === undefined ? 1 : level);
+
+    var amp = ctx.createGain();
+    amp.gain.setValueAtTime(0.0001, at);
+    amp.gain.exponentialRampToValueAtTime(Math.max(peak, 0.001), at + 0.002);
+    amp.gain.exponentialRampToValueAtTime(0.0001, at + recipe.decay);
+    amp.connect(audio.master);
+
+    if (recipe.thump) {
+      var osc = ctx.createOscillator();
+      osc.type = "sine";
+
+      // Set as well as scheduled. A node whose frequency is only ever
+      // scheduled reads as its 440 Hz default until the first booked change
+      // comes due, which is true of the node and misleading to anything
+      // looking at it - the drum is a low thump from the moment it exists.
+      osc.frequency.value = recipe.thump;
+      osc.frequency.setValueAtTime(recipe.thump, at);
+      osc.frequency.exponentialRampToValueAtTime(recipe.to, at + recipe.decay * 0.6);
+      osc.connect(amp);
+      osc.start(at);
+      osc.stop(at + recipe.decay + 0.05);
+      return;
+    }
+
+    var source = ctx.createBufferSource();
+    source.buffer = noiseBuffer(ctx);
+
+    var band = ctx.createBiquadFilter();
+    band.type = "bandpass";
+    band.frequency.value = recipe.hz;
+    band.Q.value = recipe.q;
+
+    source.connect(band);
+    band.connect(amp);
+    source.start(at);
+    source.stop(at + recipe.decay + 0.05);
+  }
+
+  /** The beats the ride skips off and the hi-hat closes on.
+
+      Every other beat, counting the second one - two and four in common time,
+      the second beat of a waltz. Stated as counting rather than borrowed from
+      the engine's notion of a strong beat, because it is not the same idea:
+      the engine says where the harmony is heard, and this says where a
+      drummer's foot goes, which in four happen to be opposite. Two rules that
+      agree by accident are two rules, and folding them into one would make the
+      hi-hat follow the harmony the next time the metre changed.
+  */
+  function isBackbeat(beat) { return beat % 2 === 1; }
+
+  /** The snare, which comps rather than keeps time.
+
+      Seeded off the bar and the take's own seed, the way the piano's comp is,
+      so a chorus that comes round again comes round the same - a drummer who
+      re-improvised every loop would make the one part of this app that is
+      supposed to be a fixed backdrop the least fixed thing in it. Roughly
+      half the bars get one, which is what leaving space sounds like.
+  */
+  function snareIn(measureIndex, beats) {
+    var roll = Math.sin((measureIndex + 1) * 12.9898 + comping.seed * 78.233) * 43758.5453;
+    roll = roll - Math.floor(roll);
+
+    return roll < 0.5 ? null : Math.floor(roll * 2 * beats) % beats;
+  }
+
+  /** Books the kit for one bar.
+
+      The same shape as `bassBar`: worked out from the metre here, sounded at
+      an exact time in the browser and through a booked timeout in the app,
+      which has no "play this at" to hand.
+  */
+  function drumsBar(measureIndex, barStart, secondsPerBeatNow) {
+    if (!comping.drums || !transport.inTime) return;
+
+    var beats = transport.beats;
+    var snare = snareIn(measureIndex, beats);
+    var strikes = [];
+
+    for (var beat = 0; beat < beats; ++beat) {
+      strikes.push({ piece: "ride", beat: beat, tick: 0, level: beat === 0 ? 1 : 0.8 });
+
+      // Feathered: on every beat and only just audible. A bass drum a player
+      // can pick out of the texture is a rock kick, not a jazz one.
+      strikes.push({ piece: "kick", beat: beat, tick: 0, level: 0.35 });
+
+      if (isBackbeat(beat)) {
+        strikes.push({ piece: "hiHat", beat: beat, tick: 0, level: 1 });
+
+        // The skip note: the upbeat of the backbeat, leading into the next
+        // beat. Written as a straight eighth and swung on the way out, which
+        // is the whole of why it goes through `beatsIntoBar`.
+        strikes.push({ piece: "ride", beat: beat, tick: ENGINE_TICKS_PER_BEAT / 2, level: 0.62 });
+      }
+
+      if (beat === snare)
+        strikes.push({ piece: "snare", beat: beat, tick: ENGINE_TICKS_PER_BEAT / 2, level: 0.9 });
+    }
+
+    strikes.forEach(function (strike) {
+      var when = barStart + beatsIntoBar(strike.beat, strike.tick) * secondsPerBeatNow;
+
+      if (native !== null) {
+        comping.booked.push(window.setTimeout(function () {
+          if (comping.drums && transport.running) playDrum(strike.piece, 0, strike.level);
+        }, Math.max(0, (when - transportNow()) * 1000)));
+        return;
+      }
+
+      playDrum(strike.piece, when, strike.level);
     });
   }
 
