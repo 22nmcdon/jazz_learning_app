@@ -1033,6 +1033,17 @@ try {
   const build = (await page.locator("#colophonBuild").innerText()).trim();
   check(`the page names its build (${build})`, build.startsWith("Build:"));
 
+  // The page checks at boot that the engine beside it exports every call it
+  // makes, and says so loudly when it does not. What is worth asserting here
+  // is the quiet half: this pair was built together, so the banner must stay
+  // down and the chip must read ready. A false positive on a good engine
+  // would be worse than the silence the banner was written to replace, and
+  // it is exactly what a wrong guess about how Emscripten exposes its
+  // exports would look like.
+  check("a page and engine built together say nothing about each other",
+        !(await page.locator("#staleEngine").isVisible())
+          && (await page.locator("#engineStatus").getAttribute("data-state")) === "ready");
+
   // Offline: the worker has to be registered and awake, or the page is no
   // more use on a train than it was before.
   const worker = await page.evaluate(async () => {

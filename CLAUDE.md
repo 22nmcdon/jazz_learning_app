@@ -180,10 +180,22 @@ that's easy to miss in review:
   with all the rest. Check what a new name costs the chords that already
   resolve correctly (e.g. a complete but obscure name beating a common
   rootless voicing) before adding it.
-- **Engine/page version mismatch fails silently, not loudly.** `web/index.html`
-  requests `jazz-engine.js?v=<build stamp>`; without it a cached engine paired
-  with a fresh page makes a feature simply *vanish* (empty menu, engine chip
-  still says ready) rather than erroring.
+- **Engine/page version mismatch has no symptom of its own, so the page checks
+  for it.** A cached engine paired with a fresh page makes a feature simply
+  *vanish* — empty menu, engine chip still saying ready — because `ccall` on a
+  name the engine does not export throws something that names neither the call
+  nor the cause. Two things answer that: `web/index.html` requests
+  `jazz-engine.js?v=<build stamp>` so the pair is fetched together, and at boot
+  it checks every call in `ENGINE_CALLS` against the engine's exports and
+  raises a banner naming what is missing. **A call added to the page goes in
+  `ENGINE_CALLS` and in `web/build.sh`'s `EXPORTED_FUNCTIONS`** — the check is
+  what makes forgetting either one visible instead of silent. It tests
+  existence, never invocation (a take is armed by one of these), and says
+  nothing when it finds *no* exports at all, because that means the lookup is
+  wrong rather than the engine empty — a false banner on a good engine would be
+  worse than the silence it replaces. The app needs none of this (one binary,
+  no cache between the two) but is covered anyway, out of the `No engine call
+  named` answer `WebUi.cpp` already returns.
 - **The app's UI must never block on the network** — a render-blocking resource
   that never arrives leaves the whole webview invisible (backgrounds paint, no
   text does). Webfonts are requested by script, only when served over the web.

@@ -182,6 +182,28 @@ button { font-family: inherit; cursor: pointer; }
 }
 .status[data-state="ready"] { color: var(--gold); border-color: var(--gold); }
 .status[data-state="failed"] { color: var(--rust); border-color: var(--rust); }
+/* An engine a deploy behind the page it is paired with is neither loading nor
+   failed: it answered, and it is wrong. Its own state, so the chip cannot say
+   "ready" over the top of the banner below. */
+.status[data-state="stale"] { color: var(--rust); border-color: var(--rust); }
+
+/* --- an engine a deploy behind the page ---------------------------------- */
+/* The loudest thing on this page, and the only one that is about something
+   broken rather than about music - so it is rust, it is first, and it says
+   what to do rather than what happened. Everything else here is quiet on
+   purpose; this is the exception that earns the noise. */
+.stale-engine {
+  margin: 0 0 24px;
+  padding: 13px 17px;
+  border: 1px solid var(--rust);
+  border-left-width: 4px;
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.stale-engine strong { color: var(--rust); }
 
 /* --- practice menu -------------------------------------------------------- */
 /* Four controls now, and at a phone width they do not fit on one line - the
@@ -1335,7 +1357,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
 @media print {
   /* What prints is the chart, on its own, in black ink. */
-  .masthead, .sheet-tools, .editor, .dock, .colophon, dialog { display: none !important; }
+  .masthead, .sheet-tools, .editor, .dock, .colophon, dialog,
+  .stale-engine { display: none !important; }
 
   body { background: #fff; color: #000; }
   .shell, .wrap { max-width: none; padding: 0; }
@@ -1363,6 +1386,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 </style>
 
 <div class="wrap">
+  <!-- Above the masthead because it is about whether anything below it can be
+       believed. Hidden until there is something to say, and there usually is
+       not: the page and the engine ship together. -->
+  <div class="stale-engine" id="staleEngine" role="alert" hidden>
+    <strong>The engine behind this page is out of date.</strong>
+    <span id="staleEngineDetail"></span>
+  </div>
+
   <header class="masthead">
     <!-- The masthead names the mode as well as the app. The accent italic
          moved off "Learning App" and onto the mode word on purpose: it is the
@@ -2145,7 +2176,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   var el = {};
-  ["engineStatus", "sheetTitle", "sheetStyle", "sheetCredit", "editToggle", "restoreChart",
+  ["engineStatus", "staleEngine", "staleEngineDetail",
+   "sheetTitle", "sheetStyle", "sheetCredit", "editToggle", "restoreChart",
    "editor", "progression",
    "parseError", "systems", "feedback", "verdict", "played", "expecting", "findingRow", "meter",
    "meterFill", "keyboard", "clearKeys", "sustainPedal", "chordDialog", "dialogBar", "dialogChord",
@@ -2242,14 +2274,127 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     }
   }
 
+  /** Every engine call this page makes, by the name the wire uses.
+
+      The page and the engine ship together and change together, and the one
+      thing that goes wrong when they come apart is that nothing goes wrong
+      loudly. `ccall` on a name the engine does not export throws
+      "Cannot read properties of undefined (reading 'apply')" - which names
+      neither the call nor the cause - `call` catches it, and the feature
+      behind that call is simply absent: an empty menu, a dock that grades
+      nothing, and the chip still reading "ready".
+
+      This list is the page's half of the contract, and `web/build.sh`'s
+      EXPORTED_FUNCTIONS is the engine's. Keeping them in step by hand is
+      exactly the kind of thing that stays in step until it does not, so the
+      page checks at boot instead of trusting: a call added here and forgotten
+      there is named on the banner the first time the page is opened, in a
+      checkout, long before it is a deploy.
+  */
+  var ENGINE_CALLS = [
+    "jazzParseChart", "jazzScalesForChord", "jazzScaleStyles", "jazzReharmonise",
+    "jazzReharmPlans", "jazzAnalyseVoicing", "jazzIdiomaticVoicings",
+    "jazzIdentifyChord", "jazzRecogniseSubstitution",
+    "jazzImportIRealPro", "jazzExportIRealPro", "jazzChartFromPage",
+    "jazzCompStyles", "jazzCompingVoicing", "jazzCompPlan", "jazzCompHit",
+    "jazzCompTake", "jazzWalkingBass",
+    "jazzSoloStartTake", "jazzSoloSetBar", "jazzSoloPlayNote", "jazzSoloEndTake"
+  ];
+
+  /** The calls the engine beside this page does not have.
+
+      Existence, never invocation. Half of these are stateful - one of them
+      arms a take - and proving a call is there by making it is a cure worse
+      than the disease. Emscripten puts every exported function on the module
+      under its C name, so the question is answerable without asking the
+      engine anything.
+
+      When *none* of them are found the answer is "cannot tell", not "all of
+      them are missing": an engine exporting nothing would not have got past
+      `createJazzEngine()`, so an empty result means this lookup is not how
+      this build of Emscripten exposes its exports. A banner on a working
+      engine would be worse than the silence it is meant to replace, so that
+      case says nothing.
+
+      The app is not checked this way and needs no checking: there the page and
+      the engine are one binary, with no cache in between to go stale. `call`
+      below covers the app's half, out of what the shell already answers.
+  */
+  function missingEngineCalls() {
+    if (native !== null || engine === null) return [];
+
+    var found = ENGINE_CALLS.filter(function (name) {
+      return typeof engine["_" + name] === "function";
+    });
+
+    return found.length === 0 ? [] : ENGINE_CALLS.filter(function (name) {
+      return found.indexOf(name) === -1;
+    });
+  }
+
+  /** Says so, once, and keeps saying it.
+
+      Called from boot with the whole list, and from `call` with the one call
+      that just failed - a call not on the list, or the app's own answer. The
+      first report wins the detail; later ones only keep the banner up, because
+      a banner that rewrites itself as you click around reads as a new fault
+      each time rather than one standing one.
+  */
+  var staleEngineReported = false;
+
+  function reportStaleEngine(names) {
+    if (staleEngineReported) return;
+    staleEngineReported = true;
+
+    // Named rather than counted, because the name of the call is the whole
+    // diagnosis - it says which feature is gone and, to anyone with the
+    // repository open, which side is behind. Three is as many as a sentence
+    // carries; past that the count says more than the list would.
+    var shown = names.slice(0, 3);
+    var missing = shown.length > 1
+                ? shown.slice(0, -1).join(", ") + " and " + shown[shown.length - 1]
+                : shown[0];
+
+    if (names.length > shown.length)
+      missing += ", and " + (names.length - shown.length) + " more";
+
+    el.staleEngineDetail.textContent = onTheWeb
+      ? "It is missing " + missing + ", so whatever uses "
+        + (names.length === 1 ? "it" : "them")
+        + " will be empty or silent rather than wrong. Reload the page - "
+        + "hold Shift, or empty the cache - to fetch the engine that goes with it."
+      : "It is missing " + missing + ". Rebuild the app so the page and the "
+        + "engine come from one build again.";
+
+    el.staleEngine.hidden = false;
+    el.engineStatus.dataset.state = "stale";
+    el.engineStatus.textContent = "engine out of date";
+  }
+
+  /** The app's answer for a call it does not have, word for word. A shell that
+      renames this renames it in `answer()` in `app/src/WebUi.cpp`. */
+  var NO_SUCH_CALL = "No engine call named ";
+
   function call(name, types, args) {
-    if (native !== null) return native.ask(name, args).then(readAnswer);
+    if (native !== null) {
+      return native.ask(name, args).then(readAnswer).then(function (answer) {
+        if (answer && answer.error && String(answer.error).indexOf(NO_SUCH_CALL) === 0)
+          reportStaleEngine([name]);
+
+        return answer;
+      });
+    }
 
     if (engine === null) return null;
 
     try {
       return JSON.parse(engine.ccall(name, "string", types, args));
     } catch (error) {
+      // A call the boot check did not know to look for - one added to the page
+      // and left off ENGINE_CALLS. The throw says nothing useful on its own,
+      // so the name of the call is the diagnosis.
+      if (typeof engine["_" + name] !== "function") reportStaleEngine([name]);
+
       return { ok: false, error: String(error) };
     }
   }
@@ -6276,6 +6421,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.engineStatus.dataset.state = "ready";
     el.engineStatus.textContent = "engine ready";
     writeColophon(kind);
+
+    // Before anything is drawn or asked for, because everything below this
+    // line assumes the engine can answer. An engine a deploy behind is the one
+    // fault on this page with no symptom of its own: it is reported here or it
+    // is not reported at all.
+    var missing = missingEngineCalls();
+    if (missing.length) reportStaleEngine(missing);
+
     await parseChart();
     await openChartFromUrl();
 

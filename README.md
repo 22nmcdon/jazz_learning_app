@@ -551,6 +551,16 @@ permission that an embedded frame is usually not allowed even to ask for, so a M
 keyboard that works on a served page does nothing inside one. A page served from its own
 origin can ask.
 
+The page and the engine ship together, and when they come apart **the page says so**.
+A browser holding a cached engine from the last deploy does not error on a call that
+engine never had: it throws something naming neither the call nor the cause, the page
+catches it, and the feature behind that call is simply *absent* - an empty menu, a dock
+that grades nothing, the engine chip still reading ready. So the page asks at boot
+whether the engine beside it exports every call it makes, and puts a banner at the top
+naming what is missing when it does not. Nothing is shown when the two agree, which is
+almost always; the one fault on this page with no symptom of its own is the one it
+checks for.
+
 `modules/engine_api` turns the engine's answers into JSON, and both shells read that one
 wire format; `web/src/JazzWebBindings.cpp` adds nothing but C linkage on top of it, the
 same way `app/` adds nothing but a webview. What the served page cannot tell you is
