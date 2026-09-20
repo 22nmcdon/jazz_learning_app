@@ -729,7 +729,16 @@ body, .sheet, .dock, .masthead, .menu-panel, .colophon {
 }
 .play-btn:hover:not(:disabled) { background: var(--blush-deep); border-color: var(--blush-deep); }
 .play-btn:disabled { opacity: 0.35; cursor: default; }
-.tools-right { margin-left: auto; display: flex; align-items: center; gap: 18px; }
+/* Wraps, because there are four of these now and at a phone width four link
+   buttons on one line are wider than the phone. The row they sit in has always
+   wrapped; this one did not, so it carried them off the edge together. */
+.tools-right {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+}
 
 .menu-option:has(input:disabled) { color: var(--text-soft); }
 
@@ -1288,6 +1297,43 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 .option-tag .verdict-flag { font-weight: 600; }
 .option-why { font-size: 13.5px; color: var(--text-soft); margin: 5px 0 0; }
 
+/* --- the guide-tone line ------------------------------------------------- */
+/* Drawn over the chart rather than beside it. The 3rd and the 7th are what
+   carry a progression, and where they go is the one thing a chord chart cannot
+   show you - so it is drawn on the chart, where a player is already looking.
+
+   The accent, which means it follows the mode the way the rest of the page
+   does. Deliberately not one of the five semantic colours: those say chord
+   tone, scale tone, approach, enclosure and outside in both modes, and a guide
+   tone is none of them. */
+.guide-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* The bars grow to make room. A guide-tone line drawn in the space a bar
+   already had was three pixels of travel for a semitone - which is the one
+   thing the picture exists to show, drawn too small to see. A visualisation
+   that needs height can ask for it; nothing else on the bar moves. */
+.systems.guiding .bar { min-height: 132px; }
+.guide-layer .strand {
+  fill: none;
+  stroke: var(--blush-deep);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+.guide-layer .node { fill: var(--blush-deep); }
+.guide-layer .degree {
+  fill: var(--blush-deep);
+  font-family: var(--sans);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  opacity: 0.9;
+}
+
 /* --- what the last take made of this bar --------------------------------- */
 /* The same reading the strip on the bar shows, with its working out. Quiet
    like the rest of the dialog: it is a reading, not a verdict. */
@@ -1745,6 +1791,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             </div>
           </div>
 
+          <button class="link-btn" type="button" id="guideButton" aria-pressed="false">Guide tones</button>
           <button class="link-btn" type="button" id="planButton">Reharmonise the tune</button>
           <button class="link-btn" type="button" id="editToggle">Edit chart</button>
           <button class="link-btn" type="button" id="restoreChart">Restore original</button>
@@ -1870,7 +1917,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 443 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 446 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -2308,6 +2355,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "menuButton", "menuPanel", "connectMidi", "midiStatus", "styleLabel",
    "showVoicing", "playChord", "nameChord", "named", "namedText",
    "planButton", "planDialog", "planClose", "planList", "planTitle", "planIntro",
+   "guideButton",
    "ioButton", "ioDialog", "ioClose", "chartFile", "importStatus", "pasteBox",
    "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink",
    "shareRow", "copyShare", "shareStatus", "shareLink",
@@ -2422,7 +2470,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   */
   var ENGINE_CALLS = [
     "jazzParseChart", "jazzScalesForChord", "jazzScaleStyles", "jazzReharmonise",
-    "jazzReharmPlans", "jazzAnalyseVoicing", "jazzIdiomaticVoicings",
+    "jazzReharmPlans", "jazzGuideTones", "jazzAnalyseVoicing", "jazzIdiomaticVoicings",
     "jazzIdentifyChord", "jazzRecogniseSubstitution",
     "jazzImportIRealPro", "jazzExportIRealPro", "jazzChartFromPage",
     "jazzCompStyles", "jazzCompingVoicing", "jazzCompPlan", "jazzCompHit",
@@ -2723,6 +2771,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (state.selected >= state.measures.length) state.selected = 0;
     renderSheet();
     updateExpecting();
+
+    /*  A different chart is a different line, and `renderSheet` has just
+        replaced every bar the old one was drawn over. This is also what makes
+        the reharm exercise show its work: the tune moves under you and the
+        strands move with it. */
+    guide.bars = null;
+    paintGuideTones();
 
     // A chart of a different length is a different loop. Kept if it still
     // fits, widened to the whole tune if it does not.
@@ -3572,6 +3627,166 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
            + (reading.tooBusy ? " - busier than this style ever gets (at most "
                                 + reading.most + ")" : "")
     };
+  }
+
+  //==========================================================================
+  //  The guide-tone line.
+  //
+  //  The 3rd and the 7th are what carry a progression - a chart is two lines
+  //  moving a semitone at a time with the roots underneath - and where they go
+  //  is the one thing a chord chart cannot show you. So it is drawn *on* the
+  //  chart, over the bars, where a player is already looking.
+  //
+  //  The engine answers it: `jazzGuideTones` walks the whole tune, carrying the
+  //  octave so the strands are continuous and folding them back when they leave
+  //  the band a guide tone is played in. This end is geometry alone.
+
+  var guide = { showing: false, bars: null, forChart: "" };
+
+  /** The band of each bar the strands are drawn in, as a fraction of its height.
+
+      Under the chord symbol and above the take strip, which is what is left of
+      a bar once the two things that were already there have had their room. */
+  /*  Clear of the chord symbol at the top and the take strip at the bottom.
+      The top figure is what it is because a bar is narrow at a phone width and
+      the highest strand's label was landing beside the chord it belongs to -
+      the picture reading as part of the symbol rather than as a line under it. */
+  var GUIDE_TOP = 0.46;
+  var GUIDE_BOTTOM = 0.88;
+
+  async function ensureGuideTones() {
+    if (guide.bars !== null && guide.forChart === state.progression) return guide.bars;
+
+    var result = await call("jazzGuideTones", ["string"], [state.progression]);
+
+    if (result === null || !result.ok) return null;
+
+    guide.bars = result.bars;
+    guide.forChart = state.progression;
+    return guide.bars;
+  }
+
+  /** Draws the strands over every system, or clears them.
+
+      Rebuilt rather than moved, because the thing it is drawn over is rebuilt:
+      a chart that is reharmonised mid-take replaces every bar element, and the
+      lines have to find the new ones. Cheap enough to do on every redraw - it
+      is two dozen line segments over a tune.
+  */
+  async function paintGuideTones() {
+    Array.prototype.forEach.call(el.systems.querySelectorAll(".guide-layer"),
+                                 function (layer) { layer.remove(); });
+
+    el.guideButton.setAttribute("aria-pressed", guide.showing ? "true" : "false");
+
+    /*  Before a single box is read. The bars grow when this is on, and
+        measuring them first would draw the whole line for the height the chart
+        is about to stop being. */
+    el.systems.classList.toggle("guiding", guide.showing);
+
+    if (!guide.showing) return;
+
+    var bars = await ensureGuideTones();
+    if (bars === null) return;
+
+    var byIndex = {};
+    var notes = [];
+
+    bars.forEach(function (bar) {
+      byIndex[bar.index] = bar;
+      bar.tones.forEach(function (tone) { notes.push(tone.note); });
+    });
+
+    if (!notes.length) return;
+
+    /*  One scale for the whole tune rather than one per system, so a strand
+        that climbs across a line break reads as climbing. Padded, because a
+        tune whose guide tones happen to span a single semitone would otherwise
+        divide by nothing and draw both strands on top of each other. */
+    var lowest = Math.min.apply(null, notes);
+    var highest = Math.max.apply(null, notes);
+    var span = Math.max(4, highest - lowest);
+
+    Array.prototype.forEach.call(el.systems.querySelectorAll(".system"), function (system) {
+      var inSystem = Array.prototype.filter.call(system.querySelectorAll(".bar"),
+                                                 function (bar) { return bar.dataset.index; });
+
+      if (!inSystem.length) return;
+
+      var box = system.getBoundingClientRect();
+
+      if (!box.width || !box.height) return;
+
+      var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "guide-layer");
+      svg.setAttribute("aria-hidden", "true");
+
+      /** Where a bar's dot sits, in the system's own coordinates. */
+      var place = function (bar, note) {
+        var at = bar.getBoundingClientRect();
+
+        return {
+          x: at.left - box.left + at.width / 2,
+          y: at.top - box.top
+               + at.height * (GUIDE_BOTTOM - (note - lowest) / span * (GUIDE_BOTTOM - GUIDE_TOP))
+        };
+      };
+
+      inSystem.forEach(function (barEl, i) {
+        var bar = byIndex[Number(barEl.dataset.index)];
+        if (!bar) return;
+
+        var nextEl = inSystem[i + 1];
+        var next = nextEl ? byIndex[Number(nextEl.dataset.index)] : null;
+
+        bar.tones.forEach(function (tone) {
+          var from = place(barEl, tone.note);
+
+          var dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          dot.setAttribute("class", "node");
+          dot.setAttribute("cx", from.x);
+          dot.setAttribute("cy", from.y);
+          dot.setAttribute("r", "2.6");
+          svg.appendChild(dot);
+
+          var label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          label.setAttribute("class", "degree");
+          label.setAttribute("x", from.x + 5);
+          label.setAttribute("y", from.y - 4);
+          label.textContent = tone.label;
+          svg.appendChild(label);
+        });
+
+        if (!next) return;
+
+        /*  Drawn per *motion*, not per strand index. The 3rd of one chord
+            resolves to the 7th of the next as often as not, so the two lines
+            cross - and matching them up by position in the list would draw two
+            lines that never cross and are both wrong.
+
+            The target is the next bar's own note rather than the motion's, so
+            an octave fold comes out as the jump it is. A guide-tone line that
+            has run out of room does jump, and drawing it as a smooth glide
+            through notes nobody plays would be the picture lying. */
+        bar.motions.forEach(function (motion) {
+          var landing = next.tones.filter(function (tone) {
+            return tone.label === motion.toLabel;
+          })[0];
+
+          if (!landing) return;
+
+          var from = place(barEl, motion.from);
+          var to = place(nextEl, landing.note);
+
+          var line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          line.setAttribute("class", "strand");
+          line.setAttribute("d", "M" + from.x + " " + from.y + " L" + to.x + " " + to.y);
+          svg.appendChild(line);
+        });
+      });
+
+      system.appendChild(svg);
+    });
   }
 
   /** Draws what the take made of each bar, on the bars.
@@ -5507,6 +5722,24 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     });
 
     if (!el.planDialog.open) el.planDialog.showModal();
+  });
+
+  el.guideButton.addEventListener("click", function () {
+    guide.showing = !guide.showing;
+    paintGuideTones();
+  });
+
+  /*  The strands are drawn in pixels, so a chart that reflows has to be drawn
+      again - the 760px breakpoint moves four bars to a line, and a window
+      dragged narrower moves them one at a time. Debounced, because a resize is
+      a stream of events and this reads every bar's box. */
+  var guideRedraw = null;
+
+  window.addEventListener("resize", function () {
+    if (!guide.showing) return;
+
+    window.clearTimeout(guideRedraw);
+    guideRedraw = window.setTimeout(paintGuideTones, 120);
   });
 
   el.planClose.addEventListener("click", function () { el.planDialog.close(); });

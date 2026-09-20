@@ -188,7 +188,17 @@ something finished or assume something unfinished is done:
   everything else, so the ride and the comp agree about where the and of two
   is. The pattern follows the **metre**, not the comping style, and needs the
   clock — there is no figure to play to a bar you are sitting on.
-- **Not built, deliberately open**: voice-leading visualizer, personal voicing
+- **Voice-leading visualiser** — done. `guideTones()` walks `guideToneMotion`
+  across a chart; the page draws it as an SVG layer per `.system`, over the
+  bars. Two things are easy to get wrong and are tested: the strands are drawn
+  **per motion, not per strand index** (a 3rd resolving to a 7th means the
+  lines cross, and pairing by position draws two lines that never cross and are
+  both wrong), and the octave is **bounded** — nearest-target resolution drifts
+  one way only, and a cycle of fourths fell four octaves before the fold was
+  added. Same problem the comp's register window and the bass's compass solve.
+  `.systems.guiding` grows the bars, and the class goes on **before** any box
+  is measured.
+- **Not built, deliberately open**: personal voicing
   library, ear training, progress tracking beyond current per-take/session
   stats, licks/line suggestions, chordal (not line) reading in solo practice,
   MusicXML/MuseScore import, metre round-tripping on export, PDF

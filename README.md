@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (443), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (446), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -112,6 +112,36 @@ bar** keeps it.
 Clicking the bar you are already on opens **its substitutions**, grouped from the closest
 to the original harmony outwards, each with a difficulty tag and a rationale. Choosing one
 rewrites the bar.
+
+### Seeing the voice leading
+
+**Guide tones**, above the chart, draws the thing a chord chart cannot show you. A
+progression is two lines moving a semitone at a time with the roots underneath - the 3rd
+and the 7th of each chord, each resolving into the nearest guide tone of the next - and
+that is what carries the harmony. The symbols say where the chords are; they say nothing
+about how they join up.
+
+So it is drawn **on the chart**, over the bars, where you are already looking: a dot per
+guide tone at the height of its pitch, its degree beside it, and a line into wherever it
+goes next. Over `| Dm7 | G7 | Cmaj7 |` you see the classic straight away - one line holds
+while the other falls a semitone, twice.
+
+The strands **cross**, and are drawn to. The 3rd of one chord resolves to the 7th of the
+next as often as not, and a picture that paired them up by position would draw two lines
+that never cross and are both wrong.
+
+The octave is **carried** bar to bar so the line is continuous, and **folded back** when it
+leaves the band a guide tone is played in. That is the same problem the comp's register
+window and the walking bass's compass solve: resolving to the nearest target only ever
+drifts one way, and a cycle of fourths resolves downwards every single bar - eight bars of
+it took the line four octaves below anything anybody plays. A line that has run out of room
+jumps, which is what a player does with it and what an engraved one shows.
+
+It is in **both modes** and follows the tune wherever it goes - including when *Reharmonise
+as you play* moves the chart under you, which is the one place you can watch voice leading
+change as it happens. The bars grow a little to make room: a semitone drawn in the space a
+bar already had was three pixels, which is the one thing the picture exists to show, drawn
+too small to see.
 
 ### Solo practice
 
@@ -831,6 +861,11 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   PDF needs a PDF library and belongs to the shell; deciding which of that text is a chord
   chart needs none and belongs here. Every reader reports the chord symbols it could not
   understand instead of handing back a chart that looks complete and is not.
+- **The guide-tone line** — `guideToneMotion` walked across a whole chart rather than
+  asked about one pair, with the octave carried so the strands are continuous and folded
+  back when they leave the band a guide tone is played in. Nearest-target resolution only
+  ever drifts one way, and a cycle of fourths drifted four octaves before it was bounded -
+  the same reason the comp has a register window and the bass a compass.
 - **Soloing styles** — the scale catalogue grouped into the vocabularies a player actually
   practises out of, built from scale families rather than lists of names so that a shape
   added to the catalogue joins its style without anyone remembering to add it. The engine
@@ -905,8 +940,6 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   would be one the app invented and then marked you against. Comping is scored on placement
   for exactly the reason a solo is not — there the standard is the style you picked — and
   the two are not in tension. See [`docs/COMPING.md`](docs/COMPING.md).
-- **The voice-leading visualiser** — though `guideToneMotion()` in the engine is the
-  primitive it needs.
 - **Reading a PDF, and printing one, in the desktop app.** Both need a PDF library the
   JUCE shell does not have; the engine's reader is shared, so only the bytes are missing.
 

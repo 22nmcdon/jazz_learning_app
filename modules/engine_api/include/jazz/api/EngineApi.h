@@ -37,6 +37,20 @@ std::string exportIRealPro (const char* progressionText, const char* title, cons
                             const char* style, int beats, int beatUnit);
 std::string chartFromPage (const char* tabSeparatedItems);
 std::string reharmPlans (const char* progressionText);
+
+/** The tune's guide tones, bar by bar, and where each one goes next.
+
+    The 3rd and the 7th are what carry a progression - a chart is two lines
+    moving a semitone at a time with the roots underneath - and that is the one
+    thing a chord chart cannot show you. This is `guideToneMotion` walked across
+    a whole chart rather than asked about one pair, with the octave *carried*:
+    each bar's tones are where the last bar's resolved to, so the answer is two
+    continuous strands rather than a row of unrelated pairs.
+
+    The last bar has tones and no motion. Nothing to move to is not the same as
+    nowhere to go, and a shell drawing this needs the tones either way.
+*/
+std::string guideTones (const char* progressionText);
 std::string identifyChord (const char* midiNotesCsv);
 std::string recogniseSubstitution (const char* progressionText, int measureIndex, const char* midiNotesCsv, int includeAdvanced);
 std::string idiomaticVoicings (const char* symbol, int anchorNote, const char* practiseStyle, int rich);

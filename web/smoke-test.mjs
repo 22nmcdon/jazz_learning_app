@@ -305,6 +305,65 @@ try {
 
   await page.locator("#ioClose").click();
 
+  /*  The guide-tone line, drawn over the chart.
+
+      The 3rd and the 7th are what carry a progression and where they go is the
+      one thing a chord chart cannot show, so it is drawn on the chart. What is
+      worth asserting is not that an SVG appeared: it is that the line *tracks
+      the tune*. A picture of the harmony that did not change when the harmony
+      did would be worse than no picture. */
+  await page.locator("#guideButton").click();
+  await page.waitForFunction(() => document.querySelectorAll(".guide-layer .strand").length > 0,
+                             null, { timeout: 10000 });
+
+  const strandsOf = () => page.evaluate(() =>
+    [...document.querySelectorAll(".guide-layer .strand")].map((s) => s.getAttribute("d")));
+
+  const firstLine = await strandsOf();
+
+  check(`the guide-tone line is drawn over the chart (${firstLine.length} strands)`,
+        firstLine.length > 0
+        && (await page.locator("#guideButton").getAttribute("aria-pressed")) === "true"
+        && (await page.locator(".guide-layer .node").count()) > 0);
+
+  // Reharmonising a bar moves its guide tones, so the line has to move with it.
+  //
+  // Opened defensively: it takes one click on the bar you are already on and
+  // two on any other, and a second click while the dialog is up lands on the
+  // modal rather than on the chart.
+  for (let attempt = 0; attempt < 2; attempt += 1)
+    if (!(await page.locator("#chordDialog[open]").count()))
+      await bars.nth(1).click();
+
+  await page.waitForSelector("#chordDialog[open]", { timeout: 10000 });
+  await page.locator("#subs details.family").first().click();
+  const barTwoWas = await bars.nth(1).getAttribute("data-label");
+
+  await page.locator("#subs button.option").first().click();
+
+  /*  Choosing one reopens the dialog on the bar it just rewrote rather than
+      closing it - so what says the change landed is the bar's own label, not
+      the dialog going away. */
+  await page.waitForFunction(
+    (was) => document.querySelectorAll("#systems .bar")[1].dataset.label !== was,
+    barTwoWas, { timeout: 10000 });
+
+  await page.locator("#dialogClose").click();
+  await page.waitForTimeout(400);
+
+  check("and follows the tune when a bar is reharmonised",
+        JSON.stringify(await strandsOf()) !== JSON.stringify(firstLine));
+
+  await page.locator("#restoreChart").click();
+  await page.waitForTimeout(400);
+
+  await page.locator("#guideButton").click();
+
+  check("and comes off the chart when it is switched off",
+        (await page.locator(".guide-layer").count()) === 0
+        && (await page.locator("#guideButton").getAttribute("aria-pressed")) === "false");
+
+
   // --- solo practice ------------------------------------------------------
   // The other half of the app: the same notes, read one at a time against the
   // bar they land in rather than together as a chord.
