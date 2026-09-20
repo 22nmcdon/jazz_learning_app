@@ -480,7 +480,8 @@ std::string importIRealPro (const char* text)
     it back does not quietly lose who wrote the tune.
 */
 std::string exportIRealPro (const char* progressionText, const char* title,
-                                            const char* composer, const char* style)
+                                            const char* composer, const char* style,
+                                            int beats, int beatUnit)
 {
     auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "",
                                         title != nullptr ? title : "");
@@ -493,6 +494,20 @@ std::string exportIRealPro (const char* progressionText, const char* title,
 
     if (style != nullptr && *style != '\0')
         parsed.chart->style = style;
+
+    /*  The metre is the shell's to say. A progression text carries chords and
+        barlines and nothing about how a bar is counted, so a chart rebuilt from
+        one opens in four however it arrived - which is why a waltz imported and
+        exported used to come back a waltz no longer.
+
+        Nothing here is a judgement about what a good metre is: anything at or
+        below zero means the caller did not know, and the text's own default
+        stands. */
+    if (beats > 0)
+        parsed.chart->timeSignature.numerator = beats;
+
+    if (beatUnit > 0)
+        parsed.chart->timeSignature.denominator = beatUnit;
 
     return hold ("{\"ok\":true,\"link\":" + quoted (core::exportIRealPro (*parsed.chart)) + "}");
 }

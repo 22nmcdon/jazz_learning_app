@@ -73,7 +73,8 @@ namespace
 
         if (name == "jazzExportIRealPro")
             return api::exportIRealPro (text (0).c_str(), text (1).c_str(),
-                                        text (2).c_str(), text (3).c_str());
+                                        text (2).c_str(), text (3).c_str(),
+                                        number (4), number (5));
 
         if (name == "jazzRecogniseSubstitution")
             return api::recogniseSubstitution (text (0).c_str(), number (1),

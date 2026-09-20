@@ -64,6 +64,37 @@ TEST ("a chart survives the round trip through iReal Pro")
     CHECK_EQ (returned.chart->title, original.title);
 }
 
+TEST ("a metre survives the round trip")
+{
+    auto original = chartOf ("| Dm7 | G7 | Cmaj7 |");
+    original.timeSignature.numerator = 3;
+    original.timeSignature.denominator = 4;
+
+    const auto returned = importIRealPro (exportIRealPro (original));
+
+    CHECK (returned.ok());
+    CHECK_EQ (returned.chart->timeSignature.numerator, 3);
+    CHECK_EQ (returned.chart->timeSignature.denominator, 4);
+}
+
+TEST ("a two-digit metre survives the round trip, and eats none of the music")
+{
+    /*  T128 is the one metre iReal Pro writes in three characters, and reading
+        it two at a time gave 1/2 and left the 8 to be read as music. Both
+        halves are checked here: the metre that came back, and the chart it did
+        not take a bite out of. */
+    auto original = chartOf ("| Dm7 | G7 | Cmaj7 |");
+    original.timeSignature.numerator = 12;
+    original.timeSignature.denominator = 8;
+
+    const auto returned = importIRealPro (exportIRealPro (original));
+
+    CHECK (returned.ok());
+    CHECK_EQ (returned.chart->timeSignature.numerator, 12);
+    CHECK_EQ (returned.chart->timeSignature.denominator, 8);
+    CHECK_EQ (returned.chart->toProgressionText(), original.toProgressionText());
+}
+
 TEST ("a bar with two chords survives the round trip")
 {
     const auto original = chartOf ("| Dm7 G7 | Cmaj7 |");

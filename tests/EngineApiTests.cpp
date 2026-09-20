@@ -81,7 +81,8 @@ TEST ("a chord no name explains returns no readings rather than a guess")
 
 TEST ("an iReal Pro link survives a round trip through the API")
 {
-    const auto exported = exportIRealPro ("| Dm7 | G7 | Cmaj7 |", "Test Tune", "Nobody", "Medium Swing");
+    const auto exported = exportIRealPro ("| Dm7 | G7 | Cmaj7 |", "Test Tune", "Nobody",
+                                          "Medium Swing", 4, 4);
 
     CHECK (contains (exported, "\"ok\":true"));
     CHECK (contains (exported, "irealbook://"));
@@ -103,6 +104,43 @@ TEST ("an iReal Pro link survives a round trip through the API")
     CHECK (contains (reimported, "\"ok\":true"));
     CHECK (contains (reimported, "\"bars\":3"));
     CHECK (contains (reimported, "Dm7"));
+}
+
+TEST ("the metre survives a round trip through the API")
+{
+    /*  A progression text carries chords and barlines and nothing about how a
+        bar is counted, so the chart this rebuilds opens in four unless the
+        shell says otherwise. It is the shell that knows - the readers have
+        always brought a time signature in - and until it was on this wire a
+        waltz imported and exported came back in four. */
+    const auto exported = exportIRealPro ("| Dm7 | G7 | Cmaj7 |", "Waltz", "Nobody",
+                                          "Jazz Waltz", 3, 4);
+
+    const auto linkStart = exported.find ("irealbook://");
+    const auto linkEnd = exported.find ('"', linkStart);
+
+    CHECK (linkStart != std::string::npos);
+    CHECK (linkEnd != std::string::npos);
+
+    if (linkStart == std::string::npos || linkEnd == std::string::npos)
+        return;
+
+    const auto link = exported.substr (linkStart, linkEnd - linkStart);
+
+    CHECK (contains (link, "T34"));
+    CHECK (contains (importIRealPro (link.c_str()), "\"beatsPerBar\":3"));
+}
+
+TEST ("a shell that does not know its metre leaves the chart's own alone")
+{
+    /*  Zero is what an older shell effectively sent and what one with nothing
+        to say should send. It must not be read as a metre of nought, and it
+        must not be read as an instruction either: the text's own default
+        stands, which is what every caller got before this was on the wire. */
+    const auto exported = exportIRealPro ("| Dm7 | G7 |", "No Metre", "", "", 0, 0);
+
+    CHECK (contains (exported, "\"ok\":true"));
+    CHECK (contains (exported, "T44"));
 }
 
 TEST ("every plan is offered, each saying how many bars it moves")

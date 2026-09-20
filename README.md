@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (429), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (433), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -536,7 +536,7 @@ The chart reader itself is in the engine either way: what the app is missing is 
 text out of a PDF, not a way to understand one.
 
 A chart that arrives with a chord the engine cannot read says so and names it rather than
-quietly dropping it, and the title, composer and style survive a round trip - they are
+quietly dropping it, and the title, composer, style **and metre** survive a round trip - they are
 written around the music the way a lead sheet writes them, feel top left and composer top
 right. An imported chart becomes the chart, so **Restore original** takes back the
 reharmonisations you have tried and returns the tune you brought in, not the one the page
@@ -691,6 +691,10 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   shuffled in 50-character blocks and has to be put back in order first. It writes a link
   back, keeping the title, composer, style, time signature and the way each chord was
   spelled, so a chart that leaves the engine and comes back is the chart that left.
+  The metre has to be *handed* to it: a progression text says what the chords are and
+  nothing about how a bar is counted, so the shell sends the one it is showing. It was
+  the missing half of that wire, rather than anything in the writer, that sent every
+  waltz out in four.
   It also rebuilds a chart from the text of a page, and a page comes in two kinds. An
   engraved lead sheet gives the chord symbols themselves: the reader stitches the runs
   back into symbols, groups them into lines, works out where the barlines were from the
@@ -778,9 +782,6 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   would be one the app invented and then marked you against. Comping is scored on placement
   for exactly the reason a solo is not — there the standard is the style you picked — and
   the two are not in tension. See [`docs/COMPING.md`](docs/COMPING.md).
-- **A metre that survives export.** The readers bring a time signature in; the iReal Pro
-  writer does not put one back out, so a waltz imported and exported comes back in four.
-  One line in `ChartFormats`, once someone wants it.
 - **The voice-leading visualiser** — though `guideToneMotion()` in the engine is the
   primitive it needs.
 - **Reading a PDF, and printing one, in the desktop app.** Both need a PDF library the

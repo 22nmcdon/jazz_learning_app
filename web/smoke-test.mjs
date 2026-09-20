@@ -230,6 +230,28 @@ try {
     check(`an imported waltz arrives in three `
           + `(${await third.locator("#timeSig").inputValue()})`,
           (await third.locator("#timeSig").inputValue()) === "3/4");
+
+    /*  And goes back out in three, which is the half that was missing. The
+        writer always wrote whatever metre the chart had; what it was handed
+        was a chart rebuilt from a progression text, which says what the chords
+        are and nothing about how a bar is counted - so every waltz left in
+        four. The metre is on the wire now, and this is the shell end of it. */
+    // A page opened cold may have the cheat sheet in front of it, and a modal
+    // dialog swallows every click behind it.
+    if (await third.locator("#helpDialog[open]").count())
+      await third.locator("#helpClose").click();
+
+    await third.locator("#menuButton").click();
+    await third.locator("#ioButton").click();
+    await third.waitForSelector("#ioDialog[open]", { timeout: 10000 });
+    await third.waitForFunction(
+      () => document.querySelector("#irealLink").value.length > 0, null, { timeout: 15000 });
+
+    const exported = await third.locator("#irealLink").inputValue();
+
+    check(`and the waltz exports as one (${(exported.match(/\[T\d+/) || ["no metre"])[0]})`,
+          exported.includes("[T34"));
+
     await third.close();
   }
 

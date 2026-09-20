@@ -400,20 +400,36 @@ ChartParseResult importIRealPro (std::string_view text)
             continue;
         }
 
-        if (c == 'T')   // time signature, e.g. T44
+        if (c == 'T')   // time signature, e.g. T44 - or T128, for 12/8
         {
-            if (i + 2 < body.size() && std::isdigit (static_cast<unsigned char> (body[i + 1])))
+            /*  However many digits it is, rather than exactly two. Most of
+                iReal Pro's metres are a digit over a digit and fit in two, and
+                12/8 does not: it writes T128, which read two at a time is 1/2
+                and leaves an 8 behind to be read as music. Nothing else here
+                can start with a digit - a chord symbol begins with a letter -
+                so taking every digit is unambiguous.
+
+                The last one is the denominator and the rest is the numerator,
+                which is the rule the writer works to as well. */
+            std::size_t digits = 0;
+
+            while (i + 1 + digits < body.size()
+                   && std::isdigit (static_cast<unsigned char> (body[i + 1 + digits])))
+                ++digits;
+
+            if (digits >= 2)
             {
                 // A tune that changes metre writes several of these. A Chart holds
                 // one, so it holds the one the tune opens in.
                 if (! sawTimeSignature)
                 {
-                    chart.timeSignature.numerator = body[i + 1] - '0';
-                    chart.timeSignature.denominator = body[i + 2] - '0';
+                    chart.timeSignature.numerator
+                        = std::stoi (body.substr (i + 1, digits - 1));
+                    chart.timeSignature.denominator = body[i + digits] - '0';
                     sawTimeSignature = true;
                 }
 
-                i += 2;
+                i += digits;
             }
 
             continue;

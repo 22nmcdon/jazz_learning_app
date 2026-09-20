@@ -1756,7 +1756,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 429 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 433 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -4552,9 +4552,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   async function refreshExport() {
-    var result = await call("jazzExportIRealPro", ["string", "string", "string", "string"],
+    // The metre goes with it. A progression text says nothing about how a bar
+    // is counted, so without these the chart is rebuilt in four and a waltz
+    // taken out of this page is a waltz no longer - the one thing that did not
+    // survive a round trip.
+    var result = await call("jazzExportIRealPro",
+                      ["string", "string", "string", "string", "number", "number"],
                       [state.progression, el.sheetTitle.textContent,
-                       state.composer || "", state.chartStyle || ""]);
+                       state.composer || "", state.chartStyle || "",
+                       transport.beats, transport.beatUnit]);
 
     el.irealLink.value = result !== null && result.ok ? result.link : "";
     el.exportStatus.textContent = "";

@@ -72,10 +72,12 @@ JAZZ_EXPORT const char* jazzImportIRealPro (const char* text)
 }
 
 JAZZ_EXPORT const char* jazzExportIRealPro (const char* progressionText, const char* title,
-                                            const char* composer, const char* style)
+                                            const char* composer, const char* style,
+                                            int beats, int beatUnit)
 {
     return hold (jazz::api::exportIRealPro (orEmpty (progressionText), orEmpty (title),
-                                            orEmpty (composer), orEmpty (style)));
+                                            orEmpty (composer), orEmpty (style),
+                                            beats, beatUnit));
 }
 
 JAZZ_EXPORT const char* jazzChartFromPage (const char* tabSeparatedItems)

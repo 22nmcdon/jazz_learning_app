@@ -21,7 +21,20 @@ std::string scalesForChord (const char* symbol, const char* style);
 std::string reharmonise (const char* progressionText, int measureIndex, int includeAdvanced, int includeRisky);
 std::string analyseVoicing (const char* symbol, const char* midiNotesCsv, const char* practiseStyle);
 std::string importIRealPro (const char* text);
-std::string exportIRealPro (const char* progressionText, const char* title, const char* composer, const char* style);
+
+/** Writes the chart back out as an iReal Pro link.
+
+    @param beats,beatUnit  the metre, because a progression text has none and
+                 the chart this rebuilds would otherwise open in four. The
+                 readers have always brought a time signature in; until this
+                 was on the wire a waltz went out in four, which is the one way
+                 a chart that left the engine and came back was not the chart
+                 that left. Zero or less means "whatever the text implies",
+                 which is what a shell that does not know its metre should
+                 send and what an older one effectively sent.
+*/
+std::string exportIRealPro (const char* progressionText, const char* title, const char* composer,
+                            const char* style, int beats, int beatUnit);
 std::string chartFromPage (const char* tabSeparatedItems);
 std::string reharmPlans (const char* progressionText);
 std::string identifyChord (const char* midiNotesCsv);
