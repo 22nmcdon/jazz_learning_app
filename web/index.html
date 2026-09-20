@@ -1783,7 +1783,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 439 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 443 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -4271,6 +4271,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       if (rampDue(index)) {
         stepTempo();
 
+        /*  Counted here as well as in `bookBeat`, and not twice: re-anchoring
+            puts this beat at index zero, so the check over there sees a chorus
+            that has not come round yet and says nothing. Without this the one
+            chorus a ramp steps on would be the one the band repeated. */
+        comping.chorus += 1;
+
         transport.origin = when;
         transport.nextBeat = 0;
         transport.countInBeats = 0;   // counted in once, at the top of the take
@@ -4303,6 +4309,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // booked the bass on every beat rather than on the downbeat - four times
     // the notes, all of them in the right places, which is the kind of wrong
     // that sounds merely thick rather than broken.
+    /*  A new time round the loop, which the comp is about to be asked for.
+        Before the band is booked rather than after, so the first bar of a
+        chorus is already the new chorus's. */
+    if (! isCountIn && inBar === 0 && barsIn > 0 && barsIn % loop.bars === 0)
+      comping.chorus += 1;
+
     if (! isCountIn && inBar === 0)
     {
       compBar(barIndex, when, secondsPerBeat());
@@ -4384,6 +4396,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     transport.running = true;
     transport.counting = transport.countIn;
     transport.nextBeat = 0;
+
+    // Back to the top: a take played again is the same exercise, so it starts
+    // on the chorus the last one started on rather than wherever it got to.
+    comping.chorus = 0;
     transport.countInBeats = transport.countIn ? transport.beats : 0;
     transport.origin = transportNow() + 0.12;   // a moment to get the first click out
 
@@ -5734,7 +5750,18 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     drums: false,
 
     plan: null,
-    planFor: "",     // the chart, style and range the plan was made for
+    planFor: "",     // the chart, style, range and chorus the plan was made for
+
+    /*  Which time round the loop this is.
+
+        The engine plans a range of bars from one seed, and the same seed gives
+        the same plan note for note - which is what stops a loop drifting and
+        what lets a test pin one down. It also meant every chorus was the same
+        chorus, voicing for voicing, which is not something a comper does. So
+        the chorus is part of the seed: reproducible within a pass, different
+        on the next one, and back to the beginning when the take restarts.
+    */
+    chorus: 0,
     bassPlan: null,
     bassPlanFor: "",
     seed: 1,
@@ -5754,7 +5781,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function compPlanKey() {
     var loop = loopRange();
 
-    return [state.progression, comping.style, loop.from, loop.to, comping.seed].join("|");
+    return [state.progression, comping.style, loop.from, loop.to,
+            comping.seed, comping.chorus].join("|");
   }
 
   /** Fetches the plan for the loop as it now stands, if it is not in hand. */
@@ -5764,8 +5792,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (comping.plan !== null && comping.planFor === key) return comping.plan;
 
     var loop = loopRange();
+
+    // The chorus rides on the seed rather than beside it, because the engine
+    // takes one number and the page is the only thing that knows a loop has
+    // come round.
     var result = await call("jazzCompPlan", ["string", "string", "number", "number", "number"],
-                            [state.progression, comping.style, loop.from, loop.to, comping.seed]);
+                            [state.progression, comping.style, loop.from, loop.to,
+                             comping.seed + comping.chorus * 9176]);
 
     if (result === null || !result.ok) return null;
 

@@ -139,6 +139,18 @@ something finished or assume something unfinished is done:
   reversed, because In time already meant "the same mode, with a clock, adding
   readings that are silent without one" — which is exactly what comping is to
   chord practice. `state.mode` is still two-valued.
+  **The band's voicings are a weighted draw, not a minimum.** There used to be
+  exactly one voicing per chord for ever; `compingVoicing`'s seeded overload
+  now shortlists candidates within a spread of the best and draws by shape
+  weight — two-handed rootless plain 100, rich 80, one-hand rootless 34/20,
+  and **never a shell** (the root at the bottom is the fault `readCompHit`
+  flags in a player). Weight decides the draw, never the cost: in the cost it
+  rules a shape out instead of making it rarer. Travel is measured *per voice*,
+  because a summed distance penalises a shape for having fewer notes and kept
+  the thin shapes unreachable. The **unseeded** overload is unchanged and must
+  stay so — it answers "what would a comper play here", which has one answer
+  and is the ii-V-I the README walks through. The page puts the **chorus** in
+  the seed, which is what makes the second time round the form a second time.
   A style also says **how long each hit rings** (`CompSlot::heldFor`, falling
   back to `CompStyleDefinition::heldFor`), trimmed by `compPlan` so nothing
   sounds into the chord after it — one instrument plays them in order, and a

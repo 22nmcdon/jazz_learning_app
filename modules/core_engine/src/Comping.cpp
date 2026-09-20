@@ -407,6 +407,8 @@ CompPlan compPlan (const Chart& chart, const CompStyleDefinition& style,
         std::sort (chosen.begin(), chosen.end(),
                    [] (const Candidate& a, const Candidate& b) { return a.at < b.at; });
 
+        std::uint32_t voicingSalt = 0;
+
         for (const auto& [position, anticipates, weight] : chosen)
         {
             (void) weight;
@@ -429,8 +431,16 @@ CompPlan compPlan (const Chart& chart, const CompStyleDefinition& style,
             // a player against `lowestNote`/`highestNote`, so the band has to be
             // held to the same two numbers or the app comps in a style it would
             // then read as out of that style's register.
+            /*  Seeded per hit, not per bar: two chords in one bar should not be
+                offered the same choice and then differ only by where the voice
+                leading took them. The bar's own seed is already mixed with the
+                plan's, so a bar comes round the same way on the same seed and
+                a *different* one when the caller asks for a different seed -
+                which is how a second chorus is a second chorus rather than a
+                repeat. */
             const auto voicing = compingVoicing (*chord, previous,
-                                                 style.lowestNote, style.highestNote);
+                                                 style.lowestNote, style.highestNote,
+                                                 mix (barSeed, voicingSalt++));
 
             if (voicing.isEmpty())
                 continue;

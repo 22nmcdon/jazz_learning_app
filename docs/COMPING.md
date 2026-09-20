@@ -60,6 +60,42 @@ engine rather than in a shell.
   holds a chord is not a rule about how long you may. A comper holding one
   through a four-to-the-bar is reading a style that does not say not to.
 
+### What it plays: a weighted draw from four rootless shapes
+
+The band used to take the strict minimum-cost voicing, which meant **exactly one
+voicing per chord, for ever** — Dm7 came out F3 C4 E4 B4 every time it appeared,
+in every chorus, in every tune. Three things widen it, and none of them is an
+equal weighting:
+
+- **The shapes.** Two-handed rootless plain (100), the same rich (80), one-hand
+  rootless rich (34) and plain (20). The weight decides the *draw*, never the
+  cost — folded into the cost it rules a shape out rather than making it rarer,
+  and what is wanted is a thin voicing now and then, not one only when it is the
+  best move on the board by a distance.
+- **No shell, at any weight.** A shell puts the root at the bottom, and
+  `readCompHit` calls the root under a voicing a real comping fault: the bass
+  player is already playing that note. A band playing what the app marks a
+  player for is the same contradiction the style register exists to avoid,
+  pointed at the shape instead of the octave.
+- **Reaching.** About one chord in six, the hands take a voicing elsewhere in
+  the window instead of the nearest. Moving the tie-break alone moved nothing —
+  the travel term is several times its size — so reaching also costs the voice
+  leading its grip. Bounded to a hand's reach either way: past that it is not a
+  move, it is re-spelling the chord from scratch.
+
+Two things made this possible and are worth keeping. Travel is measured **per
+voice** rather than summed: the sum grows with how many notes are being counted,
+so a three-note voicing scored worse purely for being smaller, and the thinner
+shapes were never once chosen until it was an average. And the shortlist is
+candidates *within a spread of the best*, so this chooses between voicings that
+were nearly as good and never between a good one and a poor one.
+
+`compingVoicing` without a seed is untouched and deliberately so. "What would a
+comper play here" has one answer — it is what `Show me a comp` shows, what a bar
+sounds when you land on it with no clock, and the ii-V-I the README walks through
+note by note. "What does the band play over this chorus" is the other question,
+and the chorus number is part of its seed.
+
 ### What it plays: voicing choice, not a new shape
 The shapes are the same two-handed rootless shapes chord practice already
 offers (`idiomaticVoicings`). What comping adds is *which one, in which

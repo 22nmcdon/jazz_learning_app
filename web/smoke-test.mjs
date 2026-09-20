@@ -914,6 +914,50 @@ try {
   check(`and four to the bar lets go inside its own beat (${middle(fourHolds)?.toFixed(2)})`,
         middle(fourHolds) < 0.95);
 
+  /*  The band does not play the same two chords all night.
+
+      There used to be exactly one voicing per chord, for ever - the search took
+      the strict minimum and the minimum never moved, so a two-bar loop was the
+      same two voicings however long you played over it. This rolls several
+      choruses of that loop and counts what was actually struck: more shapes
+      than there are chords means the band is choosing rather than repeating.
+  */
+  await page.locator("#compingButton").click();
+  await page.selectOption("#compStyle", "charleston");
+  await page.locator("#compPiano").check();
+  await page.locator("#compingButton").click();
+
+  await forgetSounds();
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(5000);
+  await page.keyboard.press("Space");
+  await page.waitForFunction(
+    () => document.querySelector("#armTake").getAttribute("aria-pressed") === "false",
+    null, { timeout: 10000 });
+
+  const voicings = await page.evaluate(() => {
+    // Notes struck at the same instant are one chord. The electric piano builds
+    // two oscillators per note, which changes none of that.
+    const struck = new Map();
+
+    for (const sound of window.__sounded) {
+      if (sound.type !== "sine" || sound.when === null) continue;
+
+      const at = sound.when.toFixed(3);
+
+      if (!struck.has(at)) struck.set(at, []);
+      struck.get(at).push(Math.round(sound.hz));
+    }
+
+    return [...struck.values()].map((hz) => hz.sort((a, b) => a - b).join("-"));
+  });
+
+  const distinct = new Set(voicings).size;
+
+  check(`the band voices a chord more than one way (${distinct} shapes over `
+        + `${voicings.length} chords of a two-chord loop)`,
+        voicings.length > 4 && distinct > 2);
+
   /*  Stopping a take stops the band, now rather than at the end of the bar.
 
       On the web a bar of accompaniment is handed to Web Audio all at once, a

@@ -3,6 +3,7 @@
 #include "jazz/core/LineAnalyzer.h"
 #include "jazz/core/VoicingAnalyzer.h"
 
+#include <map>
 #include <set>
 
 using namespace jazz::core;
@@ -340,23 +341,157 @@ TEST ("a push at the end of the range is a hit, not a push into silence")
     }
 }
 
-TEST ("every voicing the comp plans is one the analyser would call two-handed")
+TEST ("every voicing the comp plans is a shape the app itself offers")
 {
-    // The other half of the same invariant: the plan's rhythm is in style and
-    // its notes are the voicing the app would have suggested.
+    /*  The other half of the same invariant: the plan's rhythm is in style and
+        its notes are a voicing the app would have suggested.
+
+        It used to say `twoHandedRootless` and only that, which was true while
+        the band knew one shape. It knows four now - the two-handed pair plain
+        and rich, and the thinner one-hand pair - so what has to hold is that
+        every one of them is a shape the analyser recognises as comping. */
     const auto chart = chartOf ("| Dm7 | G7alt | Cmaj7 | Am7b5 |");
-    const auto plan = compPlan (chart, compStyleFor ("charleston"), 0, 3, 2);
 
-    CHECK (! plan.isEmpty());
-
-    for (const auto& hit : plan.hits)
+    for (const auto& style : compStyles())
     {
-        const auto chord = ChordSymbol::parse (hit.chordSymbol);
-        CHECK (chord.has_value());
+        for (auto seed = 1; seed <= 8; ++seed)
+        {
+            const auto plan = compPlan (chart, style, 0, 3, static_cast<std::uint32_t> (seed));
 
-        const auto voicing = Voicing::fromNotes (hit.midiNotes);
-        CHECK (VoicingAnalyzer::classify (voicing, *chord) == VoicingType::twoHandedRootless);
+            CHECK (! plan.isEmpty());
+
+            for (const auto& hit : plan.hits)
+            {
+                const auto chord = ChordSymbol::parse (hit.chordSymbol);
+                CHECK (chord.has_value());
+
+                if (! chord.has_value())
+                    continue;
+
+                const auto voicing = Voicing::fromNotes (hit.midiNotes);
+                const auto type = VoicingAnalyzer::classify (voicing, *chord);
+
+                CHECK (type == VoicingType::twoHandedRootless
+                         || type == VoicingType::rootlessLeftHand);
+
+                /*  And never the root at the bottom, which is what kept the
+                    shell out of the band's vocabulary: the bass player is
+                    already playing that note, and `readCompHit` calls it a
+                    real comping fault. A band playing what the app marks a
+                    player for is the contradiction the style's own register
+                    exists to avoid, pointed at the shape instead. */
+                CHECK (toPitchClass (voicing.lowestNote()) != chord->root());
+            }
+        }
     }
+}
+
+TEST ("a chord is not voiced the same way every time it comes round")
+{
+    /*  There used to be exactly one voicing per chord, for ever: the search
+        took the strict minimum and the minimum never moved, so Dm7 came out
+        F3 C4 E4 B4 every time it appeared, in every chorus, in every tune.
+        Nobody comps like that. */
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 | Cm7 | F7 | Bbmaj7 | Bbmaj7 |");
+
+    std::map<std::string, std::set<std::vector<int>>> voicingsFor;
+
+    for (auto seed = 1; seed <= 6; ++seed)
+        for (const auto& hit : compPlan (chart, compStyleFor ("charleston"), 0, 7,
+                                         static_cast<std::uint32_t> (seed)).hits)
+            voicingsFor[hit.chordSymbol].insert (hit.midiNotes);
+
+    CHECK (! voicingsFor.empty());
+
+    for (const auto& [symbol, voicings] : voicingsFor)
+    {
+        (void) symbol;
+        CHECK (voicings.size() > 1);
+    }
+}
+
+TEST ("a different seed is a different chorus, and the same seed is the same one")
+{
+    /*  Both halves matter. Variety that could not be reproduced would make a
+        plan untestable and a loop drift; reproducibility without variety is
+        what this started as. */
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 |");
+    const auto& style = compStyleFor ("charleston");
+
+    const auto notesOf = [] (const CompPlan& plan)
+    {
+        std::vector<std::vector<int>> out;
+
+        for (const auto& hit : plan.hits)
+            out.push_back (hit.midiNotes);
+
+        return out;
+    };
+
+    const auto first = notesOf (compPlan (chart, style, 0, 3, 1));
+
+    CHECK (notesOf (compPlan (chart, style, 0, 3, 1)) == first);
+    CHECK (notesOf (compPlan (chart, style, 0, 3, 2)) != first);
+}
+
+TEST ("the thinner shapes come up, and come up less often")
+{
+    /*  Weighted rather than equal, which is the whole of what makes this sound
+        like one player rather than a shuffle: the two-handed shapes are what
+        comping *is*, and a comper reaching for a thin one every other chord
+        would sound like one who had run out of right hand. */
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 | Cm7 | F7 | Bbmaj7 | Bbmaj7 |");
+
+    auto twoHanded = 0;
+    auto oneHanded = 0;
+
+    for (auto seed = 1; seed <= 20; ++seed)
+    {
+        for (const auto& hit : compPlan (chart, compStyleFor ("charleston"), 0, 7,
+                                         static_cast<std::uint32_t> (seed)).hits)
+        {
+            const auto chord = ChordSymbol::parse (hit.chordSymbol);
+
+            if (! chord.has_value())
+                continue;
+
+            const auto type = VoicingAnalyzer::classify (Voicing::fromNotes (hit.midiNotes), *chord);
+
+            if (type == VoicingType::rootlessLeftHand) ++oneHanded;
+            else                                       ++twoHanded;
+        }
+    }
+
+    CHECK (oneHanded > 0);
+    CHECK (twoHanded > oneHanded * 2);
+}
+
+TEST ("asked without a seed, a comper still plays the one obvious voicing")
+{
+    /*  Two questions, two answers. "What would a comper play here" is what
+        `Show me a comp` shows and what a bar sounds when you land on it with
+        no clock - it has one answer and should keep having it. The variety
+        belongs to the band playing a chorus, not to this.
+
+        These are the notes the README walks through, exactly: over
+        | Dm7 | G7 | Cmaj7 | the hands play F3 C4 E4 B4, then F3 B3 E4 A4, then
+        E3 B3 D4 A4 - two voices held each time and two moving by a semitone. */
+    const auto dm7 = ChordSymbol::parse ("Dm7");
+    const auto g7 = ChordSymbol::parse ("G7");
+    const auto cmaj7 = ChordSymbol::parse ("Cmaj7");
+
+    CHECK (dm7.has_value() && g7.has_value() && cmaj7.has_value());
+
+    if (! dm7.has_value() || ! g7.has_value() || ! cmaj7.has_value())
+        return;
+
+    const auto first = compingVoicing (*dm7, {});
+    const auto second = compingVoicing (*g7, first.midiNotes);
+    const auto third = compingVoicing (*cmaj7, second.midiNotes);
+
+    CHECK (first.midiNotes == std::vector<int> ({ 53, 60, 64, 71 }));    // F3 C4 E4 B4
+    CHECK (second.midiNotes == std::vector<int> ({ 53, 59, 64, 69 }));   // F3 B3 E4 A4
+    CHECK (third.midiNotes == std::vector<int> ({ 52, 59, 62, 69 }));    // E3 B3 D4 A4
 }
 
 TEST ("the comp leads its voicings through the whole plan, not bar by bar")
@@ -365,14 +500,37 @@ TEST ("the comp leads its voicings through the whole plan, not bar by bar")
         the hands move a little. Done per bar, every downbeat would re-spell
         from scratch and leap. */
     const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Cm7 | F7 | Bbmaj7 |");
-    const auto plan = compPlan (chart, compStyleFor ("four"), 0, 5, 1);
 
-    for (std::size_t i = 1; i < plan.hits.size(); ++i)
+    auto small = 0;
+    auto moves = 0;
+
+    for (auto seed = 1; seed <= 10; ++seed)
     {
-        const auto moved = std::abs (plan.hits[i].midiNotes.front()
-                                       - plan.hits[i - 1].midiNotes.front());
-        CHECK (moved <= 6);
+        const auto plan = compPlan (chart, compStyleFor ("four"), 0, 5,
+                                    static_cast<std::uint32_t> (seed));
+
+        for (std::size_t i = 1; i < plan.hits.size(); ++i)
+        {
+            const auto moved = std::abs (plan.hits[i].midiNotes.front()
+                                           - plan.hits[i - 1].midiNotes.front());
+
+            /*  Never further than a hand reaches. This said "never more than a
+                fifth" while the band took the nearest voicing every time; it
+                reaches for another register now and then now, and a reach is a
+                real move. What it still may not do is re-spell the chord from
+                somewhere else entirely, which is the bug this was written for. */
+            CHECK (moved <= 12);
+
+            ++moves;
+
+            if (moved <= 6)
+                ++small;
+        }
     }
+
+    // And reaching stays the exception rather than the way it moves.
+    CHECK (moves > 0);
+    CHECK (small * 4 > moves * 3);
 }
 
 TEST ("a bar of two chords is comped as two chords")

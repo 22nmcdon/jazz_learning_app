@@ -315,75 +315,289 @@ Voicing compingVoicing (const ChordSymbol& chord, const std::vector<int>& previo
                            highestCompAnchor + twoHandedReach);
 }
 
+namespace
+{
+    /** The shapes a comper reaches for, and how readily.
+
+        Weighted rather than equal, because they are not equally ordinary. The
+        plain two-handed rootless pair is what comping *is* and carries no
+        penalty at all; the richer four-note pair says the same thing with the
+        tensions in and is nearly as everyday; the one-hand rootless shapes are
+        thinner, and a comper who played them as often as the others would
+        sound like one who had run out of right hand.
+
+        No shell. A shell puts the root at the bottom, and the root under a
+        voicing is the one thing the evaluator calls a real comping fault in a
+        player - the bass is already playing that note. A band playing what the
+        app marks you for is the contradiction the style register exists to
+        avoid, pointed at the shape instead of the octave.
+    */
+    struct CompShape
+    {
+        VoicingType type;
+        VoicingDensity density;
+        int weight;        ///< 100 is the house shape; lower comes up less
+    };
+
+    const std::vector<CompShape>& compShapes()
+    {
+        static const std::vector<CompShape> shapes {
+            { VoicingType::twoHandedRootless, VoicingDensity::plain, 100 },
+            { VoicingType::twoHandedRootless, VoicingDensity::rich,   80 },
+            { VoicingType::rootlessLeftHand,  VoicingDensity::rich,   34 },
+            { VoicingType::rootlessLeftHand,  VoicingDensity::plain,  20 }
+        };
+
+        return shapes;
+    }
+
+    /*  How far from the best a candidate may be and still be worth choosing
+        between. Wide enough that a chord usually has several answers, narrow
+        enough that none of them is a bad one: this picks among voicings that
+        were nearly as good, never between a good one and a poor one. */
+    constexpr int compSpread = 26;
+
+    /*  How often the hands move to another part of the window instead of
+        taking the nearest voicing, out of 100. Now and then rather than
+        constantly - a comper who changed register on every chord would be
+        harder to follow than one who never did. */
+    constexpr int reachChance = 18;
+
+    /*  And how far such a move may go. A pianist reaching for a new register
+        moves a fifth or an octave; anything past that is not reaching, it is
+        re-spelling the chord from scratch, which is the thing the plan is
+        built in one pass to avoid. */
+    constexpr int furthestReach = 12;
+
+    /** How far the hands travel, *per voice*, scaled to keep whole numbers.
+
+        An average rather than the sum `voiceLeadingDistance` gives, because the
+        sum grows with how many notes are being counted: a three-note voicing
+        compared against a four-note one has every note of the four to account
+        for and only three to account for them with, so it scores worse for
+        being smaller. That made the thinner shapes unreachable for a reason
+        that had nothing to do with how they sound - they were never once
+        chosen until this was an average.
+    */
+    int travelPerVoice (const std::vector<int>& from, const std::vector<int>& to)
+    {
+        if (from.empty() || to.empty())
+            return 0;
+
+        return voiceLeadingDistance (from, to) * 16
+                 / static_cast<int> (from.size() + to.size());
+    }
+
+    /** The same mixer the comp generator uses, so one seed means one thing. */
+    std::uint32_t mixSeed (std::uint32_t seed, std::uint32_t salt)
+    {
+        auto x = seed + 0x9e3779b9u * (salt + 1u);
+
+        x ^= x >> 16;
+        x *= 0x7feb352du;
+        x ^= x >> 15;
+        x *= 0x846ca68bu;
+        x ^= x >> 16;
+
+        return x;
+    }
+
+    int rollOf (std::uint32_t seed, std::uint32_t salt)
+    {
+        return static_cast<int> (mixSeed (seed, salt) % 100u);
+    }
+}
+
+namespace
+{
+    /** The search both overloads run, varied or not.
+
+        `vary` is the line between two different questions. "What would a comper
+        play here" has one answer and should keep having it: it is what
+        `Show me a comp` shows, what a bar sounds when you land on it with no
+        clock running, and the Dm7 into G7 the README walks through note by
+        note. "What does the band play over this chorus" is the other, and a
+        band that answered it identically every time was the thing this was
+        opened up to fix.
+    */
+    Voicing searchCompingVoicing (const ChordSymbol& chord, const std::vector<int>& previousNotes,
+                                  int lowestNote, int highestNote,
+                                  bool vary, std::uint32_t seed)
+    {
+        const auto home = std::max (lowestNote,
+                                    std::min (highestNote,
+                                              naturalAnchorFor (VoicingType::twoHandedRootless)));
+
+        // Nothing to lead from: the shape the suggester offers first, where it
+        // naturally sits. That is the voicing the rest of the app would show for
+        // this chord, and a tune should start on it rather than on whatever the
+        // search happened to like.
+        if (previousNotes.empty())
+        {
+            const auto opening = idiomaticVoicings (chord, VoicingType::twoHandedRootless, home);
+
+            for (const auto& candidate : opening)
+                if (! candidate.isEmpty()
+                      && candidate.lowestNote() >= lowestNote
+                      && candidate.highestNote() <= highestNote)
+                    return candidate;
+
+            return opening.empty() ? Voicing{} : opening.front();
+        }
+
+        /*  Now and then the hands move somewhere else in the window instead of
+            taking the nearest thing - now and then rather than constantly,
+            because a comper who changed register on every chord would be harder
+            to follow than one who never did.
+
+            Both halves are needed. Moving the tie-break alone moved nothing:
+            the travel term is several times its size, so the nearest voicing
+            went on winning and the reach never once reached. Reaching has to
+            cost the voice leading its grip as well. */
+        const auto reaching = vary && rollOf (seed, 7) < reachChance;
+        const auto span = std::max (1, highestNote - twoHandedReach - lowestNote + 1);
+
+        const auto pullTowards = reaching
+            ? lowestNote + static_cast<int> (mixSeed (seed, 8)
+                                               % static_cast<std::uint32_t> (span))
+            : home;
+
+        const auto leadWeight = reaching ? 1 : 3;
+
+        /*  Nothing travels further than a hand reasonably reaches, reaching or
+            not. Past that it is not a move, it is the chord being spelled from
+            scratch - which is what planning in one pass exists to avoid. */
+        const auto anchoredAt = *std::min_element (previousNotes.begin(), previousNotes.end());
+
+        struct Candidate { Voicing voicing; int cost; int weight; };
+
+        std::vector<Candidate> shortlist;
+
+        Voicing best;
+        Voicing bestOutside;
+        auto bestCost = 0;
+        auto bestOutsideCost = 0;
+
+        /*  The sweep is the window's, not this file's - so a style that comps
+            higher searches higher. It stops `twoHandedReach` below the ceiling
+            because an anchor is a voicing's *bottom* note and one anchored any
+            higher cannot fit under it anyway; sweeping to the ceiling would
+            only generate candidates the filter below throws away. */
+        for (auto anchor = lowestNote; anchor <= highestNote - twoHandedReach; ++anchor)
+        {
+            for (const auto& shape : compShapes())
+            {
+                // Unvaried, the house shape is the only shape there is.
+                if (! vary && ! (shape.type == VoicingType::twoHandedRootless
+                                   && shape.density == VoicingDensity::plain))
+                    continue;
+
+                for (const auto& candidate : idiomaticVoicings (chord, shape.type, anchor,
+                                                                shape.density))
+                {
+                    if (candidate.isEmpty())
+                        continue;
+
+                    if (vary && std::abs (candidate.lowestNote() - anchoredAt) > furthestReach)
+                        continue;
+
+                    /*  The tie-break keeps a hand near where it belongs. Without
+                        it two voicings the same distance away are decided by
+                        loop order, and the one at the edge of the window wins as
+                        often as not.
+
+                        The shape's weight is deliberately not in here. Folded
+                        into the cost it rules a shape out rather than making it
+                        rarer, and what is wanted is a thin voicing now and then
+                        - not one only when it is the best move on the board by a
+                        distance. It decides the draw below instead. */
+                    const auto cost = travelPerVoice (previousNotes, candidate.midiNotes) * leadWeight
+                                        + std::abs (candidate.lowestNote() - pullTowards) * 2;
+
+                    const auto inside = candidate.lowestNote() >= lowestNote
+                                          && candidate.highestNote() <= highestNote;
+
+                    if (inside)
+                    {
+                        shortlist.push_back ({ candidate, cost, shape.weight });
+
+                        if (best.isEmpty() || cost < bestCost)
+                        {
+                            best = candidate;
+                            bestCost = cost;
+                        }
+                    }
+                    else if (bestOutside.isEmpty() || cost < bestOutsideCost)
+                    {
+                        bestOutside = candidate;
+                        bestOutsideCost = cost;
+                    }
+                }
+            }
+        }
+
+        if (best.isEmpty())
+            return bestOutside;
+
+        if (! vary)
+            return best;
+
+        /*  Among the ones that were nearly as good, never between a good one and
+            a poor one: the spread is what makes this a choice rather than a
+            gamble. Duplicates go first - the same notes reached from two anchors
+            is one voicing offered twice, and it would weight itself. */
+        std::vector<Candidate> nearlyAsGood;
+
+        for (const auto& candidate : shortlist)
+        {
+            if (candidate.cost > bestCost + compSpread)
+                continue;
+
+            const auto already = std::any_of (nearlyAsGood.begin(), nearlyAsGood.end(),
+                                              [&candidate] (const Candidate& taken)
+                                              { return taken.voicing.midiNotes
+                                                         == candidate.voicing.midiNotes; });
+
+            if (! already)
+                nearlyAsGood.push_back (candidate);
+        }
+
+        if (nearlyAsGood.empty())
+            return best;
+
+        /*  Drawn by weight, so the house shape comes up most often and a thin one
+            comes up now and then. A straight draw would make every shortlisted
+            shape equally likely, which is a different instrument. */
+        auto total = 0;
+
+        for (const auto& candidate : nearlyAsGood)
+            total += candidate.weight;
+
+        auto ticket = static_cast<int> (mixSeed (seed, 9)
+                                          % static_cast<std::uint32_t> (std::max (1, total)));
+
+        for (const auto& candidate : nearlyAsGood)
+        {
+            ticket -= candidate.weight;
+
+            if (ticket < 0)
+                return candidate.voicing;
+        }
+
+        return nearlyAsGood.front().voicing;
+    }
+}
+
 Voicing compingVoicing (const ChordSymbol& chord, const std::vector<int>& previousNotes,
                         int lowestNote, int highestNote)
 {
-    const auto home = std::max (lowestNote, std::min (highestNote,
-                                                      naturalAnchorFor (VoicingType::twoHandedRootless)));
+    return searchCompingVoicing (chord, previousNotes, lowestNote, highestNote, false, 0);
+}
 
-    // Nothing to lead from: the shape the suggester offers first, where it
-    // naturally sits. That is the voicing the rest of the app would show for
-    // this chord, and a tune should start on it rather than on whatever the
-    // search happened to like.
-    if (previousNotes.empty())
-    {
-        const auto opening = idiomaticVoicings (chord, VoicingType::twoHandedRootless, home);
-
-        for (const auto& candidate : opening)
-            if (! candidate.isEmpty()
-                  && candidate.lowestNote() >= lowestNote && candidate.highestNote() <= highestNote)
-                return candidate;
-
-        return opening.empty() ? Voicing{} : opening.front();
-    }
-
-    Voicing best;
-    Voicing bestOutside;
-    auto bestCost = 0;
-    auto bestOutsideCost = 0;
-
-    /*  The sweep is the window's, not this file's - so a style that comps higher
-        searches higher. It stops `twoHandedReach` below the ceiling because an
-        anchor is a voicing's *bottom* note and one anchored any higher cannot
-        fit under it anyway; sweeping to the ceiling would only generate
-        candidates the filter below throws away.
-
-        That relation is also what keeps the two-argument overload exactly as it
-        was: it states the old anchors opened out by the reach, which comes back
-        here as the old anchors. */
-    for (auto anchor = lowestNote; anchor <= highestNote - twoHandedReach; ++anchor)
-    {
-        for (const auto& candidate : idiomaticVoicings (chord, VoicingType::twoHandedRootless, anchor))
-        {
-            if (candidate.isEmpty())
-                continue;
-
-            // The tie-break keeps a hand near where it belongs. Without it two
-            // voicings the same distance away are decided by loop order, and
-            // the one at the edge of the window wins as often as not.
-            const auto cost = voiceLeadingDistance (previousNotes, candidate.midiNotes) * 4
-                                + std::abs (candidate.lowestNote() - home);
-
-            const auto inside = candidate.lowestNote() >= lowestNote
-                                  && candidate.highestNote() <= highestNote;
-
-            if (inside)
-            {
-                if (best.isEmpty() || cost < bestCost)
-                {
-                    best = candidate;
-                    bestCost = cost;
-                }
-            }
-            else if (bestOutside.isEmpty() || cost < bestOutsideCost)
-            {
-                bestOutside = candidate;
-                bestOutsideCost = cost;
-            }
-        }
-    }
-
-    return best.isEmpty() ? bestOutside : best;
+Voicing compingVoicing (const ChordSymbol& chord, const std::vector<int>& previousNotes,
+                        int lowestNote, int highestNote, std::uint32_t seed)
+{
+    return searchCompingVoicing (chord, previousNotes, lowestNote, highestNote, true, seed);
 }
 
 int naturalAnchorFor (VoicingType type)

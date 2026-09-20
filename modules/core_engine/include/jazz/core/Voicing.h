@@ -123,6 +123,34 @@ Voicing compingVoicing (const ChordSymbol& chord,
                         int lowestNote,
                         int highestNote);
 
+/** The same, varied - which chord it picks depends on @p seed.
+
+    Without this there is exactly one voicing per chord, for ever: the search
+    takes the strict minimum and the minimum never moves, so Dm7 came out
+    F3 C4 E4 B4 every time it appeared, in every chorus, in every tune. Nobody
+    comps like that.
+
+    Three things widen it, and they are deliberately not equal. The shapes
+    themselves: the plain two-handed rootless pair is what the style *is*, the
+    richer four-note pair with the tensions is nearly as ordinary, and the
+    one-hand rootless shapes are thinner and come up a good deal less often. No
+    shell, ever - a shell puts the root at the bottom, which is the one thing
+    the evaluator calls a real comping fault in a player, and a band playing
+    what the app marks you for is the sort of contradiction the style register
+    already exists to avoid. And now and then the hands **reach**, taking a
+    voicing in another part of the window rather than the nearest one - now and
+    then rather than constantly, because a comper who moved register on every
+    chord would be harder to follow than one who never did.
+
+    Still a pure function of its arguments: the same seed gives the same
+    voicing, which is what lets a plan be reproduced and a test pin one down.
+*/
+Voicing compingVoicing (const ChordSymbol& chord,
+                        const std::vector<int>& previousNotes,
+                        int lowestNote,
+                        int highestNote,
+                        std::uint32_t seed);
+
 /** The register a shape belongs in - the lowest note it should reach for.
 
     A solo left hand lives an octave and a half below a rootless one, so handing

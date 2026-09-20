@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (439), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (443), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -272,12 +272,27 @@ puts a chord on every beat; Basie leaves the bar alone and answers at the end of
 pushed across the barline into the next chord; the ballad leans on the triplet inside the
 beat rather than on eighths.
 
-What it plays is **two-handed rootless voicings** — no root to fight a bass player, guide
-tones under colour — and it **leads each one from the one before** rather than spelling
-every chord from scratch. Over `| Dm7 | G7 | Cmaj7 |` that means F3 C4 E4 B4, then F3 B3 E4
-A4, then E3 B3 D4 A4: two notes held each time and two moving by a semitone, which is what a
-pianist's hands actually do. A fixed register would re-spell each chord and leap between
-them.
+What it plays is **rootless voicings** — no root to fight a bass player, guide tones under
+colour — and it **leads each one from the one before** rather than spelling every chord
+from scratch. Ask what a comper plays over `| Dm7 | G7 | Cmaj7 |` and you get F3 C4 E4 B4,
+then F3 B3 E4 A4, then E3 B3 D4 A4: two notes held each time and two moving by a semitone,
+which is what a pianist's hands actually do. A fixed register would re-spell each chord and
+leap between them.
+
+**The band does not play that same answer all night, though.** It knows four shapes and
+they are not equally ordinary: the two-handed rootless pair is what comping *is*, the
+richer four-note pair says the same thing with the tensions in and is nearly as everyday,
+and the thinner one-hand pair comes up a good deal less often — a comper who reached for a
+thin voicing every other chord would sound like one who had run out of right hand. Never a
+shell, at any weight: a shell puts the root at the bottom, and the root under a voicing is
+the one thing this app calls a real comping fault in *you*, because the bass player is
+already playing that note.
+
+And now and then the hands **reach** — taking a voicing in another part of the register
+rather than the nearest one. Now and then rather than constantly, because a comper who
+changed register on every chord would be harder to follow than one who never did; and never
+further than a hand reasonably travels, because past that it is not a move, it is the chord
+being spelled from somewhere else.
 
 The band **varies rather than looping one figure**: a style is a characteristic figure, and
 a player of it reaches for the rest of the feel's vocabulary too, so the generator does the
@@ -287,8 +302,11 @@ every bar of a chorus. Four to the bar is the exception and is one on purpose.
 The rhythm comes from the style, worked out for the whole loop in one pass rather than
 decided beat by beat — a hit that anticipates the next bar has to know what the next chord
 is, and a voicing has to be led from the one before, and neither is knowable in the moment
-it is played. The plan is **seeded**, so the same bar comes round the same way every chorus
-rather than drifting, and the same seed gives the same comp note for note.
+it is played. The plan is **seeded**: the same seed gives the same comp note for note, so
+nothing drifts and a bar can be pinned down in a test. **The chorus is part of that seed**,
+which is what makes the second time round the form a second time rather than a repeat — and
+a take started again starts at the top, so playing it twice is playing the same exercise
+twice.
 
 Everything the generator plays for a style must pass the engine's own "is this in that
 style" test — the invariant that stops the app comping in a style and then calling its own
@@ -774,7 +792,9 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   style will put a hit, how often, in what register, and which slots push across the
   barline), a seeded generator that plans a range of bars in one pass so a hit can
   anticipate the next chord and a voicing can be led from the one before, and the "is this
-  in that style" test the generator is held to from both directions. The style says where
+  in that style" test the generator is held to from both directions. Which voicing it picks
+  is seeded too, drawn by weight from four rootless shapes and occasionally reaching for
+  another register — without that there was exactly one voicing per chord, for ever. The style says where
   the chords fall and how long each one rings - per slot, because a Basie push and a
   Basie stab are the same style - trimmed so nothing sounds into the chord after it.
 - **A walking bass** — one note to the beat, built in *runs* rather than note by note: a
