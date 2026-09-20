@@ -434,7 +434,8 @@ void ElectricPiano::stopComping()
     releaseComping();
 }
 
-void ElectricPiano::compChord (const std::vector<int>& midiNotes, const std::string& bank)
+void ElectricPiano::compChord (const std::vector<int>& midiNotes, const std::string& bank,
+                               const std::vector<float>& touch)
 {
     if (! running.load())
         return;
@@ -445,16 +446,21 @@ void ElectricPiano::compChord (const std::vector<int>& midiNotes, const std::str
 
     const auto* sample = sampleFor (bank);
 
-    for (auto midiNote : midiNotes)
+    for (std::size_t i = 0; i < midiNotes.size(); ++i)
     {
         auto* voice = findFreeVoice();
 
         if (voice == nullptr)
             return;
 
-        // Under the soloist, not beside them: an accompaniment at the same
-        // level as the line being played over it is not an accompaniment.
-        startVoice (*voice, midiNote, 0.22f, sample);
+        /*  How hard, against this shell's own idea of an accompaniment - which
+            is under the soloist rather than beside them, because one at the
+            same level as the line played over it is not an accompaniment.
+            Clamped, so a page sending nonsense makes the band odd rather than
+            silent or deafening. */
+        const auto hard = i < touch.size() ? juce::jlimit (0.2f, 2.0f, touch[i]) : 1.0f;
+
+        startVoice (*voice, midiNotes[i], 0.22f * hard, sample);
 
         voice->comping = true;
         voice->walking = false;
@@ -478,7 +484,7 @@ void ElectricPiano::stopBass()
     releaseWalking();
 }
 
-void ElectricPiano::bassNote (int midiNote, const std::string& bank)
+void ElectricPiano::bassNote (int midiNote, const std::string& bank, float touch)
 {
     if (! running.load())
         return;
@@ -494,7 +500,7 @@ void ElectricPiano::bassNote (int midiNote, const std::string& bank)
     if (voice == nullptr)
         return;
 
-    startVoice (*voice, midiNote, 0.5f, sampleFor (bank));
+    startVoice (*voice, midiNote, 0.5f * juce::jlimit (0.2f, 2.0f, touch), sampleFor (bank));
 
     voice->comping = false;
     voice->walking = true;

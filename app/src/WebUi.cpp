@@ -256,9 +256,11 @@ void WebUi::handleSound (const var& request)
     else if (what == "bass")
     {
         const auto note = static_cast<int> (object->getProperty ("note"));
+        const auto touch = static_cast<float> (static_cast<double> (object->getProperty ("velocity")));
 
         if (note > 0)
-            sound.bassNote (note, object->getProperty ("bank").toString().toStdString());
+            sound.bassNote (note, object->getProperty ("bank").toString().toStdString(),
+                            touch > 0.0f ? touch : 1.0f);
         else
             sound.stopBass();
     }
@@ -272,10 +274,19 @@ void WebUi::handleSound (const var& request)
             for (const auto& note : *array)
                 notes.push_back (static_cast<int> (note));
 
+        /*  How hard each one, against the usual. One per note when the page
+            sends them and empty when it does not - an older page simply gets
+            the even chord it always got, rather than a silent one. */
+        std::vector<float> touch;
+
+        if (auto* array = object->getProperty ("velocities").getArray())
+            for (const auto& one : *array)
+                touch.push_back (static_cast<float> (static_cast<double> (one)));
+
         if (notes.empty())
             sound.stopComping();
         else
-            sound.compChord (notes, object->getProperty ("bank").toString().toStdString());
+            sound.compChord (notes, object->getProperty ("bank").toString().toStdString(), touch);
     }
     else if (what == "click")
     {

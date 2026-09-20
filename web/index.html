@@ -5802,6 +5802,90 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   /** Long enough not to click, short enough to read as "it stopped". */
   var BAND_CUT = 0.05;
 
+  /** A repeatable number between 0 and 1, from whatever numbers you hand it.
+
+      Every bit of variance the band has is drawn from this rather than from
+      `Math.random`, for the same reason the comp plan is seeded: a backdrop
+      that came round a little different every time is the one part of a
+      practice app nobody can play against, and nothing a test can pin down.
+  */
+  function spread(numbers) {
+    var h = 2166136261;
+
+    for (var i = 0; i < numbers.length; ++i) {
+      h ^= (numbers[i] | 0) + 0x9e3779b9;
+      h = Math.imul(h, 16777619);
+      h ^= h >>> 15;
+    }
+
+    return (h >>> 0) / 4294967296;
+  }
+
+  /** A multiplier within @p by of 1, repeatably. */
+  function nudge(by, numbers) {
+    return 1 + (spread(numbers) - 0.5) * 2 * by;
+  }
+
+  /*  How hard the band plays, and why it is never twice the same.
+
+      A backing track at one velocity is what gives a practice app away. A real
+      rhythm section is uneven, and the unevenness is most of what makes it
+      sound like people rather than like a file being played back. Three things
+      move, and none of them is a style saying anything - a style says where the
+      chords fall, how long they ring and in what register, and this is the
+      difference between a player and a sequencer playing the same part.
+
+      Stroke to stroke: no two chords are struck identically.
+
+      Voice to voice inside a chord: the top note carries, the inner voices sit
+      under it, and the bottom is the hand's weight. A pianist's chord is not
+      four equal notes and never was - it is the single biggest thing between a
+      comp that sounds played and one that sounds typed.
+
+      And on the beat against between beats: a hit off the beat is lighter than
+      one on it, which is what lets a syncopation read as a syncopation rather
+      than as a downbeat in the wrong place.
+  */
+  var TOUCH = {
+    stroke: 0.15,    // how much one chord differs from the next
+    voice: 0.09,     // how much one note of a chord differs from another
+    top: 1.14,       // the voice that carries
+    inner: 0.90,     // the ones under it
+    offbeat: 0.87,   // struck between the beats rather than on one
+    stated: 1.08     // the bass note that says what the chord is
+  };
+
+  /*  What the band plays at on average. The web page and the app arrived at
+      their own numbers for this and they are not the same number - one is a
+      Web Audio gain and the other an amplitude inside a voice pool - so what
+      travels between them is **how hard against the usual**, never a level.
+      Each shell keeps its own idea of usual, which is what `drum` already did
+      with its `level`. */
+  var COMP_LEVEL = 0.45;
+  var BASS_LEVEL = 0.6;
+
+  /** How hard each note of a comped chord is struck, against the usual.
+
+      @param beat  negative when nothing is counting, exactly as it means
+                   everywhere else here: with no clock there is no on-the-beat
+                   for a chord to be off, and it is simply struck.
+  */
+  function compVelocities(notes, bar, beat, tick) {
+    var onTheBeat = beat < 0 || tick === 0;
+    var stroke = nudge(TOUCH.stroke, [bar, beat, tick])
+                   * (onTheBeat ? 1 : TOUCH.offbeat);
+
+    return notes.map(function (note, i) {
+      // Notes arrive low to high, so the last is the one that carries and the
+      // first is the hand underneath. What is in between is in between.
+      var place = i === notes.length - 1 ? TOUCH.top
+                : i === 0 ? 1
+                : TOUCH.inner;
+
+      return stroke * place * nudge(TOUCH.voice, [bar, beat, tick, note]);
+    });
+  }
+
   function noteFrequency(midiNote) {
     return 440 * Math.pow(2, (midiNote - 69) / 12);
   }
@@ -6054,12 +6138,20 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   /** Sounds one note of the walking line, at @p when on the web. */
-  function playBassNote(midiNote, when) {
+  /** @param where  the bar and beat it walks on, or undefined with no clock.
+                    The note that states the chord - the one on the beat the
+                    chord arrives - is played a touch firmer, because that is
+                    the note a bass player leans on and the rest is travel. */
+  function playBassNote(midiNote, when, where) {
     var bank = BASS_BANKS[comping.bassBank];
     if (!bank || (bank.buildVoice === null && !bank.sample)) return;
 
+    var placed = where || { bar: 0, beat: -1, states: false };
+    var velocity = nudge(TOUCH.stroke, [placed.bar, placed.beat, midiNote])
+                     * (placed.states ? TOUCH.stated : 1);
+
     if (native !== null) {
-      native.send("jazz.sound", { what: "bass", note: midiNote,
+      native.send("jazz.sound", { what: "bass", note: midiNote, velocity: velocity,
                                   bank: sampledName(comping.bassBank) });
       return;
     }
@@ -6075,7 +6167,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // one ring under the next turns a walking line into a drone.
     stopBassVoice(at);
 
-    var voice = voiceFor(bank, midiNote, 0.6, at);
+    var voice = voiceFor(bank, midiNote, BASS_LEVEL * velocity, at);
     if (voice === null) return;
 
     voice.output.connect(audio.master);
@@ -6117,14 +6209,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
         var when = barStart + beatsIntoBar(note.beat, note.tick) * secondsPerBeatNow;
 
+        // The root landing on the beat the chord arrives is the one note the
+        // line is not free about - the engine's own first rule - so it is also
+        // the one the player leans on.
+        var where = { bar: note.bar, beat: note.beat, states: note.role === "root" };
+
         if (native !== null) {
           comping.booked.push(window.setTimeout(function () {
-            if (comping.bass && transport.running) playBassNote(note.midi, 0);
+            if (comping.bass && transport.running) playBassNote(note.midi, 0, where);
           }, Math.max(0, (when - transportNow()) * 1000)));
           return;
         }
 
-        playBassNote(note.midi, when);
+        playBassNote(note.midi, when, where);
       });
     });
   }
@@ -6182,13 +6279,27 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     kick:  { thump: 92, to: 48, decay: 0.20, level: 0.34 }
   };
 
-  /** Strikes one piece of the kit, at @p when on the page's own clock. */
-  function playDrum(piece, when, level) {
+  /** Strikes one piece of the kit, at @p when on the page's own clock.
+
+      @param level  what the pattern asks for - a feathered kick is the same
+                    kick played quietly. The unevenness on top of it is this
+                    function's, because it is about the drummer rather than
+                    about the part.
+  */
+  function playDrum(piece, when, level, where) {
     var recipe = KIT[piece];
     if (!recipe || audio.bank === "silent") return;
 
+    var placed = where || { bar: 0, beat: -1, tick: 0 };
+
+    /*  A drummer's hands are the least even thing in the band, and a ride that
+        is exactly the same weight every stroke is the single most mechanical
+        sound a backing track can make. */
+    var struck = (level === undefined ? 1 : level)
+                   * nudge(TOUCH.stroke, [placed.bar, placed.beat, placed.tick, piece.length]);
+
     if (native !== null) {
-      native.send("jazz.sound", { what: "drum", piece: piece, level: level });
+      native.send("jazz.sound", { what: "drum", piece: piece, level: struck });
       return;
     }
 
@@ -6198,7 +6309,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (ctx.state === "suspended") ctx.resume();
 
     var at = when || ctx.currentTime;
-    var peak = recipe.level * (level === undefined ? 1 : level);
+    var peak = recipe.level * struck;
 
     var amp = ctx.createGain();
     amp.gain.setValueAtTime(0.0001, at);
@@ -6268,8 +6379,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       half the bars get one, which is what leaving space sounds like.
   */
   function snareIn(measureIndex, beats) {
-    var roll = Math.sin((measureIndex + 1) * 12.9898 + comping.seed * 78.233) * 43758.5453;
-    roll = roll - Math.floor(roll);
+    // The same `spread` the band's velocity draws from. This grew a hash of
+    // its own when the kit was the only thing here that needed one; two of
+    // them in one file is one too many, and the chorus goes in for the reason
+    // the comp's does - a drummer who played the same bar the same way all
+    // night is the thing the seeding is not for.
+    var roll = spread([comping.seed, comping.chorus, measureIndex]);
 
     return roll < 0.5 ? null : Math.floor(roll * 2 * beats) % beats;
   }
@@ -6310,14 +6425,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     strikes.forEach(function (strike) {
       var when = barStart + beatsIntoBar(strike.beat, strike.tick) * secondsPerBeatNow;
 
+      var where = { bar: measureIndex, beat: strike.beat, tick: strike.tick };
+
       if (native !== null) {
         comping.booked.push(window.setTimeout(function () {
-          if (comping.drums && transport.running) playDrum(strike.piece, 0, strike.level);
+          if (comping.drums && transport.running)
+            playDrum(strike.piece, 0, strike.level, where);
         }, Math.max(0, (when - transportNow()) * 1000)));
         return;
       }
 
-      playDrum(strike.piece, when, strike.level);
+      playDrum(strike.piece, when, strike.level, where);
     });
   }
 
@@ -6412,12 +6530,20 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   /** @param release  when the style says to let go, or undefined to ring on
                       until the next chord stops it - which is what every comp
                       did before a style could say how long a hit lasts. */
-  function playCompVoicing(notes, when, release) {
+  function playCompVoicing(notes, when, release, where) {
     var bank = SOUND_BANKS[comping.bank];
     if (!bank || (bank.buildVoice === null && !bank.sample)) return;
 
+    // Nothing counting: no position, so no on-the-beat for a chord to be off.
+    var placed = where || { bar: 0, beat: -1, tick: 0 };
+    var velocities = compVelocities(notes, placed.bar, placed.beat, placed.tick);
+
     if (native !== null) {
-      native.send("jazz.sound", { what: "comp", notes: notes, bank: sampledName(comping.bank) });
+      // Sent across rather than worked out again on the other side: one
+      // rhythm section that sounded like two players depending on which shell
+      // you opened would be the same bug the shared page exists to prevent.
+      native.send("jazz.sound", { what: "comp", notes: notes, velocities: velocities,
+                                  bank: sampledName(comping.bank) });
       return;
     }
 
@@ -6431,10 +6557,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     stopCompVoices(at);
 
-    notes.forEach(function (note) {
+    notes.forEach(function (note, i) {
       // Under the soloist rather than beside them: an accompaniment at the
       // same level as the line played over it is not an accompaniment.
-      var voice = voiceFor(bank, note, 0.45, at);
+      var voice = voiceFor(bank, note, COMP_LEVEL * velocities[i], at);
       if (voice === null) return;
 
       voice.output.connect(audio.master);
@@ -6568,7 +6694,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         // the same split the click already lives with.
         if (native !== null) {
           comping.booked.push(window.setTimeout(function () {
-            if (comping.piano && transport.running) playCompVoicing(hit.notes, 0);
+            if (comping.piano && transport.running) playCompVoicing(hit.notes, 0, undefined, hit);
           }, Math.max(0, (when - transportNow()) * 1000)));
 
           /*  The app has no "play this until", so letting go is a second
@@ -6584,7 +6710,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           return;
         }
 
-        playCompVoicing(hit.notes, when, release);
+        playCompVoicing(hit.notes, when, release, hit);
       });
     });
   }

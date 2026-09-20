@@ -119,6 +119,19 @@ await page.addInitScript(() => {
       each voice - `setTargetAtTime` is used for nothing else on this page, so
       recording it records exactly that and nothing else. */
   window.__released = [];
+
+  /*  Every gain the page ramps to. A velocity becomes a peak gain and nothing
+      else, so this is where "how hard was that struck" is actually observable
+      - the page's own numbers are inside a closure and the notes themselves
+      say nothing about how hard they were played. */
+  window.__gains = [];
+  const realRamp = AudioParam.prototype.exponentialRampToValueAtTime;
+
+  AudioParam.prototype.exponentialRampToValueAtTime = function (value, when) {
+    window.__gains.push(Number(value.toFixed(5)));
+    return realRamp.call(this, value, when);
+  };
+
   const realTarget = AudioParam.prototype.setTargetAtTime;
 
   AudioParam.prototype.setTargetAtTime = function (value, when, constant) {
@@ -717,6 +730,7 @@ try {
   const forgetSounds = () => page.evaluate(() => {
     window.__sounded = [];
     window.__released = [];
+    window.__gains = [];
   });
 
   /*  Two things sit between this and a bar: the comping panel, which is drawn
@@ -996,6 +1010,22 @@ try {
 
   check(`stopping a take stops the band with it (${tail.toFixed(2)}s of tail)`,
         isFinite(tail) && tail < 0.4);
+
+  /*  And it played that bar like people rather than like a file.
+
+      Every note of the band used to come out at one of a handful of fixed
+      levels - every comped note at exactly the same gain, every bass note at
+      another, each drum at a third - which is the single thing that gives a
+      backing track away. Velocity now moves stroke to stroke, voice to voice
+      inside a chord, and between a hit on the beat and one off it.
+
+      Counted rather than eyeballed, over a stretch where the piano, the bass
+      and the kit were all playing and the player was silent: a handful of
+      distinct gains means the fixed levels are back. */
+  const gains = await page.evaluate(() => [...new Set(window.__gains)].length);
+
+  check(`and plays it unevenly, the way people do (${gains} distinct velocities)`,
+        gains > 40);
 
   await page.waitForFunction(
     () => document.querySelector("#armTake").getAttribute("aria-pressed") === "false",

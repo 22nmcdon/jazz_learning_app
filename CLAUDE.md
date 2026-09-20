@@ -172,6 +172,15 @@ something finished or assume something unfinished is done:
   two as one was a real bug — the Charleston accepted three of the eight
   positions a swing comper uses, and nothing in the catalogue accepted the and
   of one at all. See `docs/COMPING.md` before touching any of it.
+- **The band's velocity is humanised in the page, not the engine.** Stroke to
+  stroke, voice to voice inside a chord (top carries, inner sit under, bottom
+  is the hand), and lighter off the beat than on it — seeded off `spread()`
+  like everything else, so a loop still comes round the same. A style says
+  where chords fall, how long they ring and in what register; this is the
+  difference between a player and a sequencer playing that part, which is why
+  it is not on `CompStyleDefinition`. **What crosses to the app is a
+  multiplier, never a level** — the two shells have their own idea of how loud
+  an accompaniment is, and each keeps it.
 - **Drums** — done. The one member of the band with no engine call: the page
   owns the pattern, each shell owns the sound (synthesised in both, like the
   click — there is no kit in `assets/` and four unpitched one-shots would not

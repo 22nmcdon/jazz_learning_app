@@ -456,6 +456,32 @@ megabyte; a kit is four unpitched sounds that are never transposed, and a shaped
 noise is as good as a recording of one. There is no sound picker beside it for the same
 reason - a menu with one entry is a question with one answer.
 
+### The band plays unevenly, on purpose
+
+Every note the band played used to come out at one of a handful of fixed levels - every
+comped note at exactly the same gain, every bass note at another, each drum at a third.
+That is the single thing that gives a backing track away: a real rhythm section is uneven,
+and the unevenness is most of what makes it sound like people.
+
+Three things move. **Stroke to stroke**, so no two chords are struck identically. **Voice
+to voice inside a chord** - the top note carries, the inner voices sit under it, the bottom
+is the hand's weight - because a pianist's chord is not four equal notes and never was.
+And **on the beat against between beats**, so a syncopation reads as a syncopation rather
+than as a downbeat in the wrong place. The bass leans on the note that states the chord,
+which is the one note the line is not free about.
+
+None of it is the style saying anything. A style says where the chords fall, how long they
+ring and in what register; this is the difference between a player and a sequencer playing
+the same part. And it is **seeded** like everything else here, so a loop that comes round
+again comes round the same - a backdrop that was different every time is the one thing
+nobody can practise against.
+
+What travels between the two shells is **how hard against the usual**, never a level: the
+page and the app arrived at their own numbers for how loud an accompaniment is, and they
+are not the same number. Each keeps its own idea of usual and the unevenness is shared,
+which is what stops one rhythm section sounding like two players depending on which shell
+you opened.
+
 ### The band's instruments are recordings
 
 The piano offers a synthesised **electric piano** and a recorded **grand piano**; the bass

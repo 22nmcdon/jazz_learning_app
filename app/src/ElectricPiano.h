@@ -121,7 +121,18 @@ public:
         replaces itself: the chord before it is released here, together, which
         is also what keeps the voice pool from filling up with tails.
     */
-    void compChord (const std::vector<int>& midiNotes, const std::string& bank = {});
+    /** @param touch  how hard each note is struck *against the usual*, one per
+                       note, or empty for the usual. Relative rather than a
+                       level, because this shell and the page arrived at their
+                       own numbers for how loud an accompaniment is and they
+                       are not the same number - so what travels between them
+                       is the unevenness, and each keeps its own idea of usual.
+                       A rhythm section that sounded like two different players
+                       depending on which shell you opened would be the bug the
+                       shared page exists to prevent.
+    */
+    void compChord (const std::vector<int>& midiNotes, const std::string& bank = {},
+                    const std::vector<float>& touch = {});
 
     /** One note of the walking bass, replacing whatever it last played.
 
@@ -129,7 +140,7 @@ public:
         instruments sharing a voice pool must not share voices, or a bass note
         and a comped chord an octave apart stop each other.
     */
-    void bassNote (int midiNote, const std::string& bank = {});
+    void bassNote (int midiNote, const std::string& bank = {}, float touch = 1.0f);
 
     void stopBass();
 
