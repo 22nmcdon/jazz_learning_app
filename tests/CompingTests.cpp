@@ -1375,3 +1375,125 @@ TEST ("trimming a busy bar keeps what the style likes most")
         for (auto bar = 0; bar < 8; ++bar)
             CHECK (hitsInBar (compPlan (chart, basie, 0, 7, seed), bar) <= basie.mostPerBar);
 }
+
+//==============================================================================
+// How long a hit rings. A style says where the chords fall and, now, how long
+// they last - the difference between a Basie punch and a ballad's sustain,
+// which for a long time this shape had no field for.
+
+TEST ("every style says how long its chords ring")
+{
+    for (const auto& style : compStyles())
+    {
+        CHECK (style.heldFor > 0);
+
+        // And every slot that overrides it says something playable rather than
+        // something silent.
+        for (const auto& slot : style.slots)
+            CHECK (heldForSlot (slot, style) > 0);
+    }
+}
+
+TEST ("a slot's own duration wins over the style's")
+{
+    CompStyleDefinition style;
+    style.heldFor = ticksPerBeat;
+
+    const CompSlot quiet { 0, 0, 100, false, std::nullopt };
+    const CompSlot held  { 1, 0, 100, false, ticksPerBeat * 3 };
+
+    CHECK_EQ (heldForSlot (quiet, style), ticksPerBeat);
+    CHECK_EQ (heldForSlot (held, style), ticksPerBeat * 3);
+}
+
+TEST ("a stabbed style and a held one really are different lengths")
+{
+    /*  The point of the field, stated as a test: the two styles at the ends of
+        the range have to come out sounding different, or nothing has been
+        added. Compared as the styles say it rather than as one plan happened
+        to come out, because a plan's durations are trimmed by where the next
+        chord fell. */
+    CHECK (compStyleFor ("ballad").heldFor > compStyleFor ("basie").heldFor);
+    CHECK (compStyleFor ("four").heldFor < ticksPerBeat);
+}
+
+TEST ("a comped chord never rings into the one after it")
+{
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 | Cm7 | F7 | Bbmaj7 | Bbmaj7 |");
+
+    for (const auto& style : compStyles())
+    {
+        for (auto seed = 1; seed <= 6; ++seed)
+        {
+            const auto plan = compPlan (chart, style, 0, 7, static_cast<std::uint32_t> (seed));
+
+            for (std::size_t i = 0; i + 1 < plan.hits.size(); ++i)
+            {
+                const auto& hit = plan.hits[i];
+                const auto& next = plan.hits[i + 1];
+
+                const auto at = hit.measureIndex * 4 * ticksPerBeat + hit.at.inTicks();
+                const auto then = next.measureIndex * 4 * ticksPerBeat + next.at.inTicks();
+
+                CHECK (hit.heldFor > 0);
+                CHECK (at + hit.heldFor <= then);
+            }
+        }
+    }
+}
+
+TEST ("a comped chord is held for what its slot asked, when there is room")
+{
+    /*  The trim must not be the only thing deciding lengths, or every style
+        would sound the same and the field would be decoration. Over a ballad -
+        the sparsest, longest style - some hit has to come out holding its full
+        written length. */
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 |");
+    const auto& ballad = compStyleFor ("ballad");
+    const auto plan = compPlan (chart, ballad, 0, 3, 7);
+
+    auto full = 0;
+
+    for (const auto& hit : plan.hits)
+        if (hit.heldFor == ballad.heldFor)
+            ++full;
+
+    CHECK (! plan.hits.empty());
+    CHECK (full > 0);
+}
+
+TEST ("the reading says nothing about how long a chord was held")
+{
+    /*  The other half of the decision. A style now says how long the *band*
+        holds a chord, and that must not become a standard the player is marked
+        against: a comper holding one through a four-to-the-bar is reading a
+        style that does not say not to.
+
+        Two styles alike in every way but their durations, reading the same
+        chord in the same place. The readings have to be the same reading - and
+        they are for a reason stronger than care, because a `PlayedHit` is a
+        bar, a position and some notes, with nowhere to put a duration at all.
+        This is what would fail if somebody added the field in good faith and
+        the reading quietly started to use it. */
+    const auto chart = chartOf ("| Dm7 | G7 |");
+
+    auto stabbed = compStyleFor ("charleston");
+    auto held = stabbed;
+
+    held.heldFor = stabbed.heldFor * 4;
+
+    for (auto& slot : held.slots)
+        slot.heldFor = ticksPerBeat * 3;
+
+    const PlayedHit hit { 0, BarPosition { 0, 0 }, { 53, 57, 60, 65 } };
+
+    const auto a = readCompHit (chart, stabbed, hit);
+    const auto b = readCompHit (chart, held, hit);
+
+    CHECK_EQ (a.summary, b.summary);
+    CHECK (a.placement == b.placement);
+    CHECK_EQ (a.anticipation, b.anticipation);
+    CHECK_EQ (a.inRegister, b.inRegister);
+    CHECK_EQ (a.oneTooMany, b.oneTooMany);
+    CHECK_EQ (a.voicing.score, b.voicing.score);
+}

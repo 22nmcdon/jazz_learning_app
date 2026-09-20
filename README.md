@@ -18,7 +18,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (433), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (439), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -313,10 +313,22 @@ The searching is bounded to a register window — voice leading on its own alway
 nearest voicing, so a progression that keeps rising would walk the hands off the top of the
 keyboard.
 
-One thing the style does **not** decide yet is how long a hit lasts: a voicing rings until
-the next one stops it, whatever the style. So the styles differ in where the chords fall and
-not in whether they are stabbed or held, which is a real difference between a Basie punch
-and a ballad's sustain, and is the first thing to add to the style shape.
+The style also says **how long each chord rings** - and not as one number per style,
+because the difference is often inside one. Four to the bar is a damped chunk on every
+beat, half of what the beat is worth: held any longer it stops being a pulse and becomes
+an organ. Basie is stabs, except for the push at the end of the bar, which is carrying the
+next chord in and has to last long enough to be heard stating one. The Charleston's *one*
+is short and its *and of two* rings, which is what makes the figure sound like the figure
+rather than like two even stabs. The ballad holds.
+
+Nothing rings into the chord after it: the engine trims each duration to the next onset,
+because one instrument plays these in order and a shell would have to stop the voicing
+there anyway - a number a shell had to correct would be two opinions about one thing.
+
+**The reading says nothing about how long you held yours**, and cannot: a played hit is a
+bar, a position and some notes, with nowhere to put a duration. That is deliberate rather
+than unfinished. A style says how long the *band* holds a chord; a comper holding one
+through a four-to-the-bar is reading a style that does not say not to.
 
 ### Comping it yourself
 
@@ -763,7 +775,8 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   barline), a seeded generator that plans a range of bars in one pass so a hit can
   anticipate the next chord and a voicing can be led from the one before, and the "is this
   in that style" test the generator is held to from both directions. The style says where
-  the chords fall; how long they ring is still the page's.
+  the chords fall and how long each one rings - per slot, because a Basie push and a
+  Basie stab are the same style - trimmed so nothing sounds into the chord after it.
 - **A walking bass** — one note to the beat, built in *runs* rather than note by note: a
   run knows the root it starts on and the approach note it has to reach by its last beat,
   and everything between is travel. Bounded to a real bass's compass, because a line free
@@ -790,8 +803,6 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   is ask whether the voicing you played said what the bar said; that is chord practice's
   question, and answering both at once would mean deciding which one a block-chord solo
   wants. The notes struck together are already marked, so the seam is there.
-- **How long a comped chord is held.** A comping style says where the chords fall and not
-  whether they are stabbed or held, as above.
 - **Rhythm in a *solo's* score.** The readings exist (above) and deliberately produce words
   rather than points: a line has no written standard for where its notes fall, so a number
   would be one the app invented and then marked you against. Comping is scored on placement

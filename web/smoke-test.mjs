@@ -91,6 +91,18 @@ await page.addInitScript(() => {
     return source;
   };
 
+  /*  When a comped chord is let go of. A style says how long its chords ring
+      now, and the only place that becomes audible is the release scheduled on
+      each voice - `setTargetAtTime` is used for nothing else on this page, so
+      recording it records exactly that and nothing else. */
+  window.__released = [];
+  const realTarget = AudioParam.prototype.setTargetAtTime;
+
+  AudioParam.prototype.setTargetAtTime = function (value, when, constant) {
+    window.__released.push(when);
+    return realTarget.call(this, value, when, constant);
+  };
+
   /*  A MIDI keyboard, so the chordal half of solo practice can be driven at
       all. Notes struck together are the whole of what tells the engine it is
       reading a chord rather than a line, and a pointer plays one key at a time
@@ -679,7 +691,10 @@ try {
                   .slice(0, 4);
   };
 
-  const forgetSounds = () => page.evaluate(() => { window.__sounded = []; });
+  const forgetSounds = () => page.evaluate(() => {
+    window.__sounded = [];
+    window.__released = [];
+  });
 
   /*  Two things sit between this and a bar: the comping panel, which is drawn
       over the chart it hangs under, and the bar's own dialog, which a second
@@ -814,7 +829,27 @@ try {
     return struck.map((w) => (w - beats[0]) / 0.25).sort((a, b) => a - b);
   };
 
+  /** How long each chord of the roll just taken rang for, in beats.
+
+      Each start paired with the next release, which is what a release is: one
+      instrument plays these in order, and the engine trims a hit so it never
+      rings past the one after it. */
+  const holdsOfLastRoll = async () => {
+    const holds = await page.evaluate(() => {
+      const starts = [...new Set(window.__sounded.filter((s) => s.type === "sine")
+                                                 .map((s) => s.when))].sort((a, b) => a - b);
+      const ends = [...new Set(window.__released)].sort((a, b) => a - b);
+
+      return starts.map((start) => ends.find((end) => end > start + 1e-6))
+                   .filter((end) => end !== undefined)
+                   .map((end, i) => end - starts[i]);
+    });
+
+    return holds.map((h) => h / 0.25).sort((a, b) => a - b);   // 240bpm
+  };
+
   const fourToTheBar = await compRhythmOf("four");
+  const fourHolds = await holdsOfLastRoll();
   const sparse = await compRhythmOf("basie");
 
   check(`a style says how much the band plays (four: ${fourToTheBar.length}, `
@@ -835,6 +870,26 @@ try {
 
   check(`a swung push lands two thirds through the beat (${sparse.map((t) => t.toFixed(2)).join(" ")})`,
         swung.length > 0);
+
+  /*  A style says how long its chords ring, not only where they fall - the
+      difference between a Basie punch and a ballad's sustain, which used to be
+      no difference at all because a voicing rang until the next one stopped it
+      whatever the style was. Checked as the two ends of the range: the ballad
+      has to hold longer than four-to-the-bar's damped chunk, and four to the
+      bar has to let go well inside its own beat.
+  */
+  await compRhythmOf("ballad");
+  const balladHolds = await holdsOfLastRoll();
+
+  const middle = (holds) => holds[Math.floor(holds.length / 2)];
+
+  check(`a style says how long its chords ring `
+        + `(four ${middle(fourHolds)?.toFixed(2)} beats, ballad ${middle(balladHolds)?.toFixed(2)})`,
+        fourHolds.length > 0 && balladHolds.length > 0
+        && middle(balladHolds) > middle(fourHolds));
+
+  check(`and four to the bar lets go inside its own beat (${middle(fourHolds)?.toFixed(2)})`,
+        middle(fourHolds) < 0.95);
 
   /*  The grand piano is a recording where the electric piano is synthesised, so
       the same comp on the same bar comes out of a different kind of node. That

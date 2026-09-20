@@ -139,6 +139,14 @@ something finished or assume something unfinished is done:
   reversed, because In time already meant "the same mode, with a clock, adding
   readings that are silent without one" — which is exactly what comping is to
   chord practice. `state.mode` is still two-valued.
+  A style also says **how long each hit rings** (`CompSlot::heldFor`, falling
+  back to `CompStyleDefinition::heldFor`), trimmed by `compPlan` so nothing
+  sounds into the chord after it — one instrument plays them in order, and a
+  number a shell had to correct would be two opinions about one thing. **The
+  evaluator says nothing about duration and cannot**: a `PlayedHit` has nowhere
+  to put one. That is the decision, not an omission — a style says what the
+  *band* does, and a comper holding a chord through a four-to-the-bar is
+  reading a style that does not say not to.
   **A style's slots are the figure the band plays, never a fence around the
   player**: placement is read against the grid the style's `feel` implies, and
   the slots keep a tier of their own for words rather than points. Reading the

@@ -43,10 +43,22 @@ engine rather than in a shell.
   rather than eighths — rather than fitted to one style and generalized
   afterward. A style the shape can't express is a sign the shape is wrong,
   not the style.
-- **What it doesn't have yet: hit duration.** A hit rings until the next one
-  stops it, whatever the style — the one bullet of the agreed shape with no
-  field. Real difference between a Basie punch and a ballad's sustain, and
-  the first thing to add if this shape reopens.
+- **Hit duration is the style's too**, and it sits on the *slot* with a
+  fallback on the style (`CompSlot::heldFor` → `CompStyleDefinition::heldFor`),
+  because the interesting difference is often inside one style rather than
+  between two: Basie's bar-end push is carrying the next chord in and rings,
+  while the same style's downbeat is a stab. `compPlan` trims each duration to
+  the next onset — one instrument plays these in order, so a length past that
+  is one nothing could sound, and a number a shell had to correct would be two
+  opinions about one thing.
+
+  **The evaluator says nothing about it, and cannot.** A `PlayedHit` is a bar,
+  a position and some notes; there is nowhere on it to put how long a chord was
+  held. That is the same argument as everywhere else in this document, pointed
+  the other way: placement is scored because the style *is* a written standard
+  for it, and duration is not scored because a style saying how long the band
+  holds a chord is not a rule about how long you may. A comper holding one
+  through a four-to-the-bar is reading a style that does not say not to.
 
 ### What it plays: voicing choice, not a new shape
 The shapes are the same two-handed rootless shapes chord practice already

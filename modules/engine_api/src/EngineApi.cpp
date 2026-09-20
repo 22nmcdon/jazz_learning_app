@@ -799,6 +799,7 @@ std::string compPlan (const char* progressionText, const char* styleKey,
                             + ",\"at\":" + quoted (hit.at.describe())
                             + ",\"chord\":" + quoted (hit.chordSymbol)
                             + ",\"anticipation\":" + (hit.anticipation ? "true" : "false")
+                            + ",\"heldFor\":" + std::to_string (hit.heldFor)
                             + ",\"notes\":" + notes + "}";
                    })
                  + "}");

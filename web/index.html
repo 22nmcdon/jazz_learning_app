@@ -1783,7 +1783,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
        is wrong in the one place a reader goes to find out what they are
        looking at. -->
   <footer class="colophon">
-    <span>Engine: <code>modules/core_engine</code> - 433 unit tests, no JUCE.</span>
+    <span>Engine: <code>modules/core_engine</code> - 439 unit tests, no JUCE.</span>
     <span id="colophonEngine"></span>
     <span id="colophonFraming"></span>
     <span id="colophonBuild"></span>
@@ -6080,7 +6080,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   /** Sounds a comped voicing, at @p when on the web and as soon as it arrives
       in the app - the same inequality the click already has, and for the same
       reason: the bridge has no "play this at" argument. */
-  function playCompVoicing(notes, when) {
+  /** How quickly a comped chord lets go once its time is up.
+
+      A release rather than a cut: a chord that stops dead is a sound no piano
+      makes, and the fingers coming off the keys is what the ear hears at the
+      end of a stab. */
+  var COMP_RELEASE = 0.05;
+
+  /** @param release  when the style says to let go, or undefined to ring on
+                      until the next chord stops it - which is what every comp
+                      did before a style could say how long a hit lasts. */
+  function playCompVoicing(notes, when, release) {
     var bank = SOUND_BANKS[comping.bank];
     if (!bank || (bank.buildVoice === null && !bank.sample)) return;
 
@@ -6095,6 +6105,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (ctx.state === "suspended") ctx.resume();
 
     var at = when || ctx.currentTime;
+    var letGo = release !== undefined && release > at;
 
     stopCompVoices(at);
 
@@ -6105,7 +6116,19 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       if (voice === null) return;
 
       voice.output.connect(audio.master);
-      voice.stop(voice.stopAt);
+
+      if (letGo) {
+        /*  `setTargetAtTime` rather than a ramp, because a ramp needs the value
+            it is starting from and nothing here knows it: the voice is partway
+            through an envelope of its own by then, and a recorded bank's is the
+            recording's rather than one this page wrote. Decaying towards
+            silence from wherever it has got to needs no such number. */
+        voice.amp.gain.cancelScheduledValues(release);
+        voice.amp.gain.setTargetAtTime(0.0001, release, COMP_RELEASE);
+      }
+
+      // Whichever comes first: the note's own end, or the style letting go.
+      voice.stop(letGo ? Math.min(voice.stopAt, release + COMP_RELEASE * 6) : voice.stopAt);
       audio.compVoices.push(voice);
     });
   }
@@ -6199,16 +6222,39 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
         var when = barStart + beatsIntoBar(hit.beat, hit.tick) * secondsPerBeatNow;
 
+        /*  How long the style holds it. A duration is not a position, so it is
+            read at the straight rate rather than through `beatsIntoBar`:
+            swinging an eighth moves where it falls and does not change what an
+            eighth is worth.
+
+            Older engines say nothing here, and a chord that rings until the
+            next one stops it is exactly what this did before - so undefined is
+            the honest value rather than a guess at a length. */
+        var release = typeof hit.heldFor === "number"
+                    ? when + (hit.heldFor / ENGINE_TICKS_PER_BEAT) * secondsPerBeatNow
+                    : undefined;
+
         // Scheduled where the web can schedule and booked where it cannot -
         // the same split the click already lives with.
         if (native !== null) {
           comping.booked.push(window.setTimeout(function () {
             if (comping.piano && transport.running) playCompVoicing(hit.notes, 0);
           }, Math.max(0, (when - transportNow()) * 1000)));
+
+          /*  The app has no "play this until", so letting go is a second
+              message. The engine trims a hit so it never rings past the next
+              one, and these are booked in the order the hits are played, so a
+              release landing on the very moment of the next chord still runs
+              before it rather than silencing it.  */
+          if (release !== undefined)
+            comping.booked.push(window.setTimeout(function () {
+              if (comping.piano && transport.running) stopCompVoices();
+            }, Math.max(0, (release - transportNow()) * 1000)));
+
           return;
         }
 
-        playCompVoicing(hit.notes, when);
+        playCompVoicing(hit.notes, when, release);
       });
     });
   }

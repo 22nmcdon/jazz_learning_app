@@ -37,6 +37,16 @@ struct CompSlot
         does not.
     */
     bool anticipates { false };
+
+    /** How long a chord in this slot rings, in ticks. Empty is the style's own.
+
+        On the slot as well as on the style because the difference is often
+        *within* a style rather than between two: Basie's bar-end push carries
+        the next chord in and rings, while the same style's occasional downbeat
+        is a stab. A style with nothing to say slot by slot says it once, on
+        `heldFor` below, and leaves every slot empty.
+    */
+    std::optional<int> heldFor;
 };
 
 /** Everything a comping style is, as data.
@@ -46,14 +56,17 @@ struct CompSlot
     style described in one place and re-described in another is how the two
     drift, which is the same reason `scaleStyles()` lives in the engine.
 
-    What a style still cannot say is **how long a hit lasts**. A voicing rings
-    until the next one stops it and a shell decides that, so nothing here tells
-    a Basie punch from a ballad's sustain - which is a real difference between
-    them and the one bullet of this shape with no field. The evaluator is held
-    to the same silence: it reads placement, register, density and the notes,
-    and marks nobody for holding a chord, because a comper holding every chord
-    through a four-to-the-bar is reading a style that does not say not to. That
-    is the first thing to add if this shape is reopened.
+    **How long a hit lasts** is a style's to say too, on `heldFor` here and on
+    each slot. A Basie punch and a ballad's sustain are a real difference
+    between the two, and for a long time this shape had no field for it: a
+    voicing rang until the next one stopped it, whatever the style.
+
+    The evaluator stays silent about it, and **cannot do otherwise**. A
+    `PlayedHit` carries a bar, a position and some notes; there is nowhere on it
+    for a duration, so nothing downstream can mark a player for holding a chord.
+    That is a design decision rather than an omission - a comper holding one
+    through a four-to-the-bar is reading a style that does not say not to. What
+    is written here is what the *band* does.
 */
 struct CompStyleDefinition
 {
@@ -97,7 +110,16 @@ struct CompStyleDefinition
         Zero for four-to-the-bar, which really is exactly four to the bar.
     */
     int variation { 25 };
+
+    int heldFor { ticksPerBeat };
 };
+
+/** How long a chord in @p slot rings under @p style, in ticks.
+
+    The one answer, so the generator and anything reading a plan back cannot
+    disagree about it - the same reason `slotAt` exists.
+*/
+int heldForSlot (const CompSlot& slot, const CompStyleDefinition& style);
 
 /** Every style the engine knows, in menu order. */
 std::vector<CompStyleDefinition> compStyles();
@@ -136,6 +158,16 @@ struct CompHit
 
     std::string chordSymbol;   ///< what this hit is voicing
     bool anticipation {};      ///< sounds the next bar's chord, early
+
+    /** How long it rings, in ticks, resolved and trimmed.
+
+        Never past the onset of the hit after it. One instrument plays these in
+        order, so a duration running into the next chord is a length nothing
+        could sound - a shell would have to stop it there anyway, and an engine
+        writing a number the shell had to correct would be two opinions about
+        one thing.
+    */
+    int heldFor { ticksPerBeat };
 };
 
 /** What a comper plays over a range of bars. */

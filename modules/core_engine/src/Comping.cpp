@@ -140,7 +140,12 @@ std::vector<CompStyleDefinition> compStyles()
         four.summary = "A chord on every beat, even and quiet - the rhythm guitar's job, "
                        "taken by the left hand.";
         four.feel = Subdivision::beat;
-        four.slots = { CompSlot { std::nullopt, 0, 100, false } };
+        four.slots = { CompSlot { std::nullopt, 0, 100, false, std::nullopt } };
+
+        // Damped, and well short of the beat it sits on. Freddie Green's part
+        // is a chunk rather than a chord: held for its full beat it stops being
+        // a pulse and becomes an organ.
+        four.heldFor = ticksPerBeat / 2;
         four.fewestPerBar = 4;
         four.mostPerBar = 8;
         four.lowestNote = 45;
@@ -164,11 +169,17 @@ std::vector<CompStyleDefinition> compStyles()
         basie.summary = "Next to nothing, mostly pushed across the barline. Leaves the most "
                         "room for a line.";
         basie.feel = Subdivision::eighth;
+        /*  The style where the duration is not one number. A punch is a punch -
+            short, and the silence after it is the point - but the bar-end push
+            is carrying the next chord in, and a chord stating a new harmony
+            has to last long enough to be heard as one. */
         basie.slots = {
-            CompSlot { -1,           ticksPerBeat / 2, 75, true  },   // the and of the last beat
-            CompSlot { 0,            0,                25, false },   // the downbeat, now and then
-            CompSlot { 1,            ticksPerBeat / 2, 20, false }    // the and of two
+            CompSlot { -1,           ticksPerBeat / 2, 75, true,  ticksPerBeat * 3 / 2 },
+            CompSlot { 0,            0,                25, false, std::nullopt },
+            CompSlot { 1,            ticksPerBeat / 2, 20, false, std::nullopt }
         };
+
+        basie.heldFor = ticksPerBeat / 2;
         basie.fewestPerBar = 0;
         basie.mostPerBar = 2;
         basie.lowestNote = 48;
@@ -191,10 +202,13 @@ std::vector<CompStyleDefinition> compStyles()
         charleston.summary = "One, and the and of two - the first comping figure anybody learns, "
                              "and still the most useful.";
         charleston.feel = Subdivision::eighth;
+        /*  One is short and the and of two rings - which is what makes the
+            figure sound like the figure rather than like two even stabs. The
+            second chord has the back half of the bar to itself and takes it. */
         charleston.slots = {
-            CompSlot { 0, 0,                95, false },
-            CompSlot { 1, ticksPerBeat / 2, 90, false },
-            CompSlot { -1, ticksPerBeat / 2, 30, true }
+            CompSlot { 0,  0,                95, false, ticksPerBeat / 2 },
+            CompSlot { 1,  ticksPerBeat / 2, 90, false, ticksPerBeat * 3 / 2 },
+            CompSlot { -1, ticksPerBeat / 2, 30, true,  ticksPerBeat }
         };
         // Nought, so the band can leave a bar alone the way a player does. Its
         // two main slots fire almost always, so an empty bar stays rare.
@@ -217,11 +231,16 @@ std::vector<CompStyleDefinition> compStyles()
                          "on eighths.";
         ballad.feel = Subdivision::tripletEighth;
         ballad.slots = {
-            CompSlot { 0,  0,                    90, false },
-            CompSlot { 2,  0,                    55, false },
-            CompSlot { 1,  2 * ticksPerBeat / 3, 30, false },
-            CompSlot { -1, 2 * ticksPerBeat / 3, 35, true  }
+            CompSlot { 0,  0,                    90, false, std::nullopt },
+            CompSlot { 2,  0,                    55, false, std::nullopt },
+            CompSlot { 1,  2 * ticksPerBeat / 3, 30, false, std::nullopt },
+            CompSlot { -1, 2 * ticksPerBeat / 3, 35, true,  std::nullopt }
         };
+
+        // The other end of the range from a punch, and the whole reason this
+        // field exists: a ballad's chords are held, and one stabbed at the
+        // length Basie uses is a ballad played like a swing tune.
+        ballad.heldFor = ticksPerBeat * 2;
         ballad.fewestPerBar = 0;
         ballad.mostPerBar = 3;
         ballad.lowestNote = 45;
@@ -235,6 +254,13 @@ std::vector<CompStyleDefinition> compStyles()
     }
 
     return styles;
+}
+
+int heldForSlot (const CompSlot& slot, const CompStyleDefinition& style)
+{
+    // At least a tick: a chord that rings for no time is not a chord, and a
+    // style written with a zero in it should be heard rather than be silent.
+    return std::max (1, slot.heldFor.value_or (style.heldFor));
 }
 
 const CompStyleDefinition& compStyleFor (const std::string& key)
@@ -411,10 +437,36 @@ CompPlan compPlan (const Chart& chart, const CompStyleDefinition& style,
 
             previous = voicing.midiNotes;
 
+            const auto* slot = slotAt (position, style, beatsPerBar);
+
             plan.hits.push_back (CompHit { measureIndex, position, voicing.midiNotes,
-                                           chord->toString(), pushed });
+                                           chord->toString(), pushed,
+                                           slot != nullptr ? heldForSlot (*slot, style)
+                                                           : std::max (1, style.heldFor) });
         }
     }
+
+    /*  Nothing rings into the chord after it.
+
+        One instrument plays these in order, so a duration past the next onset
+        is a length nothing could sound: a shell would stop the voicing there to
+        play the next one whatever this said. Trimmed here rather than left to
+        each shell, because a number the shell has to correct is two opinions
+        about one thing - and the browser and the app would eventually hold
+        different ones.
+
+        Absolute ticks, so a hit at the end of a bar is measured against the
+        next bar's downbeat rather than against a beat number that starts over.
+        A chart has one metre, so one bar's worth of ticks is every bar's. */
+    const auto atTicks = [beatsPerBar] (const CompHit& hit)
+    {
+        return hit.measureIndex * beatsPerBar * ticksPerBeat + hit.at.inTicks();
+    };
+
+    for (std::size_t i = 0; i + 1 < plan.hits.size(); ++i)
+        plan.hits[i].heldFor = std::max (1, std::min (plan.hits[i].heldFor,
+                                                      atTicks (plan.hits[i + 1])
+                                                        - atTicks (plan.hits[i])));
 
     return plan;
 }
