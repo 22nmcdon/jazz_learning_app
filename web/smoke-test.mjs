@@ -61,16 +61,45 @@ await page.addInitScript(() => {
   const Ctor = window.AudioContext || window.webkitAudioContext;
   const realCreate = Ctor.prototype.createOscillator;
 
-  Ctor.prototype.createOscillator = function () {
-    const osc = realCreate.call(this);
-    const realStart = osc.start.bind(osc);
+  /*  The page's own clock, so a check can say what time it is in the same
+      units a scheduled sound is booked in. Taken off the first node made
+      rather than off a context this script created, which would be a
+      different clock entirely. */
+  window.__audioNow = () => null;
 
-    osc.start = function (when) {
-      window.__sounded.push({ type: osc.type, hz: osc.frequency.value, when });
+  /*  `describe` is called when the node is *started*, never when it is made.
+      The page builds a node and then sets its type, its frequency and its rate,
+      so reading those at creation reads the defaults - every oscillator a sine
+      at 440, which loses the click and every pitch with it. */
+  const remember = (node, describe) => {
+    const realStart = node.start.bind(node);
+    const realStop = node.stop.bind(node);
+    const record = { when: null, stoppedAt: null };
+
+    node.start = function (when) {
+      Object.assign(record, describe());
+      record.when = when === undefined ? this.context.currentTime : when;
+      window.__audioNow = () => node.context.currentTime;
+      window.__sounded.push(record);
       return realStart(when);
     };
 
-    return osc;
+    /*  And when it is told to stop, which is how a check can tell a sound that
+        was cancelled before it ever spoke from one that played. Stopping a node
+        before its start time is how Web Audio cancels a booked sound, so the
+        two have to be compared rather than counted. */
+    node.stop = function (when) {
+      record.stoppedAt = when === undefined ? this.context.currentTime : when;
+      return realStop(when);
+    };
+
+    return node;
+  };
+
+  Ctor.prototype.createOscillator = function () {
+    const osc = realCreate.call(this);
+
+    return remember(osc, () => ({ type: osc.type, hz: osc.frequency.value }));
   };
 
   /*  The recorded instruments come out of a buffer source rather than an
@@ -81,14 +110,8 @@ await page.addInitScript(() => {
 
   Ctor.prototype.createBufferSource = function () {
     const source = realBuffer.call(this);
-    const realStart = source.start.bind(source);
 
-    source.start = function (when) {
-      window.__sounded.push({ type: "sample", rate: source.playbackRate.value, when });
-      return realStart(when);
-    };
-
-    return source;
+    return remember(source, () => ({ type: "sample", rate: source.playbackRate.value }));
   };
 
   /*  When a comped chord is let go of. A style says how long its chords ring
@@ -890,6 +913,54 @@ try {
 
   check(`and four to the bar lets go inside its own beat (${middle(fourHolds)?.toFixed(2)})`,
         middle(fourHolds) < 0.95);
+
+  /*  Stopping a take stops the band, now rather than at the end of the bar.
+
+      On the web a bar of accompaniment is handed to Web Audio all at once, a
+      bar ahead, which is what makes it sample-accurate - and it means that by
+      the time a take is stopped the rest of the bar already exists as booked
+      nodes. Silencing the chord and the bass note that happen to be sounding
+      does not touch those, so the band used to play on for the remainder of
+      the bar: a couple of seconds of a tune nobody was playing any more.
+
+      Measured as every node's own end against the moment of the stop, because
+      what is booked is not what is heard - a node stopped before its start
+      time never sounds at all, which is exactly how the rest of the bar is
+      taken back. */
+  await page.locator("#compingButton").click();
+  await page.locator("#compBass").check();
+  await page.locator("#compDrums").check();
+  await page.locator("#compingButton").click();
+
+  await forgetSounds();
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(1800);
+  await page.keyboard.press("Space");
+
+  const tail = await page.evaluate(() => {
+    const stoppedAt = window.__audioNow();
+
+    const past = window.__sounded
+      .filter((s) => s.when !== null)
+      // Still to be heard: it has not been stopped, or it stops after this
+      // moment having actually started before then.
+      .filter((s) => s.stoppedAt === null || (s.stoppedAt > stoppedAt && s.stoppedAt > s.when))
+      .map((s) => (s.stoppedAt === null ? Infinity : s.stoppedAt) - stoppedAt);
+
+    return past.length ? Math.max(...past) : 0;
+  });
+
+  check(`stopping a take stops the band with it (${tail.toFixed(2)}s of tail)`,
+        isFinite(tail) && tail < 0.4);
+
+  await page.waitForFunction(
+    () => document.querySelector("#armTake").getAttribute("aria-pressed") === "false",
+    null, { timeout: 10000 });
+
+  await page.locator("#compingButton").click();
+  await page.locator("#compBass").uncheck();
+  await page.locator("#compDrums").uncheck();
+  await page.locator("#compingButton").click();
 
   /*  The grand piano is a recording where the electric piano is synthesised, so
       the same comp on the same bar comes out of a different kind of node. That

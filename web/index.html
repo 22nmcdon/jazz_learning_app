@@ -5408,7 +5408,21 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // `compVoices` is the band's, a plain list because nothing ever asks it for
   // one note back - a comp only ever replaces itself, all of it at once.
   var audio = { ctx: null, master: null, voices: {}, compVoices: [], bassVoice: null,
-                bank: "ep", noise: null };
+                bank: "ep", noise: null,
+
+                /*  Everything the band has scheduled and not yet finished.
+
+                    On the web a bar of accompaniment is handed to Web Audio all
+                    at once, a bar ahead, because that is what makes it
+                    sample-accurate - so by the time a take is stopped the rest
+                    of the bar already exists as nodes with their start times
+                    booked. `compVoices` and `bassVoice` cannot stand in for
+                    this: each new chord replaces what they hold, so between
+                    them they know about the *last* voicing of each instrument
+                    and nothing else, and the drums were never in either.
+
+                    This is the list that makes stopping mean stopping. */
+                band: [] };
 
   /*  Two kinds of bank, one registry. A synthesised bank builds a voice from
       oscillators; a recorded one names a file, the note it was played at, and
@@ -5506,6 +5520,55 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       stopAt: when + length
     };
   }
+
+  /** Keeps a scheduled band voice where `silenceBand` can find it.
+
+      Pruned as it goes rather than swept: a voice whose own end has passed can
+      no longer be sounded by anything, and a list that only grew would hold
+      every chord of a long take. */
+  function rememberBandVoice(voice) {
+    if (audio.ctx === null) return voice;
+
+    var now = audio.ctx.currentTime;
+
+    audio.band = audio.band.filter(function (booked) { return booked.stopAt > now; });
+    audio.band.push(voice);
+
+    return voice;
+  }
+
+  /** Stops the band now, including everything it had lined up.
+
+      Not the same job as one chord letting go of the last: that is music, is
+      scheduled, and belongs to `stopCompVoices`. This is the take ending, and
+      the only honest answer to it is silence - a node whose start time has not
+      arrived is stopped before it does, which the Web Audio spec answers by
+      never sounding it at all.
+
+      The app needs none of this. There the band is a stream of messages booked
+      with timers, and dropping the timers is already the whole of stopping. */
+  function silenceBand() {
+    if (native !== null || audio.ctx === null) return;
+
+    var at = audio.ctx.currentTime;
+
+    audio.band.forEach(function (voice) {
+      try {
+        voice.amp.gain.cancelScheduledValues(at);
+        voice.amp.gain.setValueAtTime(Math.max(voice.amp.gain.value, 0.0001), at);
+        voice.amp.gain.exponentialRampToValueAtTime(0.0001, at + BAND_CUT);
+        voice.stop(at + BAND_CUT * 1.4);
+      } catch (e) {
+        // A node already stopped, or one whose ramp had nothing to cancel.
+        // Either way it is not going to sound, which is all this wanted.
+      }
+    });
+
+    audio.band = [];
+  }
+
+  /** Long enough not to click, short enough to read as "it stopped". */
+  var BAND_CUT = 0.05;
 
   function noteFrequency(midiNote) {
     return 440 * Math.pow(2, (midiNote - 69) / 12);
@@ -5768,7 +5831,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     voice.output.connect(audio.master);
     voice.stop(voice.stopAt);
-    audio.bassVoice = voice;
+    audio.bassVoice = rememberBandVoice(voice);
   }
 
   function stopBassVoice(when) {
@@ -5894,6 +5957,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     amp.gain.exponentialRampToValueAtTime(0.0001, at + recipe.decay);
     amp.connect(audio.master);
 
+    var ends = at + recipe.decay + 0.05;
+
     if (recipe.thump) {
       var osc = ctx.createOscillator();
       osc.type = "sine";
@@ -5907,7 +5972,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       osc.frequency.exponentialRampToValueAtTime(recipe.to, at + recipe.decay * 0.6);
       osc.connect(amp);
       osc.start(at);
-      osc.stop(at + recipe.decay + 0.05);
+      osc.stop(ends);
+
+      // One-shots, but still the band's: a take stopped mid-bar must not leave
+      // a ride cymbal to arrive on its own afterwards.
+      rememberBandVoice({ amp: amp, stopAt: ends,
+                          stop: function (when) { osc.stop(when); } });
       return;
     }
 
@@ -5922,7 +5992,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     source.connect(band);
     band.connect(amp);
     source.start(at);
-    source.stop(at + recipe.decay + 0.05);
+    source.stop(ends);
+
+    rememberBandVoice({ amp: amp, stopAt: ends,
+                        stop: function (when) { source.stop(when); } });
   }
 
   /** The beats the ride skips off and the hi-hat closes on.
@@ -6129,7 +6202,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
       // Whichever comes first: the note's own end, or the style letting go.
       voice.stop(letGo ? Math.min(voice.stopAt, release + COMP_RELEASE * 6) : voice.stopAt);
-      audio.compVoices.push(voice);
+      audio.compVoices.push(rememberBandVoice(voice));
     });
   }
 
@@ -6163,6 +6236,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   /** Stops the band and forgets where its hands were. */
   function stopComping() {
     forgetBookedComping();
+
+    /*  Before the two below, and doing most of the work: they let go of the
+        chord and the bass note that happen to be sounding, and a bar of
+        accompaniment scheduled ahead of them is neither. Without this the band
+        played out the rest of the bar after a take was stopped - a couple of
+        seconds of a tune nobody was playing any more. */
+    silenceBand();
+
     stopCompVoices();
     stopBassVoice();
     comping.notes = [];
