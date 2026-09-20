@@ -45,6 +45,10 @@ cmake --build build
 cmake -S . -B build-core -DJAZZ_BUILD_APP=OFF
 cmake --build build-core
 ./build-core/tests/jazz_core_tests     # or: ctest --test-dir build-core
+
+# Adding a test changes a number quoted in this file and in the page's
+# colophon. The suite is the only thing that knows it, so nobody counts:
+./tools/test-count.sh                  # writes it in; --check is what CI runs
 ```
 
 Both configurations run in CI on every push (`.github/workflows/ci.yml`): the engine job

@@ -106,9 +106,15 @@ platform-specific has leaked into Core Engine.
 
 CI (`.github/workflows/ci.yml`): one job builds with `-DJAZZ_BUILD_APP=OFF` on a
 GUI-less runner (a failure here means broken layering, not a missing package —
-check that before reaching for `apt-get`); another builds the full app. CI also
-checks the test count against what `README.md`/the page's colophon quote (it's
-gone stale twice).
+check that before reaching for `apt-get`); another builds the full app.
+
+**The test count is generated, not typed.** `README.md` and the page's colophon
+quote it; the suite is the only thing that knows it, and it went stale twice
+when both were written by hand. `tools/test-count.sh` asks the built binary and
+writes the number into both files; `--check` changes nothing and fails, and is
+what CI runs. **After adding a test, run it** rather than editing either file.
+It is also an error for a file to contain *no* count — a generator quietly
+maintaining nothing looks exactly like one with nothing to do.
 
 `.github/workflows/pages.yml` builds the wasm, deploys to GitHub Pages, and runs
 `web/smoke-test.mjs` against the built page before deploy. Run it yourself after
