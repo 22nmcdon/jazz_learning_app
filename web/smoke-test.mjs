@@ -1227,6 +1227,55 @@ try {
   check(`and four to the bar lets go inside its own beat (${middle(fourHolds)?.toFixed(2)})`,
         middle(fourHolds) < 0.95);
 
+  /*  A style you can look at, and copy without changing it.
+
+      The check that matters before any editing exists, because it proves the
+      two halves of the grammar agree through the real path: the engine writes
+      a style out as flat text, the page draws it, the page writes it back, and
+      the engine reads it. Copy the Charleston, change nothing, play it - and
+      the band has to play the Charleston, hit for hit.
+
+      Anything lost in that round trip shows up here as a different figure. A
+      test that only asserted the dialog opens would pass with the writer
+      dropping every slot on the floor.
+  */
+  const charleston = await compRhythmOf("charleston");
+
+  await page.locator("#menuButton").click();
+  check("the engine offers the style editor", await page.locator("#styleEdit").isVisible());
+
+  await page.locator("#styleEdit").click();
+  await page.waitForSelector("#styleDialog[open]", { timeout: 10000 });
+
+  // Opened from the settings panel, which at a phone width would cover it.
+  check("writing your own opens from The band, and closes the panel",
+        await page.locator("#menuPanel").isHidden());
+
+  const litCells = await page.locator('#styleGrid .style-cell[aria-pressed="true"]').count();
+  const rows = await page.locator("#styleGrid .style-row").count();
+
+  check(`the style is drawn as its figure (${litCells} chords over ${rows} rows)`,
+        litCells === 3 && rows === 2);
+
+  await page.locator("#styleApply").click();
+  await page.waitForFunction(() => !document.querySelector("#styleDialog").open,
+                             null, { timeout: 10000 });
+
+  check("and applying it puts it in the menu",
+        (await page.locator('#compStyle option[value="yours"]').count()) === 1);
+
+  const copied = await compRhythmOf("yours");
+
+  check(`a copy of a style plays what the style plays `
+        + `(${charleston.map((t) => t.toFixed(2)).join(" ")} vs `
+        + `${copied.map((t) => t.toFixed(2)).join(" ")})`,
+        copied.length > 0 && copied.join(",") === charleston.join(","));
+
+  // And the page put the whole style on the wire, not a key the engine would
+  // have quietly failed to find and fallen back to four-to-the-bar for.
+  const reference = await page.evaluate(() => document.querySelector("#compStyle").value);
+  check(`the copy is its own style, not the name of one (${reference})`, reference === "yours");
+
   /*  The band does not play the same two chords all night.
 
       There used to be exactly one voicing per chord, for ever - the search took

@@ -1413,6 +1413,71 @@ dialog {
 }
 dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
+/* The comping style's figure, drawn as the grid it is.
+
+   One row per position the style's feel divides a beat into, one column per
+   beat of the chart's current metre - so a style written in four has nothing
+   in the fourth column when the chart is a waltz, which is a truer thing to
+   show than a slot the bar has not got.
+
+   A cell is a slot, which is why the editor cannot produce two slots on one
+   position - `slotAt` takes the first match and the second would be a slot
+   written twice. That is a whole class of invalid style the grid rules out by
+   being a grid. */
+.style-grid { display: flex; flex-direction: column; gap: 5px; }
+
+.style-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+
+.style-row-head {
+  flex: 0 0 62px;
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.style-cell {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  font-family: var(--sans);
+  font-size: 10px;
+  color: var(--text-soft);
+  cursor: pointer;
+  padding: 0;
+}
+
+.style-cell[aria-pressed="true"] { background: var(--sage); border-color: var(--sage); color: var(--paper); }
+
+/* The band's own push. A slot that voices the next bar's chord early is a
+   different thing from one that does not, and it is worth seeing at a glance
+   rather than only in the row under the grid. */
+.style-cell[data-pushes="yes"] { background: var(--gold); border-color: var(--gold); }
+
+/* Counted back from the end of the bar. Three of the four styles that ship
+   place a slot this way, and it is what keeps "the and of the last beat" the
+   same idea in three as in four - so the column says so rather than looking
+   like an ordinary last beat. */
+.style-col-last { border-style: dashed; }
+
+.style-heads { display: flex; align-items: center; gap: 4px; }
+.style-head {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-soft);
+}
+
+.style-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; }
+
+
 .dialog-head {
   display: flex;
   align-items: flex-start;
@@ -1993,6 +2058,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
               <label class="menu-label" for="compStyle">Comping style</label>
               <select class="menu-select" id="compStyle"></select>
               <p class="menu-note" id="compStyleNote"></p>
+              <!-- Hidden until the engine's answer proves it can be used. The
+                   boot-time guard checks that a call *exists* and cannot see a
+                   call whose answer changed shape, so this feature-detects on
+                   the data: an engine that does not send a style's slots
+                   cannot be handed an edited one back. -->
+              <button class="link-btn" type="button" id="styleEdit" hidden>Write your own</button>
             </div>
 
             <div class="menu-field">
@@ -2624,6 +2695,41 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   </div>
 </dialog>
 
+<!-- The comping style, as the figure it is.
+
+     A fifth dialog rather than a fourth menu: `CLAUDE.md`'s ceiling of three is
+     about menus and popovers, and a style is a thing you sit down with rather
+     than a setting you flick. It is opened from *The band*, which is the
+     section that owns what the band does.
+
+     The catalogue is the engine's and is never edited in place - this always
+     works on a copy, which is what the head says out loud. -->
+<dialog id="styleDialog">
+  <div class="dialog-head">
+    <div>
+      <div class="bar-label" id="styleFrom">From the Charleston</div>
+      <div class="plan-title">Your comping style</div>
+    </div>
+    <button class="close-btn" type="button" id="styleClose" aria-label="Close">&times;</button>
+  </div>
+
+  <div class="tab-body">
+    <p class="voicing-note" id="styleIntro">
+      Where the band puts a chord in the bar. Each column is a beat of the chart you are on,
+      each row a way of dividing it; a lit cell is a chord the style plays there.
+    </p>
+
+    <div class="style-grid" id="styleGrid"></div>
+
+    <p class="menu-note" id="styleAdvice"></p>
+
+    <div class="style-actions">
+      <button class="dock-btn" type="button" id="styleApply">Play this</button>
+      <button class="link-btn" type="button" id="styleRevert">Back to the original</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="planDialog">
   <div class="dialog-head">
     <div>
@@ -2872,6 +2978,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "connectMidi", "midiStatus", "styleLabel",
    "showVoicing", "playChord", "nameChord", "named", "namedText",
    "planButton", "planDialog", "planClose", "planList", "planTitle", "planIntro",
+   "styleEdit", "styleDialog", "styleClose", "styleFrom", "styleGrid", "styleAdvice",
+   "styleIntro", "styleApply", "styleRevert",
    "guideButton", "leadLegend", "leadChord",
    "ioButton", "ioDialog", "ioClose", "chartFile", "importStatus", "pasteBox",
    "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink",
@@ -4864,7 +4972,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     }
 
     var result = await call("jazzCompTake", ["string", "string", "number", "number", "string"],
-                      [state.progression, comping.style, bars[0], bars[bars.length - 1],
+                      [state.progression, compStyleRef(), bars[0], bars[bars.length - 1],
                        comp.hits.map(hitToWire).join(";")]);
 
     if (result === null || !result.ok) {
@@ -6344,6 +6452,227 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     updateGuideHint();
   });
 
+  //============================================================================
+  /*  The comping style, drawn as the figure it is.
+
+      The engine sends a style whole - every field, the slots included - and
+      the page draws it and hands an edited copy back. That is not the page
+      forming an opinion about placement: `compHit` and `compTake` still say
+      whether a hit is in style and still nothing else does. See
+      `docs/COMPING.md`.
+
+      The catalogue itself is never edited. Opening this always takes a copy,
+      which is what the dialog's head says out loud - a built-in style is the
+      engine's and stays the engine's.  */
+
+  /** The style the dialog is working on: a copy, never the original. */
+  var editing = null;
+
+  /** The style the copy was taken from, for *Back to the original*. */
+  var editingFrom = null;
+
+  function copyOfStyle(style) {
+    return {
+      key: YOUR_STYLE,
+      name: "Yours",
+      summary: style.summary,
+      feel: style.feel,
+      fewestPerBar: style.fewestPerBar,
+      mostPerBar: style.mostPerBar,
+      lowestNote: style.lowestNote,
+      highestNote: style.highestNote,
+      variation: style.variation,
+      heldFor: style.heldFor,
+      ticksPerBeat: style.ticksPerBeat,
+      slots: (style.slots || []).map(function (slot) {
+        return { beat: slot.beat, tick: slot.tick, weight: slot.weight,
+                 anticipates: slot.anticipates, heldFor: slot.heldFor };
+      })
+    };
+  }
+
+  /** The ticks the style's feel divides a beat into - the grid's rows. */
+  function ticksOfFeel(feel) {
+    var step = feel === "beats" ? ENGINE_TICKS_PER_BEAT
+             : feel === "eighth-note triplets" ? ENGINE_TICKS_PER_BEAT / 3
+             : feel === "sixteenths" ? ENGINE_TICKS_PER_BEAT / 4
+             : ENGINE_TICKS_PER_BEAT / 2;
+
+    var ticks = [];
+
+    for (var tick = 0; tick < ENGINE_TICKS_PER_BEAT; tick += step) ticks.push(tick);
+
+    return ticks;
+  }
+
+  /** What a row of the grid is called, in the words a player counts in. */
+  function tickLabel(tick, feel) {
+    if (tick === 0) return "on it";
+    if (feel === "eighth-note triplets") return tick === 8 ? "trip" : "let";
+    if (feel === "sixteenths") return tick === 6 ? "e" : tick === 12 ? "and" : "a";
+
+    return "and";
+  }
+
+  /** Which column a slot is drawn in, for a bar of @p beats.
+
+      Only for *drawing*. A negative beat counts back from the end of the bar
+      and is how three of the four shipped styles place their push - resolving
+      one to a column and writing that number back would turn "the and of the
+      last beat" into "the and of beat four", which is a different style in
+      three. The slot keeps the beat it was given; this only says where to
+      paint it. */
+  function columnOfSlot(slot, beats) {
+    if (slot.beat === "") return null;          // every beat: the whole row
+
+    var beat = Number(slot.beat);
+
+    return beat < 0 ? beats + beat : beat;
+  }
+
+  function drawStyleGrid() {
+    if (!editing) return;
+
+    var beats = transport.beats || 4;
+    var ticks = ticksOfFeel(editing.feel);
+
+    el.styleGrid.textContent = "";
+
+    // The beats, along the top. The last is marked because a slot placed there
+    // may be counted from the end rather than from the start.
+    var heads = document.createElement("div");
+    heads.className = "style-heads";
+
+    var spacer = document.createElement("span");
+    spacer.className = "style-row-head";
+    heads.appendChild(spacer);
+
+    for (var beat = 0; beat < beats; beat++) {
+      var head = document.createElement("span");
+      head.className = "style-head";
+      head.textContent = String(beat + 1);
+      heads.appendChild(head);
+    }
+
+    el.styleGrid.appendChild(heads);
+
+    ticks.forEach(function (tick) {
+      var row = document.createElement("div");
+      row.className = "style-row";
+
+      var label = document.createElement("span");
+      label.className = "style-row-head";
+      label.textContent = tickLabel(tick, editing.feel);
+      row.appendChild(label);
+
+      for (var beat = 0; beat < beats; beat++) {
+        var cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = "style-cell" + (beat === beats - 1 ? " style-col-last" : "");
+        cell.dataset.beat = String(beat);
+        cell.dataset.tick = String(tick);
+
+        var slot = slotDrawnAt(beat, tick, beats);
+
+        cell.setAttribute("aria-pressed", slot ? "true" : "false");
+
+        if (slot) {
+          cell.dataset.pushes = slot.anticipates ? "yes" : "no";
+          cell.textContent = slot.beat === "" ? "every" : String(slot.weight);
+          cell.setAttribute("aria-label",
+            "Beat " + (beat + 1) + ", " + tickLabel(tick, editing.feel)
+            + " - weight " + slot.weight + (slot.anticipates ? ", pushed" : ""));
+        } else {
+          cell.setAttribute("aria-label", "Beat " + (beat + 1) + ", "
+                                          + tickLabel(tick, editing.feel) + " - empty");
+        }
+
+        row.appendChild(cell);
+      }
+
+      el.styleGrid.appendChild(row);
+    });
+
+    sayStyleAdvice();
+  }
+
+  /** The slot painted in one cell, if any. */
+  function slotDrawnAt(beat, tick, beats) {
+    return (editing.slots || []).filter(function (slot) {
+      if (slot.tick !== tick) return false;
+
+      var column = columnOfSlot(slot, beats);
+
+      return column === null || column === beat;
+    })[0];
+  }
+
+  /*  The one rule the engine documents and does not enforce, said where it can
+      be acted on rather than clamped behind the player's back.
+
+      `variation` above the lightest slot's weight means the density trim
+      replaces the figure with the feel's own grid - the band stops playing
+      the style. That is a *sound*, not a fault, and it is what was asked for,
+      so the engine plays it. What it is not is obvious, hence a sentence. */
+  function sayStyleAdvice() {
+    var weights = (editing.slots || []).map(function (slot) { return slot.weight; });
+    var lightest = weights.length ? Math.min.apply(null, weights) : 0;
+
+    el.styleAdvice.textContent = editing.variation > lightest
+      ? "Straying (" + editing.variation + ") is above this figure's lightest chord ("
+        + lightest + "), so the band will mostly play the beat rather than the figure."
+      : "";
+  }
+
+  function openStyleDialog() {
+    var from = currentCompStyle();
+
+    if (!from) return;
+
+    editingFrom = comping.style === YOUR_STYLE ? editingFrom : from;
+    editing = copyOfStyle(from);
+
+    el.styleFrom.textContent = editingFrom ? "From " + editingFrom.name : "Your own";
+    drawStyleGrid();
+
+    if (!el.styleDialog.open) el.styleDialog.showModal();
+  }
+
+  el.styleEdit.addEventListener("click", function () {
+    // Opened from the settings panel, which at a phone width covers it.
+    setMenuOpen(false);
+    openStyleDialog();
+  });
+
+  el.styleApply.addEventListener("click", function () {
+    if (!editing) return;
+
+    comping.custom = editing;
+    comping.style = YOUR_STYLE;
+
+    addYourStyleOption();
+    el.compStyle.value = YOUR_STYLE;
+    remember("CompStyle", YOUR_STYLE);
+    describeCompStyle();
+
+    // A different figure is a different plan, and the one in hand is now the
+    // wrong one - the same reason the style picker throws it away.
+    forgetCompPlan();
+    el.styleDialog.close();
+  });
+
+  el.styleRevert.addEventListener("click", function () {
+    if (!editingFrom) return;
+
+    editing = copyOfStyle(editingFrom);
+    drawStyleGrid();
+  });
+
+  el.styleClose.addEventListener("click", function () { el.styleDialog.close(); });
+  el.styleDialog.addEventListener("click", function (event) {
+    if (event.target === el.styleDialog) el.styleDialog.close();
+  });
+
   el.planClose.addEventListener("click", function () { el.planDialog.close(); });
   el.planDialog.addEventListener("click", function (event) {
     if (event.target === el.planDialog) el.planDialog.close();
@@ -6774,17 +7103,98 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       el.compStyle.appendChild(option);
     });
 
-    if (!result.styles.some(function (style) { return style.key === comping.style; }))
+    /*  Can this engine be handed a style back?
+
+        A feature-detect on the answer rather than on the call's name. The
+        boot-time guard checks that every call in `ENGINE_CALLS` exists and
+        cannot see a call whose *answer* changed shape - and this feature
+        added no new call, so an older cached engine would take a described
+        style, fail to find it as a key, and comp four to the bar with the chip
+        still reading ready. An engine that sends a style's figure is one that
+        can read an edited one back. */
+    comping.canEdit = !!(result.styles.length && result.styles[0].slots);
+    el.styleEdit.hidden = !comping.canEdit;
+
+    if (comping.custom) addYourStyleOption();
+
+    // A style that is no longer on offer falls back to the first - but the one
+    // the player wrote is on offer, and is not the engine's to forget.
+    if (comping.style !== YOUR_STYLE
+        && !result.styles.some(function (style) { return style.key === comping.style; }))
       comping.style = result.styles.length ? result.styles[0].key : "";
 
     el.compStyle.value = comping.style;
     describeCompStyle();
   }
 
-  function describeCompStyle() {
-    var chosen = (comping.styles || []).filter(function (style) {
+  /** Puts the player's own style in the menu, once. */
+  function addYourStyleOption() {
+    if (el.compStyle.querySelector('option[value="' + YOUR_STYLE + '"]')) return;
+
+    var option = document.createElement("option");
+    option.value = YOUR_STYLE;
+    option.textContent = "Yours";
+    el.compStyle.appendChild(option);
+  }
+
+  /*  The key the menu gives a style the player wrote.
+
+      Not "custom", which is the engine's prefix for a described style: if this
+      ever leaked out as a style reference the engine would read it as a
+      catalogue key, not find it, and fall back to four to the bar - silently,
+      which is the one way this could go wrong without anyone noticing. A key
+      that is nobody's prefix fails the same way but cannot be mistaken for
+      half of a description. */
+  var YOUR_STYLE = "yours";
+
+  /** The style in play, whether it came out of the engine or out of the grid.
+
+      One lookup, used by everything that asks about the *current* style rather
+      than about the menu. `comping.styles` holds only what the engine ships,
+      so anything filtering that list by key answers `undefined` for a style
+      the player wrote - and the two callers here both had a default for
+      `undefined` that was wrong for a custom style in a different way. */
+  function currentCompStyle() {
+    if (comping.style === YOUR_STYLE) return comping.custom;
+
+    return (comping.styles || []).filter(function (style) {
       return style.key === comping.style;
     })[0];
+  }
+
+  /** How the engine is told which style to play: a catalogue key, or a whole
+      description of one it has never seen.
+
+      The page writes this grammar and never reads it. The engine sends a
+      style's own `reference` for the copy to start from, so the only direction
+      that needs writing is out - and `docs/COMPING.md` says why the two
+      directions are not the same format. */
+  function compStyleRef() {
+    return comping.style === YOUR_STYLE && comping.custom
+             ? referenceFrom(comping.custom) : comping.style;
+  }
+
+  /** A style written out the way `styleReference` writes it in the engine.
+
+      The optionals need no thought here, which is the point of their crossing
+      as strings: a `beat` of "" is every beat and a `beat` of "-1" counts back
+      from the end, and both arrive already spelled that way. A page that
+      turned them into numbers would have to invent a spelling for "no number",
+      and every number is taken.  */
+  function referenceFrom(style) {
+    var head = [style.feel, style.fewestPerBar, style.mostPerBar, style.lowestNote,
+                style.highestNote, style.variation, style.heldFor].join("|");
+
+    var figure = (style.slots || []).map(function (slot) {
+      return [slot.beat, slot.tick, slot.weight,
+              slot.anticipates ? 1 : 0, slot.heldFor].join(":");
+    }).join(";");
+
+    return "custom:" + head + "|" + figure;
+  }
+
+  function describeCompStyle() {
+    var chosen = currentCompStyle();
 
     el.compStyleNote.textContent = chosen ? chosen.summary : "";
   }
@@ -7344,6 +7754,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     style: "charleston",
     styles: [],
 
+    /*  The style the player wrote, when there is one, in the same shape the
+        engine sends its own - so one lookup answers for both and nothing has
+        to know which kind it is holding. Null until they write one.
+
+        `canEdit` is whether this engine can be handed one back at all; see
+        `loadCompStyles`, which works it out from the answer's shape rather
+        than from a call's name. */
+    custom: null,
+    canEdit: false,
+
     /*  The plan: what the band plays over the loop, worked out in one go by
         the engine rather than decided beat by beat here. Two things need more
         than the moment they are played in - a hit that anticipates has to know
@@ -7386,7 +7806,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function compPlanKey() {
     var loop = loopRange();
 
-    return [state.progression, comping.style, loop.from, loop.to,
+    /*  The whole style reference rather than its key. A style the player is
+        editing keeps one key while its figure changes underneath, so keying
+        the cache on the name would hand back the plan for the style as it was
+        - the same reason `state.progression` is in here rather than a chart
+        id. It costs a longer string compare per booking and nothing else. */
+    return [state.progression, compStyleRef(), loop.from, loop.to,
             comping.seed, comping.chorus].join("|");
   }
 
@@ -7402,7 +7827,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // takes one number and the page is the only thing that knows a loop has
     // come round.
     var result = await call("jazzCompPlan", ["string", "string", "number", "number", "number"],
-                            [state.progression, comping.style, loop.from, loop.to,
+                            [state.progression, compStyleRef(), loop.from, loop.to,
                              comping.seed + comping.chorus * 9176]);
 
     if (result === null || !result.ok) return null;
@@ -7776,9 +8201,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       Defaults to true, because that is what every style but the ballad is and
       because it is also what the page did before it knew to ask. */
   function compFeelIsEighths() {
-    var chosen = (comping.styles || []).filter(function (style) {
-      return style.key === comping.style;
-    })[0];
+    /*  Through `currentCompStyle()`, or a style the player wrote is not in
+        `comping.styles` and this falls through to its default - swinging the
+        eighths of a triplet style and folding every one of them onto tick 12,
+        which is the exact failure the comment above describes. */
+    var chosen = currentCompStyle();
 
     return !chosen || chosen.feel === "eighths";
   }
@@ -8147,7 +8574,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // Space plays the chord too, as long as nothing else has the keyboard.
   // Stepping along the chart with the hands still on the keys.
   document.addEventListener("keydown", function (event) {
-    if (el.chordDialog.open || el.planDialog.open || el.ioDialog.open) return;
+    // The style dialog has number boxes in it, and Space in one of those is a
+    // space, not a take being armed.
+    if (el.chordDialog.open || el.planDialog.open || el.ioDialog.open
+        || el.styleDialog.open) return;
     if (event.target !== document.body && !event.target.classList.contains("bar")) return;
 
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
@@ -8468,7 +8898,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     var result = await call("jazzCompHit",
                       ["string", "string", "number", "number", "number", "string", "number"],
-                      [state.progression, comping.style, hit.bar,
+                      [state.progression, compStyleRef(), hit.bar,
                        hit.at ? hit.at.beat : -1, hit.at ? hit.at.tick : 0,
                        hit.notes.join(","), already]);
 
