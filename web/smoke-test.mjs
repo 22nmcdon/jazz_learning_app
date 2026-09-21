@@ -1854,6 +1854,171 @@ try {
     await framed.close();
   }
 
+  /*  What survives a reload, and what must not.
+
+      A settings layer is the one kind of feature that cannot be checked by
+      looking at the page once: every assertion here is about the *second*
+      visit. Its own context, because that is what owns the store - the rest of
+      the suite would otherwise be practising against whatever this left
+      behind.
+
+      The negative half matters as much as the positive. Reloading is meant to
+      find the stand where you left it, not to resume a session, so the chart
+      and the take have to come back as they came the first time. A settings
+      layer that quietly restored a reharmonised chart would look like this one
+      working. */
+  {
+    const kept = await browser.newContext();
+    const before = await kept.newPage();
+
+    await before.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await before.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await before.locator("#helpDialog[open]").count()) await before.locator("#helpClose").click();
+
+    await before.locator("#playLive").click();
+    await before.fill("#tempo", "184");
+    await before.dispatchEvent("#tempo", "change");
+    await before.selectOption("#timeSig", "3/4");
+
+    await before.locator("#transportButton").click();
+    await before.selectOption("#loopFrom", { index: 2 });
+    await before.selectOption("#loopTo", { index: 5 });
+    await before.locator("#transportButton").click();
+
+    await before.locator("#menuButton").click();
+    await before.selectOption("#soundBank", "grand");
+    await before.locator("#compBass").check();
+    await before.locator("#compDrums").check();
+    await before.selectOption("#bassSound", { index: 1 });
+    const styleWanted = await before.locator("#compStyle option").nth(1).getAttribute("value");
+    await before.selectOption("#compStyle", styleWanted);
+    await before.locator("#menuButton").click();
+
+    await before.locator("#guideButton").click();
+
+    // Something to prove is *not* remembered: a chart that is not the one the
+    // page ships with.
+    await before.locator("#menuButton").click();
+    await before.locator("#editToggle").click();
+    await before.fill("#progression", "| Eb7 | Ab7 |");
+    await before.dispatchEvent("#progression", "input");
+    await before.waitForFunction(
+      () => document.querySelectorAll("#systems .chord").length === 2, null, { timeout: 10000 });
+
+    await before.reload({ waitUntil: "load" });
+    await before.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await before.locator("#helpDialog[open]").count()) await before.locator("#helpClose").click();
+
+    const back = await before.evaluate(() => ({
+      tempo: document.querySelector("#tempo").value,
+      metre: document.querySelector("#timeSig").value,
+      inTime: document.querySelector("#playLive").getAttribute("aria-checked"),
+      bank: document.querySelector("#soundBank").value,
+      bass: document.querySelector("#compBass").checked,
+      drums: document.querySelector("#compDrums").checked,
+      piano: document.querySelector("#compPiano").checked,
+      bassSound: document.querySelector("#bassSound").value,
+      style: document.querySelector("#compStyle").value,
+      guide: document.querySelector("#guideButton").getAttribute("aria-pressed"),
+      from: document.querySelector("#loopFrom").value,
+      to: document.querySelector("#loopTo").value,
+      bars: document.querySelectorAll("#systems .bar[data-index]").length,
+      armed: document.querySelector("#armTake").getAttribute("aria-pressed")
+    }));
+
+    check(`the practice settings come back (${back.tempo}bpm, ${back.metre}, `
+          + `${back.bank}, bars ${Number(back.from) + 1}-${Number(back.to) + 1})`,
+          back.tempo === "184" && back.metre === "3/4" && back.inTime === "true"
+          && back.bank === "grand" && back.from === "2" && back.to === "5");
+
+    check(`and so does the band (${back.style}, bass ${back.bassSound})`,
+          back.bass === true && back.drums === true && back.style === styleWanted
+          && back.bassSound !== "upright" && back.guide === "true");
+
+    // Two things it must not bring back. The chart is the tune on the stand,
+    // not a setting; a take is work, and a page that opened mid-take would be
+    // counting someone in who had not asked to play.
+    check(`but not the chart you were editing (${back.bars} bars)`, back.bars === 12);
+    check("and not a take", back.armed === "false");
+
+    /*  A loop is bar numbers, so a range recalled onto a shorter chart is two
+        numbers rather than a loop. `fillLoopRange()` is what already knows
+        that, which is why the recall goes back through it rather than writing
+        the pickers directly.
+
+        Arrived at through a link, because that is the only way a *different*
+        chart is on screen at the moment the settings are read: the chart is
+        deliberately not remembered, so reloading always brings the twelve bars
+        back and bars 3-6 would still fit. A four-bar tune in the address is
+        the real case, and the one that would otherwise go unnoticed. */
+    await before.locator("#menuButton").click();
+    await before.locator("#editToggle").click();
+    await before.fill("#progression", "| C7 | F7 |");
+    await before.dispatchEvent("#progression", "input");
+    await before.waitForFunction(
+      () => document.querySelectorAll("#systems .chord").length === 2, null, { timeout: 10000 });
+
+    await before.locator("#menuButton").click();
+    await before.locator("#ioButton").click();
+    await before.waitForSelector("#ioDialog[open]", { timeout: 10000 });
+    await before.waitForFunction(
+      () => document.querySelector("#shareLink").value.length > 0, null, { timeout: 15000 });
+
+    const twoBars = await before.locator("#shareLink").inputValue();
+
+    await before.goto(twoBars, { waitUntil: "load" });
+    await before.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await before.locator("#helpDialog[open]").count()) await before.locator("#helpClose").click();
+
+    await before.locator("#transportButton").click();
+
+    const narrowed = await before.evaluate(() => ({
+      from: document.querySelector("#loopFrom").value,
+      to: document.querySelector("#loopTo").value,
+      options: document.querySelectorAll("#loopTo option").length
+    }));
+
+    check(`a loop that no longer fits widens to the whole tune `
+          + `(bars ${Number(narrowed.from) + 1}-${Number(narrowed.to) + 1} of ${narrowed.options})`,
+          narrowed.options < 12 && narrowed.from === "0"
+          && narrowed.to === String(narrowed.options - 1));
+
+    await before.locator("#transportButton").click();
+    await kept.close();
+
+    /*  And a browser that refuses the store at all. Some private windows throw
+        on every access rather than handing back an empty one, so every read
+        and write is wrapped - and since they all now go through one pair of
+        accessors, a missing `try` would be silent everywhere at once rather
+        than in the one place it was forgotten. Remembering is the feature that
+        is allowed to fail here; booting is not. */
+    const shy = await browser.newContext();
+    const denied = await shy.newPage();
+    const thrown = [];
+
+    denied.on("pageerror", (error) => thrown.push(String(error).split("\n")[0]));
+
+    await denied.addInitScript(() => {
+      const refuse = () => { throw new DOMException("denied", "SecurityError"); };
+      Object.defineProperty(window, "localStorage", { configurable: true, get: refuse });
+    });
+
+    await denied.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await denied.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await denied.locator("#helpDialog[open]").count()) await denied.locator("#helpClose").click();
+
+    await denied.locator("#playLive").click();
+    await denied.fill("#tempo", "150");
+    await denied.dispatchEvent("#tempo", "change");
+
+    check(`a browser that refuses to remember still works (${thrown[0] || "no errors"})`,
+          thrown.length === 0
+          && (await denied.locator("#systems .bar[data-index]").count()) === 12
+          && (await denied.locator("#tempo").inputValue()) === "150");
+
+    await shy.close();
+  }
+
   /*  The chart's own tools, which moved off a toolbar above the music and into
       the settings panel's Chart section. Three of the four had no check at all
       - only Import / export and Reharmonise the tune did - and the failure

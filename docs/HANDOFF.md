@@ -23,7 +23,8 @@ The last four commits restructured the page's layout:
 | `c418613` | The transport onto a strip of its own — Static/In time, the metre, the tempo, the take button and the beat dots, all of them out of the Practice menu. What is left of the *Playing* group is one popover off the strip. |
 | `c4c5eea` | Reserved the strip's height in **both** of the page's typefaces. The first version sized it against the fallback face alone and shipped a chart that moved when the clock came on. |
 | `16dab04` | One settings panel: the comping panel and the chart's toolbar merged into `#menuPanel` in seven sections, and the colophon with them. |
-| *(this one)* | The dock foot regrouped into what you press and what you read. |
+| `200a44c` | The dock foot regrouped into what you press and what you read. |
+| *(this one)* | Practice settings remembered across reloads, through one pair of storage accessors. |
 
 Verify anything you change:
 
@@ -35,27 +36,14 @@ cmake --build build          # the page is copied into the JUCE shell
 
 ---
 
-## The layout work: commits 6 and 7
+## The layout work: commit 7
 
-Five of seven are done. These two are planned in detail and agreed; the shape of
-the finished thing is a top bar with its head and its transport, a chart that
-takes every remaining pixel, and a dock.
+Six of seven are done. The last is the paperwork.
 
 **Where the unbuilt features land is settled**: they are sections of
 `#menuPanel`, which is what commit 4 was mostly for. A comping-style editor off
 *The band*, a voicing library off *Voicings*, practice history and ear training
 as sections of their own.
-
-### 6 — Remember practice settings
-
-Almost nothing survives a reload: only `jazzVoicingStyle`, `jazzScaleStyle` and
-the cheat-sheet-seen flags. Add helpers beside the existing try/catch storage
-code and persist tempo, metre, In time, sound bank, band members, comping style,
-sounds, guide tones and loop range. Same flat `jazz*` naming, so no migration.
-
-Not the chart, not a take, nothing mid-exercise. A remembered loop must go back
-through `fillLoopRange()` — bars 1–12 recalled onto a four-bar chart is not a
-loop. Every read stays `try`-wrapped for private windows.
 
 ### 7 — Docs, screenshots and counts
 
@@ -135,6 +123,15 @@ DSP undertaking. Do not start it because a feature seems to want it.
 
 Small, verified, and none of them urgent.
 
+- **Count-in, the tempo ramp and *Reharmonise as you play* are not
+  remembered.** They were left out of commit 6 on purpose — the handoff's
+  agreed list did not include them, and they read as setup for one particular
+  exercise rather than as preferences. The loop range is the awkward one on
+  that line: it is just as per-exercise and it *is* remembered. If someone
+  wants the ramp back across reloads, the accessors are there and it is four
+  lines; the question to answer first is whether the whole *Take setup* popover
+  should persist as a unit.
+
 - **The band lost its at-a-glance mark.** The old *Comping* button wore
   `aria-pressed` when any of the three players was on, so you could see the band
   was playing without opening anything. Merging the panels deleted the button
@@ -208,6 +205,16 @@ all — which reads exactly like a hole in the scan and is not one. This cost a
 round of head-scratching; `CLAUDE.md`'s note about a 900px control predates the
 containers being flex.
 
+- **What a reload keeps** — the settings coming back, *and* the chart and the
+  take not coming back with them, which is the half a working-looking bug would
+  hide. In its own browser context, because that is what owns the store. The
+  loop-no-longer-fits case is reached through a shared link rather than by
+  editing the chart, since the chart is deliberately not remembered and
+  reloading always brings the twelve bars back — a four-bar tune in the address
+  is the only way a different chart is on screen when the settings are read.
+  Beside it, that a browser refusing `localStorage` outright still boots: every
+  accessor is wrapped, and now that they are one pair a missing `try` would be
+  silent everywhere at once.
 - **The settings panel** — that the editor and *Restore original* still work
   now that they are buttons inside a panel rather than on a toolbar, and that
   each closes the panel it was pressed from. Three of the four chart tools had

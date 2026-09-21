@@ -112,6 +112,14 @@ Emptying the sheet of everything that was not music is most of what the chart ga
 At 430x860 the chart stopped needing to scroll at all - 572px of content in a 382px zone
 became 382px in 382px.
 
+**How the room was set up is remembered; what you were doing is not.** Come back and the
+tempo, the metre, Static or In time, your sound, who is in the band and what they are
+playing, the guide tones and the loop are as you left them. The chart is not, and neither
+is a take: reloading is meant to find the stand where you left it, not to resume a
+session - a page that opened mid-take would be counting you in for something you had not
+asked to play. Nothing here needs an account or a server; it is your own browser's
+storage, and a browser that refuses it simply forgets between visits.
+
 The desktop app and the browser page are not merely alike: they are the same page. A
 screenshot of one is a screenshot of the other, because there is one file. What differs is
 what is behind it - native C++ in the app, WebAssembly in the browser - and which of the

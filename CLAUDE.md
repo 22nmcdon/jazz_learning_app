@@ -343,6 +343,19 @@ that's easy to miss in review:
   with all the rest. Check what a new name costs the chords that already
   resolve correctly (e.g. a complete but obscure name beating a common
   rootless voicing) before adding it.
+- **Practice settings are remembered; work is not.** One pair of accessors
+  (`remember`/`recall`, plus `rememberFlag`/`recallFlag`/`recallNumber`) is the
+  only thing on the page that touches `localStorage`, under flat `jazz*` keys.
+  What survives a reload is how the room is set up — tempo, metre, In time, the
+  sound bank, the band, the comping style, guide tones, the loop. What must
+  never survive is the chart, a take, or anything mid-exercise. Three rules the
+  recall keeps: it **makes no sound** (turning the piano on by hand sounds the
+  bar you are on, which is wrong for a page that has just opened); it **never
+  overrides the chart** (a metre is remembered in the picker's handler, not in
+  `setMetre`, which an import also calls); and it **validates every value**,
+  since a store the page does not own can hold anything. A recalled loop goes
+  back through `fillLoopRange()` — bars 1–12 on a four-bar chart is two numbers,
+  not a loop.
 - **Engine/page version mismatch has no symptom of its own, so the page checks
   for it.** A cached engine paired with a fresh page makes a feature simply
   *vanish* — empty menu, engine chip still saying ready — because `ccall` on a

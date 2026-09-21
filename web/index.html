@@ -2763,14 +2763,39 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     range: { low: 48, high: 72 }
   };
 
-  // Per-viewer convenience only; the page works the same if it is unavailable.
-  function rememberStyle(style) {
-    try { window.localStorage.setItem("jazzVoicingStyle", style); } catch (e) { /* private window */ }
+  /*  Per-viewer convenience only; the page works the same if it is
+      unavailable. Every read is wrapped rather than the store being tested
+      once, because a private window does not fail at the same moment on every
+      browser - some throw on `getItem`, some on `setItem`, some only once a
+      quota is reached - and a settings layer that throws on boot would take
+      the whole page with it.
+
+      One pair of accessors rather than a pair per setting. There were two
+      pairs before this, written out longhand, and a third would have been
+      written out longhand as well; what a setting actually needs is a name and
+      a value, and the flat `jazz*` keys are what was already in people's
+      browsers, so nothing here needs migrating. */
+  function remember(key, value) {
+    try { window.localStorage.setItem("jazz" + key, String(value)); } catch (e) { /* private window */ }
   }
 
-  function recallStyle() {
-    try { return window.localStorage.getItem("jazzVoicingStyle"); } catch (e) { return null; }
+  function recall(key) {
+    try { return window.localStorage.getItem("jazz" + key); } catch (e) { return null; }
   }
+
+  function rememberFlag(key, on) { remember(key, on ? "yes" : "no"); }
+  function recallFlag(key) { return recall(key) === "yes"; }
+
+  /** A number, or null if nothing sensible was stored. Anything can be in
+      there - it is a string in a store the page does not own - so the range is
+      checked here rather than trusted and clamped later. */
+  function recallNumber(key, low, high) {
+    var value = Number(recall(key));
+    return recall(key) !== null && isFinite(value) && value >= low && value <= high ? value : null;
+  }
+
+  function rememberStyle(style) { remember("VoicingStyle", style); }
+  function recallStyle() { return recall("VoicingStyle"); }
 
   /** Whether the cheat sheet for a mode has been seen before.
 
@@ -2783,16 +2808,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       and shows it again, which is a small annoyance, where guessing "seen"
       would hide the one thing a first visitor needs. */
   function cheatSheetKey(mode) {
-    return mode === "solo" ? "jazzSoloSheetSeen" : "jazzCheatSheetSeen";
+    return mode === "solo" ? "SoloSheetSeen" : "CheatSheetSeen";
   }
 
-  function cheatSheetSeen(mode) {
-    try { return window.localStorage.getItem(cheatSheetKey(mode)) === "yes"; } catch (e) { return false; }
-  }
-
-  function rememberCheatSheetSeen(mode) {
-    try { window.localStorage.setItem(cheatSheetKey(mode), "yes"); } catch (e) { /* private window */ }
-  }
+  function cheatSheetSeen(mode) { return recallFlag(cheatSheetKey(mode)); }
+  function rememberCheatSheetSeen(mode) { rememberFlag(cheatSheetKey(mode), true); }
 
   var el = {};
   ["engineStatus", "staleEngine", "staleEngineDetail",
@@ -4298,11 +4318,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   function rememberStyleChoice(key) {
-    try { window.localStorage.setItem("jazzScaleStyle", key); } catch (e) { /* private window */ }
+    remember("ScaleStyle", key);
   }
 
   function recallStyleChoice() {
-    try { return window.localStorage.getItem("jazzScaleStyle"); } catch (e) { return null; }
+    return recall("ScaleStyle");
   }
 
   /** Fills the style menu from the engine's own list.
@@ -6190,6 +6210,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.guideButton.addEventListener("click", function () {
     guide.showing = !guide.showing;
+    rememberFlag("GuideTones", guide.showing);
 
     // Nothing to ask again on the way off, and nothing to wait for on the way
     // on beyond the one call: the marks are on the keys themselves, so they
@@ -6328,8 +6349,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
                                   + ", and the box at the head of the chart says where it has got to.";
   }
 
-  el.playLive.addEventListener("click", function () { setInTime(true); });
-  el.playStatic.addEventListener("click", function () { setInTime(false); });
+  el.playLive.addEventListener("click", function () { setInTime(true); rememberFlag("InTime", true); });
+  el.playStatic.addEventListener("click", function () { setInTime(false); rememberFlag("InTime", false); });
 
   /** The tempo, and the box that shows it, and nothing else.
 
@@ -6369,6 +6390,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.tempo.addEventListener("change", function () {
     setTempo(el.tempo.value);
+
+    /*  Remembered here rather than in `setTempo`, which the ramp also calls.
+        A tempo the ramp climbed to is where this take got to, not the tempo
+        you practise at - recalling 260 because the loop came round often
+        enough would be the page mistaking a result for a setting. */
+    remember("Tempo", transport.bpm);
+
     if (transport.running) reanchorClock();
   });
 
@@ -6450,6 +6478,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   el.timeSig.addEventListener("change", function () {
     var parts = el.timeSig.value.split("/");
     setMetre(Number(parts[0]), Number(parts[1]));
+
+    // Here and not in `setMetre`, for the same reason as the tempo: an import
+    // calls that, and a waltz that arrived in a link is the chart's metre
+    // rather than a preference about how to practise.
+    remember("Metre", transport.beats + "/" + transport.beatUnit);
   });
 
   el.countIn.addEventListener("change", function () {
@@ -6470,6 +6503,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         transport.from = Number(el.loopFrom.value);
         transport.to = Number(el.loopTo.value);
       }
+
+      remember("LoopFrom", transport.from);
+      remember("LoopTo", transport.to);
     });
   });
 
@@ -6550,6 +6586,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.compPiano.addEventListener("change", function () {
     comping.piano = el.compPiano.checked;
+    rememberFlag("CompPiano", comping.piano);
 
     if (!comping.piano) {
       forgetBookedComping();
@@ -6609,6 +6646,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.compStyle.addEventListener("change", function () {
     comping.style = el.compStyle.value;
+    remember("CompStyle", comping.style);
     describeCompStyle();
 
     // A different style is a different plan, and the one in hand is now the
@@ -6618,12 +6656,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.compSound.addEventListener("change", function () {
     comping.bank = el.compSound.value;
+    remember("CompSound", comping.bank);
     if (comping.bank === "silent") stopCompVoices();
     else loadBankSample(SOUND_BANKS[comping.bank]);
   });
 
   el.compBass.addEventListener("change", function () {
     comping.bass = el.compBass.checked;
+    rememberFlag("CompBass", comping.bass);
 
     if (!comping.bass) {
       stopBassVoice();
@@ -6639,10 +6679,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       clock stops. So this is only the flag and the button. */
   el.compDrums.addEventListener("change", function () {
     comping.drums = el.compDrums.checked;
+    rememberFlag("CompDrums", comping.drums);
   });
 
   el.bassSound.addEventListener("change", function () {
     comping.bassBank = el.bassSound.value;
+    remember("BassSound", comping.bassBank);
     if (comping.bassBank === "silent") stopBassVoice();
     else loadBankSample(BASS_BANKS[comping.bassBank]);
   });
@@ -8020,6 +8062,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.soundBank.addEventListener("change", function () {
     audio.bank = el.soundBank.value;
+    remember("SoundBank", audio.bank);
 
     // The app has the same recordings compiled in, so one word across the
     // bridge puts both shells on the same instrument.
@@ -8531,6 +8574,117 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
                                    + "native build of the same engine.";
   }
 
+  /** Everything a player set last time that is still true this time.
+
+      Settings, not work. What comes back is how the room was set up - the
+      tempo, the metre, who is in the band, what the keys are marked with - and
+      never the chart, never a take, never anything mid-exercise. Reloading is
+      meant to find the stand where you left it, not to resume a practice
+      session.
+
+      Three rules it keeps:
+
+      **Nothing here may make a sound.** Turning the piano on by hand sounds
+      the bar you are on, which is right for a click and wrong for a page that
+      has only just opened - so this sets the state and the control and leaves
+      the noise to the next thing the player does. Samples are still fetched,
+      because fetching one is silent and not fetching it makes the first note
+      quiet.
+
+      **Nothing here may override the chart.** The metre is the clearest case:
+      a waltz that arrives in a link is the chart's own and wins, which is why
+      the metre is remembered in the picker's handler rather than in
+      `setMetre`, where an import would also reach it.
+
+      **Anything read is a string from a store the page does not own**, so
+      every value is checked against what it is allowed to be rather than
+      trusted. A missing key, a private window and a corrupt value all arrive
+      here as the same answer: leave that setting alone. */
+  function recallPracticeSettings() {
+    var tempo = recallNumber("Tempo", 40, 300);
+    if (tempo !== null) setTempo(tempo);
+
+    var metre = recall("Metre");
+    if (metre && /^[0-9]{1,2}\/[0-9]{1,2}$/.test(metre)) {
+      var parts = metre.split("/");
+      setMetre(Number(parts[0]), Number(parts[1]));
+
+      /*  The tune the page opened with is in this metre, so Restore original
+          has to come back to it. Left at the markup's 4/4, restoring a chart
+          would quietly undo a setting that has nothing to do with the chart. */
+      original.beats = transport.beats;
+      original.beatUnit = transport.beatUnit;
+    }
+
+    var bank = recall("SoundBank");
+    if (bank && SOUND_BANKS[bank]) {
+      audio.bank = bank;
+      el.soundBank.value = bank;
+    }
+
+    var compBank = recall("CompSound");
+    if (compBank && SOUND_BANKS[compBank]) {
+      comping.bank = compBank;
+      el.compSound.value = compBank;
+    }
+
+    var bassBank = recall("BassSound");
+    if (bassBank && BASS_BANKS[bassBank]) {
+      comping.bassBank = bassBank;
+      el.bassSound.value = bassBank;
+    }
+
+    /*  Who is playing. The piano is read here and may be turned straight back
+        off by `applyMode`, which is the right answer rather than a fight: in
+        chord practice the piano is yours, so `compingPianoForMode` parks the
+        preference in `pianoWanted` and gives it back the moment solo practice
+        asks for it. */
+    comping.piano = recallFlag("CompPiano");
+    comping.bass = recallFlag("CompBass");
+    comping.drums = recallFlag("CompDrums");
+    el.compPiano.checked = comping.piano;
+    el.compBass.checked = comping.bass;
+    el.compDrums.checked = comping.drums;
+
+    if (comping.piano && comping.bank !== "silent") loadBankSample(SOUND_BANKS[comping.bank]);
+    if (comping.bass && comping.bassBank !== "silent") loadBankSample(BASS_BANKS[comping.bassBank]);
+
+    /*  Checked against the engine's own list rather than a copy of it: the
+        catalogue is the engine's, so a style that has been renamed or dropped
+        since last time is a style this page must not claim to be playing. */
+    var style = recall("CompStyle");
+    if (style && el.compStyle.querySelector('option[value="' + style + '"]')) {
+      comping.style = style;
+      el.compStyle.value = style;
+      describeCompStyle();
+      forgetCompPlan();
+    }
+
+    /*  The loop is bar numbers, and bar numbers only mean anything against a
+        chart. Put back through `fillLoopRange()`, which already knows how to
+        widen a range that no longer fits - bars 1 to 12 recalled onto a
+        four-bar chart is not a loop, it is two numbers. */
+    var from = recallNumber("LoopFrom", 0, 255);
+    var to = recallNumber("LoopTo", 0, 255);
+
+    if (from !== null && to !== null && to >= from) {
+      transport.from = from;
+      transport.to = to;
+      el.loopFrom.value = String(from);
+      el.loopTo.value = String(to);
+      fillLoopRange();
+    }
+
+    if (recallFlag("GuideTones")) {
+      guide.showing = true;
+      updateGuideHint();
+    }
+
+    // Last, because it is the one that redraws everything else: `setInTime`
+    // ends in `applyMode`, which wants the band already decided.
+    if (recallFlag("InTime")) setInTime(true);
+  }
+
   startEngine().then(async function (kind) {
     el.engineStatus.dataset.state = "ready";
     el.engineStatus.textContent = "engine ready";
@@ -8554,6 +8708,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     fillMetres();
     fillBeatRow();
     fillCompSounds();
+
+    // After the lists are filled and before the first `applyMode`: a recalled
+    // comping style has to be checked against the list the engine just gave,
+    // and a recalled band member has to be a band member the mode allows.
+    recallPracticeSettings();
+
     applyMode();
 
     // Last, and only if nothing else is already in front of the reader: a
