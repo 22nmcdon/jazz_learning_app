@@ -187,4 +187,53 @@ struct PracticeReading
 */
 PracticeReading readPractice (const std::vector<PracticeTake>& takes, int today);
 
+/** One bar of one tune, across every take over it. */
+struct TuneBarMemory
+{
+    int measureIndex {};
+    std::string chordSymbol;
+
+    /** Takes that reached this bar at all. The number that makes the whole
+        per-tune reading worth having: a bar nobody gets to is invisible from
+        inside every take that did not get to it. */
+    int takes {};
+
+    LineStats notes;
+};
+
+/** What one saved tune remembers about being practised. */
+struct TuneProgress
+{
+    int takes {};
+    int daysPractised {};
+    int daysSinceLast {};
+    int barsInChart {};
+
+    /** Every bar of the chart, in order, whether or not it was ever reached -
+        the unreached ones are the point. */
+    std::vector<TuneBarMemory> bars;
+
+    std::string summary;
+    std::vector<std::string> observations;
+};
+
+/** Reads every take over one tune against the tune itself.
+
+    The finding this exists for is coverage *within* a tune. Everybody starts at
+    the top, and a chorus takes longer than the patience of whoever is playing
+    it, so the back half of a standard gets a fraction of the practice the front
+    half does - which is invisible from inside any one take and obvious across
+    eleven. Nothing else here can see it, because nothing else here sees more
+    than one take.
+
+    @param takes  this tune's takes only. Filtering by `PracticeTake::tune` is
+                  the caller's job: a shell already knows which tune is which,
+                  and an engine that took the whole record and a tune number
+                  would be an engine that had to be told what a tune is.
+    @param today  as `readPractice`.
+*/
+TuneProgress readTuneProgress (const Chart& chart,
+                               const std::vector<PracticeTake>& takes,
+                               int today);
+
 } // namespace jazz::core

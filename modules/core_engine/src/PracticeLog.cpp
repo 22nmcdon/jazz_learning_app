@@ -56,6 +56,36 @@ namespace
         return result;
     }
 
+    /** "1-4, 9 and 12" from a sorted list of bar numbers.
+
+        Runs rather than every number, because the finding this serves is about
+        stretches of a tune - "bars 1-16 in every take" is a shape somebody
+        recognises, and sixteen numbers in a row is a list they skip. */
+    std::string runsOf (const std::vector<int>& numbers)
+    {
+        std::vector<std::string> parts;
+
+        for (std::size_t i = 0; i < numbers.size(); )
+        {
+            auto end = i;
+
+            while (end + 1 < numbers.size() && numbers[end + 1] == numbers[end] + 1)
+                ++end;
+
+            // Two in a row is written out: "4 and 5" reads better than "4-5"
+            // and is no longer.
+            if (end > i + 1)
+                parts.push_back (std::to_string (numbers[i]) + "-" + std::to_string (numbers[end]));
+            else
+                for (auto n = i; n <= end; ++n)
+                    parts.push_back (std::to_string (numbers[n]));
+
+            i = end + 1;
+        }
+
+        return joined (parts);
+    }
+
     LineStats& add (LineStats& into, const LineStats& more)
     {
         into.chordTones += more.chordTones;
@@ -296,6 +326,161 @@ PracticeReading readPractice (const std::vector<PracticeTake>& takes, int today)
             " separately for that reason - never scored differently.");
 
     return reading;
+}
+
+TuneProgress readTuneProgress (const Chart& chart,
+                               const std::vector<PracticeTake>& takes,
+                               int today)
+{
+    TuneProgress progress;
+    progress.barsInChart = chart.measureCount();
+
+    for (auto bar = 0; bar < progress.barsInChart; ++bar)
+    {
+        TuneBarMemory memory;
+        memory.measureIndex = bar;
+
+        const auto& measure = chart.measures[static_cast<std::size_t> (bar)];
+
+        if (! measure.isEmpty())
+            memory.chordSymbol = measure.slots.front().chord.toString();
+
+        progress.bars.push_back (memory);
+    }
+
+    if (takes.empty())
+    {
+        progress.summary = "Never played with a take running.";
+        return progress;
+    }
+
+    std::set<int> days;
+    auto lastDay = takes.front().day;
+
+    for (const auto& take : takes)
+    {
+        ++progress.takes;
+        days.insert (take.day);
+        lastDay = std::max (lastDay, take.day);
+
+        for (const auto& bar : take.bars)
+        {
+            // A chart edited shorter since the take was played still has a
+            // record of the bars that are gone. They are dropped rather than
+            // drawn: the tune on the stand is the tune this reading is about.
+            if (bar.measureIndex < 0 || bar.measureIndex >= progress.barsInChart)
+                continue;
+
+            auto& memory = progress.bars[static_cast<std::size_t> (bar.measureIndex)];
+            ++memory.takes;
+            add (memory.notes, bar.notes);
+        }
+    }
+
+    progress.daysPractised = static_cast<int> (days.size());
+    progress.daysSinceLast = std::max (0, today - lastDay);
+
+    progress.summary = plural (progress.takes, "take", "takes")
+                     + " over " + plural (progress.daysPractised, "day", "days")
+                     + (progress.daysSinceLast == 0
+                          ? ". The last one was today."
+                          : ". The last one was "
+                              + plural (progress.daysSinceLast, "day", "days") + " ago.");
+
+    /*  One take is not a habit.
+
+        Everything below reads a pattern across takes, and a pattern needs
+        something to be a pattern across. With one take every bar it reached was
+        reached in "every take", which is true and says nothing at all. */
+    if (progress.takes < 3)
+        return progress;
+
+    std::vector<int> always;
+    std::vector<int> rarely;
+    std::vector<int> never;
+
+    // A third of the takes is the line between a bar you practise and one you
+    // happen to pass through on the way to stopping.
+    const auto seldom = std::max (1, progress.takes / 3);
+
+    for (const auto& bar : progress.bars)
+    {
+        if (bar.takes == 0)
+            never.push_back (bar.measureIndex + 1);
+        else if (bar.takes == progress.takes)
+            always.push_back (bar.measureIndex + 1);
+        else if (bar.takes <= seldom)
+            rarely.push_back (bar.measureIndex + 1);
+    }
+
+    /*  The headline finding, and the reason this function exists.
+
+        Only said when the tune is actually lopsided - some bars in every take
+        and some in hardly any. A tune played end to end every time has nothing
+        to answer for and should not be handed a sentence implying it does. */
+    if (! always.empty() && ! (rarely.empty() && never.empty()))
+    {
+        auto said = "Bar" + std::string (always.size() == 1 ? " " : "s ") + runsOf (always)
+                  + (always.size() == 1 ? " has been" : " have been") + " in every take";
+
+        if (! rarely.empty())
+        {
+            // The most any of them managed, not the first one's count: the
+            // sentence is about a group, and quoting one member's number as if
+            // it were the group's is the kind of true-ish thing a reader
+            // catches and then stops trusting the rest of.
+            auto most = 0;
+
+            for (auto number : rarely)
+                most = std::max (most, progress.bars[static_cast<std::size_t> (number - 1)].takes);
+
+            said += ", " + runsOf (rarely) + " in no more than "
+                  + plural (most, "take", "takes") + " of " + std::to_string (progress.takes);
+        }
+
+        said += ". Starting a take somewhere other than the top is the cheapest way to even"
+                " that out.";
+
+        progress.observations.push_back (said);
+    }
+
+    if (! never.empty())
+        progress.observations.push_back (
+            "Bar" + std::string (never.size() == 1 ? " " : "s ") + runsOf (never)
+            + (never.size() == 1 ? " has" : " have") + " never been reached with a take running.");
+
+    /*  The bar that keeps pulling away.
+
+        The same reading `LineAnalyzer` makes of one take, one level out - and
+        it means something different here. In one take a bar that went outside
+        was a moment; in nine takes it is the bar of this tune that is actually
+        difficult, which is the sentence worth having. */
+    LineStats everything;
+
+    for (const auto& bar : progress.bars)
+        add (everything, bar.notes);
+
+    if (everything.settled() >= 20)
+    {
+        const TuneBarMemory* worst = nullptr;
+
+        for (const auto& bar : progress.bars)
+            if (bar.takes >= 2 && bar.notes.settled() >= 8
+                  && (worst == nullptr
+                        || bar.notes.percentOutside() > worst->notes.percentOutside()))
+                worst = &bar;
+
+        if (worst != nullptr && worst->notes.percentOutside() >= everything.percentOutside() + 20)
+            progress.observations.push_back (
+                "Bar " + std::to_string (worst->measureIndex + 1)
+                + (worst->chordSymbol.empty() ? "" : " (" + worst->chordSymbol + ")")
+                + " is the one that keeps pulling away: "
+                + std::to_string (worst->notes.percentOutside())
+                + "% of what you have played there sat outside, against "
+                + std::to_string (everything.percentOutside()) + "% across the tune.");
+    }
+
+    return progress;
 }
 
 } // namespace jazz::core

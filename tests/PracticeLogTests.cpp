@@ -292,3 +292,172 @@ TEST ("coverageOf clamps a range the chart does not have rather than reading pas
     CHECK (qualities & qualityBit (ChordQuality::dominant));
     CHECK_EQ (static_cast<int> (roots), static_cast<int> (rootBit (2) | rootBit (7)));
 }
+
+//  --- what one tune remembers ---------------------------------------------
+
+namespace
+{
+    /** The take-wide counts are not derived from the bars by the engine - the
+        header says so - so a test that wants them consistent adds them itself. */
+    void sumInto (LineStats& into, const LineStats& more)
+    {
+        into.chordTones += more.chordTones;
+        into.scaleTones += more.scaleTones;
+        into.approachTones += more.approachTones;
+        into.unresolved += more.unresolved;
+        into.outside += more.outside;
+    }
+
+    /** A take over @p reached, each bar carrying @p notes. */
+    PracticeTake takeOver (int day, const std::vector<int>& reached, LineStats notes)
+    {
+        PracticeTake take;
+        take.day = day;
+        take.mode = PracticeMode::soloing;
+        take.tune = 1;
+
+        for (auto bar : reached)
+        {
+            PracticeBar played;
+            played.measureIndex = bar;
+            played.notes = notes;
+            take.bars.push_back (played);
+            sumInto (take.notes, notes);
+        }
+
+        return take;
+    }
+
+    const std::string twelveBars =
+        "| Dm7 | G7 | Cmaj7 | Cmaj7 | Cm7 | F7 | Bbmaj7 | Bbmaj7 | Am7b5 | D7alt | Gm7 | Gm7 |";
+}
+
+TEST ("a tune never played still draws every bar of itself")
+{
+    const auto progress = readTuneProgress (chartOf (twelveBars), {}, 10);
+
+    CHECK_EQ (progress.takes, 0);
+    CHECK_EQ (progress.barsInChart, 12);
+    CHECK_EQ (static_cast<int> (progress.bars.size()), 12);
+    CHECK_EQ (progress.bars[8].chordSymbol, std::string ("Am7b5"));
+    CHECK (progress.summary.find ("Never played") != std::string::npos);
+    CHECK (progress.observations.empty());
+}
+
+TEST ("one take is not a habit, so nothing is read across takes yet")
+{
+    const auto progress = readTuneProgress (chartOf (twelveBars),
+                                            { takeOver (3, { 0, 1, 2, 3 }, notesOf (4, 2, 0, 0, 1)) },
+                                            3);
+
+    CHECK_EQ (progress.takes, 1);
+    CHECK_EQ (progress.bars[0].takes, 1);
+    CHECK_EQ (progress.bars[7].takes, 0);
+
+    // Every bar it reached was reached in "every take", which is true and worth
+    // nothing. Bars 5-12 have "never been reached", which after one take is a
+    // statement about the take rather than about the player.
+    CHECK (progress.observations.empty());
+}
+
+TEST ("the front half of a tune gets the practice, and the reading says which bars")
+{
+    std::vector<PracticeTake> takes;
+
+    for (auto day = 1; day <= 6; ++day)
+        takes.push_back (takeOver (day, { 0, 1, 2, 3 }, notesOf (4, 2, 0, 0, 1)));
+
+    // Twice, somebody made it round to the last four.
+    takes.push_back (takeOver (7, { 0, 1, 2, 3, 8, 9, 10, 11 }, notesOf (4, 2, 0, 0, 1)));
+    takes.push_back (takeOver (8, { 0, 1, 2, 3, 8, 9, 10, 11 }, notesOf (4, 2, 0, 0, 1)));
+
+    const auto progress = readTuneProgress (chartOf (twelveBars), takes, 8);
+
+    CHECK_EQ (progress.takes, 8);
+    CHECK_EQ (progress.daysPractised, 8);
+    CHECK_EQ (progress.bars[0].takes, 8);
+    CHECK_EQ (progress.bars[8].takes, 2);
+    CHECK_EQ (progress.bars[4].takes, 0);
+
+    CHECK (says (progress.observations, "Bars 1-4 have been in every take"));
+    CHECK (says (progress.observations, "9-12 in no more than 2 takes of 8"));
+    CHECK (says (progress.observations, "Bars 5-8 have never been reached"));
+}
+
+TEST ("a tune played end to end every time is not handed a sentence about neglect")
+{
+    std::vector<PracticeTake> takes;
+    const std::vector<int> wholeChorus { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
+
+    for (auto day = 1; day <= 5; ++day)
+        takes.push_back (takeOver (day, wholeChorus, notesOf (4, 2, 0, 0, 1)));
+
+    const auto progress = readTuneProgress (chartOf (twelveBars), takes, 5);
+
+    CHECK (! says (progress.observations, "in every take"));
+    CHECK (! says (progress.observations, "never been reached"));
+}
+
+TEST ("the bar that keeps pulling away is named, and only when it stands apart")
+{
+    std::vector<PracticeTake> takes;
+
+    for (auto day = 1; day <= 4; ++day)
+    {
+        auto take = takeOver (day, { 0, 1, 2, 3 }, notesOf (5, 2, 0, 0, 0));
+
+        // Bar 10 - the altered dominant - is where it keeps going outside.
+        PracticeBar hard;
+        hard.measureIndex = 9;
+        hard.notes = notesOf (1, 1, 0, 0, 5);
+        take.bars.push_back (hard);
+        sumInto (take.notes, hard.notes);
+
+        takes.push_back (take);
+    }
+
+    const auto progress = readTuneProgress (chartOf (twelveBars), takes, 4);
+
+    CHECK (says (progress.observations, "Bar 10 (D7alt) is the one that keeps pulling away"));
+
+    // And with the same line everywhere, no bar stands apart from the rest.
+    std::vector<PracticeTake> even;
+
+    for (auto day = 1; day <= 4; ++day)
+        even.push_back (takeOver (day, { 0, 1, 2, 3, 9 }, notesOf (3, 2, 0, 0, 2)));
+
+    CHECK (! says (readTuneProgress (chartOf (twelveBars), even, 4).observations,
+                   "keeps pulling away"));
+}
+
+TEST ("bars the chart no longer has are dropped rather than drawn")
+{
+    std::vector<PracticeTake> takes;
+
+    // Played when the tune was twelve bars; the chart on the stand is now four.
+    for (auto day = 1; day <= 3; ++day)
+        takes.push_back (takeOver (day, { 0, 1, 9, 11 }, notesOf (4, 2, 0, 0, 1)));
+
+    const auto progress = readTuneProgress (chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 |"), takes, 3);
+
+    CHECK_EQ (progress.barsInChart, 4);
+    CHECK_EQ (static_cast<int> (progress.bars.size()), 4);
+    CHECK_EQ (progress.bars[0].takes, 3);
+    CHECK_EQ (progress.bars[2].takes, 0);
+}
+
+TEST ("a run of one bar is written as a number, not as a range")
+{
+    std::vector<PracticeTake> takes;
+
+    for (auto day = 1; day <= 4; ++day)
+        takes.push_back (takeOver (day, { 0 }, notesOf (4, 2, 0, 0, 1)));
+
+    takes.push_back (takeOver (5, { 0, 2 }, notesOf (4, 2, 0, 0, 1)));
+
+    const auto progress = readTuneProgress (chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 |"), takes, 5);
+
+    CHECK (says (progress.observations, "Bar 1 has been in every take"));
+    CHECK (says (progress.observations, "3 in no more than 1 take of 5"));
+    CHECK (says (progress.observations, "Bars 2 and 4 have never been reached"));
+}
