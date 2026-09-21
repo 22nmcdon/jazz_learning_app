@@ -13,7 +13,7 @@ it done. A handoff that accumulates is one nobody reads.
 
 Branch: `claude/gifted-wozniak-7z4jt6`.
 
-The last four commits restructured the page's layout:
+The page's layout was restructured over these commits, and that work is done:
 
 | Commit | What it did |
 |---|---|
@@ -25,7 +25,8 @@ The last four commits restructured the page's layout:
 | `16dab04` | One settings panel: the comping panel and the chart's toolbar merged into `#menuPanel` in seven sections, and the colophon with them. |
 | `200a44c` | The dock foot regrouped into what you press and what you read. |
 | `f03c65f` | Practice settings remembered across reloads, through one pair of storage accessors. |
-| *(this one)* | The chart's tools out of the settings panel into a menu of their own above the music, and the chart justified into its zone instead of leaving a void under it. |
+| `d1efdb5` | The chart's tools out of the settings panel into a menu of their own above the music, and the chart justified into its zone instead of leaving a void under it. |
+| *(this one)* | The screenshots reshot against the finished page, in the typeface a visitor actually sees. |
 
 Verify anything you change:
 
@@ -37,44 +38,60 @@ cmake --build build          # the page is copied into the JUCE shell
 
 ---
 
-## The layout work: commit 7
+## Where the unbuilt features land
 
-Six of seven are done. The last is the paperwork.
+Settled, and most of why the settings panel was worth merging: they are sections
+of `#menuPanel`. A comping-style editor off *The band*, a voicing library off
+*Voicings*, practice history and ear training as sections of their own. What
+does **not** go there is anything about the tune on the stand or about a
+particular take — those have menus of their own, and `CLAUDE.md` says three is
+the ceiling.
 
-**Where the unbuilt features land is settled**: they are sections of
-`#menuPanel`, which is what commit 4 was mostly for. A comping-style editor off
-*The band*, a voicing library off *Voicings*, practice history and ear training
-as sections of their own.
+## Reshooting the screenshots
 
-### 7 — Docs, screenshots and counts
+`docs/screenshot-desktop.png`, `-solo.png` and `-compact.png` are shot from the
+built page in a real browser, not cropped by hand, and each is in a state its
+README caption actually claims: a shell Cm7 at C3 flagged below the
+low-interval limit (bar 5, *Voicings* set to shell, keys 48/51/58); a solo take
+running over two scored bars with an enclosure landing (arm, play over bars 1
+and 2, then 63/61/62 back on bar 1); and the narrow layout at 430×860.
 
-**Reshoot `docs/screenshot-*.png`.** All three were taken on 2026-09-17 and
-predate the entire restructure — the compact one shows the exact 0-of-12-bars
-state the work fixed, and none of them has the transport strip. README carries a
-note under each saying so; remove those notes when the images are replaced.
+**The trap is the typeface.** The page renders in Jost over the web and in the
+fallback stack without it, and a machine that cannot reach Google Fonts will
+quietly photograph the wrong one — the same trap that shipped a broken
+transport strip. Chromium here cannot reach `fonts.googleapis.com` directly
+even though `curl` can, and pointing Playwright at `$HTTPS_PROXY` does not work
+either: the proxy only takes HTTPS `CONNECT`, so the page's own plain-HTTP
+localhost request is refused and the page never boots.
 
-Then update `README.md`'s layout narrative for the finished shape, and run
-`./tools/test-count.sh`.
+What does work: `curl` the CSS **with a browser user-agent** (or it returns TTF
+rather than woff2), `curl` each `fonts.gstatic.com` URL out of it, then serve
+both back through `page.route()` from disk. The page is untouched and still
+asks for exactly what it asks for in production. Shoot at
+`deviceScaleFactor: 2` — the files come to 98–136KB, against 65–93KB for the
+old 1× ones.
 
-### The second-breakpoint question — answered, and no new breakpoint
+## Two numbers that were judged rather than measured
 
-The transport strip did not fit one row at 390px and `flex-wrap` was enough: the
-strip is two groups, one row each, and they share a line above 760px and take
-one each below it. No new breakpoint — what the existing 760px query gained is
-six lines of tightening (gaps, and the take button's letter-spacing), because
-the wider group wanted 346px of the 342px a 390px phone offers.
+Both are in `web/index.html`, both look like constants and are not:
 
-**The tempo box is not one of them**, and it looks like it should be. Taking it
-from 62px to 48 showed `12` for 120 — the last digit gone, nothing to say so.
-A number input keeps room for its own spinner, so its content wants 56px of the
-60 that 62 leaves it. `the tempo box shows the whole tempo at 390px` reads it at
-both ends of the range now.
+- **`MAX_EXTRA_GAP` (28px)**, the cap on how far the gaps between systems grow
+  when the chart is shorter than its zone. Chosen by eye against the default
+  three-system chart at five window sizes. A six-system tune has five gaps and
+  reaches the cap far sooner, so if a long chart ever looks thin at the bottom
+  that is the number to revisit — not the order the slack is given away in.
+- **The transport strip's `min-height` (29px)** and the five explicit
+  line-heights that keep the controls under it. Those *are* measured, and the
+  arithmetic is written beside each rule — but it is arithmetic about one set of
+  paddings. Change a padding up there and the reservation has to be re-derived,
+  which is what the per-group check is for.
 
-What that cost, and the thing to keep in mind for the strip's neighbours: each
-group reserves its row **empty**, so static chord practice — which shows neither
-the metre nor the take button — now spends 66px on the strip where it used to
-spend 29. That is deliberate. The alternative is the chart moving when the clock
-comes on, and `the transport strip keeps the chart still` fails if it does.
+And one standing cost, so nobody "fixes" it: each of the strip's two groups
+reserves its row **empty**, so static chord practice — which shows neither the
+metre nor the take button — spends 66px on the strip at a phone width where it
+would otherwise spend 29. That is the price of the chart not moving when the
+clock comes on, and `the transport strip keeps the chart still` fails the moment
+someone takes it back.
 
 ---
 
@@ -123,13 +140,6 @@ DSP undertaking. Do not start it because a feature seems to want it.
 ## Loose ends
 
 Small, verified, and none of them urgent.
-
-- **`MAX_EXTRA_GAP` is 28px and was chosen by eye**, against the default
-  twelve-bar chart at five window sizes. It is the one number in `layOutChart()`
-  that is a judgement rather than a measurement. A tune of six systems has five
-  gaps to fill and will reach the cap far sooner than the default three-system
-  one does, so if a long chart ever looks thin at the bottom, that is the number
-  to revisit — not the order the slack is given away in.
 
 - **One unexplained smoke-test timeout.** A single run failed with
   `page.waitForFunction: Timeout 15000ms` while the chart menu was half-wired;

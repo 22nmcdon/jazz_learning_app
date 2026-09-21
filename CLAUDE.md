@@ -300,10 +300,13 @@ something finished or assume something unfinished is done:
   anything before — there was no `scrollIntoView`, `scrollTo` or `scrollTop` in
   the file at all, so on a tune longer than the chart zone the mark simply
   rolled off the bottom. The transport is out of the menu and onto a strip of
-  its own, the two settings dropdowns and the chart's toolbar are one sectioned
-  panel, and the dock foot is two groups — what you press and what you read (see
-  UI Conventions above). **Still to come** (see `docs/HANDOFF.md`): practice
-  settings remembered across reloads, and the screenshots reshot.
+  its own, the two settings dropdowns are one sectioned panel with the chart's
+  tools in a menu of their own above the music, the dock foot is two groups —
+  what you press and what you read — practice settings survive a reload, and the
+  chart is justified into its zone rather than leaving a void under it (see UI
+  Conventions above). The three screenshots in `docs/` are shot against this
+  shape, in the webfont; `docs/HANDOFF.md` says how, since a machine that cannot
+  reach Google Fonts will otherwise photograph the fallback face.
 - **Not built, deliberately open**: personal voicing
   library, ear training, progress tracking beyond current per-take/session
   stats, licks/line suggestions, chordal (not line) reading in solo practice,

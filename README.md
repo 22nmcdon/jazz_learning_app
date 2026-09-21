@@ -10,7 +10,6 @@ responsive UI and one UI-agnostic theory engine.
 
 ![Chord practice: a shell voicing read back, with the low-interval limit flagged](docs/screenshot-desktop.png)
 
-*This shot predates the layout work and shows the old masthead and sheet head - it will be reshot once the transport strip and the settings panel land.*
 
 ## Layout
 
@@ -215,7 +214,6 @@ a second one.
 
 ![Solo practice: a take in progress, each bar scored, an enclosure landing](docs/screenshot-solo.png)
 
-*This shot predates the layout work and shows the old masthead and sheet head - it will be reshot once the transport strip and the settings panel land.*
 
 The keys do not latch here, because a line is played rather than held: each note sounds,
 is read back - **E4 - the 9th, scale tone, in D Dorian** - and lets go. Every note is read
@@ -796,14 +794,19 @@ JAZZ_UI_SIZE=430x860 ./build/app/JazzLearningApp_artefacts/Debug/"Jazz Learning 
 
 <img src="docs/screenshot-compact.png" width="320" alt="Compact layout">
 
-*This shot predates the layout work and shows the old masthead and sheet head - it will be reshot once the transport strip and the settings panel land.*
 
 Below 760px the page lays itself out narrow: the bars and the keyboard both shorten, so
-more of the tune fits, and every dialog becomes a bottom sheet rather than a floating
-panel. The chart's head needs
-nothing said to it - it is a line in the top bar rather than three columns over the music,
-so it wraps the way the controls beside it do. That is the page's own CSS doing it, so the
-browser at the same width does the same thing - there is no second layout to keep in step.
+more of the tune fits, every dialog becomes a bottom sheet rather than a floating panel,
+and the settings panel becomes one too - with a close row of its own, since at that width
+it covers the button that opened it. The chart's head needs nothing said to it: it is a
+line in the top bar rather than three columns over the music, so it wraps the way the
+controls beside it do, and the transport under it takes two rows instead of one. That is
+the page's own CSS doing it, so the browser at the same width does the same thing - there
+is no second layout to keep in step.
+
+It is one breakpoint, not a set of size classes. The two the cheat sheet adds are its own,
+and one of them is a *height* query - a short window tightens its spacing rather than
+scrolling. Everything else that changes with width wraps.
 
 ## Trying the engine in a browser
 
