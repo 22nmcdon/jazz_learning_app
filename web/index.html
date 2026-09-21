@@ -3186,6 +3186,155 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     rememberObject(TUNE_LIBRARY_KEY, library);
   }
 
+  /*  The practice record.
+
+      One row per finished take, and the row is counts. What it does not hold
+      is the point: no score, no line, no voicing, no note. `LineStats::score()`
+      says of itself that it is a reading of a bar rather than a grade for a
+      player, and a mark kept across weeks is exactly the grade it refuses to
+      be - so the engine's practice wire does not even send one, and there is
+      nothing here to write down. Comping's `fit` is left off for the same
+      reason.
+
+      What is kept is that you practised and what you practised over. That is
+      the amended rule's other half: a record of work happening is not the work
+      itself, and nothing in here could reconstruct a performance.
+  */
+  var PRACTICE_KEY = "Practice";
+
+  /** How many takes are kept before the oldest go.
+
+      A cap rather than growth without end, because this is somebody's browser
+      and a store that only grows is one that eventually fails to write at the
+      worst moment. Three hundred takes is a year of practising most days, and
+      the reading says it is reading the last N rather than pretending to be
+      the whole story.
+  */
+  var MOST_TAKES_KEPT = 300;
+
+  /** The row, in the order the engine's grammar reads it.
+
+      One list, used to write the wire text and to check a row coming back out
+      of the store. Two lists would be two lists to disagree, and the failure
+      would be a history the engine refuses with a page that thinks it is fine.
+  */
+  var TAKE_FIELDS = ["day", "mode", "tune", "seconds", "qualities", "roots",
+                     "chordTones", "scaleTones", "approachTones", "unresolved", "outside",
+                     "leaps", "leapsResolved", "chordsPlayed",
+                     "onFigure", "idiomatic", "pushed", "offStyle"];
+
+  var BAR_FIELDS = ["index", "chordTones", "scaleTones", "approachTones", "unresolved", "outside"];
+
+  /** Today, as a day number the engine can count with.
+
+      Local rather than UTC, because a take at eleven at night is that day's
+      practice to the person who played it, and the engine has no clock of its
+      own to disagree with. The same arithmetic makes every row, so the epoch
+      only has to be consistent with itself.
+  */
+  function todayNumber() {
+    var now = new Date();
+    return Math.floor((now.getTime() - now.getTimezoneOffset() * 60000) / 86400000);
+  }
+
+  function wholeNumber(value) {
+    return typeof value === "number" && isFinite(value) && value >= 0 ? Math.round(value) : null;
+  }
+
+  /** Reads the record back, dropping any row that is not exactly right.
+
+      Dropped row by row rather than all at once: one bad row is not a reason
+      to forget a year. What must not happen is a row reaching the engine that
+      its grammar refuses, because that reads back as an error over the whole
+      history rather than as one lost take.
+  */
+  function recallPractice() {
+    var stored = recallObject(PRACTICE_KEY);
+    var rows = [];
+
+    if (!stored || !Array.isArray(stored.takes)) return rows;
+
+    stored.takes.forEach(function (row) {
+      if (!row || typeof row !== "object") return;
+
+      var readable = TAKE_FIELDS.every(function (field) { return wholeNumber(row[field]) !== null; });
+
+      if (!readable || row.mode > 1) return;
+
+      var bars = [];
+      var barsFine = Array.isArray(row.bars) && row.bars.every(function (bar) {
+        if (!bar || typeof bar !== "object") return false;
+        if (!BAR_FIELDS.every(function (f) { return wholeNumber(bar[f]) !== null; })) return false;
+
+        bars.push(bar);
+        return true;
+      });
+
+      if (!barsFine) return;
+
+      row.bars = bars;
+      rows.push(row);
+    });
+
+    return rows;
+  }
+
+  function rememberPractice(rows) {
+    rememberObject(PRACTICE_KEY, { takes: rows });
+  }
+
+  /** The rows as the one flat string the engine reads.
+
+      Built from `TAKE_FIELDS` rather than written out, so a field added to the
+      row is a field added to the wire and there is no third place to forget.
+  */
+  function practiceHistoryText(rows) {
+    return rows.map(function (row) {
+      var head = TAKE_FIELDS.map(function (field) { return String(row[field]); }).join(":");
+      var bars = (row.bars || []).map(function (bar) {
+        return BAR_FIELDS.map(function (field) { return String(bar[field]); }).join(",");
+      }).join(";");
+
+      return head + "|" + bars;
+    }).join("~");
+  }
+
+  /** Appends one take and drops the oldest past the cap. */
+  function logTake(row) {
+    var rows = recallPractice();
+
+    rows.push(row);
+
+    if (rows.length > MOST_TAKES_KEPT)
+      rows = rows.slice(rows.length - MOST_TAKES_KEPT);
+
+    rememberPractice(rows);
+  }
+
+  /** A row with every field at zero, so a caller only sets what it knows.
+
+      Both halves of the app write one of these and each leaves the other's
+      numbers alone - a soloing take has no `onFigure` and a comping take has
+      no line. Zero is what "this mode does not have that" looks like, and the
+      engine reads only the half the row's mode says is there.
+  */
+  function blankTakeRow(mode, seconds) {
+    var row = { bars: [] };
+
+    TAKE_FIELDS.forEach(function (field) { row[field] = 0; });
+
+    row.day = todayNumber();
+    row.mode = mode;
+    row.tune = state.tune;
+    row.seconds = Math.max(0, Math.round(seconds || 0));
+
+    return row;
+  }
+
+  function secondsSince(startedAt) {
+    return startedAt ? (Date.now() - startedAt) / 1000 : 0;
+  }
+
   /** The chart as it stands, in the shape a saved tune is. */
   function chartRecordNow() {
     return {
@@ -5097,6 +5246,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (result === null || !result.ok) return;
 
     solo.armed = true;
+    solo.startedAt = Date.now();
     solo.take = result;
     solo.bar = null;
     solo.bars = {};
@@ -5151,6 +5301,50 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.soloAgainst.textContent = "";
 
     drawSummary(result);
+    logSoloTake(result);
+  }
+
+  /** One row for a finished solo take.
+
+      Written here rather than inside `drawSummary`, because drawing and
+      remembering are different jobs and one of them must not stop working when
+      the other's panel changes.
+
+      A take with nothing in it writes nothing. An armed take somebody never
+      played over is not practice, and a row of zeros would tell the record
+      somebody sat down and did nothing - which is worse than silence, because
+      it is a claim.
+  */
+  function logSoloTake(result) {
+    var notes = result.take || {};
+
+    if (!notes.total && !(result.bars || []).length) return;
+
+    var row = blankTakeRow(0, secondsSince(solo.startedAt));
+
+    row.qualities = result.qualities || 0;
+    row.roots = result.roots || 0;
+    row.chordTones = notes.chordTones || 0;
+    row.scaleTones = notes.scaleTones || 0;
+    row.approachTones = notes.approachTones || 0;
+    row.unresolved = notes.unresolved || 0;
+    row.outside = notes.outside || 0;
+    row.leaps = result.leaps || 0;
+    row.leapsResolved = result.leapsResolved || 0;
+    row.chordsPlayed = result.chordsPlayed || 0;
+
+    row.bars = (result.bars || []).map(function (bar) {
+      return {
+        index: bar.index,
+        chordTones: bar.chordTones || 0,
+        scaleTones: bar.scaleTones || 0,
+        approachTones: bar.approachTones || 0,
+        unresolved: bar.unresolved || 0,
+        outside: bar.outside || 0
+      };
+    });
+
+    logTake(row);
   }
 
   /** Arming and the clock are one gesture.
@@ -5185,6 +5379,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   function startCompTake() {
     comp.armed = true;
+    comp.startedAt = Date.now();
     comp.hits = [];
     comp.counts = {};
     comp.bars = [];
@@ -5237,6 +5432,36 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     }
 
     drawCompSummary(result);
+    logCompTake(result);
+  }
+
+  /** One row for a finished comping take.
+
+      The note tiers stay zero - a comp has hits, not a line - and the bars
+      carry no tiers either. They are still written, because a bar a comping
+      take covered is a bar that was *reached*, and reaching is what one tune's
+      memory counts. A chorus comped through is practice over those bars
+      whether or not any of it was a line.
+
+      `fit` is deliberately not here. It is comping's score, and this record
+      keeps none.
+  */
+  function logCompTake(result) {
+    var row = blankTakeRow(1, secondsSince(comp.startedAt));
+
+    row.qualities = result.qualities || 0;
+    row.roots = result.roots || 0;
+    row.onFigure = result.onTheFigure || 0;
+    row.idiomatic = result.idiomatic || 0;
+    row.pushed = result.pushed || 0;
+    row.offStyle = result.offStyle || 0;
+
+    row.bars = (result.bars || []).map(function (bar) {
+      return { index: bar.bar, chordTones: 0, scaleTones: 0,
+               approachTones: 0, unresolved: 0, outside: 0 };
+    });
+
+    logTake(row);
   }
 
   /** "bar:beat:tick:note,note,note" - and -1 for a hit nothing was counting
