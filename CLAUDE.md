@@ -7,7 +7,8 @@ the reasoning behind solo practice, see `docs/SOLO_PRACTICE.md`; for comping,
 `docs/COMPING.md`; for the rhythm grid they share, `docs/RHYTHM.md`. Read the
 relevant one before touching `LineAnalyzer`, `Comping.h`/`compPlan()`, or
 `Rhythm.h`. This file is only for what you need to not break the repo or redo
-settled work.
+settled work. For what is **left** to do — work in progress, unbuilt features
+and their open design questions, and known loose ends — see `docs/HANDOFF.md`.
 
 ## Project Overview
 
@@ -57,9 +58,31 @@ Three layers, as separate modules. Do not blur this boundary.
 One page (`web/index.html`) serves both desktop and mobile — "responsive"
 means CSS, not per-platform builds.
 
-- **One breakpoint, 760px.** No compact/regular/expanded size classes. Add a
-  second breakpoint only when something actually collides (test with
-  `JAZZ_UI_SIZE=430x860` or a 430px viewport).
+- **The page is a frame, not a document.** Three zones: `.top-bar` at its own
+  height, `<main class="chart-zone">` taking everything left and scrolling
+  *itself*, and `.dock` at the bottom. `body` is a flex column at `100dvh`.
+  Laid out as a document — masthead, article, footer, all scrolling together —
+  the chart got whatever was left over and lost: four bars of twelve were
+  readable at 1280×860, and **none at all** at 430×860. Anything added to the
+  top bar or the dock is taken out of the chart, so it has to earn it.
+- **The chart's head is in the top bar**, not in the sheet. A lead sheet is
+  engraved feel / title / credit and still reads that way, along a line; in the
+  sheet it scrolled away with the music, so the one thing naming what you are
+  playing left the screen as soon as you played past the first line. The metre
+  and tempo (`#timeSig`, `#tempo`) are in that head.
+- **Viewport-relative heights are `dvh`, never `vh`.** On a phone `vh` is the
+  window with the browser's own chrome collapsed, and the part that goes under
+  it is the bottom of the frame — the dock.
+- **Breakpoints: 760px for the page, and two scoped to the cheat sheet.**
+  `max-width: 760px` is the page's own and still the only one that lays the
+  page out differently. `#helpDialog` adds `min-width: 700px` (two columns once
+  there is width for them) and `max-height: 700px` (tighter spacing on a short
+  window) — a *height* query, which is the first of those here. No
+  compact/regular/expanded size classes. Add another only when something
+  actually collides, and say in the commit message what collided and at what
+  size; both of the help dialog's were added that way, against a measurement.
+  Test with `JAZZ_UI_SIZE=430x860` or a 430px viewport — and note that neither
+  of the help dialog's breakpoints is exercised at that size.
 - **Differences are by input type, not platform** (e.g. the scale picker is a
   dialog or a bottom sheet depending on room, never two implementations).
 - **Anything mode- or platform-specific is `data-mode`/`onTheWeb` + a CSS/JS
@@ -74,6 +97,15 @@ means CSS, not per-platform builds.
   simply the first case where there are two. The other mode's tab is *hidden*,
   not disabled: it is a question this mode is not about, which is why the
   panels were split by mode in the first place.
+- **The cheat sheet is five sections and never scrolls.** `#helpDialog` has its
+  own tab strip — Chart, Playing, Reading, In time, Band — because it stopped
+  fitting: solo practice's sheet was 2,650px of content in 590px of dialog at a
+  phone width. Sections that mean the same in both modes are written **once**
+  and shown in both; only what genuinely differs (what the keys do, what the
+  page is reading) carries `data-mode`, on the individual `<li>` rather than on
+  the list. An entry is a bold lead you can scan plus a quieter detail. A check
+  measures every section in both modes at two sizes and fails if any has to
+  scroll — so a section that grows has to be split, not allowed to overflow.
 - **The on-screen keyboard is first-class**, not a fallback: 2 octaves by
   default, widens with a connected MIDI keyboard or an out-of-range note. No
   octave-shift control.
@@ -205,12 +237,21 @@ something finished or assume something unfinished is done:
   chord read "stay where you are" and then say nothing on the bar it changes.
   `guideToneMotion` is still what answers it for two chord *symbols* and is
   untouched.
+- **The page's layout** — done, and the reasoning is in UI Conventions above.
+  Three zones; the chart's head in the top bar; the cheat sheet sectioned. The
+  rolling bar brings itself into view, which nothing on this page did for
+  anything before — there was no `scrollIntoView`, `scrollTo` or `scrollTop` in
+  the file at all, so on a tune longer than the chart zone the mark simply
+  rolled off the bottom. **Still to come** (see `docs/HANDOFF.md`): the
+  transport out of the menu into a strip, the two settings dropdowns merged
+  into one panel, the dock foot regrouped, and practice settings remembered
+  across reloads.
 - **Not built, deliberately open**: personal voicing
   library, ear training, progress tracking beyond current per-take/session
   stats, licks/line suggestions, chordal (not line) reading in solo practice,
-  MusicXML/MuseScore import, metre round-tripping on export, PDF
-  reading/printing in the JUCE app (the engine's reader is shared and
-  format-agnostic; the app just lacks a PDF text-extraction library).
+  MusicXML/MuseScore import, PDF reading/printing in the JUCE app (the engine's
+  reader is shared and format-agnostic; the app just lacks a PDF text-extraction
+  library). Each one's open design question is in `docs/HANDOFF.md`.
 
 ## Critical Invariants
 
@@ -283,6 +324,23 @@ that's easy to miss in review:
   worse than the silence it replaces. The app needs none of this (one binary,
   no cache between the two) but is covered anyway, out of the `No engine call
   named` answer `WebUi.cpp` already returns.
+- **The frame has four silent failure modes, all of them CSS.** Each looks like
+  nothing happening rather than like an error:
+  - **`min-height: 0` on `.chart-zone`.** A flex child's `min-height` is `auto`
+    — "never smaller than my content" — so without it the zone grows to fit the
+    whole chart, the body overflows, and the frame does nothing at all.
+  - **`overflow-y`, not `overflow`, on `body`.** Hidden on *both* axes
+    propagates to the viewport and pins `documentElement.scrollWidth` to the
+    window, which is exactly what the narrow-layout check reads. With it, a
+    deliberately 900px-wide control at a 390px viewport was caught by **neither
+    half** of that check. Vertical is clipped; horizontal is left visible so an
+    overflow is still detectable.
+  - **`#helpDialog[open] { display: flex }`.** A `<dialog>` is `display: none`
+    until it is open, so a bare `display: flex` shows it on every page load.
+  - **`border-bottom` + `:last-child` is wrong for a mode-filtered list.** The
+    last *visible* entry is not the last child once an entry is hidden by mode,
+    so a rule is left hanging under nothing. Space between entries has no
+    opinion about what is hidden.
 - **The app's UI must never block on the network** — a render-blocking resource
   that never arrives leaves the whole webview invisible (backgrounds paint, no
   text does). Webfonts are requested by script, only when served over the web.
@@ -305,7 +363,14 @@ that's easy to miss in review:
 
 - iReal Pro and PDF import both ship. Is MusicXML/MuseScore import needed too?
 - How much of the reharm suggestion engine should be rule-based vs. data/ML-informed?
-- Is a future dense, DAW-style desktop layout worth designing for now, or deferred?
+- ~~Is a future dense, DAW-style desktop layout worth designing for now, or
+  deferred?~~ **Answered: denser yes, multi-column not yet.** The page is laid
+  out as an instrument rather than an article — a fixed three-zone frame with
+  the chart taking every pixel the other two do not — but it stays *one
+  responsive column*. No side panel, no wide-screen layout of its own. If that
+  is revisited, the thing to weigh is that settings are moving into one panel
+  (`docs/HANDOFF.md`, commit 4), and a persistent side panel is that panel
+  pinned open.
 
 If work touches one of these, flag the ambiguity rather than silently picking a direction.
 

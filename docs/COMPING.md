@@ -265,8 +265,8 @@ same dock, and the clock adds where the chord landed.
 
 What that saved is precisely what the old "before you start" note warned a third
 mode would cost. `state.mode` stays two-valued, so there's no third palette
-block, no third cheat-sheet flag, no third `.mode-stack` sibling and no third
-pill in a switch that is `overflow: hidden` at 430px. `data-mode` stays a strict
+block, no third cheat-sheet flag, no third `data-mode` value for `applyMode` to
+sweep and no third pill in a switch that is `overflow: hidden` at 430px. `data-mode` stays a strict
 single-value compare, which also left `web/smoke-test.mjs`'s
 `[data-mode='solo']` selectors working untouched. And it answered the question
 the third-mode design had no good answer to — what the bar dialog shows while
@@ -539,10 +539,13 @@ of a bug report rather than this plan.
   come back in the same shape, so this is a page change with no engine in it.
 - **Hit duration**, the durations bullet above — the one field the agreed shape
   never got, and the reason nothing may mark a player for holding a chord.
-- **Drums.** Named in the comping menu and not built: the one piece of the
-  rhythm section needing no theory and no engine call, only a pattern and a kit.
+- ~~**Drums.**~~ Built since. It stayed the one piece of the rhythm section
+  needing no theory and no engine call: the page owns the pattern and each shell
+  owns the kit, synthesised in both like the click. It follows the **metre**
+  rather than the comping style, and needs the clock — there is no figure to
+  play to a bar you are sitting on.
 
 And a note for anyone tempted by a third mode again: `state.mode` is still
-two-valued, and `data-mode`/`applyMode`/the palette tokens/the masthead/the
-per-mode cheat sheets are still built around exactly two. The exercise this file
+two-valued, and `data-mode`/`applyMode`/the palette tokens/the top bar/the
+cheat sheet's per-mode entries are still built around exactly two. The exercise this file
 describes needed none of it, which is the argument.

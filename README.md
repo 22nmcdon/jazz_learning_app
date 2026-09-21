@@ -10,6 +10,8 @@ responsive UI and one UI-agnostic theory engine.
 
 ![Chord practice: a shell voicing read back, with the low-interval limit flagged](docs/screenshot-desktop.png)
 
+*This shot predates the layout work and shows the old masthead and sheet head - it will be reshot once the transport strip and the settings panel land.*
+
 ## Layout
 
 | Directory | Layer | Depends on |
@@ -72,14 +74,23 @@ where MIDI bugs show up first (see the platform notes in `CLAUDE.md`).
 ## Trying it
 
 The app opens on a built-in practice chart, drawn as a lead sheet: systems of four bars
-divided by barlines, the feel written top left, the title in the middle and the composer
-on the right. Click a bar to move to it; click the bar you are already on for the question
-the mode you are in is about.
+divided by barlines, with the feel, the title and the composer written along the top bar
+the way a lead sheet engraves them. Click a bar to move to it; click the bar you are
+already on for the question the mode you are in is about.
+
+The page is **three zones, not a scrolling document**: the top bar at its own height, the
+chart taking everything left over and scrolling *itself*, and the dock at the bottom. That
+is not decoration. Laid out as a document, the chart got whatever the other two had
+finished with - four bars of twelve readable in a 1280x860 window, and **none at all** at
+430x860, where the first bar started below the dock. The head is in the top bar for the
+same reason it is worth having: in the sheet it scrolled away with the music, so the one
+thing naming what you are playing left the screen as soon as you played past the first
+line.
 
 The desktop app and the browser page are not merely alike: they are the same page. A
 screenshot of one is a screenshot of the other, because there is one file. What differs is
 what is behind it - native C++ in the app, WebAssembly in the browser - and which of the
-two is answering is written in the colophon at the foot of the page.
+two is answering is written in the colophon, at the foot of the chart.
 
 **Chords** and **Solo**, at the top, are the two things you can practise against that one
 chart. Chord practice asks whether the voicing you played says what the bar says. Solo
@@ -157,6 +168,8 @@ a second one.
 
 ![Solo practice: a take in progress, each bar scored, an enclosure landing](docs/screenshot-solo.png)
 
+*This shot predates the layout work and shows the old masthead and sheet head - it will be reshot once the transport strip and the settings panel land.*
+
 The keys do not latch here, because a line is played rather than held: each note sounds,
 is read back - **E4 - the 9th, scale tone, in D Dorian** - and lets go. Every note is read
 on its own, so a rolled double-stop is two notes each read where it sits rather than one
@@ -212,6 +225,12 @@ walking to another bar does not end it - the target moves and the notes keep acc
 which is most of what soloing over a chart is. **Stop the take** freezes a summary: how the
 whole thing divided up, and which bar pulled away from the rest. A note outside the scale is
 *outside the scale*, never wrong.
+
+In time, **the chart follows the bar you are on**. On a tune longer than fits, the rolling
+mark used to march off the bottom and stay there - at the one moment a player cannot reach
+for a scrollbar. It scrolls by the system rather than the bar, because a line of music is
+the unit you read, and only when the bar has actually left: a chart that already fits never
+moves under you.
 
 Every bar you play over also carries its own verdict, **on the bar**: a slim four-part strip
 in the same colours the dock uses - chord tone, scale tone, approach note, outside - in
@@ -347,9 +366,9 @@ click agree in both - what the app gives up is a few milliseconds of jitter on t
 ### Comping
 
 **Comping** — next to *Reharmonise the tune*, above the chart — is the band behind you. It
-opens on a list of who is playing: **piano comping** and **bass walking**, both of which
-work, and **drums**, which is named and not built yet. Each has its own sound picker,
-because the band is not playing your instrument.
+opens on a list of who is playing: **piano comping**, **bass walking** and **drums**, all
+three of which work. The piano and the bass have their own sound pickers, because the band
+is not playing your instrument; the kit is synthesised in both shells, like the click.
 
 **Comping style** picks what the band plays: *Four to the bar*, *Basie — sparse*,
 *Charleston* or *Ballad — triplet*. The list is the engine's, like the scale styles are, and
@@ -632,14 +651,18 @@ and a take is read exactly as it always was — every one of these readings is a
 
 ### Both modes
 
-Switching modes changes **the light, and the words**. Solo practice turns the paper down a
-stop and cools it, the rose accent becomes slate, and the masthead reads *Jazz Learning App:
-Solo* over a line about playing one - so which mode you are in is something you can feel
-without reading the toggle, and something you can read without knowing what the toggle does.
-The two mastheads and the two hints above the chart are written one on top of the other
-rather than one replacing the other, so a wording that wraps to a different number of lines
-cannot make the chart jump when you switch. Nothing moves and nothing is rebuilt - it is the
-same room under a different lamp. The colours that mean something stay exactly as they are:
+Switching modes changes **the light**. Solo practice turns the paper down a stop and cools
+it, and the rose accent becomes slate - so which mode you are in is something you can feel
+without reading the toggle. The window title names it too, for anyone who would rather read
+it than feel it.
+
+It used to say so on the page as well, in a masthead reading *Jazz Learning App: Solo* over
+a paragraph about playing one, and the two wordings were drawn one on top of the other so
+that a line wrapping differently could not make the chart jump. All of it is gone: that was
+250px of introduction charging rent on every screen, above a chart that was getting one
+line of music. Nothing in the top bar is mode-specific now, so the chart cannot jump - the
+thing the stacking was protecting is structural rather than arranged. Nothing moves and
+nothing is rebuilt - it is the same room under a different lamp. The colours that mean something stay exactly as they are:
 sage, gold, green, teal and rust say chord tone, scale tone, approach note, enclosure and
 outside in both modes, and recolouring those would be changing the meaning rather than the
 light. Whatever was under your hands is let go of on the way through, in either direction.
@@ -680,11 +703,20 @@ Stepping along the chart to check one bar after another never puts a dialog in f
 keyboard - it takes a second click on the bar you are already on to open one - and the arrow
 keys move between bars without taking a hand off the keys.
 
-A first visit opens a short cheat sheet covering the things that cannot be guessed from
-looking. There is one for each mode, because they explain different pages: arriving at solo
-practice for the first time opens the solo half, which has more that cannot be guessed (a
-take has to be armed, and the keys stop latching). Each appears once; the **?** beside the
-Practice menu brings back the one for the mode you are in, and says so when you hover it.
+A first visit opens a cheat sheet covering the things that cannot be guessed from looking:
+**Chart**, **Playing**, **Reading**, **In time** and **Band**, a section at a time. Each
+section fits whatever it is opened on - a check measures all five in both modes at a
+desktop and a phone size and fails if any of them has to be scrolled, because a sheet you
+scroll is one people stop reading at the fold.
+
+Most of it is written **once and shown in both modes**. What a bar click does, what the
+band is, what the clock adds - those mean the same thing whichever question you are asking
+of the chart. Only what genuinely differs stays split: what the keys do (they latch in one
+mode and not the other) and what the page is reading (a voicing against a symbol, or a note
+against a bar). Every entry is a bold line you can scan and a quieter one underneath saying
+*why*, which is the half that makes open notes and latching keys make sense.
+
+It appears once per mode; the **?** beside the Practice menu brings it back.
 
 **Import / export**, in the Practice menu, opens a chart that came from somewhere else and
 writes the one on screen back out. Both shells read an iReal Pro link, the `.html` file
@@ -701,9 +733,9 @@ The chart reader itself is in the engine either way: what the app is missing is 
 text out of a PDF, not a way to understand one.
 
 A chart that arrives with a chord the engine cannot read says so and names it rather than
-quietly dropping it, and the title, composer, style **and metre** survive a round trip - they are
-written around the music the way a lead sheet writes them, feel top left and composer top
-right. An imported chart becomes the chart, so **Restore original** takes back the
+quietly dropping it, and the title, composer, style **and metre** survive a round trip - they
+are written along the top bar the way a lead sheet engraves them, feel first and composer
+last. An imported chart becomes the chart, so **Restore original** takes back the
 reharmonisations you have tried and returns the tune you brought in, not the one the page
 happened to open with.
 
@@ -716,10 +748,14 @@ JAZZ_UI_SIZE=430x860 ./build/app/JazzLearningApp_artefacts/Debug/"Jazz Learning 
 
 <img src="docs/screenshot-compact.png" width="320" alt="Compact layout">
 
-Below 760px the page lays itself out narrow: the sheet head centres, the bars grow, and
-every dialog becomes a bottom sheet rather than a floating panel. That is the page's own
-CSS doing it, so the browser at the same width does the same thing - there is no second
-layout to keep in step.
+*This shot predates the layout work and shows the old masthead and sheet head - it will be reshot once the transport strip and the settings panel land.*
+
+Below 760px the page lays itself out narrow: the bars and the keyboard both shorten, so
+more of the tune fits, and every dialog becomes a bottom sheet rather than a floating
+panel. The chart's head needs
+nothing said to it - it is a line in the top bar rather than three columns over the music,
+so it wraps the way the controls beside it do. That is the page's own CSS doing it, so the
+browser at the same width does the same thing - there is no second layout to keep in step.
 
 ## Trying the engine in a browser
 
@@ -968,5 +1004,9 @@ These were left open rather than silently decided:
    data-informed ranking could replace the ordering without touching the rules.
 3. **Solo/improv feedback layer** — in, both static and in time: you arm a take and either
    walk the chart yourself or let the clock walk it. What is still open is rhythm, above.
-4. **A dense, DAW-style desktop layout** — deferred; it would arrive as a fourth size
-   class rather than a second UI.
+4. **A dense, DAW-style desktop layout** — **answered: denser yes, multi-column not yet.**
+   The page is laid out as an instrument rather than an article now - a fixed three-zone
+   frame with the chart taking every pixel the other two do not - but it stays one
+   responsive column. No side panel, no wide-screen layout of its own, and no size classes;
+   if it is revisited, a persistent side panel is the settings panel pinned open rather than
+   a second UI.
