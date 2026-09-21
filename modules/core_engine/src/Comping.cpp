@@ -388,8 +388,20 @@ CompPlan compPlan (const Chart& chart, const CompStyleDefinition& style,
         std::stable_sort (chosen.begin(), chosen.end(), byWeight);
         std::stable_sort (offered.begin(), offered.end(), byWeight);
 
-        if (static_cast<int> (chosen.size()) > style.mostPerBar)
-            chosen.resize (static_cast<std::size_t> (style.mostPerBar));
+        /*  Floored at nothing, because a `std::size_t` cast of a negative is
+            not a small number - it is about eighteen quintillion, and `resize`
+            throws rather than trimming. Unreachable while the catalogue was
+            the only thing that could hand this function a style; reachable the
+            moment one can be described from outside, and a plain struct field
+            should not be able to throw whoever fills it in.
+
+            A no-op for every style that ships - all four have a `mostPerBar`
+            of at least 2 - so nothing that worked comps differently by a
+            single tick. There is a test that says so. */
+        const auto ceiling = static_cast<std::size_t> (std::max (0, style.mostPerBar));
+
+        if (chosen.size() > ceiling)
+            chosen.resize (ceiling);
 
         for (const auto& candidate : offered)
         {

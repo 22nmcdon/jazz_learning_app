@@ -187,6 +187,45 @@ TEST ("a slot naming a beat the metre has not got says nothing")
     CHECK (slotPositions (fourthBeat, 3).empty());
 }
 
+TEST ("a style's own numbers cannot make the planner throw")
+{
+    /*  `mostPerBar` trims the bar's candidates, and a `std::size_t` cast of a
+        negative is not a small number - it is about eighteen quintillion, so
+        `resize` threw `std::length_error` rather than trimming. In the app
+        that is an exception out of a plain call; in wasm it is a trap.
+
+        It could not happen while `compStyles()` was the only thing that made
+        one of these. It can the moment a style is described from outside, and
+        a field on a plain struct should not be able to throw whoever fills it
+        in - which is why this is floored here rather than only at the wire,
+        where it is *also* refused. */
+    CompStyleDefinition broken;
+    broken.slots = { CompSlot { 0, 0, 100, false }, CompSlot { 1, 0, 100, false },
+                     CompSlot { 2, 0, 100, false }, CompSlot { 3, 0, 100, false } };
+    broken.mostPerBar = -1;
+
+    const auto plan = compPlan (chartOf ("| Dm7 | G7 |"), broken, 0, 1, 7);
+
+    /*  A comp, rather than a crash - and not an empty one. The ceiling trims
+        the bar to nothing and then the *floor* tops it back up to
+        `fewestPerBar`, which is 1 by default: the two ends of the density
+        window are read in order, and a nonsense ceiling does not disable the
+        floor. One hit per bar over two bars. */
+    CHECK_EQ (static_cast<int> (plan.hits.size()), 2);
+    CHECK_EQ (hitsInBar (plan, 0), 1);
+    CHECK_EQ (hitsInBar (plan, 1), 1);
+}
+
+TEST ("and the flooring changes nothing about the styles that ship")
+{
+    /*  The negative control for the test above, and the half that matters:
+        a guard that quietly altered what the catalogue plays would be a worse
+        bug than the one it fixed. Every shipped style is already above the
+        floor, so the clamp is arithmetic that never fires. */
+    for (const auto& style : compStyles())
+        CHECK (style.mostPerBar > 0);
+}
+
 TEST ("the styles on offer are genuinely different from one another")
 {
     const auto styles = compStyles();
