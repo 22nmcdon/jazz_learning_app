@@ -168,6 +168,17 @@ DSP undertaking. Do not start it because a feature seems to want it.
 
 Small, verified, and none of them urgent.
 
+- **Nothing else on the page is measured in two faces.** The cheat sheet's
+  no-scroll checks and the 390px narrow scan are pixel assertions too, and both
+  run against whichever face the machine happens to render. They pass today in
+  both, but neither is *checked* in both — the strip's second pass is the only
+  one. If either starts failing on CI and not locally, that is the first thing
+  to suspect, and the `TALL_METRICS` block in `web/smoke-test.mjs` is the tool.
+
+- **`actions/upload-pages-artifact@v3` and `actions/deploy-pages@v4`** both have
+  a v5 out. Neither is in the Node 20 deprecation warning, so neither was bumped
+  with `checkout` and `setup-emsdk` — but they will want doing eventually.
+
 - **`app/src/ElectricPiano.cpp:205`** — `const auto frequency = frequencyOf
   (midiNote);` is declared and never used in that function. A
   `-Wunused-variable` warning. Pre-existing.
@@ -215,9 +226,15 @@ new container must add that container to the scan**, or the net has a hole in
 it.
 
 - **The transport strip** — that the chart's top edge is the same number in
-  every corner of mode × In time, at a laptop size and a phone one. Checked with
-  a negative control: with the reservation taken out it passes at 1100px and
-  fails at 390px, naming both positions, which is why it measures two sizes.
-  Beside it, that the tempo box is not narrower than the number in it — the one
-  kind of overflow the narrow scan cannot see, since a box too small for its
-  contents is the right width as far as its own rectangle is concerned.
+  every corner of mode × In time, at a laptop size and a phone one, **and in two
+  typefaces**. The second face is the one that matters: it shipped broken past
+  the first version of this check, because the reservation is a pixel count and
+  was sized on a machine that could not reach Google Fonts. The taller face is
+  forced with `ascent-override`/`descent-override` rather than by fetching a
+  webfont, so it needs no network — a check that quietly passes when a CDN is
+  unreachable is what let it through. Beside it, that each group really is the
+  29px it reserves, which is the line that names the cause rather than the
+  consequence. Beside that, that the tempo box is not narrower than the number
+  in it — the one kind of overflow the narrow scan cannot see, since a box too
+  small for its contents is the right width as far as its own rectangle is
+  concerned.

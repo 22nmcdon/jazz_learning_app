@@ -81,6 +81,19 @@ means CSS, not per-platform builds.
   (`.transport-clock`, `.transport-take`) are each one row at any width and each
   reserve that row empty. A check measures the chart's top edge in both settings
   at two sizes and fails if it moves.
+- **A reserved height is a pixel count, so it holds or fails to hold *per
+  typeface*.** The page renders in two by design (`docs/BRANDING.md`): Jost over
+  the web, the fallback stack in the app and offline. Every control on the strip
+  is a button or a form control whose height comes from `line-height: normal` —
+  the font's own metrics — so each one is given an explicit `line-height` (a
+  `height` for the select, which does not size from one) and the reservation is
+  sized against that arithmetic. Sized against one face instead, it was 29px
+  against controls that are 37–39 in the other, stopped binding altogether, and
+  shipped a chart that moved when the clock came on while every local run said
+  otherwise. **Measuring a layout on a machine that cannot reach Google Fonts
+  measures the wrong page** — so the check runs a second pass with
+  `ascent-override`/`descent-override` forcing taller metrics, which needs no
+  network.
 - **Viewport-relative heights are `dvh`, never `vh`.** On a phone `vh` is the
   window with the browser's own chrome collapsed, and the part that goes under
   it is the bottom of the frame — the dock.

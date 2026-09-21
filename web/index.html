@@ -270,6 +270,21 @@ body > .wrap {
    one, and fails if it is not one number - two sizes because the strip fails
    differently at each.
 
+   `min-height` only reserves anything while the content fits inside it, and
+   that is not a given: every control up here is a button or a form control
+   with no `line-height` of its own, so its height comes from `normal` - which
+   is computed from the *font's metrics*. This page renders in two faces by
+   design (`docs/BRANDING.md`): Jost when it is served over the web, the
+   fallback stack in the app and offline. Sized against the fallback alone, the
+   reservation was 29px against controls that are 37 to 39 in a taller face -
+   so it stopped binding altogether, the rows went back to being content-sized,
+   and the chart moved when the clock came on. It shipped that way.
+
+   Hence the block below: every control on the strip is given an explicit
+   `line-height` (a `height` for the select, which does not size from one), so
+   its box is arithmetic rather than font-derived. Tallest is 28 against the 29
+   reserved. Do not take those away without taking the reservation away too.
+
    The grouping is also what keeps each group on one line at a phone width: the
    wide control and the narrow one are in different groups, so neither line is
    the one carrying everything. Put the metre with the take button instead and
@@ -291,6 +306,12 @@ body > .wrap {
   min-height: 29px;
   min-width: 0;
 }
+
+.transport .mode-option  { line-height: 12px; }   /* 12 + 14 padding + 2 border = 28 */
+.transport .tempo-input  { line-height: 16px; }   /* 16 + 10 padding + 2 border = 28 */
+.transport .metre-select { height: 28px; }        /* a closed select ignores line-height */
+.transport .arm-btn      { line-height: 12px; }   /* 12 + 12 padding + 2 border = 26 */
+.transport .link-btn     { line-height: 13px; }   /* 13 +  2 padding + 1 border = 16 */
 
 /* The popover hangs off the *row*, not off its own button. `.menu-wrap` makes
    itself the containing block, which is right for a button at the end of a row

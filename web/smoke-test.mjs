@@ -1855,38 +1855,110 @@ try {
       anywhere above the chart rather than only in the strip. At both sizes,
       because the strip is one row on a laptop and two on a phone and it fails
       differently at each: on a laptop a group grows, on a phone the two groups
-      fold onto one line and back. */
-  for (const [width, height] of [[1100, 700], [390, 780]]) {
+      fold onto one line and back.
+
+      And in two typefaces, which is the run that matters most and the one this
+      check did not have when it first shipped green. The page renders in Jost
+      over the web and in the fallback stack in the app and offline
+      (`docs/BRANDING.md`), and the strip's reservation is a pixel count - so
+      it holds or fails to hold *per face*. It was sized against the fallback
+      on a machine that could not reach Google Fonts, and every control on the
+      strip is a button or a form control taking its height from `line-height:
+      normal`, which is the font's own metrics. In Jost they came out 37 to 39
+      against 29 reserved, the reservation stopped binding, and the deployed
+      site moved the chart when the clock came on while every local run said it
+      did not.
+
+      A webfont cannot be the thing under test here - it needs the network, and
+      a check that quietly passes when a CDN is unreachable is the check that
+      let this through. So the second pass overrides the *metrics* instead:
+      `ascent-override` and `descent-override` on a face built from whatever
+      sans is installed is exactly what `normal` is computed from, so it
+      reproduces a taller face with nothing fetched. Without the strip's
+      explicit line-heights this pass reports three different chart tops at
+      390px. */
+  const TALL_METRICS = `
+    @font-face {
+      font-family: "MetricsProbe";
+      src: local("DejaVu Sans"), local("Liberation Sans"), local("Arial");
+      ascent-override: 150%; descent-override: 45%; line-gap-override: 0%;
+    }
+    :root { --sans: "MetricsProbe", sans-serif !important; }`;
+
+  for (const [width, height, face] of [[1100, 700, "as served"], [390, 780, "as served"],
+                                       [1100, 700, "a taller face"], [390, 780, "a taller face"]]) {
     const held = await browser.newPage({ viewport: { width, height } });
+
+    if (face !== "as served")
+      await held.addInitScript((css) => {
+        addEventListener("DOMContentLoaded", () => {
+          const style = document.createElement("style");
+          style.textContent = css;
+          document.head.appendChild(style);
+        });
+      }, TALL_METRICS);
+
     await held.goto(`${origin}/index.html`, { waitUntil: "load" });
     await held.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+
+    /*  The webfont is `display: swap`, so it lands whenever it lands. Measured
+        on both sides of that, a perfectly reserved strip still reports two
+        numbers - the whole top bar resizes as the face changes. */
+    await held.evaluate(() => document.fonts.ready.then(() => true));
+
     if (await held.locator("#helpDialog[open]").count()) await held.locator("#helpClose").click();
 
-    const chartTop = () => held.evaluate(() =>
-      Math.round(document.querySelector(".chart-zone").getBoundingClientRect().top));
+    const measure = () => held.evaluate(() => {
+      const box = (selector) => {
+        const found = document.querySelector(selector);
+        return found ? Math.round(found.getBoundingClientRect().height) : null;
+      };
 
-    const tops = [];
+      return { top: Math.round(document.querySelector(".chart-zone").getBoundingClientRect().top),
+               clock: box(".transport-clock"),
+               take: box(".transport-take") };
+    });
+
+    const seen = [];
 
     for (const mode of ["modeChords", "modeSolo"]) {
       await held.locator(`#${mode}`).click();
       if (await held.locator("#helpDialog[open]").count()) await held.locator("#helpClose").click();
 
-      tops.push(await chartTop());                      // static
+      const said = mode.replace("mode", "").toLowerCase();
+
+      seen.push([`${said} static`, await measure()]);
       await held.locator("#playLive").click();
-      tops.push(await chartTop());                      // in time, not rolling
+      seen.push([`${said} in time`, await measure()]);
 
       await held.locator("#armTake").click();
       await held.waitForFunction(
         () => !document.querySelector("#beatRow").hidden, null, { timeout: 10000 });
-      tops.push(await chartTop());                      // and with the dots out
+      seen.push([`${said} rolling`, await measure()]);
 
       await held.locator("#armTake").click();
       await held.locator("#playStatic").click();
     }
 
-    const seen = [...new Set(tops)];
-    check(`the transport strip keeps the chart still at ${width}px (${seen.join(", ")})`,
-          seen.length === 1);
+    /*  Named per state rather than deduplicated to a set of numbers. The first
+        time this failed it said `(93, 94)` and nothing else, which left the
+        one thing worth knowing - which of the six moved - to be worked out
+        from the CSS. */
+    const tops = [...new Set(seen.map(([, m]) => m.top))];
+
+    check(`the transport strip keeps the chart still at ${width}px, ${face}`
+          + ` (${tops.length === 1 ? tops[0] : seen.map(([at, m]) => `${at} ${m.top}`).join(", ")})`,
+          tops.length === 1);
+
+    /*  And the reason it holds, asserted directly: a group taller than its own
+        reservation is the failure, and this is the line that names which one.
+        The chart-top check above sees the consequence; this sees the cause. */
+    const grown = seen.filter(([, m]) => m.clock !== 29 || m.take !== 29)
+                      .map(([at, m]) => `${at} clock ${m.clock} take ${m.take}`);
+
+    check(`and both its rows are the 29px they reserve at ${width}px, ${face}`
+          + `${grown.length ? " (" + grown.join(", ") + ")" : ""}`,
+          grown.length === 0);
 
     await held.close();
   }
