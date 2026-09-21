@@ -2597,11 +2597,43 @@ try {
           && both[1].mode === 1
           && both[1].chordTones + both[1].scaleTones + both[1].outside === 0);
 
-    /*  The round trip is proved in the dashboard's own checks, where the page
-        calls the engine with this text through the real control rather than
-        through a hook - this page has never had one and should not grow one to
-        be tested. What is asserted here is the row, which is what this commit
-        writes. */
+    /*  The round trip, through the real control.
+
+        This is the check the whole feature rests on: eighteen fields in an
+        order, written by the page and read by the engine, in two languages.
+        It breaks silently - a page that thinks it is keeping a history while
+        every reading of it comes back an error - so it is asserted through
+        the button a player actually presses rather than through a hook.
+    */
+    await logging.locator("#recordButton").click();
+    await logging.waitForSelector("#progressDialog[open]", { timeout: 10000 });
+
+    const said = await logging.locator("#recordSummary").innerText();
+
+    check(`the engine reads the page's own record back (${said.slice(0, 26)}...)`,
+          said.indexOf("2 takes") === 0);
+
+    check("and the panel draws the engine's words rather than its own",
+          (await logging.locator("#recordSaid li").count()) > 0);
+
+    // The coverage half: what has been played over, and what has not. The
+    // outlined chips are the half a player cannot see for themselves.
+    check(`both halves of the coverage are drawn `
+          + `(${await logging.locator('#recordQualities .record-chip[data-met="yes"]').count()} met, `
+          + `${await logging.locator('#recordQualities .record-chip[data-met="no"]').count()} not)`,
+          (await logging.locator('#recordQualities .record-chip[data-met="yes"]').count()) > 0
+          && (await logging.locator('#recordQualities .record-chip[data-met="no"]').count()) > 0
+          && (await logging.locator("#recordRoots .record-chip").count()) === 12);
+
+    // Nothing in this panel is a mark. Not in the figures, not in the words.
+    const panelText = await logging.locator("#progressPanelRecord").innerText();
+
+    check("and nothing in the panel is a score",
+          panelText.toLowerCase().indexOf("score") < 0
+          && panelText.indexOf("/100") < 0
+          && panelText.indexOf("out of 100") < 0);
+
+    await logging.locator("#progressClose").click();
 
     await record.close();
   }
@@ -2875,6 +2907,105 @@ try {
 
     check(`nothing runs off the side at 390px (${mode.replace("mode", "")})`,
           spill.page <= 0 && spill.offscreen.length === 0);
+  }
+
+  /*  The practice button's real cost.
+
+      `.top-bar-right` wraps, and every pixel of top-bar height comes out of
+      the chart - which is the rule this page's whole frame is built on. A
+      button that pushes that row into two has taken a line of music away from
+      somebody on a phone, and it does that silently.
+
+      So this measures the row rather than trusting it: every child of
+      `.top-bar-right` has to sit on the same line. The words go below the
+      page's one breakpoint and the button becomes the same circle the help
+      button is, which is what buys the room.
+  */
+  const topRow = await narrow.evaluate(() => {
+    const tops = Array.from(document.querySelectorAll(".top-bar-right > *"))
+                      .filter((el) => el.getBoundingClientRect().width > 0)
+                      .map((el) => Math.round(el.getBoundingClientRect().top));
+
+    const bar = document.querySelector(".top-bar").getBoundingClientRect().height;
+    const button = document.querySelector("#recordButton");
+
+    button.style.display = "none";
+    const without = document.querySelector(".top-bar").getBoundingClientRect().height;
+    button.style.display = "";
+
+    return { rows: new Set(tops).size, count: tops.length,
+             cost: Math.round(bar - without) };
+  });
+
+  /*  The height itself, not the row count - which is what this check first
+      asked and got wrong. `.top-bar-right` already sits on four lines at 390px,
+      so "is it one row" was never the question. What matters is whether the
+      button takes any of the chart, and the only way to know is to measure the
+      bar with it and without it.
+  */
+  check(`the practice button takes no height from the chart at 390px `
+        + `(${topRow.cost}px, ${topRow.count} controls)`,
+        topRow.cost === 0 && topRow.count >= 4);
+
+  /*  And the panel behind it fits.
+
+      Measured against a child with `min-width`, never `width`: a flex row
+      shrinks the latter back and the scan passes while the thing it was
+      watching for happens anyway. That is how this check went vacuous once
+      before, on the style editor.
+  */
+  await narrow.locator("#recordButton").click();
+  await narrow.waitForSelector("#progressDialog[open]", { timeout: 10000 });
+
+  const recordSpill = await narrow.evaluate(() => {
+    const spilling = [];
+
+    for (const element of document.querySelectorAll(
+           "#progressDialog .tab, #progressDialog .dialog-head > *,"
+           + " .record-figure, .record-chip, .record-said li")) {
+      const at = element.getBoundingClientRect();
+
+      if (at.width > 0 && (at.right > window.innerWidth + 0.5 || at.left < -0.5))
+        spilling.push(element.className || element.id);
+    }
+
+    return spilling;
+  });
+
+  check(`the practice record fits a 390px screen${recordSpill.length ? " (" + recordSpill.join(", ") + ")" : ""}`,
+        recordSpill.length === 0);
+
+  check("and its own body scrolls rather than the page behind it",
+        await narrow.evaluate(() => {
+          const body = document.querySelector("#progressPanelRecord");
+          return getComputedStyle(body).overflowY === "auto";
+        }));
+
+  await narrow.locator("#progressClose").click();
+
+  /*  And again at a laptop width, which is where a labelled button cost 38px.
+      390 was never the size that caught this: the bar is already four lines
+      deep there and one more control changed nothing. */
+  {
+    const wide = await browser.newPage({ viewport: { width: 1024, height: 800 } });
+    await wide.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await wide.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000, state: "attached" });
+    if (await wide.locator("#helpDialog[open]").count()) await wide.locator("#helpClose").click();
+
+    const cost = await wide.evaluate(() => {
+      const barH = () => document.querySelector(".top-bar").getBoundingClientRect().height;
+      const button = document.querySelector("#recordButton");
+      const withIt = barH();
+
+      button.style.display = "none";
+      const without = barH();
+      button.style.display = "";
+
+      return Math.round(withIt - without);
+    });
+
+    check(`the practice button takes no height from the chart at 1024px (${cost}px)`, cost === 0);
+    await wide.close();
   }
 
   /*  And in time, where the dock foot carries the take button and the beat dots

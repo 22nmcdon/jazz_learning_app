@@ -647,6 +647,100 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
   white-space: nowrap;
 }
 
+/*  The practice record's own button, beside the help one.
+
+    Not a section of the settings panel, which is what an earlier comment in
+    this file predicted. That panel is being cut back to things that are
+    genuinely settings - MIDI, sound, about - and what is behind this button is
+    a *reading* rather than a preference.
+
+    A glyph rather than a label, and that was measured rather than chosen. Every
+    pixel of top-bar height comes out of the chart (see UI Conventions), and
+    `.top-bar-right` is already full: a labelled button wraps the row and takes
+    38px of music with it. Top-bar height, with the button hidden and then
+    carrying each label:
+
+        width   none  "Your practice"  "Progress"  "Record"  "Log"  glyph
+        1024     91        129            129        129      129     91
+        1100     91        129            129         91       91     91
+        1280     91        129            129         91       91     91
+
+    Only the glyph is free at every width - even three letters cost a row at
+    1024, which is a laptop. The name lives on `aria-label` and `title`, which
+    is what a screen reader was reading anyway, and this is the number to
+    revisit when the top bar is next rearranged: there is room for exactly one
+    more labelled control up there, and it is not currently spare.
+*/
+.record-button {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: none;
+  color: var(--text-soft);
+  font-family: var(--serif);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.record-button:hover { color: var(--blush-deep); border-color: var(--blush-deep); }
+
+/*  The record itself. A list of readings, not a chart of one number - there is
+    no number here to chart, deliberately. */
+.record-head {
+  font-family: var(--serif);
+  font-size: 17px;
+  color: var(--charcoal);
+  display: block;
+  margin-bottom: 14px;
+}
+.record-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 16px;
+}
+.record-figure { min-width: 74px; }
+.record-figure b {
+  display: block;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--charcoal);
+}
+.record-figure span {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-soft);
+}
+.record-said { margin: 0; padding-left: 18px; }
+.record-said li { font-size: 13.5px; line-height: 1.55; margin-bottom: 9px; }
+.record-group { margin-top: 20px; }
+.record-title {
+  display: block;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-soft);
+  margin-bottom: 8px;
+}
+.record-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.record-chip {
+  font-size: 12px;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  color: var(--charcoal);
+}
+.record-chip[data-met="no"] { color: var(--text-soft); border-style: dashed; }
+.record-empty { font-size: 13.5px; line-height: 1.6; color: var(--text-soft); }
+
 .help-button {
   width: 30px;
   height: 30px;
@@ -720,9 +814,16 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
      top of the section, which reads as a mistake. */
   #helpDialog .help-list li { margin-top: 0; margin-bottom: 15px; }
 }
-#helpDialog[open] { display: flex; flex-direction: column; }
-#helpDialog .dialog-head { flex: 0 0 auto; }
-#helpDialog .tabs { flex: 0 0 auto; }
+/*  Both tabbed dialogs, and the `[open]` is the whole point: a <dialog> is
+    `display: none` until it is opened, so a bare `display: flex` here shows it
+    on every page load. That has happened once already on this page and is the
+    kind of thing nobody notices in a diff. */
+#helpDialog[open],
+#progressDialog[open] { display: flex; flex-direction: column; }
+#helpDialog .dialog-head,
+#progressDialog .dialog-head { flex: 0 0 auto; }
+#helpDialog .tabs,
+#progressDialog .tabs { flex: 0 0 auto; }
 #helpDialog .tab-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -2043,6 +2144,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
       <div class="status" id="engineStatus" data-state="loading">starting engine</div>
 
+      <button class="record-button" type="button" id="recordButton"
+              aria-label="Your practice" title="Your practice">&#9683;</button>
+
       <button class="help-button" type="button" id="helpButton"
               aria-label="How this works" title="How this works">?</button>
 
@@ -2620,6 +2724,51 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
      `data-mode` puts that in the hands of `applyMode` along with everything
      else that swaps. The first visit to each opens it by itself; after that
      the "?" does. -->
+<!-- The practice record, and one tune's memory.
+
+     A dialog rather than a panel section, opened by a button of its own. What
+     is behind it is a *reading* - what has been practised, and what has not -
+     and a reading is not a setting, which is what `#menuPanel` holds.
+
+     Two tabs because there are two questions. One is about the player: how
+     much, over what, and what has never come up. The other is about a tune:
+     which of its bars ever get reached, which is the thing no single take can
+     see. The tunes half is filled in the commit after this one. -->
+<dialog id="progressDialog">
+  <div class="dialog-head">
+    <div>
+      <div class="bar-label">Since you started</div>
+      <div class="plan-title">Your practice</div>
+    </div>
+    <button class="close-btn" type="button" id="progressClose" aria-label="Close">&times;</button>
+  </div>
+
+  <div class="tabs" id="progressTabs" role="tablist">
+    <button class="tab" type="button" id="progressTabRecord" role="tab" aria-selected="true">The record</button>
+    <button class="tab" type="button" id="progressTabTunes" role="tab" aria-selected="false">Your tunes</button>
+  </div>
+
+  <div class="tab-body" id="progressPanelRecord" role="tabpanel">
+    <span class="record-head" id="recordSummary"></span>
+    <div class="record-figures" id="recordFigures"></div>
+    <ul class="record-said" id="recordSaid"></ul>
+
+    <div class="record-group" id="recordCoverage">
+      <span class="record-title">Chords you have played over</span>
+      <div class="record-chips" id="recordQualities"></div>
+    </div>
+
+    <div class="record-group" id="recordKeys">
+      <span class="record-title">And in which keys</span>
+      <div class="record-chips" id="recordRoots"></div>
+    </div>
+  </div>
+
+  <div class="tab-body" id="progressPanelTunes" role="tabpanel" hidden>
+    <p class="record-empty">Your saved tunes go here.</p>
+  </div>
+</dialog>
+
 <dialog id="helpDialog">
   <!-- Sectioned, because it stopped fitting. Solo practice's sheet was 2,650px
        of content in 590px of dialog at a phone width - four and a half screens
@@ -3388,6 +3537,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "ioButton", "ioDialog", "ioClose", "chartFile", "importStatus", "pasteBox",
    "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink",
    "shareRow", "copyShare", "shareStatus", "shareLink",
+   "recordButton", "progressDialog", "progressClose", "progressTabs",
+   "progressTabRecord", "progressTabTunes", "progressPanelRecord", "progressPanelTunes",
+   "recordSummary", "recordFigures", "recordSaid", "recordCoverage", "recordQualities",
+   "recordKeys", "recordRoots",
    "helpButton", "helpDialog", "helpClose", "helpTabs",
    "helpTabChart", "helpTabPlaying", "helpTabReading", "helpTabTime", "helpTabBand",
    "helpPanelChart", "helpPanelPlaying", "helpPanelReading", "helpPanelTime", "helpPanelBand",
@@ -7667,6 +7820,156 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   });
 
 
+  /*  The practice record's panel.
+
+      Everything drawn here comes back from the engine. The page hands over the
+      rows it has stored and draws the answer - it works out no percentage, no
+      total and no sentence of its own, because a second opinion about what a
+      history means is exactly the drift `compStyles` and `scaleStyles` are
+      kept out of the shell to avoid.
+
+      There is no chart of anything over time, and that is the decision rather
+      than a gap. The engine's practice wire sends no score, so there is
+      nothing to plot even if a line would look good here.
+  */
+
+  function drawFigure(into, number, label) {
+    var figure = document.createElement("div");
+    var value = document.createElement("b");
+    var name = document.createElement("span");
+
+    figure.className = "record-figure";
+    value.textContent = String(number);
+    name.textContent = label;
+    figure.appendChild(value);
+    figure.appendChild(name);
+    into.appendChild(figure);
+  }
+
+  function drawChips(into, met, missing) {
+    into.textContent = "";
+
+    met.forEach(function (name) {
+      var chip = document.createElement("span");
+      chip.className = "record-chip";
+      chip.dataset.met = "yes";
+      chip.textContent = name;
+      into.appendChild(chip);
+    });
+
+    // The ones never played are drawn too, in outline. They are the half a
+    // player cannot see for themselves, and a list that showed only what had
+    // happened would be the half they already know.
+    missing.forEach(function (name) {
+      var chip = document.createElement("span");
+      chip.className = "record-chip";
+      chip.dataset.met = "no";
+      chip.textContent = name;
+      into.appendChild(chip);
+    });
+  }
+
+  function showEmptyRecord(message) {
+    el.recordSummary.textContent = "";
+    el.recordFigures.textContent = "";
+    el.recordSaid.textContent = "";
+    el.recordCoverage.hidden = true;
+    el.recordKeys.hidden = true;
+
+    var line = document.createElement("li");
+    line.className = "record-empty";
+    line.textContent = message;
+    el.recordSaid.appendChild(line);
+  }
+
+  async function drawPracticeRecord() {
+    var rows = recallPractice();
+
+    if (!rows.length) {
+      showEmptyRecord("Nothing practised yet. Start a take and this fills itself in -"
+                      + " what you played over, and what you have not.");
+      return;
+    }
+
+    var result = await call("jazzPracticeReading", ["string", "number"],
+                            [practiceHistoryText(rows), todayNumber()]);
+
+    if (result === null || !result.ok) {
+      // The record is still there; this engine cannot read it. Saying so is
+      // better than an empty panel, which looks exactly like no practice.
+      showEmptyRecord("This engine could not read your practice record. Reload to pick up"
+                      + " the version of it that can.");
+      return;
+    }
+
+    el.recordSummary.textContent = result.summary;
+
+    el.recordFigures.textContent = "";
+    drawFigure(el.recordFigures, result.takes, result.takes === 1 ? "take" : "takes");
+    drawFigure(el.recordFigures, result.minutes, "minutes");
+    drawFigure(el.recordFigures, result.daysPractised, result.daysPractised === 1 ? "day" : "days");
+    drawFigure(el.recordFigures, result.bars, "bars played");
+
+    // Only where both halves have something in them: two numbers, one of which
+    // is zero, is a reproach rather than a reading.
+    if (result.soloTakes > 0 && result.compTakes > 0) {
+      drawFigure(el.recordFigures, result.soloTakes, "soloing");
+      drawFigure(el.recordFigures, result.compTakes, "comping");
+    }
+
+    el.recordSaid.textContent = "";
+    (result.observations || []).forEach(function (line) {
+      var item = document.createElement("li");
+      item.textContent = line;
+      el.recordSaid.appendChild(item);
+    });
+
+    if (rows.length >= MOST_TAKES_KEPT) {
+      var capped = document.createElement("li");
+      capped.textContent = "This is the last " + MOST_TAKES_KEPT
+                         + " takes. Older ones have been dropped, so the record is what"
+                         + " you have been doing lately rather than everything you have done.";
+      el.recordSaid.appendChild(capped);
+    }
+
+    el.recordCoverage.hidden = false;
+    el.recordKeys.hidden = false;
+    drawChips(el.recordQualities, result.qualitiesMet, result.qualitiesMissing);
+    drawChips(el.recordRoots, result.rootsMet, result.rootsMissing);
+  }
+
+  function showProgressTab(which) {
+    var onTunes = which === "tunes";
+
+    el.progressTabRecord.setAttribute("aria-selected", onTunes ? "false" : "true");
+    el.progressTabTunes.setAttribute("aria-selected", onTunes ? "true" : "false");
+    el.progressPanelRecord.hidden = onTunes;
+    el.progressPanelTunes.hidden = !onTunes;
+  }
+
+  async function openPracticeRecord() {
+    setMenuOpen(false);
+    setChartOpen(false);
+    setTransportOpen(false);
+
+    showProgressTab("record");
+
+    // Drawn on the way in rather than kept up to date, because the record only
+    // changes when a take ends and this is shut for all of them.
+    await drawPracticeRecord();
+
+    if (!el.progressDialog.open) el.progressDialog.showModal();
+  }
+
+  el.recordButton.addEventListener("click", openPracticeRecord);
+  el.progressClose.addEventListener("click", function () { el.progressDialog.close(); });
+  el.progressDialog.addEventListener("click", function (event) {
+    if (event.target === el.progressDialog) el.progressDialog.close();
+  });
+
+  el.progressTabRecord.addEventListener("click", function () { showProgressTab("record"); });
+  el.progressTabTunes.addEventListener("click", function () { showProgressTab("tunes"); });
+
   el.helpButton.addEventListener("click", openCheatSheet);
   el.helpClose.addEventListener("click", function () { el.helpDialog.close(); });
   el.helpDialog.addEventListener("click", function (event) {
@@ -9515,7 +9818,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // The style dialog has number boxes in it, and Space in one of those is a
     // space, not a take being armed.
     if (el.chordDialog.open || el.planDialog.open || el.ioDialog.open
-        || el.styleDialog.open) return;
+        || el.styleDialog.open || el.progressDialog.open) return;
     if (event.target !== document.body && !event.target.classList.contains("bar")) return;
 
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
