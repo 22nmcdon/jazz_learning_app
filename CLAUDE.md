@@ -277,10 +277,10 @@ something finished or assume something unfinished is done:
   anything before — there was no `scrollIntoView`, `scrollTo` or `scrollTop` in
   the file at all, so on a tune longer than the chart zone the mark simply
   rolled off the bottom. The transport is out of the menu and onto a strip of
-  its own, and the two settings dropdowns and the chart's toolbar are one
-  sectioned panel (see UI Conventions above). **Still to come** (see
-  `docs/HANDOFF.md`): the dock foot regrouped, and practice settings remembered
-  across reloads.
+  its own, the two settings dropdowns and the chart's toolbar are one sectioned
+  panel, and the dock foot is two groups — what you press and what you read (see
+  UI Conventions above). **Still to come** (see `docs/HANDOFF.md`): practice
+  settings remembered across reloads, and the screenshots reshot.
 - **Not built, deliberately open**: personal voicing
   library, ear training, progress tracking beyond current per-take/session
   stats, licks/line suggestions, chordal (not line) reading in solo practice,

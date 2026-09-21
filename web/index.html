@@ -1359,6 +1359,20 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
   font-size: 12px;
   color: var(--text-soft);
 }
+
+/* The two kinds of thing on that row, each wrapping within itself. The status
+   group takes the free space so it sits at the far end - what the last button
+   on the row used to do with `margin-left: auto`, which only ever worked while
+   that button happened to be last. */
+.dock-actions,
+.dock-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  min-width: 0;
+}
+.dock-status { margin-left: auto; }
 .dock-foot .legend { display: flex; align-items: center; gap: 7px; }
 .dock-foot .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); display: inline-block; }
 .dock-foot .ring { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--gold); display: inline-block; }
@@ -1686,6 +1700,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
      taken down to 48 it showed `12` for 120, the last digit simply gone with
      nothing to say so. A check reads it at this width for exactly that. */
   .transport, .transport-clock, .transport-take { gap: 8px 10px; }
+
+  /* The dock's two groups are a line each here rather than two ends of one, so
+     the status group has nothing to be pushed away from - `margin-left: auto`
+     just indents it off the left margin everything else on the page keeps. */
+  .dock-status { margin-left: 0; }
 
   /* And a line each means a line each, not "whichever fits". Static chord
      practice shows neither the metre nor the take button, so the two groups
@@ -2291,28 +2310,42 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     <div class="meter" id="meter" hidden><span id="meterFill" style="width:0%"></span></div>
     <div class="keyboard" id="keyboard"></div>
+    <!-- Two groups, not ten things on a wrapping row. They are two kinds of
+         thing - what you press and what you read - and mixed together they
+         wrapped into whatever order the width happened to produce, with a
+         legend landing between two buttons. Grouped, the row breaks where the
+         meaning breaks.
+
+         The take button and the beat dots were on this row too. They are in
+         the transport strip now, beside the tempo they are counting at - see
+         the comment on `#armTake` there for what that costs. -->
     <div class="dock-foot">
-      <span class="practising" id="practising">Practising <b id="styleLabel">any shape</b></span>
-      <!-- The take button and the beat dots were here, under the hand. They
-           are in the transport strip now, beside the tempo they are counting
-           at - see the comment on `#armTake` there for what that costs. -->
-      <button class="play-btn" type="button" id="playChord" disabled>Play chord</button>
-      <button class="link-btn" type="button" id="nameChord" disabled>Name it</button>
-      <button class="link-btn" type="button" id="showVoicing">Show me one</button>
-      <!-- Beside "Show me one" rather than over the chart, because what it
-           writes on is the keyboard. A control for the keys belongs with the
-           keys; the buttons above the chart are the ones that change the tune. -->
-      <button class="link-btn" type="button" id="guideButton" aria-pressed="false"
-              title="Marks the keys the next chord's 3rd and 7th are on, voiced from whatever you just played.">Guide tones</button>
-      <button class="link-btn" type="button" id="sustainPedal" aria-pressed="false"
-              title="Holds notes after the keys lift, as a sustain pedal does. A pedal on a connected MIDI keyboard works this too.">Sustain</button>
-      <span class="legend"><span class="dot"></span> scale tone</span>
-      <span class="legend"><span class="ring"></span> passing tone</span>
-      <!-- Which chord the badges on the keys are for. Without it the marks are
-           two keys with no name on them, and the next chord is exactly the
-           thing a player has not looked at yet. -->
-      <span class="legend lead-legend" id="leadLegend" hidden>next <b id="leadChord"></b></span>
-      <button class="link-btn" type="button" id="clearKeys" style="margin-left:auto">Clear keys</button>
+      <div class="dock-actions">
+        <button class="play-btn" type="button" id="playChord" disabled>Play chord</button>
+        <button class="link-btn" type="button" id="nameChord" disabled>Name it</button>
+        <button class="link-btn" type="button" id="showVoicing">Show me one</button>
+        <!-- Beside "Show me one" rather than over the chart, because what it
+             writes on is the keyboard. A control for the keys belongs with the
+             keys; the buttons above the chart are the ones that change the tune. -->
+        <button class="link-btn" type="button" id="guideButton" aria-pressed="false"
+                title="Marks the keys the next chord's 3rd and 7th are on, voiced from whatever you just played.">Guide tones</button>
+        <button class="link-btn" type="button" id="sustainPedal" aria-pressed="false"
+                title="Holds notes after the keys lift, as a sustain pedal does. A pedal on a connected MIDI keyboard works this too.">Sustain</button>
+        <button class="link-btn" type="button" id="clearKeys">Clear keys</button>
+      </div>
+
+      <!-- What the keys are saying back, rather than anything to press. It used
+           to be spelled with `margin-left: auto` on the last button, which is a
+           group split written as a nudge on one member of it. -->
+      <div class="dock-status">
+        <span class="practising" id="practising">Practising <b id="styleLabel">any shape</b></span>
+        <span class="legend"><span class="dot"></span> scale tone</span>
+        <span class="legend"><span class="ring"></span> passing tone</span>
+        <!-- Which chord the badges on the keys are for. Without it the marks are
+             two keys with no name on them, and the next chord is exactly the
+             thing a player has not looked at yet. -->
+        <span class="legend lead-legend" id="leadLegend" hidden>next <b id="leadChord"></b></span>
+      </div>
     </div>
   </div>
 </div>

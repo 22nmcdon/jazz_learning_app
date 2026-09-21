@@ -22,7 +22,8 @@ The last four commits restructured the page's layout:
 | `603ffd6` | Sectioned the cheat sheet into five tabs so it never has to be scrolled, and added six topics it never covered. |
 | `c418613` | The transport onto a strip of its own — Static/In time, the metre, the tempo, the take button and the beat dots, all of them out of the Practice menu. What is left of the *Playing* group is one popover off the strip. |
 | `c4c5eea` | Reserved the strip's height in **both** of the page's typefaces. The first version sized it against the fallback face alone and shipped a chart that moved when the clock came on. |
-| *(this one)* | One settings panel: the comping panel and the chart's toolbar merged into `#menuPanel` in seven sections, and the colophon with them. |
+| `16dab04` | One settings panel: the comping panel and the chart's toolbar merged into `#menuPanel` in seven sections, and the colophon with them. |
+| *(this one)* | The dock foot regrouped into what you press and what you read. |
 
 Verify anything you change:
 
@@ -34,20 +35,11 @@ cmake --build build          # the page is copied into the JUCE shell
 
 ---
 
-## The layout work: commits 5 to 7
+## The layout work: commits 6 and 7
 
-Four of seven are done. These three are planned in detail and agreed; the shape
-of the finished thing is a top bar with its head and its transport, a chart that
+Five of seven are done. These two are planned in detail and agreed; the shape of
+the finished thing is a top bar with its head and its transport, a chart that
 takes every remaining pixel, and a dock.
-
-### 5 — Regroup the dock foot
-
-Twelve children on one wrapping row become two groups: **actions**
-(`#playChord`, `#nameChord`, `#showVoicing`, `#guideButton`, `#sustainPedal`,
-`#clearKeys`) and **status** (`#practising`, the two `.legend` spans,
-`#leadLegend`). `#armTake` and `#beatRow` have already left for the strip, so the
-row is ten children rather than twelve. Drop the inline `margin-left: auto` on
-`#clearKeys` in favour of the group split.
 
 **Where the unbuilt features land is settled**: they are sections of
 `#menuPanel`, which is what commit 4 was mostly for. A comping-style editor off
@@ -205,9 +197,16 @@ messages are reproducible without writing measuring scripts again.
 
 The narrow-layout scan at the end of the file is the safety net for all of this.
 It scans `.top-bar`, `.top-bar-right`, `.transport-clock`, `.transport-take`,
-`.dock-foot` and `.feedback` at 390px. **Anything that moves a control into a
-new container must add that container to the scan**, or the net has a hole in
-it.
+`.dock-actions`, `.dock-status` and `.feedback` at 390px. **Anything that moves
+a control into a new container must add that container to the scan**, or the net
+has a hole in it.
+
+To prove the scan reaches a container, give one of its children `min-width`, not
+`width`. Every container it scans is a flex row, so a `width: 900px` child is
+simply shrunk back to fit and the deliberately-broken control is not broken at
+all — which reads exactly like a hole in the scan and is not one. This cost a
+round of head-scratching; `CLAUDE.md`'s note about a 900px control predates the
+containers being flex.
 
 - **The settings panel** — that the editor and *Restore original* still work
   now that they are buttons inside a panel rather than on a toolbar, and that

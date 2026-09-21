@@ -2111,7 +2111,7 @@ try {
 
       for (const element of document.querySelectorAll(
              ".top-bar > *, .top-bar-right > *, .transport-clock > *, .transport-take > *,"
-             + " .dock-foot > *")) {
+             + " .dock-actions > *, .dock-status > *")) {
         const box = element.getBoundingClientRect();
 
         if (box.width > 0 && (box.right > window.innerWidth + 0.5 || box.left < -0.5))
@@ -2140,7 +2140,7 @@ try {
 
     for (const element of document.querySelectorAll(
            ".top-bar > *, .top-bar-right > *, .transport-clock > *, .transport-take > *,"
-           + " .dock-foot > *, .feedback > *")) {
+           + " .dock-actions > *, .dock-status > *, .feedback > *")) {
       const box = element.getBoundingClientRect();
 
       if (box.width > 0 && (box.right > window.innerWidth + 0.5 || box.left < -0.5))
