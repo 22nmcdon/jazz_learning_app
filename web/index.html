@@ -281,9 +281,17 @@ body > .wrap {
    and the chart moved when the clock came on. It shipped that way.
 
    Hence the block below: every control on the strip is given an explicit
-   `line-height` (a `height` for the select, which does not size from one), so
-   its box is arithmetic rather than font-derived. Tallest is 28 against the 29
-   reserved. Do not take those away without taking the reservation away too.
+   `line-height`, so its box is arithmetic rather than font-derived. Tallest is
+   28 against the 29 reserved. Do not take those away without taking the
+   reservation away too.
+
+   The select needs all three of what it is given. It does not take its height
+   from `line-height` at all, so that is set outright - but a height alone
+   leaves the text laying itself out on the font's own line box inside a box
+   that clips, and a tall enough face renders `4/4` with its top sliced off.
+   The line box has to be pinned as well, and the vertical padding dropped to
+   leave it the room. Screenshotted in both faces rather than measured: the
+   height was right in every variant and only one of them was readable.
 
    The grouping is also what keeps each group on one line at a phone width: the
    wide control and the narrow one are in different groups, so neither line is
@@ -309,7 +317,7 @@ body > .wrap {
 
 .transport .mode-option  { line-height: 12px; }   /* 12 + 14 padding + 2 border = 28 */
 .transport .tempo-input  { line-height: 16px; }   /* 16 + 10 padding + 2 border = 28 */
-.transport .metre-select { height: 28px; }        /* a closed select ignores line-height */
+.transport .metre-select { height: 28px; line-height: 1; padding-block: 0; }
 .transport .arm-btn      { line-height: 12px; }   /* 12 + 12 padding + 2 border = 26 */
 .transport .link-btn     { line-height: 13px; }   /* 13 +  2 padding + 1 border = 16 */
 
