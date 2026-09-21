@@ -246,6 +246,82 @@ body > .wrap {
   min-width: 0;
 }
 
+/* --- the transport strip -------------------------------------------------- */
+/* A second row of the top bar rather than a zone of its own: `flex-basis:
+   100%` in a wrapping row is all "always on its own line" needs, and it keeps
+   the frame at three zones.
+
+   The strip has to be the same height whatever is on it, and most of what is
+   on it comes and goes: the metre, the tempo and the dots need a clock, and
+   the take button needs a mode that can grade one. Left to wrap freely that is
+   four different heights across the four corners of mode x In time - one row
+   on a laptop but one, two or three on a phone - and every one of them moves
+   the chart zone's top edge. Turning the clock on would shove the music down
+   under the eye reading it, which is a worse answer to "what changed" than the
+   thing that actually changed.
+
+   So the rows are structural rather than a consequence of what is showing.
+   Two groups - the clock, then the take - each of which is one row of its own
+   at any width, each reserving that row whether or not anything in it is
+   showing. On a laptop both groups sit on one line; on a phone they are a line
+   each; in neither case does the count depend on the clock. `min-height` is
+   the tallest thing either group ever holds. A check measures the chart zone's
+   top edge in every corner of mode x In time, at a laptop size and a phone
+   one, and fails if it is not one number - two sizes because the strip fails
+   differently at each.
+
+   The grouping is also what keeps each group on one line at a phone width: the
+   wide control and the narrow one are in different groups, so neither line is
+   the one carrying everything. Put the metre with the take button instead and
+   that line wants 401px of the 342px a 390px phone has. */
+.transport {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  min-width: 0;
+}
+.transport-clock,
+.transport-take {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  min-height: 29px;
+  min-width: 0;
+}
+
+/* The popover hangs off the *row*, not off its own button. `.menu-wrap` makes
+   itself the containing block, which is right for a button at the end of a row
+   - the practice menu's, the comping panel's - and wrong for one in the middle
+   of one: `left: 0` from there put 340px of panel half off a 430px screen, and
+   `right: 0` would have put it off the other side on a wider one. Anchored to
+   the row, the panel's right edge lands on the row's, which is the button's own
+   edge on a laptop and safely inside the screen on a phone.
+
+   The child selector is not decoration: `.transport-more` alone carries the
+   same class count `.menu-wrap` does and `.menu-wrap`'s rule comes later in
+   the file, so it has to out-specify that rule rather than merely disagree
+   with it. */
+.transport-take { position: relative; }
+.transport-take > .transport-more { position: static; }
+
+/* Wider than the 310px default because the loop, ramp and reharm rows are two
+   controls and a label each. */
+#transportPanel { width: min(340px, calc(100vw - 32px)); }
+
+/* The note leads the panel instead of a heading - the button that opened it is
+   the heading - so it has no margin pushing it off one. */
+.menu-note.lede { margin-top: 0; }
+
+/* Open reads the way the other two panel buttons read it. */
+#transportButton[aria-expanded="true"] {
+  color: var(--blush-deep);
+  border-bottom-width: 2px;
+  border-color: var(--blush-deep);
+}
+
 /* Hosted by the desktop app. This used to hide the whole branding column,
    which the app has no use for when the window's own title bar already names
    it. There is no branding column any more - what is left is the chart's head,
@@ -341,12 +417,6 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
 }
 .tempo-select { width: auto; flex: 1 1 0; min-width: 0; margin-top: 0; }
 
-.transport-btn { min-width: 74px; }
-.transport-btn[aria-pressed="true"] {
-  background: var(--rust);
-  border-color: var(--rust);
-  color: var(--cream);
-}
 
 /* Where the beat is, one dot to a beat of the metre. The chart says which bar and this says
    where in it - the one thing a moving highlight cannot show, because a bar
@@ -744,13 +814,6 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
    columns centred over a chart cost a title's worth of height and a blank
    third of the row either side of it; read left to right they cost one line. */
 .sheet-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 14px;
-  min-width: 0;
-}
-.sheet-mark {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -1565,6 +1628,34 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   /* The head is a line in the top bar now rather than three columns over the
      chart, so it needs nothing said to it here: it wraps on its own, and it
      wraps the same way the controls beside it do. */
+
+  /* The transport's two groups are a line each here rather than sharing one,
+     and at 390px the wider of the two - the switch and the tempo mark - wants
+     346px of the 342px on offer. Four pixels, but a line either way, and a
+     third row of the strip costs 29px of chart in every mode including the
+     static one with no use for any of it. These give back forty-odd between
+     them and none changes what anything says: the spacing between the
+     controls, and the letter-spacing on the one button up here wearing any.
+
+     The tempo box is deliberately not among them, though 62px for three digits
+     looks like the obvious place to start. A number input keeps room for its
+     own spinner, so its content wants 56px of the 60 that width leaves it;
+     taken down to 48 it showed `12` for 120, the last digit simply gone with
+     nothing to say so. A check reads it at this width for exactly that. */
+  .transport, .transport-clock, .transport-take { gap: 8px 10px; }
+
+  /* And a line each means a line each, not "whichever fits". Static chord
+     practice shows neither the metre nor the take button, so the two groups
+     would fold onto one row there and back onto two the moment the clock came
+     on - which is the shift the split exists to stop, arriving by the other
+     door. */
+  .transport-clock, .transport-take { flex: 1 1 100%; }
+  .metre-row { gap: 6px 8px; }
+  .tempo-mark { gap: 3px; }
+  .metre-select { padding: 4px 4px; }
+  .arm-btn { padding: 6px 11px; letter-spacing: 0.1em; }
+  .beat-row { gap: 5px; }
+
   .keyboard { height: 100px; }
   .bar { min-height: 70px; padding-top: 22px; }
 
@@ -1606,7 +1697,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
      printed lead sheet without its feel, its title or who wrote it is not a
      lead sheet. What goes is everything beside it, which is all controls. */
   .sheet-tools, .editor, .dock, .colophon, dialog,
-  .top-bar-right, .stale-engine { display: none !important; }
+  .top-bar-right, .transport, .stale-engine { display: none !important; }
 
   /* And it stops looking like a bar: no rule under it, no padding holding it
      off a screen edge that is not there. The head sits over the chart the way
@@ -1617,7 +1708,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     display: block;
   }
   .sheet-head { margin-bottom: 18px; }
-  .metre-row { display: none !important; }
 
   /* The frame comes off first. A printer has no viewport to fit, and a chart
      laid out inside a `100dvh` box with a scrolling middle prints the one
@@ -1678,25 +1768,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
          the one thing that names what you are playing left the screen the
          moment you played past the first line. -->
     <div class="sheet-head">
-      <div class="sheet-mark">
-        <span class="style-mark" id="sheetStyle">Medium Swing</span>
-
-        <!-- Where a lead sheet puts them: the metre and the tempo mark sit
-             beside the feel rather than inside a menu. They are the chart's
-             own - an imported waltz arrives in three - so this is also where
-             they are most honestly read. Shown only once there is a clock for
-             them to mean anything to. -->
-        <div class="metre-row" id="metreRow" hidden>
-          <label class="sr-only" for="timeSig">Time signature</label>
-          <select class="metre-select" id="timeSig"></select>
-          <span class="tempo-mark">
-            <span class="note-value" aria-hidden="true">&#9833;</span>
-            <span aria-hidden="true">=</span>
-            <label class="sr-only" for="tempo">Tempo, in beats per minute</label>
-            <input class="tempo-input" id="tempo" type="number" min="40" max="300" step="1" value="120">
-          </span>
-        </div>
-      </div>
+      <span class="style-mark" id="sheetStyle">Medium Swing</span>
       <h2 class="sheet-title" id="sheetTitle">Practice Chart</h2>
       <span class="sheet-credit" id="sheetCredit">chord chart</span>
     </div>
@@ -1727,90 +1799,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <span class="menu-title">Chart</span>
             <button class="link-btn" type="button" id="ioButton">Import / export</button>
             <p class="menu-note">Open a chart from iReal Pro or a PDF, or take this one away.</p>
-          </div>
-
-          <!-- A switch rather than a checkbox, because it is the same kind of
-               choice the one at the top is - and because only one side of it
-               exists, which a switch says more honestly than a tick would. -->
-          <!-- No `data-mode`: the clock belongs to both modes now. In solo
-               practice In time counts a line; in chord practice it is comping,
-               and the same switch turns it on. -->
-          <div class="menu-group">
-            <span class="menu-title">Playing</span>
-            <div class="mode-switch" role="radiogroup" aria-label="How the chart moves">
-              <button class="mode-option" type="button" id="playStatic" role="radio" aria-checked="true">Static</button>
-              <button class="mode-option" type="button" id="playLive" role="radio" aria-checked="false">In time</button>
-            </div>
-            <p class="menu-note" id="playingNote">Static: the bar you are on is the bar you chose,
-              and nothing is counting time.</p>
-
-            <!-- Tempo and metre used to sit here. They belong to the chart, so
-                 they moved to its head; what is left is only what belongs to
-                 the practice session. Hidden rather than disabled: a count-in
-                 beside a switch set to Static is asking a question nobody has
-                 reached yet. -->
-            <label class="menu-option" id="countInRow" hidden>
-              <input type="checkbox" id="countIn" checked> Count in a bar first
-            </label>
-
-            <div class="tempo-row" id="loopRow" hidden>
-              <label class="tempo-label" for="loopFrom">Loop bars</label>
-              <select class="menu-select tempo-select" id="loopFrom"></select>
-              <span class="tempo-unit">to</span>
-              <select class="menu-select tempo-select" id="loopTo"></select>
-            </div>
-
-            <!-- Under the loop, because a chorus is what it counts. Off by
-                 default and hidden with the rest of what a clock needs: this
-                 is practice you set up deliberately, not practice you should
-                 find yourself in. -->
-            <label class="menu-option" id="rampRow" hidden>
-              <input type="checkbox" id="ramp"> Speed up each chorus
-            </label>
-
-            <div class="tempo-row" id="rampHow" hidden>
-              <label class="tempo-label" for="rampBy">by</label>
-              <input class="tempo-input" id="rampBy" type="number" min="1" max="20" step="1" value="4">
-              <span class="tempo-unit">bpm, up to</span>
-              <input class="tempo-input" id="rampTo" type="number" min="40" max="300" step="5" value="200">
-              <span class="tempo-unit">bpm</span>
-            </div>
-
-            <!-- Last of the three things that happen *to* a take rather than
-                 that happens *to* a take rather than a setting of it, and like
-                 them it needs a clock: a chorus is the unit, and static there
-                 is no such thing. -->
-            <label class="menu-option" id="reharmRow" hidden>
-              <input type="checkbox" id="reharmLive"> Reharmonise as you play
-            </label>
-
-            <!-- Two questions rather than one list, because they are
-                 genuinely independent: a single bar can go out to a risky
-                 substitution, and the whole tune can be nudged by the lightest
-                 plan there is. -->
-            <div class="tempo-row" id="reharmHow" hidden>
-              <label class="tempo-label" for="reharmAmount">Changing</label>
-              <select class="menu-select tempo-select" id="reharmAmount">
-                <option value="bar">one bar a chorus</option>
-                <option value="few">a few bars a chorus</option>
-                <option value="tune">the whole tune</option>
-              </select>
-            </div>
-
-            <div class="tempo-row" id="reharmFar" hidden>
-              <label class="tempo-label" for="reharmReach">Going</label>
-              <select class="menu-select tempo-select" id="reharmReach">
-                <option value="safe">no further than safe</option>
-                <option value="advanced">into advanced moves</option>
-                <option value="risky">out to risky ones</option>
-              </select>
-            </div>
-
-            <!-- A plan carries its own reach, so the question above it has
-                 nothing left to ask. What it needs instead is which plan, and
-                 that is chosen where the six of them are already described. -->
-            <p class="menu-note" id="reharmPlanNote" hidden></p>
-
           </div>
 
           <div class="menu-group" data-mode="solo">
@@ -1867,6 +1855,148 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <span class="menu-title">MIDI keyboard</span>
             <button class="link-btn" type="button" id="connectMidi">Connect a keyboard</button>
             <p class="menu-note" id="midiStatus">Not connected. The on-screen keyboard works either way.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- The transport, on a row of its own rather than three levels down a
+         dropdown. What is here is what a player reaches for while they are
+         playing: whether the chart is moving, how fast and in what, and the
+         button that starts a take - plus the dots saying where in the bar the
+         clock is. The switch, the take button and everything with them were
+         behind the Practice button, in a Playing group eleven rows deep and
+         three levels down; the metre and the tempo came the other way, out of
+         the chart's head and down to the switch that gives them a meaning.
+
+         Two groups, and the split is the strip's own sentence: what the clock
+         is doing (still or in time, in what metre, at what tempo), then what
+         the take is doing (start it, where in the bar it has got to, and how
+         it is set up). Each is one row of its own and keeps that row whether
+         or not anything in it is showing - see `.transport` in the stylesheet
+         for why the row count must not depend on the clock. -->
+    <div class="transport" id="transport">
+      <!-- A switch rather than a checkbox, because it is the same kind of
+           choice the one above it is - and because only one side of it exists,
+           which a switch says more honestly than a tick would. -->
+      <!-- No `data-mode`: the clock belongs to both modes. In solo practice In
+           time counts a line; in chord practice it is comping, and the same
+           switch turns it on. -->
+      <div class="transport-clock">
+        <div class="mode-switch" role="radiogroup" aria-label="How the chart moves">
+          <button class="mode-option" type="button" id="playStatic" role="radio" aria-checked="true">Static</button>
+          <button class="mode-option" type="button" id="playLive" role="radio" aria-checked="false">In time</button>
+        </div>
+
+        <!-- Written the way a lead sheet writes them, and still the chart's own
+             - an imported waltz arrives in three. They sat beside the feel until
+             the strip existed; here they are beside the switch that gives them
+             something to mean, which is the thing they actually depend on.
+             Shown only once there is a clock. -->
+        <div class="metre-row" id="metreRow" hidden>
+          <label class="sr-only" for="timeSig">Time signature</label>
+          <select class="metre-select" id="timeSig"></select>
+          <span class="tempo-mark">
+            <span class="note-value" aria-hidden="true">&#9833;</span>
+            <span aria-hidden="true">=</span>
+            <label class="sr-only" for="tempo">Tempo, in beats per minute</label>
+            <input class="tempo-input" id="tempo" type="number" min="40" max="300" step="1" value="120">
+          </span>
+        </div>
+      </div>
+
+      <div class="transport-take">
+        <!-- It moved off the keyboard to get here, which costs something: it is
+             no longer under the hand that is about to play. It is pressed once a
+             take and the space bar still arms it, so what it gains is worth
+             more - it is the take's own control, beside the dots counting the
+             take and the popover setting one up. -->
+        <button class="arm-btn" type="button" id="armTake" hidden aria-pressed="false">
+          <span class="arm-dot" aria-hidden="true"></span><span id="armLabel">Start a take</span>
+        </button>
+
+        <!-- No Play button beside it: in time, starting a take *is* pressing
+             play. Two buttons meant a take running against a still chart and a
+             chart rolling with nothing counting, both of which were only ever
+             mistakes. The dots are filled from the metre, so a waltz shows
+             three. -->
+        <span class="beat-row" id="beatRow" hidden aria-hidden="true"></span>
+
+        <!-- What is left of the Playing group: the four things you set before a
+             take rather than during one. One popover instead of a group nested
+             in a panel, so they are one click from the strip they belong to
+             rather than three from the corner of the screen. -->
+        <div class="menu-wrap transport-more">
+          <button class="link-btn" type="button" id="transportButton"
+                  aria-expanded="false" aria-controls="transportPanel">Take setup</button>
+          <div class="menu-panel" id="transportPanel" hidden>
+            <div class="menu-group">
+              <p class="menu-note lede" id="playingNote">Static: the bar you are on is the bar you chose,
+                and nothing is counting time.</p>
+
+              <!-- Hidden rather than disabled: a count-in beside a switch set
+                   to Static is asking a question nobody has reached yet. -->
+              <label class="menu-option" id="countInRow" hidden>
+                <input type="checkbox" id="countIn" checked> Count in a bar first
+              </label>
+
+              <div class="tempo-row" id="loopRow" hidden>
+                <label class="tempo-label" for="loopFrom">Loop bars</label>
+                <select class="menu-select tempo-select" id="loopFrom"></select>
+                <span class="tempo-unit">to</span>
+                <select class="menu-select tempo-select" id="loopTo"></select>
+              </div>
+
+              <!-- Under the loop, because a chorus is what it counts. Off by
+                   default and hidden with the rest of what a clock needs: this
+                   is practice you set up deliberately, not practice you should
+                   find yourself in. -->
+              <label class="menu-option" id="rampRow" hidden>
+                <input type="checkbox" id="ramp"> Speed up each chorus
+              </label>
+
+              <div class="tempo-row" id="rampHow" hidden>
+                <label class="tempo-label" for="rampBy">by</label>
+                <input class="tempo-input" id="rampBy" type="number" min="1" max="20" step="1" value="4">
+                <span class="tempo-unit">bpm, up to</span>
+                <input class="tempo-input" id="rampTo" type="number" min="40" max="300" step="5" value="200">
+                <span class="tempo-unit">bpm</span>
+              </div>
+
+              <!-- Last of the three things that happen *to* a take rather than
+                   being a setting of it, and like them it needs a clock: a
+                   chorus is the unit, and static there is no such thing. -->
+              <label class="menu-option" id="reharmRow" hidden>
+                <input type="checkbox" id="reharmLive"> Reharmonise as you play
+              </label>
+
+              <!-- Two questions rather than one list, because they are
+                   genuinely independent: a single bar can go out to a risky
+                   substitution, and the whole tune can be nudged by the lightest
+                   plan there is. -->
+              <div class="tempo-row" id="reharmHow" hidden>
+                <label class="tempo-label" for="reharmAmount">Changing</label>
+                <select class="menu-select tempo-select" id="reharmAmount">
+                  <option value="bar">one bar a chorus</option>
+                  <option value="few">a few bars a chorus</option>
+                  <option value="tune">the whole tune</option>
+                </select>
+              </div>
+
+              <div class="tempo-row" id="reharmFar" hidden>
+                <label class="tempo-label" for="reharmReach">Going</label>
+                <select class="menu-select tempo-select" id="reharmReach">
+                  <option value="safe">no further than safe</option>
+                  <option value="advanced">into advanced moves</option>
+                  <option value="risky">out to risky ones</option>
+                </select>
+              </div>
+
+              <!-- A plan carries its own reach, so the question above it has
+                   nothing left to ask. What it needs instead is which plan, and
+                   that is chosen where the six of them are already described. -->
+              <p class="menu-note" id="reharmPlanNote" hidden></p>
+            </div>
           </div>
         </div>
       </div>
@@ -2064,15 +2194,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     <div class="keyboard" id="keyboard"></div>
     <div class="dock-foot">
       <span class="practising" id="practising">Practising <b id="styleLabel">any shape</b></span>
-      <button class="arm-btn" type="button" id="armTake" hidden aria-pressed="false">
-        <span class="arm-dot" aria-hidden="true"></span><span id="armLabel">Start a take</span>
-      </button>
-      <!-- No Play button beside it: in time, starting a take *is* pressing
-           play. Two buttons meant a take running against a still chart and a
-           chart rolling with nothing counting, both of which were only ever
-           mistakes. The dots are filled from the metre, so a waltz shows
-           three. -->
-      <span class="beat-row" id="beatRow" hidden aria-hidden="true"></span>
+      <!-- The take button and the beat dots were here, under the hand. They
+           are in the transport strip now, beside the tempo they are counting
+           at - see the comment on `#armTake` there for what that costs. -->
       <button class="play-btn" type="button" id="playChord" disabled>Play chord</button>
       <button class="link-btn" type="button" id="nameChord" disabled>Name it</button>
       <button class="link-btn" type="button" id="showVoicing">Show me one</button>
@@ -2276,26 +2400,26 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     <ul class="help-list" id="helpPanelTime" hidden>
       <li><b>In time puts a clock behind the chart.</b>
-        <span><i>Practice &rarr; Playing</i>. The chart moves on its own and the rolling bar
-        keeps itself in view. The metre and tempo are at the head of the chart, and a tune
-        imported in three arrives counted in three.</span></li>
+        <span>The switch on the transport strip, under the chart's head. The chart moves on
+        its own and the rolling bar keeps itself in view. The metre and tempo are on the
+        strip beside it, and a tune imported in three arrives counted in three.</span></li>
 
       <li data-mode="chords"><b>And turns this into comping.</b>
         <span>The keys stop latching - a comp is struck, not held - and each chord is read
         twice: what it said about the bar, and where it landed.</span></li>
 
       <li><b>Start a take</b>
-        <span>- the button, or the space bar. It counts a bar in, loops the range you set,
-        and stopping freezes the summary.</span></li>
+        <span>- the button on the strip, or the space bar. It counts a bar in, loops the
+        range you set under <i>Take setup</i>, and stopping freezes the summary.</span></li>
 
       <li><b>The tempo can climb,</b>
-        <span>a few beats each time the loop comes round, up to a ceiling you choose. An
-        option, not a requirement.</span></li>
+        <span>a few beats each time the loop comes round, up to a ceiling you choose.
+        <i>Take setup</i>, and an option rather than a requirement.</span></li>
 
       <li><b>The tune can change under you.</b>
-        <span><i>Reharmonise as you play</i> reharmonises a bar, a few bars or the whole
-        tune each chorus, going further out as it goes - then puts it back when the take
-        stops.</span></li>
+        <span><i>Take setup &rarr; Reharmonise as you play</i> reharmonises a bar, a few bars
+        or the whole tune each chorus, going further out as it goes - then puts it back when
+        the take stops.</span></li>
     </ul>
 
     <ul class="help-list" id="helpPanelBand" hidden>
@@ -2558,6 +2682,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "helpPanelChart", "helpPanelPlaying", "helpPanelReading", "helpPanelTime", "helpPanelBand",
    "compingButton", "compingPanel", "compPiano", "compSound", "compingNote",
    "compStyle", "compStyleNote", "compBass", "bassSound", "compDrums",
+   "transportButton", "transportPanel",
    "playStatic", "playLive", "playingNote", "metreRow", "tempo", "timeSig", "countInRow", "countIn",
    "loopRow", "loopFrom", "loopTo", "beatRow",
    "rampRow", "ramp", "rampHow", "rampBy", "rampTo",
@@ -6231,23 +6356,37 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.compingButton.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
+  function setTransportOpen(open) {
+    el.transportPanel.hidden = !open;
+    el.transportButton.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
   el.menuButton.addEventListener("click", function () {
     setCompingOpen(false);
+    setTransportOpen(false);
     setMenuOpen(el.menuPanel.hidden);
   });
 
   el.compingButton.addEventListener("click", function () {
     setMenuOpen(false);
+    setTransportOpen(false);
     setCompingOpen(el.compingPanel.hidden);
   });
 
-  // Both panels are `.menu-wrap` children, so one rule closes whichever is
-  // open the moment a click lands anywhere else on the page.
+  el.transportButton.addEventListener("click", function () {
+    setMenuOpen(false);
+    setCompingOpen(false);
+    setTransportOpen(el.transportPanel.hidden);
+  });
+
+  // All three panels are `.menu-wrap` children, so one rule closes whichever
+  // is open the moment a click lands anywhere else on the page.
   document.addEventListener("click", function (event) {
     if (event.target.closest(".menu-wrap")) return;
 
     setMenuOpen(false);
     setCompingOpen(false);
+    setTransportOpen(false);
   });
 
   document.addEventListener("keydown", function (event) {
@@ -6261,6 +6400,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (!el.compingPanel.hidden) {
       setCompingOpen(false);
       el.compingButton.focus();
+    }
+
+    if (!el.transportPanel.hidden) {
+      setTransportOpen(false);
+      el.transportButton.focus();
     }
   });
 

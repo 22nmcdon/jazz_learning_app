@@ -688,30 +688,41 @@ try {
   await page.locator("#menuButton").click();
   const styles = await page.locator("#scaleStyle option").count();
   check(`the engine's styles fill the menu (${styles})`, styles >= 5);
+  await page.locator("#menuButton").click();
 
-  // In time puts a clock behind the chart. Driven fast and looped over two
-  // bars, so the test watches a real roll rather than a stubbed one.
+  /*  In time puts a clock behind the chart. Driven fast and looped over two
+      bars, so the test watches a real roll rather than a stubbed one.
+
+      Reached without opening anything: the switch, the tempo, the metre and
+      the take button are on the transport strip. Every click on one of them
+      below used to be a pair of menu clicks around it, and a pair with half of
+      it missing leaves the menu hanging open over the page - which is why they
+      came out together rather than one at a time. */
   await page.locator("#playLive").click();
+
+  // The tempo and the metre are on the transport strip, not in a menu, so they
+  // are readable and reachable while playing rather than behind a button.
+  check("the tempo mark is on the transport strip",
+        (await page.locator("#metreRow").isVisible())
+        && (await page.locator(".transport #tempo").count()) === 1
+        && (await page.locator(".transport #timeSig").count()) === 1);
+
+  // What is left of the old Playing group is one popover off the strip: the
+  // things a take is set up with rather than played with.
+  await page.locator("#transportButton").click();
   check("choosing in time reveals what a clock needs",
         (await page.locator("#countInRow").isVisible())
         && (await page.locator("#loopRow").isVisible()));
-
-  // The tempo and the metre are at the head of the chart, not in the menu, so
-  // they are readable while playing rather than behind a button.
-  check("the tempo mark is at the head of the chart",
-        (await page.locator("#metreRow").isVisible())
-        && (await page.locator(".sheet-head #tempo").count()) === 1
-        && (await page.locator(".sheet-head #timeSig").count()) === 1);
 
   // A loop nobody has chosen is the whole tune, not bar one to bar one.
   check(`the loop starts as the whole chart `
         + `(${await page.locator("#loopFrom").inputValue()}-${await page.locator("#loopTo").inputValue()})`,
         (await page.locator("#loopFrom").inputValue()) === "0"
         && (await page.locator("#loopTo").inputValue()) === "11");
+  await page.locator("#transportButton").click();
 
   // Count in first, which is the default: the dots count and the chart waits.
   // One button does both jobs now - starting a take is what sets it rolling.
-  await page.locator("#menuButton").click();
   await page.locator("#armTake").click();
   await page.waitForFunction(
     () => document.querySelector("#beatRow").classList.contains("counting"),
@@ -731,11 +742,11 @@ try {
         (await page.locator("#beatRow .beat").count()) === 3);
   await page.selectOption("#timeSig", "4/4");
 
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
   await page.uncheck("#countIn");
   await page.selectOption("#loopFrom", "0");
   await page.selectOption("#loopTo", "1");
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
 
   await page.fill("#tempo", "300");
   await page.dispatchEvent("#tempo", "change");
@@ -783,14 +794,14 @@ try {
       a chorus begins rather than under a phrase. So this measures the beats:
       the gaps have to come in runs, one run per pass of the loop, each shorter
       than the last. */
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
   await page.check("#ramp");
   await page.fill("#rampBy", "20");
   await page.dispatchEvent("#rampBy", "change");
   await page.fill("#rampTo", "300");
   await page.dispatchEvent("#rampTo", "change");
   await page.selectOption("#loopTo", "0");      // one bar, so a chorus is four beats
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
 
   await page.fill("#tempo", "200");
   await page.dispatchEvent("#tempo", "change");
@@ -829,10 +840,10 @@ try {
   check(`and steps on a chorus, not inside one (${runs.map((r) => r.beats).join("+")} beats)`,
         runs.slice(0, -1).every((run) => run.beats % 4 === 0));
 
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
   await page.uncheck("#ramp");
   await page.selectOption("#loopTo", "1");
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
   await page.fill("#tempo", "300");
   await page.dispatchEvent("#tempo", "change");
   await page.evaluate(() => document.activeElement.blur());
@@ -853,10 +864,10 @@ try {
 
   const before = await chartNow();
 
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
   await page.check("#reharmLive");
   await page.selectOption("#reharmReach", "advanced");
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
   await page.evaluate(() => document.activeElement.blur());
 
   await page.keyboard.press("Space");
@@ -920,9 +931,9 @@ try {
       it is reharmonising what the last chorus left rather than the chart the
       take started from - which is what makes the tune go further out pass by
       pass instead of landing somewhere and staying. */
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
   await page.selectOption("#reharmAmount", "tune");
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
   await page.evaluate(() => document.activeElement.blur());
 
   const barsOf = (chart) => chart.split(" | ");
@@ -950,16 +961,15 @@ try {
 
   check("and a whole-tune take puts every bar of it back", true);
 
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
   // Back to a bar before switching off: the amount goes away with the
   // exercise, and a hidden select is one nothing can choose from.
   await page.selectOption("#reharmAmount", "bar");
   await page.uncheck("#reharmLive");
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
   await page.evaluate(() => document.activeElement.blur());
 
   // Off the clock the dialog goes back to meaning what it always meant.
-  await page.locator("#menuButton").click();
   await page.locator("#playStatic").click();
   await page.locator("#menuButton").click();
   await page.locator("#planButton").click();
@@ -969,9 +979,7 @@ try {
         (await page.locator("#planTitle").innerText()).trim() === "Reharmonise");
 
   await page.locator("#planClose").click();
-  await page.locator("#menuButton").click();
   await page.locator("#playLive").click();
-  await page.locator("#menuButton").click();
   await page.evaluate(() => document.activeElement.blur());
 
 
@@ -1097,11 +1105,11 @@ try {
   // are selected by value: their labels are bar numbers, and "1" as a label is
   // bar index 0, which is a one-bar loop when you wanted two.
   await page.locator("#compingButton").click();
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
   await page.uncheck("#countIn");
   await page.selectOption("#loopFrom", { value: "0" });
   await page.selectOption("#loopTo", { value: "3" });
-  await page.locator("#menuButton").click();
+  await page.locator("#transportButton").click();
   await page.fill("#tempo", "240");
   await page.dispatchEvent("#tempo", "change");
   await page.evaluate(() => document.activeElement.blur());
@@ -1430,8 +1438,8 @@ try {
   await goToBar(0);
 
   // Back to static for the checks that follow, which click bars themselves.
-  await page.locator("#menuButton").click();
   await page.locator("#playStatic").click();
+  await page.locator("#menuButton").click();
   await page.selectOption("#scaleStyle", "pentatonic");
   await page.locator("#menuButton").click();
   await bars.first().click();
@@ -1572,9 +1580,7 @@ try {
   check("the sustain pedal is there for a connected keyboard",
         await page.locator("#sustainPedal").isVisible());
 
-  await page.locator("#menuButton").click();
   await page.locator("#playLive").click();
-  await page.locator("#menuButton").click();
 
   check("and stays in time, where notes are let go of for you",
         await page.locator("#sustainPedal").isVisible());
@@ -1681,9 +1687,7 @@ try {
   check("and in comping's own tiers, not a solo strip's",
         compMarks.every((m) => m.tiers.every((t) => ["is", "un", "out"].includes(t))));
 
-  await page.locator("#menuButton").click();
   await page.locator("#playStatic").click();
-  await page.locator("#menuButton").click();
 
   await strike([53, 57, 60, 65]);
   check("and static chord practice is exactly as it was",
@@ -1798,11 +1802,11 @@ try {
         chart zone the mark simply rolled off the bottom and stayed there - at
         the one moment a player cannot reach for the scrollbar. */
     await framed.evaluate(() => document.querySelector(".chart-zone").scrollTop = 0);
-    await framed.locator("#menuButton").click();
     await framed.locator("#playLive").click();
+    await framed.locator("#transportButton").click();
     await framed.selectOption("#loopFrom", "0");
     await framed.selectOption("#loopTo", { index: 11 });   // the whole twelve bars
-    await framed.locator("#menuButton").click();
+    await framed.locator("#transportButton").click();
     await framed.fill("#tempo", "300");
     await framed.dispatchEvent("#tempo", "change");
     await framed.locator("#armTake").click();
@@ -1837,6 +1841,54 @@ try {
 
     await framed.locator("#armTake").click();
     await framed.close();
+  }
+
+  /*  And the strip above the chart holds still. Most of what is on it needs a
+      clock - the metre, the tempo, the dots - and the take button needs a mode
+      that can grade one, so a strip left to wrap freely is one, two or three
+      rows deep depending on which corner of mode x In time you are standing
+      in. Every one of those moves the top of the chart, which means turning
+      the clock on shoves the music down under the eye that is reading it.
+
+      Measured at the chart's top edge rather than on the strip, because that
+      is the thing a player would see move - and it catches a row appearing
+      anywhere above the chart rather than only in the strip. At both sizes,
+      because the strip is one row on a laptop and two on a phone and it fails
+      differently at each: on a laptop a group grows, on a phone the two groups
+      fold onto one line and back. */
+  for (const [width, height] of [[1100, 700], [390, 780]]) {
+    const held = await browser.newPage({ viewport: { width, height } });
+    await held.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await held.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await held.locator("#helpDialog[open]").count()) await held.locator("#helpClose").click();
+
+    const chartTop = () => held.evaluate(() =>
+      Math.round(document.querySelector(".chart-zone").getBoundingClientRect().top));
+
+    const tops = [];
+
+    for (const mode of ["modeChords", "modeSolo"]) {
+      await held.locator(`#${mode}`).click();
+      if (await held.locator("#helpDialog[open]").count()) await held.locator("#helpClose").click();
+
+      tops.push(await chartTop());                      // static
+      await held.locator("#playLive").click();
+      tops.push(await chartTop());                      // in time, not rolling
+
+      await held.locator("#armTake").click();
+      await held.waitForFunction(
+        () => !document.querySelector("#beatRow").hidden, null, { timeout: 10000 });
+      tops.push(await chartTop());                      // and with the dots out
+
+      await held.locator("#armTake").click();
+      await held.locator("#playStatic").click();
+    }
+
+    const seen = [...new Set(tops)];
+    check(`the transport strip keeps the chart still at ${width}px (${seen.join(", ")})`,
+          seen.length === 1);
+
+    await held.close();
   }
 
   /*  The cheat sheet fits, section by section, on a desktop window and a phone
@@ -1926,7 +1978,9 @@ try {
     const spill = await narrow.evaluate(() => {
       const offscreen = [];
 
-      for (const element of document.querySelectorAll(".top-bar > *, .top-bar-right > *, .dock-foot > *")) {
+      for (const element of document.querySelectorAll(
+             ".top-bar > *, .top-bar-right > *, .transport-clock > *, .transport-take > *,"
+             + " .dock-foot > *")) {
         const box = element.getBoundingClientRect();
 
         if (box.width > 0 && (box.right > window.innerWidth + 0.5 || box.left < -0.5))
@@ -1946,16 +2000,16 @@ try {
   await narrow.locator("#modeChords").click();
   if (await narrow.locator("#helpDialog[open]").count()) await narrow.locator("#helpClose").click();
 
-  await narrow.locator("#menuButton").click();
   await narrow.locator("#playLive").click();
-  await narrow.locator("#menuButton").click();
   await narrow.locator("#armTake").click();
   await narrow.waitForFunction(() => !document.querySelector("#beatRow").hidden, null, { timeout: 10000 });
 
   const compSpill = await narrow.evaluate(() => {
     const offscreen = [];
 
-    for (const element of document.querySelectorAll(".top-bar > *, .top-bar-right > *, .dock-foot > *, .feedback > *")) {
+    for (const element of document.querySelectorAll(
+           ".top-bar > *, .top-bar-right > *, .transport-clock > *, .transport-take > *,"
+           + " .dock-foot > *, .feedback > *")) {
       const box = element.getBoundingClientRect();
 
       if (box.width > 0 && (box.right > window.innerWidth + 0.5 || box.left < -0.5))
@@ -1967,6 +2021,55 @@ try {
 
   check("nothing runs off the side at 390px (Chords, in time)",
         compSpill.page <= 0 && compSpill.offscreen.length === 0);
+
+  /*  And nothing runs off the side of a *control*, which the scan above cannot
+      see: a box that is too narrow for what is in it is exactly the right
+      width as far as its own rectangle is concerned. The tempo box is the one
+      that matters, because it is the only field here showing a value rather
+      than a label - and it is the one the strip's tightening reached for
+      first, at which point 120 read as `12` with the last digit simply gone.
+      A number input keeps room for its own spinner, so the answer is not the
+      three digits' worth it looks like it needs. Read at both ends of the
+      range the box accepts. */
+  const clipped = [];
+
+  for (const bpm of ["120", "300"]) {
+    await narrow.fill("#tempo", bpm);
+    await narrow.dispatchEvent("#tempo", "change");
+    await narrow.evaluate(() => document.activeElement.blur());
+
+    if (await narrow.evaluate(() => {
+      const box = document.querySelector("#tempo");
+      return box.scrollWidth > box.clientWidth + 0.5;
+    })) clipped.push(bpm);
+  }
+
+  check(`the tempo box shows the whole tempo at 390px (${clipped.length ? clipped.join(", ") : "120, 300"})`,
+        clipped.length === 0);
+
+  /*  And every panel opens onto the screen. The scan above cannot see this
+      either: a panel is absolutely positioned and shut while it runs, so its
+      button being in bounds says nothing about where the panel lands. Which is
+      how the transport's own popover first opened half off a 430px screen -
+      `.menu-wrap` anchors a panel to its button, and this button is in the
+      middle of a row rather than at the end of one. */
+  const panels = [];
+
+  for (const [button, panel] of [["#menuButton", "#menuPanel"],
+                                 ["#compingButton", "#compingPanel"],
+                                 ["#transportButton", "#transportPanel"]]) {
+    if (!(await narrow.locator(button).isVisible())) continue;
+
+    await narrow.locator(button).click();
+
+    const box = await narrow.locator(panel).boundingBox();
+    if (box && (box.x < -0.5 || box.x + box.width > 390 + 0.5)) panels.push(panel);
+
+    await narrow.locator(button).click();
+  }
+
+  check(`every panel opens onto the screen at 390px${panels.length ? " (" + panels.join(", ") + ")" : ""}`,
+        panels.length === 0);
 
   await narrow.locator("#armTake").click();
   await narrow.close();

@@ -68,8 +68,19 @@ means CSS, not per-platform builds.
 - **The chart's head is in the top bar**, not in the sheet. A lead sheet is
   engraved feel / title / credit and still reads that way, along a line; in the
   sheet it scrolled away with the music, so the one thing naming what you are
-  playing left the screen as soon as you played past the first line. The metre
-  and tempo (`#timeSig`, `#tempo`) are in that head.
+  playing left the screen as soon as you played past the first line.
+- **The top bar's second row is the transport strip**, and it holds what a
+  player reaches for while playing: Static / In time, the metre and tempo
+  (`#timeSig`, `#tempo`), the take button and the beat dots. What a take is set
+  up with rather than played with - count-in, loop, ramp, reharmonise-as-you-go
+  - is one popover off it (`#transportButton`). **Its row count must not depend
+  on what is showing.** Most of the strip needs a clock, and the take button
+  needs a mode that can grade one, so a strip left to wrap freely is one, two or
+  three rows deep depending on which corner of mode x In time you are in - and
+  every one of those moves the top of the chart. The two groups
+  (`.transport-clock`, `.transport-take`) are each one row at any width and each
+  reserve that row empty. A check measures the chart's top edge in both settings
+  at two sizes and fails if it moves.
 - **Viewport-relative heights are `dvh`, never `vh`.** On a phone `vh` is the
   window with the browser's own chrome collapsed, and the part that goes under
   it is the bottom of the frame — the dock.
@@ -242,10 +253,10 @@ something finished or assume something unfinished is done:
   rolling bar brings itself into view, which nothing on this page did for
   anything before — there was no `scrollIntoView`, `scrollTo` or `scrollTop` in
   the file at all, so on a tune longer than the chart zone the mark simply
-  rolled off the bottom. **Still to come** (see `docs/HANDOFF.md`): the
-  transport out of the menu into a strip, the two settings dropdowns merged
-  into one panel, the dock foot regrouped, and practice settings remembered
-  across reloads.
+  rolled off the bottom. The transport is out of the menu and onto a strip of
+  its own (see UI Conventions above). **Still to come** (see `docs/HANDOFF.md`):
+  the two settings dropdowns merged into one panel, the dock foot regrouped, and
+  practice settings remembered across reloads.
 - **Not built, deliberately open**: personal voicing
   library, ear training, progress tracking beyond current per-take/session
   stats, licks/line suggestions, chordal (not line) reading in solo practice,

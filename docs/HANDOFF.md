@@ -13,13 +13,14 @@ it done. A handoff that accumulates is one nobody reads.
 
 Branch: `claude/gifted-wozniak-7z4jt6`.
 
-The last three commits restructured the page's layout:
+The last four commits restructured the page's layout:
 
 | Commit | What it did |
 |---|---|
 | `a296503` | Three-zone frame: `body` is a flex column at `100dvh`, a new `.chart-zone` takes the remaining height and scrolls itself, `.dock` stopped being sticky. The rolling bar now brings itself into view — nothing in the page scrolled anything before. |
 | `6bf5152` | Cut the masthead's prose and moved the chart's head into a one-row `.top-bar`. Bars readable went 4/12 → 12/12 at 1280×860 and **0/12 → 12/12** at 430×860. |
 | `603ffd6` | Sectioned the cheat sheet into five tabs so it never has to be scrolled, and added six topics it never covered. |
+| *(this one)* | The transport onto a strip of its own — Static/In time, the metre, the tempo, the take button and the beat dots, all of them out of the Practice menu. What is left of the *Playing* group is one popover off the strip. |
 
 Verify anything you change:
 
@@ -31,42 +32,20 @@ cmake --build build          # the page is copied into the JUCE shell
 
 ---
 
-## The layout work: commits 3 to 7
+## The layout work: commits 4 to 7
 
-The first two of seven are done. These five are planned in detail and agreed;
-the shape of the finished thing is a one-row top bar, a chart that takes every
-remaining pixel, and a dock — with **one** settings panel instead of two
-dropdowns in opposite corners.
+Three of seven are done. These four are planned in detail and agreed; the shape
+of the finished thing is a top bar with its head and its transport, a chart that
+takes every remaining pixel, and a dock — with **one** settings panel instead of
+two dropdowns in opposite corners.
 
 The problem being solved, so a cold reader can judge the plan rather than just
 follow it: settings live in `#menuPanel` (top right, 310px, seven groups,
 seventeen controls, already scrolling) **and** `#compingPanel` (hanging off the
 chart toolbar, four more groups). Nothing says which holds what. The smoke test
-opens one or the other **62 times** to drive the app. The *Playing* group alone
-is eleven rows nested three deep.
-
-### 3 — The transport strip
-
-Move `#playStatic`/`#playLive`, `#tempo`, `#timeSig`, `#armTake`/`#armLabel` and
-`#beatRow` into `.top-bar`. Every handler binds by `id`, so relocating the
-markup is enough. The deeper options — `#countIn`, `#loopFrom`/`#loopTo`,
-`#ramp` + `#rampBy`/`#rampTo`, `#reharmLive` + `#reharmAmount`/`#reharmReach`,
-and `#playingNote` — become **one** popover off the strip: one level of nesting
-instead of three. Delete the emptied *Playing* group from `#menuPanel`.
-
-The strip must reserve its height in Static, or switching Static↔In time shifts
-the chart and the mode-change check fails.
-
-Accepted trade-off: `#armTake` moves away from the keyboard. It is pressed once
-per take, the space bar still arms it, and the beat dots belong beside the
-tempo.
-
-> **The test work is the bulk of this one.** `smoke-test.mjs` has roughly 34
-> `#menuButton` and 28 `#compingButton` open/close pairs that exist only to
-> reach a control behind a dropdown. Most become direct clicks — but they must
-> be removed **as pairs**. Half a pair leaves the menu open over the page and
-> every later click lands on the wrong thing. Also re-point `smoke-test.mjs`'s
-> `.sheet-head #tempo` / `#timeSig` assertion to the strip.
+opens one or the other **38 times** to drive the app — it was 62 before the
+transport left the menu, and the 24 that went were exactly the pairs that
+existed only to reach a control behind a dropdown.
 
 ### 4 — One settings panel
 
@@ -87,16 +66,18 @@ training as a section that opens its own exercise the way *Chart* does. The
 current growth pattern — another row in *Playing*, another button in
 `.dock-foot` — is out of road.
 
-All 28 `#compingButton` sites become `#menuButton`; the colophon check must open
-the panel first.
+All 29 `#compingButton` sites become `#menuButton`; the colophon check must open
+the panel first. Note the strip's own popover (`#transportButton`) is a third
+`.menu-wrap` and stays where it is — it is the take's, not the settings panel's.
 
 ### 5 — Regroup the dock foot
 
 Twelve children on one wrapping row become two groups: **actions**
 (`#playChord`, `#nameChord`, `#showVoicing`, `#guideButton`, `#sustainPedal`,
 `#clearKeys`) and **status** (`#practising`, the two `.legend` spans,
-`#leadLegend`). `#armTake` and `#beatRow` left for the top bar in commit 3. Drop
-the inline `margin-left: auto` on `#clearKeys` in favour of the group split.
+`#leadLegend`). `#armTake` and `#beatRow` have already left for the strip, so the
+row is ten children rather than twelve. Drop the inline `margin-left: auto` on
+`#clearKeys` in favour of the group split.
 
 ### 6 — Remember practice settings
 
@@ -113,20 +94,31 @@ loop. Every read stays `try`-wrapped for private windows.
 
 **Reshoot `docs/screenshot-*.png`.** All three were taken on 2026-09-17 and
 predate the entire restructure — the compact one shows the exact 0-of-12-bars
-state the work fixed. They were deliberately left stale rather than shot twice,
-since commit 3 changes the top bar again. README carries a note under each
-saying so; remove those notes when the images are replaced.
+state the work fixed, and none of them has the transport strip. README carries a
+note under each saying so; remove those notes when the images are replaced.
 
 Then update `README.md`'s layout narrative for the finished shape, and run
 `./tools/test-count.sh`.
 
-### The second-breakpoint question
+### The second-breakpoint question — answered, and no new breakpoint
 
-`CLAUDE.md` says add one only when something actually collides. The top bar's
-contents will not fit one row at 390px. **Try `flex-wrap` first** — wrapping to
-two rows may be perfectly good. Add a width breakpoint only if the 390px
-overflow check fails, and record in the commit message which element collided
-and at what width.
+The transport strip did not fit one row at 390px and `flex-wrap` was enough: the
+strip is two groups, one row each, and they share a line above 760px and take
+one each below it. No new breakpoint — what the existing 760px query gained is
+six lines of tightening (gaps, and the take button's letter-spacing), because
+the wider group wanted 346px of the 342px a 390px phone offers.
+
+**The tempo box is not one of them**, and it looks like it should be. Taking it
+from 62px to 48 showed `12` for 120 — the last digit gone, nothing to say so.
+A number input keeps room for its own spinner, so its content wants 56px of the
+60 that 62 leaves it. `the tempo box shows the whole tempo at 390px` reads it at
+both ends of the range now.
+
+What that cost, and the thing to keep in mind for the strip's neighbours: each
+group reserves its row **empty**, so static chord practice — which shows neither
+the metre nor the take button — now spends 66px on the strip where it used to
+spend 29. That is deliberate. The alternative is the chart moving when the clock
+comes on, and `the transport strip keeps the chart still` fails if it does.
 
 ---
 
@@ -180,16 +172,17 @@ Small, verified, and none of them urgent.
   (midiNote);` is declared and never used in that function. A
   `-Wunused-variable` warning. Pre-existing.
 
-- **`web/smoke-test.mjs:764`** — the check *"the clock moves the chart on its
+- **`web/smoke-test.mjs:775`** — the check *"the clock moves the chart on its
   own"* asserts `#systems .bar:nth-child(2)` is rolling. A `.system`'s first
   child is `.system-number`, so `.bar:nth-child(2)` is the **first** bar of each
   system — the check asserts bar one is rolling, which is where the take starts.
   It is vacuous. Assert a later bar instead.
 
-- **`web/smoke-test.mjs:737`** — `selectOption("#loopTo", "1")`. The options
+- **`web/smoke-test.mjs:748`** — `selectOption("#loopTo", "1")` (and again at
+  845). The options
   carry value `0..11` and label `1..12`, so a bare string is ambiguous. A
   previous session verified it resolves to bar index 0, which makes a **one**-bar
-  loop while the comment at L768 says the loop is two bars long. **Re-confirm
+  loop while the comment at L779 says the loop is two bars long. **Re-confirm
   before changing anything** — the two readings differ only in which of value or
   label Playwright tries first. Then use the unambiguous `{ index: n }` form that
   L1804 already uses.
@@ -216,6 +209,15 @@ messages are reproducible without writing measuring scripts again.
   use it.
 
 The narrow-layout scan at the end of the file is the safety net for all of this.
-It scans `.top-bar`, `.top-bar-right`, `.dock-foot` and `.feedback` at 390px.
-**Anything that moves a control into a new container must add that container to
-the scan**, or the net has a hole in it.
+It scans `.top-bar`, `.top-bar-right`, `.transport-clock`, `.transport-take`,
+`.dock-foot` and `.feedback` at 390px. **Anything that moves a control into a
+new container must add that container to the scan**, or the net has a hole in
+it.
+
+- **The transport strip** — that the chart's top edge is the same number in
+  every corner of mode × In time, at a laptop size and a phone one. Checked with
+  a negative control: with the reservation taken out it passes at 1100px and
+  fails at 390px, naming both positions, which is why it measures two sizes.
+  Beside it, that the tempo box is not narrower than the number in it — the one
+  kind of overflow the narrow scan cannot see, since a box too small for its
+  contents is the right width as far as its own rectangle is concerned.

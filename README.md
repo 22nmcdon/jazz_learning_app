@@ -87,6 +87,13 @@ same reason it is worth having: in the sheet it scrolled away with the music, so
 thing naming what you are playing left the screen as soon as you played past the first
 line.
 
+Under it is the **transport strip**: Static or In time, the metre and the tempo, the take
+button and the dots saying where in the bar the clock is. All of it used to be three levels
+down the Practice menu, which is a strange place to keep the things you reach for with one
+hand on the keys. The strip is the same height whatever is showing - most of what is on it
+needs a clock, and if the row grew when the clock came on it would shove the music down
+under the eye reading it.
+
 The desktop app and the browser page are not merely alike: they are the same page. A
 screenshot of one is a screenshot of the other, because there is one file. What differs is
 what is behind it - native C++ in the app, WebAssembly in the browser - and which of the
@@ -279,24 +286,24 @@ a chord sounds more generous and in fact leaves nothing outside anything - over 
 Bbmaj7 not one of the twelve notes comes back outside. **Which scale?** says which one you
 are being held to, and puts it on the keyboard.
 
-**Playing**, in the same menu, is **Static** or **In time**. Static is the default: the bar
-you are on is the bar you chose, it stays there until you move, and nothing is counting
-time.
+**Static** or **In time** is the switch at the left of the **transport strip**, the row
+under the chart's head. Static is the default: the bar you are on is the bar you chose, it
+stays there until you move, and nothing is counting time.
 
 **In time** puts a clock behind the chart. **Start a take** then counts a bar in and moves
 the chart for you, a bar to the click, looping whatever range of bars you give it - arming
-the take and starting the clock are one gesture, from the button in the dock or from the
+the take and starting the clock are one gesture, from the button on the strip or from the
 **space bar**. Dots beside the button say where in the bar you are, one per beat of the
 metre - gold while it is counting you in, then the downbeat in red - and the bar the clock is
 on wears a line across its top. The take and the clock are the same take: the clock is
 walking the chart instead of your mouse, and the engine cannot tell the difference, which is
 the point. Everything else works exactly as it does static.
 
-**Speed up each chorus**, under the loop, is the practice-room exercise: start under
+**Speed up each chorus**, under the loop in *Take setup*, is the practice-room exercise: start under
 tempo and let it climb. It goes up by however many beats to the minute you say each time
 the loop comes round, and stops at a ceiling you set. It changes **only at the top of the
 form** - a tempo that moved under a phrase would be unplayable, and the chart is going
-back to the first bar of the loop at that moment anyway. The box at the head of the chart
+back to the first bar of the loop at that moment anyway. The box on the transport strip
 is always the tempo being played, so it is also where the ramp shows: stopping and
 starting again carries on from where you got to, and starting over means putting the
 number back. Off unless you ask for it - this is practice you set up, not practice you
@@ -342,9 +349,10 @@ The change lands on the **last bar of a chorus** rather than at the top of the n
 that everything - the chart, the band's next plan, the scale a line is read against - is
 already the new tune by the downbeat.
 
-The **tempo and the metre are at the head of the chart**, where a lead sheet writes them,
-rather than in the menu - they belong to the tune, not to the practice session, which is also
-why an imported one brings its own. iReal Pro links and PDF lead sheets have always carried a
+The **tempo and the metre are on the transport strip**, written the way a lead sheet writes
+them and beside the switch that gives them something to mean, rather than in a menu - they
+belong to the tune, not to the practice session, which is also why an imported one brings
+its own. iReal Pro links and PDF lead sheets have always carried a
 time signature and the readers have always pulled it out; until the head had somewhere to put
 it, a waltz arrived as a waltz and was counted in four. The click counts the numerator, so
 6/8 is six clicks in a bar rather than two. Changing the metre while it is rolling starts it
@@ -455,8 +463,8 @@ through a four-to-the-bar is reading a style that does not say not to.
 
 ### Comping it yourself
 
-The same style data reads the other way round. In **chord practice**, turn *Playing* to
-**In time** under *Practice*: the chart starts moving, a bass player walks under you, the
+The same style data reads the other way round. In **chord practice**, turn the transport
+strip to **In time**: the chart starts moving, a bass player walks under you, the
 piano stands down — it is your instrument now — and every chord you strike is read twice
 over. What the notes said about the bar is the question chord practice always asked, and
 the clock adds the one that needs it: did the chord land where this style is counted.
