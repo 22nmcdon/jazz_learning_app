@@ -151,6 +151,20 @@ void coverageOf (const Chart& chart, int fromBar, int toBar,
         }
 }
 
+void coverageOf (const std::vector<std::string>& chordSymbols,
+                 unsigned int& qualities, unsigned int& roots)
+{
+    qualities = 0;
+    roots = 0;
+
+    for (const auto& symbol : chordSymbols)
+        if (const auto chord = ChordSymbol::parse (symbol))
+        {
+            qualities |= qualityBit (chord->quality());
+            roots |= rootBit (chord->root());
+        }
+}
+
 PracticeReading readPractice (const std::vector<PracticeTake>& takes, int today)
 {
     PracticeReading reading;

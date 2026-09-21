@@ -219,6 +219,20 @@ namespace
              + ",\"score\":" + std::to_string (stats.score());
     }
 
+    /** The harmony a take was played over, as the two masks a practice row
+        stores.
+
+        On the take rather than worked out by a shell, because which quality
+        "Am7b5" is is theory and CLAUDE.md puts theory in the engine. A page
+        parsing chord symbols for itself is a second chord reader, and it would
+        be wrong about the first symbol somebody spells unusually.
+    */
+    std::string coverageJson (unsigned int qualities, unsigned int roots)
+    {
+        return ",\"qualities\":" + std::to_string (qualities)
+             + ",\"roots\":" + std::to_string (roots);
+    }
+
     std::string lineBarJson (int measureIndex, const std::string& symbol, const LineStats& stats,
                              bool neverLeftTheChord = false)
     {
@@ -1596,7 +1610,12 @@ std::string compTake (const char* progressionText, const char* styleRef,
         return hold (jsonError ("That comping style could not be read."));
     const auto comp = evaluateComp (*parsed.chart, style, hits, fromBar, toBar);
 
-    return hold ("{\"ok\":true,\"style\":" + quoted (style.key)
+    unsigned int qualities = 0;
+    unsigned int roots = 0;
+    coverageOf (*parsed.chart, fromBar, toBar, qualities, roots);
+
+    return hold ("{\"ok\":true" + coverageJson (qualities, roots)
+                 + ",\"style\":" + quoted (style.key)
                  + ",\"styleName\":" + quoted (style.name)
                  + ",\"ticksPerBeat\":" + std::to_string (ticksPerBeat)
                  + ",\"fit\":" + orNull (comp.fit)
@@ -1742,7 +1761,16 @@ std::string soloEndTake()
 
     const auto take = analyzer.summary();
 
-    return hold ("{\"ok\":true,\"taking\":false"
+    std::vector<std::string> symbols;
+
+    for (const auto& bar : take.bars)
+        symbols.push_back (bar.chordSymbol);
+
+    unsigned int qualities = 0;
+    unsigned int roots = 0;
+    coverageOf (symbols, qualities, roots);
+
+    return hold ("{\"ok\":true,\"taking\":false" + coverageJson (qualities, roots)
                  + std::string (",\"summary\":") + quoted (take.summary)
                  + ",\"observations\":" + jsonArray (take.observations,
                                                      [] (const std::string& line) { return quoted (line); })

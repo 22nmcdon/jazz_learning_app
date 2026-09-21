@@ -1106,3 +1106,36 @@ TEST ("a tune progress call refuses a chart it cannot parse, before the history"
     CHECK (contains (json, "\"ok\":false"));
     CHECK (! contains (json, "could not be read"));   // the chart's error, not the history's
 }
+
+TEST ("a solo take says which harmony it was played over")
+{
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "everything");
+    soloPlayNote (62);
+    soloSetBar (1, "G7", "", "everything");
+    soloPlayNote (67);
+    soloSetBar (2, "Am7b5", "", "everything");
+    soloPlayNote (69);
+
+    const std::string json = soloEndTake();
+
+    // Masks, not names: a row stores these and the page never parses a symbol
+    // to get them. minor | dominant | halfDiminished = 2 + 4 + 8.
+    CHECK (contains (json, "\"qualities\":14"));
+
+    // D, G, A = bits 2, 7 and 9 = 4 + 128 + 512.
+    CHECK (contains (json, "\"roots\":644"));
+}
+
+TEST ("a comping take says the same, off the chart it was graded against")
+{
+    const std::string json = compTake ("| Dm7 | G7 | Cmaj7 | Cmaj7 |", "freddie", 0, 1,
+                                       "0:1:0:62,65,69;1:1:0:65,69,72");
+
+    CHECK (contains (json, "\"ok\":true"));
+
+    // Bars 0 to 1 only - the range the take actually covered. Cmaj7 is on the
+    // chart and was not played over, so major must not be in the mask.
+    CHECK (contains (json, "\"qualities\":6"));       // minor | dominant
+    CHECK (contains (json, "\"roots\":132"));         // D and G
+}

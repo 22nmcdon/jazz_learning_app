@@ -139,6 +139,17 @@ unsigned int rootBit (PitchClass root) noexcept;
 void coverageOf (const Chart& chart, int fromBar, int toBar,
                  unsigned int& qualities, unsigned int& roots);
 
+/** The same, for a stretch of practice that never had a chart.
+
+    Solo practice is told its bars one at a time, as symbols - there is no
+    `Chart` anywhere in that path - so this reads the symbols the take was
+    played against. A symbol that will not parse is skipped rather than
+    refused: the take happened, and a bar the engine could not name is a gap in
+    the coverage rather than a reason to have no coverage at all.
+*/
+void coverageOf (const std::vector<std::string>& chordSymbols,
+                 unsigned int& qualities, unsigned int& roots);
+
 /** How much practice, over what, and what has been left alone. */
 struct PracticeReading
 {

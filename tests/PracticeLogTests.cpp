@@ -461,3 +461,32 @@ TEST ("a run of one bar is written as a number, not as a range")
     CHECK (says (progress.observations, "3 in no more than 1 take of 5"));
     CHECK (says (progress.observations, "Bars 2 and 4 have never been reached"));
 }
+
+TEST ("coverage reads a list of symbols for a take that never had a chart")
+{
+    unsigned int qualities = 0;
+    unsigned int roots = 0;
+
+    // Solo practice is told its bars one at a time, as symbols - there is no
+    // Chart anywhere in that path.
+    coverageOf ({ "Dm7", "G7", "Cmaj7" }, qualities, roots);
+
+    CHECK (qualities & qualityBit (ChordQuality::minor));
+    CHECK (qualities & qualityBit (ChordQuality::dominant));
+    CHECK (qualities & qualityBit (ChordQuality::major));
+    CHECK_EQ (static_cast<int> (roots), static_cast<int> (rootBit (2) | rootBit (7) | rootBit (0)));
+}
+
+TEST ("a symbol the engine cannot name is a gap in the coverage, not a refusal")
+{
+    unsigned int qualities = 0;
+    unsigned int roots = 0;
+
+    // The take happened. A bar whose symbol will not parse should cost that
+    // bar's harmony, never the whole take's.
+    coverageOf ({ "Dm7", "", "%%%", "G7" }, qualities, roots);
+
+    CHECK_EQ (static_cast<int> (roots), static_cast<int> (rootBit (2) | rootBit (7)));
+    CHECK (qualities & qualityBit (ChordQuality::minor));
+    CHECK (qualities & qualityBit (ChordQuality::dominant));
+}
