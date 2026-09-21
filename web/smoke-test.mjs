@@ -420,14 +420,19 @@ try {
   const chordsPaper = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const chordsHelp = await page.locator("#helpButton").getAttribute("aria-label");
 
-  // Where everything is before the switch. The masthead and the hint above the
-  // chart are written twice, once per mode, and the two wordings are different
-  // lengths - so this is the check that the chart does not jump up or down a
-  // line when the mode changes.
+  /*  Where everything is before the switch, and how much room the chart has.
+
+      This used to guard a pair of paragraphs: the masthead lede and the hint
+      above the chart were each written twice, once per mode, and the two
+      wordings were different lengths - so hiding one outright moved everything
+      below it. Both are gone and so is the grid that held their space open, but
+      the property they were protecting is the one that matters and is easier to
+      state now: a change of mode must not move the chart or change how much of
+      it you can see. */
   const layout = () => page.evaluate(() => {
     const top = (sel) => Math.round(document.querySelector(sel).getBoundingClientRect().top);
-    return { toggle: top(".mode-switch"), sheet: top(".sheet"),
-             hint: top(".sheet-hint:not([hidden])"), systems: top("#systems") };
+    return { toggle: top(".mode-switch"), sheet: top(".sheet"), systems: top("#systems"),
+             chartHeight: Math.round(document.querySelector(".chart-zone").getBoundingClientRect().height) };
   });
   const chordsLayout = await layout();
   const chordsTitle = await page.title();
@@ -452,14 +457,30 @@ try {
   check("the page changes colour with the mode",
         (await page.evaluate(() => getComputedStyle(document.body).backgroundColor)) !== chordsPaper);
 
-  check(`the masthead names the mode (${chordsTitle} / ${await page.title()})`,
+  /*  The window names the mode. It used to say so on the page as well, in an
+      `<h1>` that cost a line of the chart to do it - and the mode is already
+      said by the switch that set it, by the colour of the whole page, and by
+      what the dock is asking for. The window title is the one place that says
+      it where the page cannot. */
+  check(`the window names the mode (${chordsTitle} / ${await page.title()})`,
         chordsTitle === "Jazz Learning App: Chords"
-        && (await page.title()) === "Jazz Learning App: Solo"
-        && (await page.locator(".masthead h1").innerText()).includes("Solo"));
+        && (await page.title()) === "Jazz Learning App: Solo");
 
   const soloLayout = await layout();
-  check(`nothing moves when the mode changes (${JSON.stringify(soloLayout)})`,
-        JSON.stringify(soloLayout) === JSON.stringify(chordsLayout));
+  const place = ({ toggle, sheet, systems }) => JSON.stringify({ toggle, sheet, systems });
+
+  check(`nothing moves when the mode changes (${place(soloLayout)})`,
+        place(soloLayout) === place(chordsLayout));
+
+  /*  The height is deliberately not part of that. The dock is mode-dependent by
+      construction - chord practice's feedback panel and solo practice's are
+      different things of different heights - and the chart takes whatever is
+      left, so it is a little taller in solo. What would be wrong is the chart
+      being squeezed to nothing by a dock that grew, which is what this watches:
+      room for more than one line of music, in either mode. */
+  check(`and the chart keeps its room either way `
+        + `(${chordsLayout.chartHeight}px chords, ${soloLayout.chartHeight}px solo)`,
+        chordsLayout.chartHeight > 200 && soloLayout.chartHeight > 200);
 
   // A voicing carried into solo practice is a chord nothing over here reads -
   // it just sits on the keyboard looking pressed.
@@ -1831,7 +1852,7 @@ try {
     const spill = await narrow.evaluate(() => {
       const offscreen = [];
 
-      for (const element of document.querySelectorAll(".masthead-controls > *, .dock-foot > *")) {
+      for (const element of document.querySelectorAll(".top-bar > *, .top-bar-right > *, .dock-foot > *")) {
         const box = element.getBoundingClientRect();
 
         if (box.width > 0 && (box.right > window.innerWidth + 0.5 || box.left < -0.5))
@@ -1860,7 +1881,7 @@ try {
   const compSpill = await narrow.evaluate(() => {
     const offscreen = [];
 
-    for (const element of document.querySelectorAll(".masthead-controls > *, .dock-foot > *, .feedback > *")) {
+    for (const element of document.querySelectorAll(".top-bar > *, .top-bar-right > *, .dock-foot > *, .feedback > *")) {
       const box = element.getBoundingClientRect();
 
       if (box.width > 0 && (box.right > window.innerWidth + 0.5 || box.left < -0.5))
