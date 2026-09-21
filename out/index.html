@@ -2825,6 +2825,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <span class="record-title">And in which keys</span>
       <div class="record-chips" id="recordRoots"></div>
     </div>
+
+    <!-- A practice record is personal, so the page can drop it. Separate from
+         forgetting a tune, because they are different things to want: one is
+         tidying the shelf, the other is not wanting this kept at all. -->
+    <div class="tune-actions" id="recordActions">
+      <button class="link-btn" type="button" id="recordForget">Forget my practice record</button>
+    </div>
   </div>
 
   <div class="tab-body" id="progressPanelTunes" role="tabpanel" hidden>
@@ -3625,7 +3632,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "recordButton", "progressDialog", "progressClose", "progressTabs",
    "progressTabRecord", "progressTabTunes", "progressPanelRecord", "progressPanelTunes",
    "recordSummary", "recordFigures", "recordSaid", "recordCoverage", "recordQualities",
-   "recordKeys", "recordRoots",
+   "recordKeys", "recordRoots", "recordActions", "recordForget",
    "tuneListView", "tuneList", "tuneListEmpty", "tuneMemoryView", "tuneBack",
    "tuneMemoryName", "tuneMemorySummary", "tuneBars", "tuneSaid", "tuneOpen", "tuneForget",
    "helpButton", "helpDialog", "helpClose", "helpTabs",
@@ -7957,6 +7964,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   function showEmptyRecord(message) {
+    el.recordActions.hidden = true;
     el.recordSummary.textContent = "";
     el.recordFigures.textContent = "";
     el.recordSaid.textContent = "";
@@ -7971,6 +7979,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   async function drawPracticeRecord() {
     var rows = recallPractice();
+
+    // Never left mid-question from the last time this was open.
+    resetForgetRecord();
 
     if (!rows.length) {
       showEmptyRecord("Nothing practised yet. Start a take and this fills itself in -"
@@ -8019,6 +8030,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       el.recordSaid.appendChild(capped);
     }
 
+    el.recordActions.hidden = false;
     el.recordCoverage.hidden = false;
     el.recordKeys.hidden = false;
     drawChips(el.recordQualities, result.qualitiesMet, result.qualitiesMissing);
@@ -8216,6 +8228,34 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     fillTuneList();
     showTuneList();
+  });
+
+  /*  Forgetting the whole record.
+
+      Two presses, like forgetting a tune, and for the same two reasons: this
+      page uses no `confirm()` anywhere, and the second press is a decision
+      rather than the dismissal of a box.
+
+      This drops the practice and leaves the tunes. They are separate things to
+      want - one is not wanting a history kept, the other is tidying a shelf -
+      and a control that silently did both would be the kind of surprise a
+      delete must never be.
+  */
+  function resetForgetRecord() {
+    el.recordForget.textContent = "Forget my practice record";
+    el.recordForget.dataset.sure = "no";
+  }
+
+  el.recordForget.addEventListener("click", async function () {
+    if (el.recordForget.dataset.sure !== "yes") {
+      el.recordForget.textContent = "Really forget all of it?";
+      el.recordForget.dataset.sure = "yes";
+      return;
+    }
+
+    rememberPractice([]);
+    resetForgetRecord();
+    await drawPracticeRecord();
   });
 
   function showProgressTab(which) {

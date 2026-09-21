@@ -2718,6 +2718,88 @@ try {
           + `(${after.tunes} tunes, ${after.takes} takes)`,
           after.tunes === 0 && after.takes === 5);
 
+    /*  Forgetting the record, and only the record.
+
+        Two presses again, and the tunes stay: those are different things to
+        want, and a control that silently did both would be the kind of
+        surprise a delete must never be. There are no tunes left at this point,
+        so this saves one and checks it survives.
+    */
+    // The dialog is modal, so everything behind it is unreachable until it
+    // is shut - which is what a 30s click timeout looks like from outside.
+    await logging.locator("#progressClose").click();
+
+    await logging.locator("#chartButton").click();
+    await logging.fill("#tuneName", "Still here afterwards");
+    await logging.locator("#saveTune").click();
+    await logging.locator("#chartButton").click();
+
+    await logging.locator("#recordButton").click();
+    await logging.waitForSelector("#progressDialog[open]", { timeout: 10000 });
+    await logging.locator("#recordForget").click();
+
+    check("forgetting the record asks first, and has not forgotten it yet",
+          (await logging.locator("#recordForget").innerText()).toLowerCase().indexOf("really") === 0
+          && (await logging.evaluate(() =>
+               JSON.parse(window.localStorage.getItem("jazzPractice")).takes.length)) > 0);
+
+    await logging.locator("#recordForget").click();
+    await logging.waitForFunction(
+      () => JSON.parse(window.localStorage.getItem("jazzPractice")).takes.length === 0,
+      null, { timeout: 10000 });
+
+    check("the second press drops the practice and keeps the tunes",
+          (await logging.evaluate(() =>
+            JSON.parse(window.localStorage.getItem("jazzTunes")).tunes.length)) === 1
+          && (await logging.locator("#recordSaid").innerText()).indexOf("Nothing practised yet") === 0);
+
+    /*  Poison the store.
+
+        A row written by a newer page, or by nothing at all, must be *dropped*
+        rather than repaired - and dropped row by row, because one bad row is
+        not a reason to forget a year. What must never happen is a row reaching
+        the engine that its grammar refuses: that reads back as an error over
+        the whole history rather than as one lost take.
+    */
+    const goodRow = {
+      day: 20000, mode: 0, tune: 0, seconds: 60, qualities: 7, roots: 1157,
+      chordTones: 8, scaleTones: 4, approachTones: 0, unresolved: 0, outside: 2,
+      leaps: 1, leapsResolved: 1, chordsPlayed: 0,
+      onFigure: 0, idiomatic: 0, pushed: 0, offStyle: 0,
+      bars: [{ index: 0, chordTones: 8, scaleTones: 4, approachTones: 0, unresolved: 0, outside: 2 }]
+    };
+
+    const withRows = (change) => {
+      const rows = [JSON.parse(JSON.stringify(goodRow)), JSON.parse(JSON.stringify(goodRow))];
+      change(rows);
+      return JSON.stringify({ takes: rows });
+    };
+
+    for (const [what, poison, left] of [
+           ["a field this page has never sent", withRows((r) => { delete r[1].qualities; }), 1],
+           ["a mode nobody writes", withRows((r) => { r[1].mode = 4; }), 1],
+           ["a count that is not a number", withRows((r) => { r[1].outside = "lots"; }), 1],
+           ["a bar missing half its tiers", withRows((r) => { delete r[1].bars[0].outside; }), 1],
+           ["a negative count", withRows((r) => { r[1].leaps = -3; }), 1],
+           ["no rows at all", JSON.stringify({ takes: [] }), 0],
+           ["nothing that parses", "{not json at all", 0]]) {
+      await logging.evaluate((text) => window.localStorage.setItem("jazzPractice", text), poison);
+
+      await logging.locator("#progressClose").click();
+      await logging.locator("#recordButton").click();
+      await logging.waitForSelector("#progressDialog[open]", { timeout: 10000 });
+
+      const drawn = await logging.locator("#progressPanelRecord").innerText();
+      const wanted = left === 1 ? "1 take over 1 day" : "Nothing practised yet";
+
+      // Not just "no crash": the *good* row still has to be read. A reader
+      // that dropped the lot on one bad row would pass a check that only
+      // looked for an absence of errors.
+      check(`a practice row with ${what} is dropped, and the rest is still read`,
+            drawn.indexOf(wanted) >= 0 && drawn.toLowerCase().indexOf("could not") < 0);
+    }
+
+    await logging.evaluate(() => window.localStorage.removeItem("jazzPractice"));
     await logging.locator("#progressClose").click();
 
     await record.close();
@@ -3059,6 +3141,30 @@ try {
 
   check(`the practice record fits a 390px screen${recordSpill.length ? " (" + recordSpill.join(", ") + ")" : ""}`,
         recordSpill.length === 0);
+
+  /*  And the tunes half, which has a bar strip in it - the one thing in this
+      dialog whose width grows with the music rather than with the window. A
+      thirty-two-bar tune is thirty-two cells, and they have to wrap rather
+      than run off the side. */
+  await narrow.locator("#progressTabTunes").click();
+
+  const tunesSpill = await narrow.evaluate(() => {
+    const spilling = [];
+
+    for (const element of document.querySelectorAll(
+           "#progressPanelTunes .tune-row, #progressPanelTunes .tune-bar,"
+           + " #progressPanelTunes .link-btn, #progressPanelTunes .record-empty")) {
+      const at = element.getBoundingClientRect();
+
+      if (at.width > 0 && (at.right > window.innerWidth + 0.5 || at.left < -0.5))
+        spilling.push(element.className);
+    }
+
+    return spilling;
+  });
+
+  check(`your tunes fits a 390px screen${tunesSpill.length ? " (" + tunesSpill.join(", ") + ")" : ""}`,
+        tunesSpill.length === 0);
 
   check("and its own body scrolls rather than the page behind it",
         await narrow.evaluate(() => {
