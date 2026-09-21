@@ -802,21 +802,120 @@ std::string compingVoicing (const char* symbol, const char* previousNotesCsv)
                  + ",\"describe\":" + quoted (voicing.describe()) + "}");
 }
 
+/** A style written as one line of flat text, ready to hand straight back.
+
+    The inverse of the reader that `compPlan` and its two neighbours use, and
+    the reason this crosses at all: a test that wanted to prove the two agree
+    would otherwise have to hand-write four descriptions, which is a second
+    copy of the catalogue living in a fixture. Emitting it means the round
+    trip can be asserted against the engine's own answer.
+
+    Flat text rather than JSON because that is the direction this wire runs.
+    Results are JSON, because encoding them is the shell's business and every
+    shell has a parser; inputs are delimited text, because the engine has no
+    JSON reader and `EngineApi.cpp` says at the top that it should not grow
+    one. `parseNoteList`, `readHit` and `readHitList` are the precedent.
+
+    Three delimiters, no escaping needed: `|` between the header fields, `;`
+    between slots, `:` inside one. Nothing here is free text - `key`, `name`
+    and `summary` are deliberately **not** carried, because the engine needs
+    none of the three to plan or to grade a bar. It only ever echoed them
+    back. What a player calls their own style is the page's business, and
+    leaving the strings out is what keeps this grammar free of quoting.
+*/
+std::string styleReference (const CompStyleDefinition& style)
+{
+    auto text = "custom:" + subdivisionName (style.feel)
+              + "|" + std::to_string (style.fewestPerBar)
+              + "|" + std::to_string (style.mostPerBar)
+              + "|" + std::to_string (style.lowestNote)
+              + "|" + std::to_string (style.highestNote)
+              + "|" + std::to_string (style.variation)
+              + "|" + std::to_string (style.heldFor)
+              + "|";
+
+    for (std::size_t i = 0; i < style.slots.size(); ++i)
+    {
+        const auto& slot = style.slots[i];
+
+        if (i > 0)
+            text += ";";
+
+        /*  An empty beat is *every* beat, which is how four-to-the-bar is one
+            slot rather than four and how "the and of the last beat" stays
+            metre-independent. It is written as nothing at all rather than as a
+            number, because every number is taken: a negative beat counts back
+            from the end of the bar and is a thing three of the four shipped
+            styles actually use. Same for `heldFor`, where 0 means "ask the
+            style" - a slot that rings for no ticks is not a thing a style can
+            mean. */
+        text += (slot.beat.has_value() ? std::to_string (*slot.beat) : "")
+              + ":" + std::to_string (slot.tick)
+              + ":" + std::to_string (slot.weight)
+              + ":" + (slot.anticipates ? "1" : "0")
+              + ":" + std::to_string (slot.heldFor.value_or (0));
+    }
+
+    return text;
+}
+
+std::string styleJson (const CompStyleDefinition& style)
+{
+    /*  The whole definition, every field of it.
+
+        This used to send nine of the eleven, leaving out `slots` and
+        `heldFor` - which was enough for a menu that only ever picked one of
+        four and not enough for anything that wants to *start from* a style.
+        A figure you cannot read is a figure you cannot copy, so an editor
+        could not have offered "like the Charleston, but".
+
+        `feel` crosses as the word rather than the number, which is what
+        `subdivisionFrom` exists to read back: a wire that carried the
+        enumerator would break the day one is inserted in the middle.
+    */
+    return "{\"key\":" + quoted (style.key)
+         + ",\"name\":" + quoted (style.name)
+         + ",\"summary\":" + quoted (style.summary)
+         + ",\"feel\":" + quoted (subdivisionName (style.feel))
+         + ",\"fewestPerBar\":" + std::to_string (style.fewestPerBar)
+         + ",\"mostPerBar\":" + std::to_string (style.mostPerBar)
+         + ",\"variation\":" + std::to_string (style.variation)
+         + ",\"lowestNote\":" + std::to_string (style.lowestNote)
+         + ",\"highestNote\":" + std::to_string (style.highestNote)
+         + ",\"heldFor\":" + std::to_string (style.heldFor)
+         /*  The grid this style's ticks are counted on. A shell storing a
+             style has to be able to tell that the grid itself changed, and
+             deriving that from the engine's own answer beats stamping a
+             version number that someone has to remember to raise. */
+         + ",\"ticksPerBeat\":" + std::to_string (ticksPerBeat)
+         /*  The same style as one line of text, ready to hand back. */
+         + ",\"reference\":" + quoted (styleReference (style))
+         + ",\"slots\":" + jsonArray (style.slots, [] (const CompSlot& slot)
+           {
+               /*  `beat` is optional and its empty case means *every* beat, so
+                   it crosses as a string: "" for every beat, a number for one.
+                   Not -1, which this field already uses for something real -
+                   a negative beat counts back from the end of the bar, which
+                   is how "the and of the last beat" stays metre-independent.
+
+                   `heldFor` is optional too, and its empty case means "ask the
+                   style". Zero says that, since a slot that rings for no ticks
+                   is not a thing a style can mean. */
+               return "{\"beat\":" + quoted (slot.beat.has_value()
+                                             ? std::to_string (*slot.beat) : "")
+                    + ",\"tick\":" + std::to_string (slot.tick)
+                    + ",\"weight\":" + std::to_string (slot.weight)
+                    + ",\"anticipates\":" + (slot.anticipates ? "true" : "false")
+                    + ",\"heldFor\":" + std::to_string (slot.heldFor.value_or (0)) + "}";
+           })
+         + "}";
+}
+
 std::string compStyles()
 {
     return hold ("{\"ok\":true,\"styles\":"
                  + jsonArray (core::compStyles(), [] (const CompStyleDefinition& style)
-                   {
-                       return "{\"key\":" + quoted (style.key)
-                            + ",\"name\":" + quoted (style.name)
-                            + ",\"summary\":" + quoted (style.summary)
-                            + ",\"feel\":" + quoted (subdivisionName (style.feel))
-                            + ",\"fewestPerBar\":" + std::to_string (style.fewestPerBar)
-                            + ",\"mostPerBar\":" + std::to_string (style.mostPerBar)
-                            + ",\"variation\":" + std::to_string (style.variation)
-                            + ",\"lowestNote\":" + std::to_string (style.lowestNote)
-                            + ",\"highestNote\":" + std::to_string (style.highestNote) + "}";
-                   })
+                   { return styleJson (style); })
                  + "}");
 }
 

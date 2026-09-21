@@ -560,10 +560,57 @@ TEST ("the comping styles carry the register and the density they expect")
     // How far the band strays from its own figure, which a shell shows and
     // never decides.
     CHECK (contains (json, "\"variation\":"));
+}
 
-    // Not the slots. Placing a hit is the engine's job, and a copy of the slot
-    // table in a shell is where a second theory starts.
-    CHECK (! contains (json, "\"slots\""));
+TEST ("a style carries its figure, so a shell can draw one and copy it")
+{
+    /*  This used to assert the opposite - that `slots` never crossed - on the
+        grounds that "placing a hit is the engine's job, and a copy of the slot
+        table in a shell is where a second theory starts."
+
+        That rule narrows rather than falls, and the narrowed version is the
+        one that was always meant. What starts a second theory is a shell
+        *deciding* whether a hit is in style; `compHit` and `compTake` still
+        answer that and nothing else does. What a shell may now do is **draw**
+        a figure and hand an edited one back - which is not a second opinion
+        about placement, it is the player having one.
+
+        Held to it on the other side: nothing on the page reads these slots to
+        judge a hit, and `rememberCompMarks` still works no number out that the
+        engine did not work out first.
+    */
+    const auto json = compStyles();
+
+    CHECK (contains (json, "\"slots\":[{"));
+    CHECK (contains (json, "\"heldFor\":"));
+
+    // The grid the ticks are counted on, so a stored style can tell that the
+    // grid itself moved rather than trusting a hand-raised version number.
+    CHECK (contains (json, "\"ticksPerBeat\":24"));
+}
+
+TEST ("a slot says what it means, not the nearest number to it")
+{
+    /*  The half with teeth. `"slots":[]` would pass the check above, and so
+        would a writer that flattened every optional to a number - which is
+        the one mistake that matters here, because both of this struct's
+        optionals have an empty case that means something a number cannot say.
+
+        Four to the bar is **one** slot with no beat at all, not four slots.
+        And Basie's push is beat -1, counting back from the end of the bar,
+        which is what keeps "the and of the last beat" the same idea in three
+        as in four. A writer that resolved either one would be writing down a
+        different style from the one it was given.
+    */
+    const auto json = compStyles();
+
+    CHECK (contains (json, "\"beat\":\"\""));     // four to the bar: every beat
+    CHECK (contains (json, "\"beat\":\"-1\""));   // counted back from the end
+    CHECK (contains (json, "\"anticipates\":true"));
+
+    // And the same two, in the flat form a shell hands back.
+    CHECK (contains (json, "\"reference\":\"custom:beats|"));
+    CHECK (contains (json, ";-1:"));
 }
 
 TEST ("a comped chord is read back over the wire")
