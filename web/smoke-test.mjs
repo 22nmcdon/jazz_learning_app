@@ -2248,6 +2248,93 @@ try {
           && (await denied.locator("#tempo").inputValue()) === "150");
 
     await shy.close();
+
+    /*  The style the player wrote, across a reload - and thrown away rather
+        than guessed at when it no longer means what it said.
+
+        Its own context again, because the store is what owns this. Written
+        through the page rather than by reaching into `localStorage`, so what
+        is asserted is the thing the editor actually saves.
+    */
+    const styleStore = await browser.newContext();
+    const wrote = await styleStore.newPage();
+
+    await wrote.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await wrote.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await wrote.locator("#helpDialog[open]").count()) await wrote.locator("#helpClose").click();
+
+    await wrote.locator("#modeSolo").click();
+    if (await wrote.locator("#helpDialog[open]").count()) await wrote.locator("#helpClose").click();
+
+    await wrote.locator("#menuButton").click();
+    await wrote.selectOption("#compStyle", "ballad");
+    await wrote.locator("#styleEdit").click();
+    await wrote.waitForSelector("#styleDialog[open]", { timeout: 10000 });
+    await wrote.locator("#styleApply").click();
+
+    const written = await wrote.evaluate(() => window.localStorage.getItem("jazzCompCustom"));
+
+    await wrote.reload({ waitUntil: "load" });
+    await wrote.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await wrote.locator("#helpDialog[open]").count()) await wrote.locator("#helpClose").click();
+
+    check("a style you wrote is still there after a reload",
+          (await wrote.locator('#compStyle option[value="yours"]').count()) === 1
+          && (await wrote.evaluate(() => document.querySelector("#compStyle").value)) === "yours");
+
+    // And it is the same style, not an empty one wearing the name. The ballad
+    // is counted in triplets, so its grid comes back three rows deep.
+    //
+    // Back to solo first: which mode you were in is deliberately not
+    // remembered, and The band is only shown where there is a band to hear.
+    await wrote.locator("#modeSolo").click();
+    if (await wrote.locator("#helpDialog[open]").count()) await wrote.locator("#helpClose").click();
+
+    await wrote.locator("#menuButton").click();
+    await wrote.locator("#styleEdit").click();
+    await wrote.waitForSelector("#styleDialog[open]", { timeout: 10000 });
+
+    check(`and it is the style it was, figure and feel `
+          + `(${await wrote.locator('#styleGrid .style-cell[aria-pressed="true"]').count()} chords, `
+          + `${await wrote.locator("#styleGrid .style-row").count()} rows)`,
+          (await wrote.locator('#styleGrid .style-cell[aria-pressed="true"]').count()) === 4
+          && (await wrote.locator("#styleGrid .style-row").count()) === 3);
+
+    await wrote.locator("#styleClose").click();
+
+    /*  Now poison it. A store the page does not own can hold anything,
+        including the last version of this page's idea of what a style is -
+        and the answer to that is to drop it, not to guess. What must not
+        happen is a half-applied style: the shipped catalogue has to be exactly
+        what it was, with no "Yours" in the menu at all.
+    */
+    const damaged = (change) => {
+      const it = JSON.parse(written);
+      change(it);
+      return JSON.stringify(it);
+    };
+
+    for (const [what, poison] of [
+           ["a tick off the grid", damaged((o) => { o.slots[0].tick = 999; })],
+           ["a feel nobody writes", damaged((o) => { o.feel = "quavers"; })],
+           ["a field this page has never sent", damaged((o) => { delete o.variation; })],
+           ["a grid of a different size", damaged((o) => { o.ticksPerBeat = 48; })],
+           ["no chords at all", damaged((o) => { o.slots = []; })],
+           ["nothing that parses", "{not json at all"]]) {
+      await wrote.evaluate((text) => window.localStorage.setItem("jazzCompCustom", text), poison);
+
+      await wrote.reload({ waitUntil: "load" });
+      await wrote.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+      if (await wrote.locator("#helpDialog[open]").count()) await wrote.locator("#helpClose").click();
+
+      const offered = await wrote.locator('#compStyle option[value="yours"]').count();
+      const shipped = await wrote.locator("#compStyle option").count();
+
+      check(`a stored style with ${what} is dropped, and the catalogue is untouched`,
+            offered === 0 && shipped === 4);
+    }
+
+    await styleStore.close();
   }
 
   /*  The chart's own tools, which moved off a toolbar above the music and into

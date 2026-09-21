@@ -3026,6 +3026,33 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     return recall(key) !== null && isFinite(value) && value >= low && value <= high ? value : null;
   }
 
+  /*  The first thing here that is not a scalar.
+
+      Built on the one pair rather than beside it, like `rememberFlag` and
+      `recallNumber` are - `localStorage` still has exactly one door on this
+      page, and this is another typed way through it rather than a second one.
+
+      `recallObject` answers null for anything it cannot parse, which is the
+      same promise `recallNumber` makes about a value out of range: a store the
+      page does not own can hold anything, including the last version of this
+      page's idea of what an object looks like. */
+  function rememberObject(key, value) {
+    try { remember(key, JSON.stringify(value)); } catch (e) { /* nothing cyclic goes in here */ }
+  }
+
+  function recallObject(key) {
+    var text = recall(key);
+
+    if (text === null) return null;
+
+    try {
+      var parsed = JSON.parse(text);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function rememberStyle(style) { remember("VoicingStyle", style); }
   function recallStyle() { return recall("VoicingStyle"); }
 
@@ -6938,6 +6965,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     comping.custom = editing;
     comping.style = YOUR_STYLE;
 
+    /*  A style is how the room is set up, which is the half of the page that
+        survives a reload - the chart, a take and anything mid-exercise are the
+        half that must not. */
+    rememberObject("CompCustom", editing);
+
     addYourStyleOption();
     el.compStyle.value = YOUR_STYLE;
     remember("CompStyle", YOUR_STYLE);
@@ -7414,6 +7446,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     comping.canEdit = !!(result.styles.length && result.styles[0].slots);
     el.styleEdit.hidden = !comping.canEdit;
 
+    /*  The style the player wrote last time, if this engine still means the
+        same thing by it. Read here rather than in `recallPracticeSettings`
+        because that one validates the remembered *key* against the menu's
+        options - so the option has to exist by the time it runs, and this is
+        what puts it there. */
+    comping.custom = recallCustomStyle(result.styles[0]);
+
     if (comping.custom) addYourStyleOption();
 
     // A style that is no longer on offer falls back to the first - but the one
@@ -7424,6 +7463,84 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     el.compStyle.value = comping.style;
     describeCompStyle();
+  }
+
+  /*  The fields the page's writer needs to describe a style, and the ones each
+      of its chords needs. Not a copy of the engine's catalogue - it is this
+      page's own contract with `referenceFrom`, which is the only thing that
+      reads them. What makes it useful is that both sides are checked against
+      it: a stored style missing one of these is from an older page, and a
+      style the engine sends missing one is a newer engine that has moved on. */
+  var STYLE_FIELDS = ["feel", "fewestPerBar", "mostPerBar", "lowestNote",
+                      "highestNote", "variation", "heldFor"];
+  var CHORD_FIELDS = ["beat", "tick", "weight", "anticipates", "heldFor"];
+
+  function hasFields(thing, fields) {
+    return !!thing && fields.every(function (field) {
+      return Object.prototype.hasOwnProperty.call(thing, field);
+    });
+  }
+
+  /** The style the player wrote, brought back from the store - or dropped.
+
+      **Dropped rather than migrated, and that is the decision.** A comping
+      style is a preference, and a preference that cannot be read back is one
+      you remake in a minute in a dialog you already know. A migration path for
+      eleven fields is more code than the editor, and it would be code nobody
+      could test against a version of the page that no longer exists. So
+      anything that does not match the shape the engine is sending *now* is
+      thrown away.
+
+      Four ways a stored style stops meaning what it said, and what catches
+      each:
+
+      - the grid moves, so every tick in it is wrong - caught by `ticksPerBeat`,
+        which the engine reports and which is stored beside the style. Derived
+        from the engine's own answer rather than stamped as a version number
+        somebody has to remember to raise, which is the staleness
+        `tools/test-count.sh` exists to end.
+      - a field is added or dropped on either side - caught by checking both
+        the stored style and the engine's own against one list of fields.
+      - a value goes out of range - caught here for the obvious ones, and by
+        the engine for the rest: a description it cannot read is an error
+        rather than a shrug.
+      - a feel is reworded - caught by holding it to the list the engine just
+        sent rather than to one written here.
+  */
+  function recallCustomStyle(shipped) {
+    var stored = recallObject("CompCustom");
+
+    if (!stored || !shipped) return null;
+
+    // The grid the ticks are counted on. A tick means nothing without it.
+    if (stored.ticksPerBeat !== shipped.ticksPerBeat) return null;
+
+    // Both sides against one list, so this catches a newer engine as well as
+    // an older store.
+    if (!hasFields(stored, STYLE_FIELDS) || !hasFields(shipped, STYLE_FIELDS)) return null;
+
+    if (!Array.isArray(stored.slots) || stored.slots.length === 0) return null;
+    if (!hasFields((shipped.slots || [])[0], CHORD_FIELDS)) return null;
+
+    var chordsRead = stored.slots.every(function (slot) {
+      return hasFields(slot, CHORD_FIELDS)
+             && typeof slot.beat === "string"
+             && isFinite(slot.tick) && slot.tick >= 0 && slot.tick < ENGINE_TICKS_PER_BEAT
+             && isFinite(slot.weight) && slot.weight >= 0 && slot.weight <= 100
+             && isFinite(slot.heldFor) && slot.heldFor >= 0;
+    });
+
+    if (!chordsRead) return null;
+
+    // The feel against the list the engine just sent, never one written here.
+    if ((comping.feels || []).indexOf(stored.feel) === -1) return null;
+
+    var numbersRead = ["fewestPerBar", "mostPerBar", "lowestNote", "highestNote",
+                       "variation", "heldFor"].every(function (field) {
+      return isFinite(stored[field]);
+    });
+
+    return numbersRead ? stored : null;
   }
 
   /** Puts the player's own style in the menu, once. */
