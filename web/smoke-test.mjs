@@ -2633,6 +2633,91 @@ try {
           && panelText.indexOf("/100") < 0
           && panelText.indexOf("out of 100") < 0);
 
+    /*  Your tunes, and one tune's memory.
+
+        The finding this half exists for is coverage *within* a tune, so the
+        check plays a saved tune's front half only, twice, and asks whether the
+        panel can tell. That is the shape almost everybody's practice has and
+        the thing no single take can see.
+    */
+    await logging.locator("#progressClose").click();
+
+    // Save the chart, then play two takes over its first bar only.
+    await logging.locator("#chartButton").click();
+    await logging.fill("#tuneName", "Front half only");
+    await logging.locator("#saveTune").click();
+    await logging.locator("#chartButton").click();
+
+    await logging.locator("#modeSolo").click();
+    if (await logging.locator("#helpDialog[open]").count()) await logging.locator("#helpClose").click();
+
+    // Three, because the engine deliberately says nothing across takes until
+    // there are three of them - with fewer, every bar reached was reached in
+    // "every take", which is true and worth nothing.
+    for (let round = 0; round < 3; round += 1) {
+      await logging.locator("#armTake").click();
+      for (const note of [62, 65, 69]) {
+        await logging.locator(`#keyboard .key[data-note="${note}"]`).click();
+        await logging.waitForTimeout(40);
+      }
+      await logging.locator("#armTake").click();
+      await logging.waitForTimeout(250);
+    }
+
+    await logging.locator("#recordButton").click();
+    await logging.waitForSelector("#progressDialog[open]", { timeout: 10000 });
+    await logging.locator("#progressTabTunes").click();
+
+    check(`the tunes tab lists what is saved `
+          + `(${await logging.locator("#tuneList .tune-row").count()})`,
+          (await logging.locator("#tuneList .tune-row").count()) === 1
+          && (await logging.locator(".tune-row-name").innerText()) === "Front half only"
+          && (await logging.locator(".tune-row-said").innerText()).indexOf("3 takes") === 0);
+
+    await logging.locator(".tune-row").click();
+    await logging.waitForSelector("#tuneMemoryView:not([hidden])", { timeout: 10000 });
+
+    // Every bar of the chart is drawn, reached or not: the unreached ones are
+    // the whole point, so they cannot be left out of the strip.
+    const bars = await logging.evaluate(() =>
+      Array.from(document.querySelectorAll("#tuneBars .tune-bar"))
+           .map((cell) => cell.dataset.reached));
+
+    check(`one tune's memory draws every bar, reached or not `
+          + `(${bars.length} bars, ${bars.filter((b) => b === "none").length} never reached)`,
+          bars.length === 12 && bars[0] === "all" && bars.filter((b) => b === "none").length === 11);
+
+    check("and says in words which bars never come up",
+          (await logging.locator("#tuneSaid").innerText()).indexOf("never been reached") > 0);
+
+    check("with no score anywhere in it",
+          (await logging.locator("#tuneMemoryView").innerText()).toLowerCase().indexOf("score") < 0);
+
+    /*  Forgetting takes two presses, because this page uses no `confirm()`
+        anywhere and a webview is the wrong place to start. */
+    await logging.locator("#tuneForget").click();
+
+    // `.link-btn` uppercases its label, and `innerText` returns what is
+    // rendered rather than what was written - so this matches either.
+    check("forgetting a tune asks first, and has not forgotten it yet",
+          (await logging.locator("#tuneForget").innerText()).toLowerCase().indexOf("really") === 0
+          && (await logging.evaluate(() =>
+               JSON.parse(window.localStorage.getItem("jazzTunes")).tunes.length)) === 1);
+
+    await logging.locator("#tuneForget").click();
+    await logging.waitForSelector("#tuneListView:not([hidden])", { timeout: 10000 });
+
+    const after = await logging.evaluate(() => ({
+      tunes: JSON.parse(window.localStorage.getItem("jazzTunes")).tunes.length,
+      takes: JSON.parse(window.localStorage.getItem("jazzPractice")).takes.length
+    }));
+
+    // The takes stay. They happened, and the record is about the player rather
+    // than about the tune - they simply stop belonging to anything.
+    check(`the second press forgets the tune and keeps the practice `
+          + `(${after.tunes} tunes, ${after.takes} takes)`,
+          after.tunes === 0 && after.takes === 5);
+
     await logging.locator("#progressClose").click();
 
     await record.close();

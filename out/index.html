@@ -741,6 +741,69 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
 .record-chip[data-met="no"] { color: var(--text-soft); border-style: dashed; }
 .record-empty { font-size: 13.5px; line-height: 1.6; color: var(--text-soft); }
 
+/*  Your tunes, and one tune's memory.
+
+    The list is rows you press, not a select: a select shows one at a time and
+    what this half is for is seeing them together - which you have been
+    playing, and which have been sitting there since March. */
+.tune-list { display: flex; flex-direction: column; }
+.tune-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 11px 2px;
+  text-align: left;
+  cursor: pointer;
+}
+.tune-row:hover .tune-row-name { color: var(--blush-deep); }
+.tune-row-name { font-family: var(--serif); font-size: 16px; color: var(--charcoal); }
+.tune-row-said { font-size: 12px; color: var(--text-soft); text-align: right; }
+
+/*  One cell per bar of the tune, shaded by how many takes ever reached it.
+
+    A picture rather than a sentence because the finding is a *shape* - the
+    front of the tune solid and the back of it pale is the thing somebody
+    recognises about their own practice in one look, and it is the same shape
+    for almost everybody. The sentence is underneath as well, since a shade is
+    not readable to everyone and a bar's numbers are on its title either way. */
+.tune-bars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin: 4px 0 16px;
+}
+.tune-bar {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 30px;
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  color: var(--text-soft);
+  background: var(--paper);
+}
+.tune-bar[data-reached="some"] { background: rgba(193, 124, 116, 0.18); color: var(--charcoal); }
+.tune-bar[data-reached="most"] { background: rgba(193, 124, 116, 0.38); color: var(--charcoal); }
+.tune-bar[data-reached="all"]  { background: rgba(193, 124, 116, 0.62); color: var(--charcoal); }
+
+.tune-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.tune-back { margin-bottom: 14px; }
+.tune-memory-said { font-size: 13.5px; line-height: 1.6; margin: 0 0 4px; }
+
 .help-button {
   width: 30px;
   height: 30px;
@@ -2765,7 +2828,29 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   </div>
 
   <div class="tab-body" id="progressPanelTunes" role="tabpanel" hidden>
-    <p class="record-empty">Your saved tunes go here.</p>
+    <!-- Two views in one panel rather than a third tab: a tune's memory is
+         something you drill into from the list and come back out of, which is
+         a different move from switching between two things that sit side by
+         side. -->
+    <div id="tuneListView">
+      <p class="record-empty" id="tuneListEmpty" hidden>No tunes saved yet. Save one from the
+        chart's own menu, above the music, and what you practise over it is counted here.</p>
+      <div class="tune-list" id="tuneList"></div>
+    </div>
+
+    <div id="tuneMemoryView" hidden>
+      <button class="link-btn tune-back" type="button" id="tuneBack">&#8592; Your tunes</button>
+      <span class="record-head" id="tuneMemoryName"></span>
+      <p class="tune-memory-said" id="tuneMemorySummary"></p>
+      <span class="record-title">Bars you have reached</span>
+      <div class="tune-bars" id="tuneBars"></div>
+      <ul class="record-said" id="tuneSaid"></ul>
+
+      <div class="tune-actions">
+        <button class="link-btn" type="button" id="tuneOpen">Put this tune on the stand</button>
+        <button class="link-btn" type="button" id="tuneForget">Forget this tune</button>
+      </div>
+    </div>
   </div>
 </dialog>
 
@@ -3541,6 +3626,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "progressTabRecord", "progressTabTunes", "progressPanelRecord", "progressPanelTunes",
    "recordSummary", "recordFigures", "recordSaid", "recordCoverage", "recordQualities",
    "recordKeys", "recordRoots",
+   "tuneListView", "tuneList", "tuneListEmpty", "tuneMemoryView", "tuneBack",
+   "tuneMemoryName", "tuneMemorySummary", "tuneBars", "tuneSaid", "tuneOpen", "tuneForget",
    "helpButton", "helpDialog", "helpClose", "helpTabs",
    "helpTabChart", "helpTabPlaying", "helpTabReading", "helpTabTime", "helpTabBand",
    "helpPanelChart", "helpPanelPlaying", "helpPanelReading", "helpPanelTime", "helpPanelBand",
@@ -7938,6 +8025,199 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     drawChips(el.recordRoots, result.rootsMet, result.rootsMissing);
   }
 
+  /*  Your tunes, and one tune's memory.
+
+      The per-bar half is the reason this panel exists. Everybody starts at the
+      top, a chorus outlasts the patience of whoever is playing it, and so the
+      back of a standard gets a fraction of the practice the front does - which
+      is invisible from inside any one take and obvious across eleven. The
+      engine counts it; this draws it.
+  */
+
+  /** Which tune the memory view is showing, or 0. */
+  var showingTune = 0;
+
+  function takesOverTune(id) {
+    return recallPractice().filter(function (row) { return row.tune === id; });
+  }
+
+  function drawTuneList() {
+    var library = recallTunes();
+    var rows = recallPractice();
+
+    el.tuneList.textContent = "";
+    el.tuneListEmpty.hidden = library.tunes.length > 0;
+
+    library.tunes.forEach(function (tune) {
+      var mine = rows.filter(function (row) { return row.tune === tune.id; });
+      var row = document.createElement("button");
+      var name = document.createElement("span");
+      var said = document.createElement("span");
+
+      row.className = "tune-row";
+      row.type = "button";
+      row.dataset.tune = String(tune.id);
+
+      name.className = "tune-row-name";
+      name.textContent = tune.name;
+
+      said.className = "tune-row-said";
+
+      // A count and a recency, which are the two things worth knowing about a
+      // tune from outside it. Both are facts; neither is a mark.
+      if (!mine.length) {
+        said.textContent = "not played with a take running";
+      } else {
+        var last = mine.reduce(function (latest, one) {
+          return Math.max(latest, one.day);
+        }, 0);
+        var ago = Math.max(0, todayNumber() - last);
+
+        said.textContent = mine.length + (mine.length === 1 ? " take, " : " takes, ")
+                         + (ago === 0 ? "today" : ago === 1 ? "yesterday" : ago + " days ago");
+      }
+
+      row.appendChild(name);
+      row.appendChild(said);
+      el.tuneList.appendChild(row);
+    });
+  }
+
+  function showTuneList() {
+    showingTune = 0;
+    el.tuneListView.hidden = false;
+    el.tuneMemoryView.hidden = true;
+    drawTuneList();
+  }
+
+  /** How solidly a bar has been reached, as a word the stylesheet shades by. */
+  function reachedBand(takes, of) {
+    if (!takes) return "none";
+    if (takes >= of) return "all";
+    return takes * 2 >= of ? "most" : "some";
+  }
+
+  async function showTuneMemory(id) {
+    var tune = recallTunes().tunes.filter(function (one) { return one.id === id; })[0];
+
+    if (!tune) {
+      showTuneList();
+      return;
+    }
+
+    showingTune = id;
+    el.tuneListView.hidden = true;
+    el.tuneMemoryView.hidden = false;
+    el.tuneMemoryName.textContent = tune.name;
+    el.tuneBars.textContent = "";
+    el.tuneSaid.textContent = "";
+    resetForget();
+
+    var mine = takesOverTune(id);
+
+    // The engine is asked even with no takes: it draws every bar of the chart
+    // either way, and an empty tune showing its own bars is more use than a
+    // sentence saying there is nothing to show.
+    var result = await call("jazzTuneProgress", ["string", "string", "number"],
+                            [tune.progression, practiceHistoryText(mine), todayNumber()]);
+
+    if (result === null || !result.ok) {
+      el.tuneMemorySummary.textContent =
+        "This engine could not read this tune's practice. Reload to pick up the version that can.";
+      return;
+    }
+
+    el.tuneMemorySummary.textContent = result.summary;
+
+    (result.bars || []).forEach(function (bar) {
+      var cell = document.createElement("span");
+
+      cell.className = "tune-bar";
+      cell.dataset.reached = reachedBand(bar.takes, result.takes);
+      cell.textContent = String(bar.index + 1);
+
+      // The numbers themselves, for anyone who wants them and for a screen
+      // reader, which cannot see a shade - the same thing the chart's own take
+      // marks do.
+      cell.title = "Bar " + (bar.index + 1) + (bar.chord ? " (" + bar.chord + ")" : "")
+                 + " - reached in " + bar.takes
+                 + (bar.takes === 1 ? " take" : " takes") + " of " + result.takes;
+
+      el.tuneBars.appendChild(cell);
+    });
+
+    (result.observations || []).forEach(function (line) {
+      var item = document.createElement("li");
+      item.textContent = line;
+      el.tuneSaid.appendChild(item);
+    });
+  }
+
+  el.tuneList.addEventListener("click", function (event) {
+    var row = event.target.closest(".tune-row");
+
+    if (row) showTuneMemory(Number(row.dataset.tune));
+  });
+
+  el.tuneBack.addEventListener("click", showTuneList);
+
+  el.tuneOpen.addEventListener("click", async function () {
+    var picked = recallTunes().tunes.filter(function (one) { return one.id === showingTune; })[0];
+
+    if (!picked) return;
+
+    el.progressDialog.close();
+
+    original = {
+      progression: picked.progression,
+      title: picked.title,
+      style: picked.style,
+      composer: picked.composer,
+      beats: picked.beats,
+      beatUnit: picked.beatUnit
+    };
+
+    await loadChartRecord(original, picked.id);
+    fillTuneList();
+  });
+
+  /*  Forgetting a tune, in two presses rather than a `confirm()`.
+
+      This page uses neither `prompt` nor `confirm` anywhere, and a webview is
+      the wrong place to start. Two presses is also a better fit for what this
+      is: the second one is a decision, not a dismissal of a box.
+
+      What it does *not* delete is the practice. Those takes happened, and the
+      record is about the player rather than about the tune - so the rows stay
+      and simply stop belonging to anything. Their tune id is never reused,
+      since `library.next` only goes up.
+  */
+  function resetForget() {
+    el.tuneForget.textContent = "Forget this tune";
+    el.tuneForget.dataset.sure = "no";
+  }
+
+  el.tuneForget.addEventListener("click", function () {
+    if (el.tuneForget.dataset.sure !== "yes") {
+      el.tuneForget.textContent = "Really forget it?";
+      el.tuneForget.dataset.sure = "yes";
+      return;
+    }
+
+    var library = recallTunes();
+
+    library.tunes = library.tunes.filter(function (one) { return one.id !== showingTune; });
+    rememberTunes(library);
+
+    // The chart stays on the stand - forgetting the tune is not putting a
+    // different one up - but it is no longer a saved tune, so takes from here
+    // stop being counted against it.
+    if (state.tune === showingTune) state.tune = 0;
+
+    fillTuneList();
+    showTuneList();
+  });
+
   function showProgressTab(which) {
     var onTunes = which === "tunes";
 
@@ -7945,6 +8225,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.progressTabTunes.setAttribute("aria-selected", onTunes ? "true" : "false");
     el.progressPanelRecord.hidden = onTunes;
     el.progressPanelTunes.hidden = !onTunes;
+
+    // Always back to the list. Coming back to a tune you drilled into three
+    // days ago is a state nobody asked to be in.
+    if (onTunes) showTuneList();
   }
 
   async function openPracticeRecord() {
