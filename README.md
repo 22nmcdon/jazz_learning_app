@@ -95,12 +95,17 @@ needs a clock, and if the row grew when the clock came on it would shove the mus
 under the eye reading it.
 
 Everything that is a setting rather than a gesture is behind one button. **Practice**, top
-right, opens a panel in seven sections - Sound, The band, Voicings, Scales, MIDI keyboard,
-Chart, About. There used to be two panels in opposite corners, and nothing said which held
-what: the band's piano sound was in one and your own was in the other, both of them called
-*Sound*. The chart's own tools - import, reharmonise, edit, restore - were a third place, a
-toolbar above the music. Below 760px the panel becomes a bottom sheet with a close row of
-its own, because at that width it is drawn over the button that would otherwise dismiss it.
+right, opens a panel in six sections - Sound, The band, Voicings, Scales, MIDI keyboard,
+About. There used to be two panels in opposite corners, and nothing said which held what:
+the band's piano sound was in one and your own was in the other, both of them called
+*Sound*. Below 760px the panel becomes a bottom sheet with a close row of its own, because
+at that width it is drawn over the button that would otherwise dismiss it.
+
+Two menus are deliberately not in it, because neither is a preference. **Take setup**, on
+the transport strip, is the take's: count in, loop, speed up each chorus, reharmonise as
+you play. **Chart**, above the music, is the tune's: import and export, reharmonise the
+tune, edit it, restore it. Which tune is on the stand is a different question from how you
+practise, and you reach for those between tunes rather than between takes.
 
 Emptying the sheet of everything that was not music is most of what the chart gained:
 
@@ -111,6 +116,15 @@ Emptying the sheet of everything that was not music is most of what the chart ga
 
 At 430x860 the chart stopped needing to scroll at all - 572px of content in a 382px zone
 became 382px in 382px.
+
+**And the chart fills the room it is given** rather than banking the difference at the
+bottom. A twelve-bar tune is 404px of music in a 560px zone on a large window; left
+top-anchored that is 156px of empty paper under the last barline, which reads as the page
+having run out. The gaps between systems grow first, up to a limit, because space spread
+through the chart is felt as air and the same space at the end is felt as a void; whatever
+is left over goes evenly above and below, which is what centres a tune too short to have
+gaps at all. On a tune longer than the window nothing happens - there is nothing to give
+away, and it scrolls as before.
 
 **How the room was set up is remembered; what you were doing is not.** Come back and the
 tempo, the metre, Static or In time, your sound, who is in the band and what they are
@@ -752,7 +766,7 @@ against a bar). Every entry is a bold line you can scan and a quieter one undern
 
 It appears once per mode; the **?** beside the **Practice** button brings it back.
 
-**Import / export**, under *Chart* in the settings panel, opens a chart that came from somewhere else and
+**Import / export**, under *Chart* above the music, opens a chart that came from somewhere else and
 writes the one on screen back out. Both shells read an iReal Pro link, the `.html` file
 iReal Pro sends when you share a song, or a progression typed as `| Dm7 | G7 | Cmaj7 |`,
 pasted in or picked as a file, and both put an `irealbook://` link back on the clipboard

@@ -94,16 +94,39 @@ means CSS, not per-platform builds.
   measures the wrong page** — so the check runs a second pass with
   `ascent-override`/`descent-override` forcing taller metrics, which needs no
   network.
-- **There is one settings panel, `#menuPanel`, and it has sections.** Seven of
-  them: Sound, The band, Voicings (chords), Scales (solo), MIDI keyboard, Chart,
-  About. There were two panels in opposite corners and a toolbar above the
-  chart, and nothing said which held what — the band's piano sound and your own
-  were in different panels, both called *Sound*. A new setting goes in a section
-  or starts one; it does not start a second panel. Below 760px the panel is a
-  bottom sheet, which is why it has a `.menu-head` close row — at that width it
-  covers the button that would otherwise close it. The transport's own popover
-  (`#transportButton`) is the one exception and stays where it is: it belongs to
-  the take, not to the settings.
+- **There is one settings panel, `#menuPanel`, and it has sections.** Six of
+  them: Sound, The band, Voicings (chords), Scales (solo), MIDI keyboard, About.
+  There were two panels in opposite corners and nothing said which held what —
+  the band's piano sound and your own were in different panels, both called
+  *Sound*. A new **setting** goes in a section or starts one; it does not start a
+  second panel. Below 760px the panel is a bottom sheet, which is why it has a
+  `.menu-head` close row — at that width it covers the button that would
+  otherwise close it.
+- **Two menus are deliberately not in it, and both are about a moment rather
+  than a preference.** `#transportButton` is the take's — count-in, loop, ramp,
+  reharmonise-as-you-go — and lives on the transport strip. `#chartButton` is
+  the tune's — import/export, reharmonise, edit, restore — and lives above the
+  chart it acts on. The chart's tools spent one commit inside `#menuPanel` and
+  it was the wrong room: what is behind *Practice* is how you practise, and
+  which tune is on the stand is a different question. **Three menus is the
+  ceiling**; a fourth means something is in the wrong one.
+- **The chart is justified into its zone, by `layOutChart()`.** A twelve-bar
+  tune is 404px of music in a 560px zone on a 1440×900 window, and top-anchored
+  the difference banks at the bottom as dead cream. It is given away in two
+  goes: the **gaps between systems grow first**, capped at `MAX_EXTRA_GAP`,
+  because slack spread through the chart reads as breathing room while the same
+  slack at the end reads as a void — then **what is left becomes symmetric
+  padding on `.sheet`**, which is the only thing that helps a tune of one
+  system, since one system has no gaps. When the chart is taller than the zone
+  this does nothing at all and the zone scrolls as it always did. It measures
+  with both custom properties cleared, or it measures its own last answer.
+  **It re-runs on four things and needs all four**: after `renderSheet()`, when
+  `#editToggle` shows or hides the editor, a `ResizeObserver` on `.chart-zone`
+  (the page's only one — a `resize` listener would miss the dock changing height
+  on a mode switch), and `document.fonts.ready`, since the webfont changes every
+  bar's height while leaving the zone's alone. Print overrides both properties
+  with `!important`, because a value set from script otherwise beats the
+  stylesheet.
 - **Viewport-relative heights are `dvh`, never `vh`.** On a phone `vh` is the
   window with the browser's own chrome collapsed, and the part that goes under
   it is the bottom of the frame — the dock.

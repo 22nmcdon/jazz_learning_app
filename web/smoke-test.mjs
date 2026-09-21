@@ -238,7 +238,7 @@ try {
 
   // A link to this page can carry a tune. Take the one the export offers and
   // open it in a second page: what comes back has to be the same chart.
-  await page.locator("#menuButton").click();
+  await page.locator("#chartButton").click();
   await page.locator("#ioButton").click();
   await page.waitForSelector("#ioDialog[open]", { timeout: 10000 });
 
@@ -289,7 +289,7 @@ try {
     if (await third.locator("#helpDialog[open]").count())
       await third.locator("#helpClose").click();
 
-    await third.locator("#menuButton").click();
+    await third.locator("#chartButton").click();
     await third.locator("#ioButton").click();
     await third.waitForSelector("#ioDialog[open]", { timeout: 10000 });
     await third.waitForFunction(
@@ -907,7 +907,7 @@ try {
       follow". Same list, same descriptions - listing them again in the menu
       would be a second copy of six write-ups to go stale - and the Static /
       In time split decides which question is being asked. */
-  await page.locator("#menuButton").click();
+  await page.locator("#chartButton").click();
   await page.locator("#planButton").click();   // which closes the panel behind it
   await page.waitForSelector("#planDialog[open]", { timeout: 10000 });
 
@@ -972,7 +972,7 @@ try {
 
   // Off the clock the dialog goes back to meaning what it always meant.
   await page.locator("#playStatic").click();
-  await page.locator("#menuButton").click();
+  await page.locator("#chartButton").click();
   await page.locator("#planButton").click();
   await page.waitForSelector("#planDialog[open]", { timeout: 10000 });
 
@@ -1854,6 +1854,95 @@ try {
     await framed.close();
   }
 
+  /*  The chart fills the zone it is given.
+
+      A twelve-bar tune is shorter than the zone on any roomy window, and the
+      difference used to bank at the bottom as dead cream - 156px of it at
+      1440x900, which reads as the page having run out rather than as the page
+      being laid out. It is given away in two goes: the gaps between systems
+      grow first, up to a cap, and what is left over becomes symmetric padding.
+
+      Both sizes, because the interesting half is the one where nothing should
+      happen. A chart taller than its zone has nothing to give away, and if the
+      spacing moved there it would be stretching a chart that is already being
+      scrolled. */
+  for (const [width, height, room] of [[1440, 900, "room to spare"],
+                                       [1100, 700, "more chart than room"]]) {
+    const filled = await browser.newPage({ viewport: { width, height } });
+
+    await filled.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await filled.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    await filled.evaluate(() => document.fonts.ready.then(() => true));
+    if (await filled.locator("#helpDialog[open]").count()) await filled.locator("#helpClose").click();
+
+    const laid = await filled.evaluate(() => {
+      const zone = document.querySelector(".chart-zone");
+      const edge = zone.getBoundingClientRect();
+      const sheet = document.querySelector(".sheet").getBoundingClientRect();
+      const systems = [...document.querySelectorAll(".system")];
+
+      return {
+        gap: systems.length > 1
+               ? Math.round(systems[1].getBoundingClientRect().top
+                            - systems[0].getBoundingClientRect().bottom)
+               : null,
+        // The section keeps a little air under the sheet by design. Anything
+        // beyond that is the void this exists to close.
+        under: Math.round(edge.bottom - sheet.bottom),
+        air: Math.round(parseFloat(getComputedStyle(
+               document.querySelector(".sheet-section")).paddingBottom)),
+        scrolls: zone.scrollHeight > zone.clientHeight + 0.5
+      };
+    });
+
+    if (room === "room to spare")
+      check(`the chart fills the zone when there is ${room} `
+            + `(gaps ${laid.gap}px, ${laid.under}px under the sheet)`,
+            laid.gap > 4 && laid.under <= laid.air + 1 && laid.scrolls === false);
+    else
+      check(`and is spaced exactly as it was when there is ${room} (gaps ${laid.gap}px)`,
+            laid.gap === 4 && laid.scrolls === true);
+
+    /*  And a tune of one system, which is the case the gaps cannot help with:
+        there are none. All of the slack has to go into the margins or it is
+        not centred at all. Typed rather than reloaded, because editing the
+        chart re-lays it out and that is the path worth exercising. */
+    if (room === "room to spare") {
+      await filled.locator("#chartButton").click();
+      await filled.locator("#editToggle").click();
+      await filled.fill("#progression", "| C7 | F7 |");
+      await filled.dispatchEvent("#progression", "input");
+      await filled.waitForFunction(
+        () => document.querySelectorAll(".system").length === 1, null, { timeout: 10000 });
+
+      await filled.locator("#chartButton").click();
+      await filled.locator("#editToggle").click();
+
+      const alone = await filled.evaluate(() => {
+        const edge = document.querySelector(".chart-zone").getBoundingClientRect();
+        const sheet = document.querySelector(".sheet").getBoundingClientRect();
+        const only = document.querySelector(".system").getBoundingClientRect();
+
+        return { above: Math.round(only.top - sheet.top),
+                 below: Math.round(sheet.bottom - only.bottom),
+                 under: Math.round(edge.bottom - sheet.bottom),
+                 air: Math.round(parseFloat(getComputedStyle(
+                        document.querySelector(".sheet-section")).paddingBottom)) };
+      });
+
+      /*  Even margins are not enough on their own to say this worked - the
+          sheet's own padding is symmetric to begin with, so a chart that had
+          been left alone entirely would also sit evenly inside a short page
+          with the void underneath it. What says it worked is the page reaching
+          the bottom of the zone *and* the music sitting in the middle of it. */
+      check(`a chart of one system is centred instead `
+            + `(${alone.above}px over, ${alone.below}px under, ${alone.under}px to the dock)`,
+            alone.under <= alone.air + 1 && Math.abs(alone.above - alone.below) <= 2);
+    }
+
+    await filled.close();
+  }
+
   /*  What survives a reload, and what must not.
 
       A settings layer is the one kind of feature that cannot be checked by
@@ -1898,7 +1987,7 @@ try {
 
     // Something to prove is *not* remembered: a chart that is not the one the
     // page ships with.
-    await before.locator("#menuButton").click();
+    await before.locator("#chartButton").click();
     await before.locator("#editToggle").click();
     await before.fill("#progression", "| Eb7 | Ab7 |");
     await before.dispatchEvent("#progression", "input");
@@ -1951,14 +2040,14 @@ try {
         deliberately not remembered, so reloading always brings the twelve bars
         back and bars 3-6 would still fit. A four-bar tune in the address is
         the real case, and the one that would otherwise go unnoticed. */
-    await before.locator("#menuButton").click();
+    await before.locator("#chartButton").click();
     await before.locator("#editToggle").click();
     await before.fill("#progression", "| C7 | F7 |");
     await before.dispatchEvent("#progression", "input");
     await before.waitForFunction(
       () => document.querySelectorAll("#systems .chord").length === 2, null, { timeout: 10000 });
 
-    await before.locator("#menuButton").click();
+    await before.locator("#chartButton").click();
     await before.locator("#ioButton").click();
     await before.waitForSelector("#ioDialog[open]", { timeout: 10000 });
     await before.waitForFunction(
@@ -2039,12 +2128,12 @@ try {
 
     const opening = await chordsNow();
 
-    await edited.locator("#menuButton").click();
+    await edited.locator("#chartButton").click();
     await edited.locator("#editToggle").click();
 
-    check("the editor opens from the panel, and closes it on the way",
+    check("the editor opens from the chart menu, and closes it on the way",
           (await edited.locator("#editor").isVisible())
-          && (await edited.locator("#menuPanel").isHidden()));
+          && (await edited.locator("#chartPanel").isHidden()));
 
     await edited.fill("#progression", "| Fmaj7 | Bb7 |");
     await edited.dispatchEvent("#progression", "input");
@@ -2054,7 +2143,7 @@ try {
     check(`and typing into it rewrites the chart (${await chordsNow()})`,
           (await chordsNow()) === "Fmaj7 B\u266d7");
 
-    await edited.locator("#menuButton").click();
+    await edited.locator("#chartButton").click();
     await edited.locator("#restoreChart").click();
     await edited.waitForFunction(
       (was) => [...document.querySelectorAll("#systems .chord")]
@@ -2062,7 +2151,7 @@ try {
       opening, { timeout: 10000 });
 
     check("and Restore original gives back the tune it opened with",
-          (await edited.locator("#menuPanel").isHidden()));
+          (await edited.locator("#chartPanel").isHidden()));
 
     await edited.close();
   }
@@ -2276,7 +2365,7 @@ try {
 
       for (const element of document.querySelectorAll(
              ".top-bar > *, .top-bar-right > *, .transport-clock > *, .transport-take > *,"
-             + " .dock-actions > *, .dock-status > *")) {
+             + " .chart-bar > *, .dock-actions > *, .dock-status > *")) {
         const box = element.getBoundingClientRect();
 
         if (box.width > 0 && (box.right > window.innerWidth + 0.5 || box.left < -0.5))
@@ -2305,7 +2394,7 @@ try {
 
     for (const element of document.querySelectorAll(
            ".top-bar > *, .top-bar-right > *, .transport-clock > *, .transport-take > *,"
-           + " .dock-actions > *, .dock-status > *, .feedback > *")) {
+           + " .chart-bar > *, .dock-actions > *, .dock-status > *, .feedback > *")) {
       const box = element.getBoundingClientRect();
 
       if (box.width > 0 && (box.right > window.innerWidth + 0.5 || box.left < -0.5))
@@ -2352,7 +2441,8 @@ try {
   const panels = [];
 
   for (const [button, panel] of [["#menuButton", "#menuPanel"],
-                                 ["#transportButton", "#transportPanel"]]) {
+                                 ["#transportButton", "#transportPanel"],
+                                 ["#chartButton", "#chartPanel"]]) {
     if (!(await narrow.locator(button).isVisible())) continue;
 
     await narrow.locator(button).click();

@@ -24,7 +24,8 @@ The last four commits restructured the page's layout:
 | `c4c5eea` | Reserved the strip's height in **both** of the page's typefaces. The first version sized it against the fallback face alone and shipped a chart that moved when the clock came on. |
 | `16dab04` | One settings panel: the comping panel and the chart's toolbar merged into `#menuPanel` in seven sections, and the colophon with them. |
 | `200a44c` | The dock foot regrouped into what you press and what you read. |
-| *(this one)* | Practice settings remembered across reloads, through one pair of storage accessors. |
+| `f03c65f` | Practice settings remembered across reloads, through one pair of storage accessors. |
+| *(this one)* | The chart's tools out of the settings panel into a menu of their own above the music, and the chart justified into its zone instead of leaving a void under it. |
 
 Verify anything you change:
 
@@ -123,6 +124,20 @@ DSP undertaking. Do not start it because a feature seems to want it.
 
 Small, verified, and none of them urgent.
 
+- **`MAX_EXTRA_GAP` is 28px and was chosen by eye**, against the default
+  twelve-bar chart at five window sizes. It is the one number in `layOutChart()`
+  that is a judgement rather than a measurement. A tune of six systems has five
+  gaps to fill and will reach the cap far sooner than the default three-system
+  one does, so if a long chart ever looks thin at the bottom, that is the number
+  to revisit — not the order the slack is given away in.
+
+- **One unexplained smoke-test timeout.** A single run failed with
+  `page.waitForFunction: Timeout 15000ms` while the chart menu was half-wired;
+  four runs since have been clean and CI has been clean. Noted rather than
+  chased. If it comes back, the 15s waits are the share-link exports and the
+  rolling-bar wait, and the thing to suspect first is `layOutChart()` running
+  during a take.
+
 - **Count-in, the tempo ramp and *Reharmonise as you play* are not
   remembered.** They were left out of commit 6 on purpose — the handoff's
   agreed list did not include them, and they read as setup for one particular
@@ -194,7 +209,7 @@ messages are reproducible without writing measuring scripts again.
 
 The narrow-layout scan at the end of the file is the safety net for all of this.
 It scans `.top-bar`, `.top-bar-right`, `.transport-clock`, `.transport-take`,
-`.dock-actions`, `.dock-status` and `.feedback` at 390px. **Anything that moves
+`.chart-bar`, `.dock-actions`, `.dock-status` and `.feedback` at 390px. **Anything that moves
 a control into a new container must add that container to the scan**, or the net
 has a hole in it.
 
@@ -205,6 +220,14 @@ all — which reads exactly like a hole in the scan and is not one. This cost a
 round of head-scratching; `CLAUDE.md`'s note about a 900px control predates the
 containers being flex.
 
+- **The chart fills its zone** — at a size with room to spare the gaps have
+  grown and the sheet reaches the dock; at a size without, the gaps are back to
+  their base and the zone still scrolls, which is the half that says the
+  justification knows when to do nothing. And a one-system tune is centred,
+  which the gaps cannot do for it. That last one needs both halves asserted:
+  even margins alone pass on a chart that was never touched, because the
+  sheet's own padding is symmetric to begin with — it was written that way
+  first and the negative control caught it.
 - **What a reload keeps** — the settings coming back, *and* the chart and the
   take not coming back with them, which is the half a working-looking bug would
   hide. In its own browser context, because that is what owns the store. The

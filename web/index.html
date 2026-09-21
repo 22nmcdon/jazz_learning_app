@@ -867,6 +867,25 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
 }
 
 /* --- lead sheet ---------------------------------------------------------- */
+/* The chart's own menu, on a line above the music. `position: relative` so the
+   panel hangs off this row rather than off `.menu-wrap`, which would anchor it
+   to a button at the far left and is the same fix the transport strip needed. */
+.chart-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px 18px;
+  margin-bottom: 10px;
+  position: relative;
+}
+.chart-bar > .menu-wrap { position: static; }
+
+/* Hung from the left, because its button is at the left of the row. */
+#chartPanel {
+  left: 0;
+  right: auto;
+  width: min(360px, calc(100vw - 32px));
+}
+
 .sheet-section { padding-block: 26px 22px; }
 
 .sheet {
@@ -874,6 +893,11 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
   border: 1px solid var(--line);
   box-shadow: 0 1px 0 var(--cream-2), 0 14px 34px rgba(36, 31, 29, 0.06);
   padding: clamp(22px, 4vw, 44px);
+
+  /* Both written by `layOutChart()` and both zero until it has something to
+     give away. They are the two halves of one answer - see that function for
+     why the gaps are filled before the margins. */
+  padding-block: calc(clamp(22px, 4vw, 44px) + var(--sheet-slack, 0px));
 }
 
 /* Engraved the way a lead sheet is - feel, title, credit - but along a line
@@ -999,7 +1023,7 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
 .parse-error:empty { display: none; }
 
 /* Systems of four bars, barlines drawn between them - no staff, no melody. */
-.systems { display: flex; flex-direction: column; gap: 4px; }
+.systems { display: flex; flex-direction: column; gap: var(--system-gap, 4px); }
 .system {
   display: flex;
   align-items: stretch;
@@ -1787,6 +1811,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 }
 
 @media print {
+  /* A printed page has no viewport to fill, so the two properties that fill one
+     have to go. They are written from script, which beats a stylesheet unless
+     the stylesheet insists. */
+  .sheet { padding-block: 0 !important; }
+  .systems { gap: 4px !important; }
+
   /* What prints is the chart, on its own, in black ink.
 
      The top bar itself stays, because the chart's head is in it now - a
@@ -1900,9 +1930,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
              Sectioned rather than left a flat list because this is where the
              unbuilt features land (`docs/HANDOFF.md`): a comping-style editor
              off The band, a voicing library off Voicings, practice history and
-             ear training as sections of their own. The growth pattern it
-             replaces - another row in a group, another button on the chart's
-             toolbar - was out of road. -->
+             ear training as sections of their own.
+
+             Six sections, not seven. The chart's own tools were here briefly
+             and are above the music again, in a menu of their own: everything
+             in this panel is how you practise, and which tune is on the stand
+             is a different question. Seven sections was also simply more than
+             one dropdown wants to hold. -->
         <div class="menu-panel" id="menuPanel" hidden>
           <!-- Shown only where the panel is a bottom sheet. As a dropdown it
                is closed by its own button, by a click anywhere else, or by
@@ -2021,22 +2055,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <span class="menu-title">MIDI keyboard</span>
             <button class="link-btn" type="button" id="connectMidi">Connect a keyboard</button>
             <p class="menu-note" id="midiStatus">Not connected. The on-screen keyboard works either way.</p>
-          </div>
-
-          <!-- The chart's own tools, which used to be a row above the music.
-               They are the tune on the stand rather than the practice session,
-               but they are still settings-shaped - pressed between playing,
-               not while - so they belong behind the same button as the rest. -->
-          <div class="menu-group">
-            <span class="menu-title">Chart</span>
-            <div class="menu-actions">
-              <button class="link-btn" type="button" id="ioButton">Import / export</button>
-              <button class="link-btn" type="button" id="planButton">Reharmonise the tune</button>
-              <button class="link-btn" type="button" id="editToggle">Edit chart</button>
-              <button class="link-btn" type="button" id="restoreChart">Restore original</button>
-            </div>
-            <p class="menu-note">Open a chart from iReal Pro or a PDF, rewrite this one by hand,
-              or take it away. <i>Restore original</i> gives back the tune you brought in.</p>
           </div>
 
           <!-- Was a footer at the bottom of the chart zone, which is a strange
@@ -2207,16 +2225,43 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 <main class="chart-zone">
   <div class="wrap">
   <section class="sheet-section">
+    <!-- The chart's own tools, above the chart they act on. They spent one
+         commit inside the settings panel and that was the wrong room: what is
+         behind the Practice button is how you practise, and which tune is on
+         the stand is a different question - you reach for these between tunes,
+         not between takes.
+
+         A button and a popover rather than the row of four links that was here
+         before, which cost 56px of chart with its separating rule. This costs
+         about twenty, and the page already has two menus shaped exactly like
+         it. -->
+    <div class="chart-bar">
+      <div class="menu-wrap">
+        <button class="link-btn" type="button" id="chartButton"
+                aria-expanded="false" aria-controls="chartPanel">Chart</button>
+
+        <div class="menu-panel" id="chartPanel" hidden>
+          <div class="menu-group">
+            <div class="menu-actions">
+              <button class="link-btn" type="button" id="ioButton">Import / export</button>
+              <button class="link-btn" type="button" id="planButton">Reharmonise the tune</button>
+              <button class="link-btn" type="button" id="editToggle">Edit chart</button>
+              <button class="link-btn" type="button" id="restoreChart">Restore original</button>
+            </div>
+            <p class="menu-note">Open a chart from iReal Pro or a PDF, rewrite this one by hand,
+              or take it away. <i>Restore original</i> gives back the tune you brought in.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="sheet">
-      <!-- The head is in the top bar now, where it stays put while the music
+      <!-- The head is in the top bar, where it stays put while the music
            scrolls. What used to sit here as well was a line saying to click a
            bar - two lines of it, one per mode - and both are in the cheat sheet
            word for word, which is where a first visit already reads them.
 
-           And a toolbar: Comping, Reharmonise the tune, Edit chart, Restore
-           original, on a row with a rule under it. They are in the settings
-           panel's Chart section now, so the sheet opens on the music. The
-           editor stays here, because it is not a control - it is the chart
+           The editor stays, because it is not a control: it is the chart
            itself, in the one form you can type. -->
       <div class="editor" id="editor" hidden>
         <label class="eyebrow" for="progression" style="display:block">Progression</label>
@@ -2822,7 +2867,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "meterFill", "keyboard", "clearKeys", "sustainPedal", "chordDialog", "dialogBar", "dialogChord",
    "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
    "scaleRows", "subs", "advanced", "risky", "spotted", "spottedText", "useSpotted",
-   "menuButton", "menuPanel", "menuClose", "connectMidi", "midiStatus", "styleLabel",
+   "menuButton", "menuPanel", "menuClose", "chartButton", "chartPanel",
+   "connectMidi", "midiStatus", "styleLabel",
    "showVoicing", "playChord", "nameChord", "named", "namedText",
    "planButton", "planDialog", "planClose", "planList", "planTitle", "planIntro",
    "guideButton", "leadLegend", "leadChord",
@@ -3093,6 +3139,51 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // --- lead sheet ----------------------------------------------------------
   var BARS_PER_SYSTEM = 4;
 
+  /*  The chart fills the zone it is given, instead of banking the difference
+      at the bottom as dead space.
+
+      A twelve-bar tune is 404px of music in 560px of chart zone on a 1440x900
+      window: 156px of empty cream between the last barline and the dock, which
+      reads as the page having run out rather than as the page being laid out.
+
+      Two things absorb it, in this order. **The gaps between systems grow
+      first**, up to `MAX_EXTRA_GAP` - slack spread through the chart is felt as
+      breathing room, while the same slack at the end is felt as a void. **What
+      is left over becomes symmetric padding** on the sheet, which is what
+      centres the music and is the only thing that can help a tune of one
+      system, since one system has no gaps to grow. Capping the gaps is what
+      stops a four-bar tune drifting into three enormous stripes.
+
+      When the chart is already taller than the zone there is nothing to give
+      away and this does nothing at all: the spacing is exactly what it was, and
+      the zone scrolls as it always did.
+
+      Measured with both properties cleared, because the thing being measured is
+      the chart at its own size rather than whatever the last pass made of it. */
+  var MAX_EXTRA_GAP = 28;
+  var BASE_GAP = 4;
+
+  function layOutChart() {
+    var zone = document.querySelector(".chart-zone");
+    var section = document.querySelector(".sheet-section");
+    var sheet = document.querySelector(".sheet");
+
+    if (!zone || !section || !sheet) return;
+
+    sheet.style.removeProperty("--sheet-slack");
+    el.systems.style.removeProperty("--system-gap");
+
+    var slack = zone.clientHeight - section.getBoundingClientRect().height;
+
+    if (slack <= 0) return;
+
+    var gaps = Math.max(0, el.systems.children.length - 1);
+    var extra = gaps ? Math.min(MAX_EXTRA_GAP, slack / gaps) : 0;
+
+    el.systems.style.setProperty("--system-gap", (BASE_GAP + extra) + "px");
+    sheet.style.setProperty("--sheet-slack", ((slack - extra * gaps) / 2) + "px");
+  }
+
   function renderSheet() {
     el.systems.textContent = "";
 
@@ -3149,6 +3240,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     }
 
     paintTakeMarks();
+
+    // A new chart is a new height, and the zone it sits in did not change size
+    // - so nothing else is going to ask for this.
+    layOutChart();
   }
 
   /** Chords sit where they fall in the bar: beat 1 at the barline, beat 3 halfway. */
@@ -5888,7 +5983,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   el.ioButton.addEventListener("click", function () {
-    setMenuOpen(false);   // the dialog takes over from the menu that opened it
+    setChartOpen(false);   // the dialog takes over from the menu that opened it
     refreshExport();
     if (!el.ioDialog.open) el.ioDialog.showModal();
   });
@@ -6076,7 +6171,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   // --- whole-tune reharmonisation ------------------------------------------
   el.planButton.addEventListener("click", async function () {
-    setMenuOpen(false);   // the dialog takes over from the panel that opened it
+    setChartOpen(false);   // the dialog takes over from the panel that opened it
 
     var result = await call("jazzReharmPlans", ["string"], [state.progression]);
     if (result === null || !result.ok) return;
@@ -6526,14 +6621,27 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.transportButton.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
+  function setChartOpen(open) {
+    el.chartPanel.hidden = !open;
+    el.chartButton.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
   el.menuButton.addEventListener("click", function () {
     setTransportOpen(false);
+    setChartOpen(false);
     setMenuOpen(el.menuPanel.hidden);
   });
 
   el.transportButton.addEventListener("click", function () {
     setMenuOpen(false);
+    setChartOpen(false);
     setTransportOpen(el.transportPanel.hidden);
+  });
+
+  el.chartButton.addEventListener("click", function () {
+    setMenuOpen(false);
+    setTransportOpen(false);
+    setChartOpen(el.chartPanel.hidden);
   });
 
   el.menuClose.addEventListener("click", function () {
@@ -6541,13 +6649,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.menuButton.focus();
   });
 
-  // Both panels are `.menu-wrap` children, so one rule closes whichever is
-  // open the moment a click lands anywhere else on the page.
+  // All three panels are `.menu-wrap` children, so one rule closes whichever
+  // is open the moment a click lands anywhere else on the page.
   document.addEventListener("click", function (event) {
     if (event.target.closest(".menu-wrap")) return;
 
     setMenuOpen(false);
     setTransportOpen(false);
+    setChartOpen(false);
   });
 
   document.addEventListener("keydown", function (event) {
@@ -6561,6 +6670,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (!el.transportPanel.hidden) {
       setTransportOpen(false);
       el.transportButton.focus();
+    }
+
+    if (!el.chartPanel.hidden) {
+      setChartOpen(false);
+      el.chartButton.focus();
     }
   });
 
@@ -8405,17 +8519,23 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   // --- chart editing -------------------------------------------------------
   el.editToggle.addEventListener("click", function () {
-    // The editor it reveals is down in the chart, which the panel is in front
-    // of at a phone width and beside everywhere else.
-    setMenuOpen(false);
+    // The editor it reveals is under this menu, so the menu has to get out of
+    // the way of what it just did.
+    setChartOpen(false);
 
     el.editor.hidden = !el.editor.hidden;
     el.editToggle.textContent = el.editor.hidden ? "Edit chart" : "Hide editor";
+
+    // The editor is inside the section the chart is fitted to, so showing or
+    // hiding it is a change of height like any other - and one the zone's own
+    // observer cannot see, because the zone did not move.
+    layOutChart();
+
     if (!el.editor.hidden) el.progression.focus();
   });
 
   el.restoreChart.addEventListener("click", function () {
-    setMenuOpen(false);   // what it does is to the chart, so let the chart be seen
+    setChartOpen(false);   // what it does is to the chart, so let the chart be seen
 
     state.progression = original.progression;
     el.progression.value = original.progression;
@@ -8720,6 +8840,22 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // chart that arrived in the link and could not be read has its own thing
     // to say, and two dialogs at once says neither.
     if (!cheatSheetSeen(state.mode) && !document.querySelector("dialog[open]")) openCheatSheet();
+
+    /*  The zone changing size is the other half of it: a window resized, or
+        the dock growing when the mode changes. One observer covers both, and it
+        cannot loop - what this pass writes changes the chart's height, never
+        the zone's, which the frame fixes from above.
+
+        The page's first `ResizeObserver`. A `resize` listener would miss the
+        mode switch, which changes the dock's height without the window moving. */
+    if (window.ResizeObserver)
+      new window.ResizeObserver(layOutChart).observe(document.querySelector(".chart-zone"));
+
+    /*  And the webfont, which lands whenever it lands and changes the height of
+        every bar while leaving the zone's alone - so the observer above would
+        never hear about it. The same two-typeface trap the transport strip
+        carries, arriving by a different door. */
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(layOutChart);
 
     // Light the keyboard with the opening chord's scale, so the page shows what
     // it does before anything is clicked.
