@@ -198,4 +198,56 @@ std::string soloSetBar (int measureIndex, const char* symbol, const char* chosen
 std::string soloPlayNote (int midiNote, int beat = -1, int tick = 0, int withPrevious = 0);
 std::string soloEndTake();
 
+/*  A practice record, read back.
+
+    The engine gains no memory here and no clock. A history is data the shell
+    hands over on every call - the way a chart's progression text is, and the way
+    a comping style described rather than named is - and `today` is a number the
+    shell computed from its own clock, like a `BarPosition`. Nothing is stored
+    between calls, so both of these stay as testable as everything else here.
+
+    The history crosses as **flat delimited text**, which is the direction this
+    wire has always run: results are JSON because encoding them is the shell's
+    business, inputs are text because the engine has no JSON reader and must not
+    grow one. Five delimiters, none of which can occur inside a number, so the
+    grammar needs no escaping and carries no free text at all:
+
+    @verbatim
+      <history> := <take> { "~" <take> }
+      <take>    := <head> "|" [ <bars> ]
+      <head>    := day : mode : tune : seconds : qualities : roots
+                     : chordTones : scaleTones : approachTones : unresolved : outside
+                     : leaps : leapsResolved : chordsPlayed
+                     : onFigure : idiomatic : pushed : offStyle
+      <bars>    := <bar> { ";" <bar> }
+      <bar>     := index , chordTones , scaleTones , approachTones , unresolved , outside
+    @endverbatim
+
+    `mode` is 0 for soloing and 1 for comping. `tune` is a **number**, which is
+    what keeps this free of quoting: what a player calls a tune is the page's
+    business, exactly as what they call their own comping style is. `qualities`
+    and `roots` are the bitmasks `jazz::core::qualityBit` and `rootBit` build,
+    and a shell gets them from a take rather than working them out - which
+    quality a symbol is is theory, and theory is the engine's.
+
+    An empty history is a record with nothing in it, which is what a first visit
+    hands over and is not an error. Anything else that does not parse **is** one:
+    a shell's bug must not read back as a player who has not practised.
+
+    Neither answer carries a score, and that is the point rather than an
+    oversight. `LineStats::score()` calls itself a reading of a bar and not a
+    grade for a player; the same number summed over weeks and drawn as a line is
+    exactly the grade it refuses to be. The counts cross, the mark does not.
+*/
+std::string practiceReading (const char* history, int today);
+
+/** One tune, read across every take over it.
+
+    @param history  this tune's takes only. Filtering is the shell's job, since
+                    a shell already knows which tune is which and an engine
+                    given the whole record plus a tune number would be an engine
+                    that had to be told what a tune is.
+*/
+std::string tuneProgress (const char* progressionText, const char* history, int today);
+
 } // namespace jazz::api

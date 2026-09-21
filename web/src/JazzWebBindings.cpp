@@ -186,3 +186,13 @@ JAZZ_EXPORT const char* jazzSoloEndTake()
 {
     return hold (jazz::api::soloEndTake());
 }
+
+JAZZ_EXPORT const char* jazzPracticeReading (const char* history, int today)
+{
+    return hold (jazz::api::practiceReading (history, today));
+}
+
+JAZZ_EXPORT const char* jazzTuneProgress (const char* progression, const char* history, int today)
+{
+    return hold (jazz::api::tuneProgress (progression, history, today));
+}

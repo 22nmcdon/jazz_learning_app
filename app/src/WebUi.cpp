@@ -116,6 +116,14 @@ namespace
             return api::soloSetBar (number (0), text (1).c_str(), text (2).c_str(),
                                     text (3).c_str(), number (4));
 
+        // The practice record. Stateless like everything above the take: the
+        // history is handed over whole on every call and nothing here keeps it.
+        if (name == "jazzPracticeReading")
+            return api::practiceReading (text (0).c_str(), number (1));
+
+        if (name == "jazzTuneProgress")
+            return api::tuneProgress (text (0).c_str(), text (1).c_str(), number (2));
+
         return "{\"ok\":false,\"error\":\"No engine call named "
                + name.toStdString() + "\"}";
     }

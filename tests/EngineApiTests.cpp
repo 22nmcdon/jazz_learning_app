@@ -968,3 +968,141 @@ TEST ("a chord that will not parse gives no guide tones")
 {
     CHECK (contains (voicedGuideTones ("not a chord", "60"), "\"ok\":false"));
 }
+
+//  --- the practice record on the wire -------------------------------------
+
+namespace
+{
+    /** One take's worth of the history grammar, with the fields nothing in a
+        given test cares about left at zero.
+
+        Written out longhand rather than built by a helper with eighteen
+        arguments: the grammar *is* what these tests are about, and a builder
+        that got a field's position wrong would agree with a reader that got it
+        wrong the same way.
+    */
+    const std::string oneSoloTake =
+        // day mode tune secs qual roots  ct st ap un out  leaps lr chords  fig idio push off
+        "10:0:7:300:7:1157:40:20:4:0:6:3:2:0:0:0:0:0"
+        "|0,10,5,1,0,2;1,12,6,2,0,1;2,18,9,1,0,3";
+}
+
+TEST ("an empty practice record reads as a record with nothing in it")
+{
+    const std::string json = practiceReading ("", 100);
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"takes\":0"));
+    CHECK (contains (json, "Nothing practised yet"));
+    CHECK (contains (json, "\"observations\":[]"));
+}
+
+TEST ("a history the shell hands over is read back as words")
+{
+    const std::string json = practiceReading (oneSoloTake.c_str(), 12);
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"takes\":1"));
+    CHECK (contains (json, "\"bars\":3"));
+    CHECK (contains (json, "\"minutes\":5"));
+    CHECK (contains (json, "\"daysSinceLast\":2"));
+    CHECK (contains (json, "\"soloTakes\":1"));
+    CHECK (contains (json, "\"compTakes\":0"));
+
+    // The three qualities in mask 7, and the three roots in mask 1157
+    // (C, D, G, plus Bb) - named by the engine, never by the page.
+    CHECK (contains (json, "\"qualitiesMet\":[\"major\",\"minor\",\"dominant\"]"));
+    CHECK (contains (json, "\"half-diminished\""));
+    CHECK (contains (json, "\"rootsMet\":[\"C\",\"D\",\"G\",\"Bb\"]"));
+}
+
+TEST ("no answer from the practice wire carries a score")
+{
+    const std::string json = practiceReading (oneSoloTake.c_str(), 12);
+
+    // `lineStatsJson` carries one and this deliberately does not use it. A
+    // score is a reading of a bar just played; the same counts summed over
+    // weeks and drawn as a line is the grade it refuses to be, so the page is
+    // given nothing to plot even if somebody later wants to.
+    CHECK (! contains (json, "\"score\""));
+    CHECK (contains (json, "\"percentOutside\""));
+    CHECK (contains (json, "\"settled\""));
+}
+
+TEST ("a malformed history is an error, never an empty reading")
+{
+    // The asymmetry a described comping style already draws: an unknown style
+    // key falls back, a broken description does not. A shell's bug reading back
+    // as "you have not practised" is the one wrong answer here.
+    for (const char* broken : { "not a take at all",
+                                "10:0:7:300:7:1157:40:20:4:0:6:3:2:0:0:0:0|",     // 17 fields
+                                "10:0:7:300:7:1157:40:20:4:0:6:3:2:0:0:0:0:0:9|",  // 19 fields
+                                "10:0:7:300:7:1157:40:20:4:0:6:3:2:0:0:0:0:0",    // no bar half
+                                "10:0:7:300:7:1157:40:20:4:0:6:3:2:0:0:0:0:0|0,10,5,1,0",
+                                "10:2:7:300:7:1157:40:20:4:0:6:3:2:0:0:0:0:0|",   // mode 2
+                                "-1:0:7:300:7:1157:40:20:4:0:6:3:2:0:0:0:0:0|" })
+    {
+        const std::string json = practiceReading (broken, 100);
+
+        CHECK (contains (json, "\"ok\":false"));
+        CHECK (contains (json, "could not be read"));
+    }
+}
+
+TEST ("a take whose bars a shell did not keep is still a take")
+{
+    const std::string json =
+        practiceReading ("10:0:7:300:7:1157:40:20:4:0:6:3:2:0:0:0:0:0|", 10);
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"takes\":1"));
+    CHECK (contains (json, "\"bars\":0"));
+
+    // The take-wide counts are not derived from the bars, so they survive.
+    CHECK (contains (json, "\"total\":70"));
+}
+
+TEST ("several takes cross on one string, separated by a tilde")
+{
+    const auto history = oneSoloTake + "~"
+                       + "11:1:7:600:4:128:0:0:0:0:0:0:0:0:6:4:1:0|";
+
+    const std::string json = practiceReading (history.c_str(), 11);
+
+    CHECK (contains (json, "\"takes\":2"));
+    CHECK (contains (json, "\"soloTakes\":1"));
+    CHECK (contains (json, "\"compTakes\":1"));
+    CHECK (contains (json, "\"daysPractised\":2"));
+    CHECK (contains (json, "\"minutes\":15"));
+}
+
+TEST ("one tune is read across its own takes, and the chart says which bars exist")
+{
+    const auto history = std::string (
+        "1:0:7:300:7:1157:12:6:0:0:2:0:0:0:0:0:0:0|0,4,2,0,0,1;1,4,2,0,0,0;2,4,2,0,0,1~"
+        "2:0:7:300:7:1157:12:6:0:0:2:0:0:0:0:0:0:0|0,4,2,0,0,1;1,4,2,0,0,0;2,4,2,0,0,1~"
+        "3:0:7:300:7:1157:12:6:0:0:2:0:0:0:0:0:0:0|0,4,2,0,0,1;1,4,2,0,0,0;2,4,2,0,0,1");
+
+    const std::string json =
+        tuneProgress ("| Dm7 | G7 | Cmaj7 | Am7b5 |", history.c_str(), 5);
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"takes\":3"));
+    CHECK (contains (json, "\"barsInChart\":4"));
+    CHECK (contains (json, "\"daysSinceLast\":2"));
+
+    // Every bar of the chart is drawn, reached or not - the unreached one is
+    // the finding, so it cannot be left out of the list.
+    CHECK (contains (json, "\"index\":3,\"chord\":\"Am7b5\",\"takes\":0"));
+    CHECK (contains (json, "\"index\":0,\"chord\":\"Dm7\",\"takes\":3"));
+    CHECK (contains (json, "Bar 4 has never been reached"));
+    CHECK (! contains (json, "\"score\""));
+}
+
+TEST ("a tune progress call refuses a chart it cannot parse, before the history")
+{
+    const std::string json = tuneProgress ("| not a chord |", "", 5);
+
+    CHECK (contains (json, "\"ok\":false"));
+    CHECK (! contains (json, "could not be read"));   // the chart's error, not the history's
+}

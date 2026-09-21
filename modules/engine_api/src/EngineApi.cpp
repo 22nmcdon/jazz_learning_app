@@ -14,6 +14,7 @@
 #include "jazz/core/ChordIdentifier.h"
 #include "jazz/core/Comping.h"
 #include "jazz/core/LineAnalyzer.h"
+#include "jazz/core/PracticeLog.h"
 #include "jazz/core/Reharmonizer.h"
 #include "jazz/core/ScaleSuggester.h"
 #include "jazz/core/VoicingAnalyzer.h"
@@ -1117,6 +1118,231 @@ std::string styleJson (const CompStyleDefinition& style)
            })
          + "}";
 }
+
+/** A practice history, read back off the wire.
+
+    Same direction as the style reader above and for the same reason: results
+    are JSON because encoding them is the shell's business, inputs are flat text
+    because the engine has no JSON reader and must not grow one.
+
+    Five delimiters, none of which can occur inside a number, so nothing needs
+    escaping and the grammar carries no free text at all:
+
+    @verbatim
+      <history> := <take> { "~" <take> }
+      <take>    := <head> "|" [ <bars> ]
+      <head>    := day : mode : tune : seconds : qualities : roots
+                     : chordTones : scaleTones : approachTones : unresolved : outside
+                     : leaps : leapsResolved : chordsPlayed
+                     : onFigure : idiomatic : pushed : offStyle
+      <bars>    := <bar> { ";" <bar> }
+      <bar>     := index , chordTones , scaleTones , approachTones , unresolved , outside
+    @endverbatim
+
+    The tune is a **number**, which is the whole reason this stays quote-free -
+    what a player calls a tune is the page's business, exactly as what they call
+    their own comping style is. `mode` is 0 for soloing and 1 for comping.
+
+    An empty history is a record with nothing in it, which is a real state and
+    not an error: it is what a first visit hands over. Anything else that does
+    not parse **is** an error, the same asymmetry a described comping style
+    draws - a shell's bug must not read back as a player who has not practised.
+*/
+std::optional<std::vector<PracticeTake>> readHistory (const std::string& text)
+{
+    std::vector<PracticeTake> takes;
+
+    if (text.empty())
+        return takes;
+
+    // Wide enough for any real record and narrow enough that a broken message
+    // cannot ask for arithmetic on a nonsense number.
+    constexpr auto latestDay = 400000;          // about eleven centuries of days
+    constexpr auto longestTake = 86400;         // one day of playing, in seconds
+    constexpr auto mostOfAnything = 1000000;
+    constexpr auto mostBars = 10000;
+
+    for (const auto& one : splitOn (text, '~'))
+    {
+        const auto halves = splitOn (one, '|');
+
+        if (halves.size() != 2)
+            return {};
+
+        const auto head = splitOn (halves[0], ':');
+
+        if (head.size() != 18)
+            return {};
+
+        const auto day       = numberIn (head[0], 0, latestDay);
+        const auto mode      = numberIn (head[1], 0, 1);
+        const auto tune      = numberIn (head[2], 0, mostOfAnything);
+        const auto seconds   = numberIn (head[3], 0, longestTake);
+        const auto qualities = numberIn (head[4], 0, 255);     // eight qualities
+        const auto roots     = numberIn (head[5], 0, 4095);    // twelve pitch classes
+
+        if (! (day && mode && tune && seconds && qualities && roots))
+            return {};
+
+        PracticeTake take;
+        take.day = *day;
+        take.mode = *mode == 1 ? PracticeMode::comping : PracticeMode::soloing;
+        take.tune = *tune;
+        take.seconds = *seconds;
+        take.qualities = static_cast<unsigned int> (*qualities);
+        take.roots = static_cast<unsigned int> (*roots);
+
+        int* const counts[] = {
+            &take.notes.chordTones, &take.notes.scaleTones, &take.notes.approachTones,
+            &take.notes.unresolved, &take.notes.outside,
+            &take.leaps, &take.leapsResolved, &take.chordsPlayed,
+            &take.hitsOnTheFigure, &take.hitsIdiomatic, &take.hitsPushed, &take.hitsOffStyle
+        };
+
+        for (std::size_t i = 0; i < 12; ++i)
+        {
+            const auto value = numberIn (head[6 + i], 0, mostOfAnything);
+
+            if (! value)
+                return {};
+
+            *counts[i] = *value;
+        }
+
+        for (const auto& barText : splitOn (halves[1], ';'))
+        {
+            // An empty bar list is a take whose bars a shell did not keep, not
+            // a broken message: the header says the take-wide counts are not
+            // derived from the bars.
+            if (barText.empty())
+                continue;
+
+            const auto parts = splitOn (barText, ',');
+
+            if (parts.size() != 6)
+                return {};
+
+            const auto index = numberIn (parts[0], 0, mostBars);
+
+            if (! index)
+                return {};
+
+            PracticeBar bar;
+            bar.measureIndex = *index;
+
+            int* const tiers[] = { &bar.notes.chordTones, &bar.notes.scaleTones,
+                                   &bar.notes.approachTones, &bar.notes.unresolved,
+                                   &bar.notes.outside };
+
+            for (std::size_t i = 0; i < 5; ++i)
+            {
+                const auto value = numberIn (parts[1 + i], 0, mostOfAnything);
+
+                if (! value)
+                    return {};
+
+                *tiers[i] = *value;
+            }
+
+            take.bars.push_back (bar);
+        }
+
+        takes.push_back (take);
+    }
+
+    return takes;
+}
+
+/** `LineStats` on the wire, with the score left off.
+
+    Deliberately not `lineStatsJson`, which carries one. A score is a reading of
+    a bar that was just played and belongs on a take; this is the same counts
+    summed over weeks, where the same number would be a grade for a player.
+    Leaving it out here means a page drawing this panel has nothing to plot even
+    if somebody later decides it would look good as a line.
+*/
+std::string practiceNotesJson (const LineStats& stats)
+{
+    return "{\"total\":" + std::to_string (stats.total())
+         + ",\"settled\":" + std::to_string (stats.settled())
+         + ",\"chordTones\":" + std::to_string (stats.chordTones)
+         + ",\"scaleTones\":" + std::to_string (stats.scaleTones)
+         + ",\"approachTones\":" + std::to_string (stats.approachTones)
+         + ",\"unresolved\":" + std::to_string (stats.unresolved)
+         + ",\"outside\":" + std::to_string (stats.outside)
+         + ",\"percentChordTones\":" + std::to_string (stats.percentChordTones())
+         + ",\"percentScaleTones\":" + std::to_string (stats.percentScaleTones())
+         + ",\"percentApproachTones\":" + std::to_string (stats.percentApproachTones())
+         + ",\"percentUnresolved\":" + std::to_string (stats.percentUnresolved())
+         + ",\"percentOutside\":" + std::to_string (stats.percentOutside()) + "}";
+}
+
+std::string namesJson (const std::vector<std::string>& names)
+{
+    return jsonArray (names, [] (const std::string& name) { return quoted (name); });
+}
+
+std::string saidJson (const std::vector<std::string>& lines)
+{
+    return jsonArray (lines, [] (const std::string& line) { return quoted (line); });
+}
+}
+
+std::string practiceReading (const char* history, int today)
+{
+    const auto takes = readHistory (history != nullptr ? history : "");
+
+    if (! takes.has_value())
+        return hold (jsonError ("That practice record could not be read."));
+
+    const auto reading = core::readPractice (*takes, today);
+
+    return hold ("{\"ok\":true,\"takes\":" + std::to_string (reading.takes)
+                 + ",\"bars\":" + std::to_string (reading.bars)
+                 + ",\"minutes\":" + std::to_string (reading.minutes)
+                 + ",\"daysPractised\":" + std::to_string (reading.daysPractised)
+                 + ",\"span\":" + std::to_string (reading.span)
+                 + ",\"daysSinceLast\":" + std::to_string (reading.daysSinceLast)
+                 + ",\"soloTakes\":" + std::to_string (reading.soloTakes)
+                 + ",\"compTakes\":" + std::to_string (reading.compTakes)
+                 + ",\"qualitiesMet\":" + namesJson (reading.qualitiesMet)
+                 + ",\"qualitiesMissing\":" + namesJson (reading.qualitiesMissing)
+                 + ",\"rootsMet\":" + namesJson (reading.rootsMet)
+                 + ",\"rootsMissing\":" + namesJson (reading.rootsMissing)
+                 + ",\"notes\":" + practiceNotesJson (reading.notes)
+                 + ",\"summary\":" + quoted (reading.summary)
+                 + ",\"observations\":" + saidJson (reading.observations)
+                 + "}");
+}
+
+std::string tuneProgress (const char* progressionText, const char* history, int today)
+{
+    auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
+
+    if (! parsed.ok())
+        return hold (jsonError (parsed.error));
+
+    const auto takes = readHistory (history != nullptr ? history : "");
+
+    if (! takes.has_value())
+        return hold (jsonError ("That practice record could not be read."));
+
+    const auto progress = core::readTuneProgress (*parsed.chart, *takes, today);
+
+    return hold ("{\"ok\":true,\"takes\":" + std::to_string (progress.takes)
+                 + ",\"daysPractised\":" + std::to_string (progress.daysPractised)
+                 + ",\"daysSinceLast\":" + std::to_string (progress.daysSinceLast)
+                 + ",\"barsInChart\":" + std::to_string (progress.barsInChart)
+                 + ",\"bars\":" + jsonArray (progress.bars, [] (const TuneBarMemory& bar)
+                   {
+                       return "{\"index\":" + std::to_string (bar.measureIndex)
+                            + ",\"chord\":" + quoted (bar.chordSymbol)
+                            + ",\"takes\":" + std::to_string (bar.takes)
+                            + ",\"notes\":" + practiceNotesJson (bar.notes) + "}";
+                   })
+                 + ",\"summary\":" + quoted (progress.summary)
+                 + ",\"observations\":" + saidJson (progress.observations)
+                 + "}");
 }
 
 std::string compStyles()
