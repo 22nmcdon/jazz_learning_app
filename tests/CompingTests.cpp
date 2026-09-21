@@ -89,6 +89,37 @@ TEST ("the grid divides a beat every way a comper needs")
         CHECK_EQ (ticksPerBeat % ticksFor (subdivision), 0);
 }
 
+TEST ("a feel written down can be read back")
+{
+    /*  The round trip, against `subdivisionName`'s own output rather than
+        against a second list of spellings written here - the two directions
+        are one table, and a name added to one cannot go missing from the
+        other. */
+    for (auto subdivision : { Subdivision::beat, Subdivision::eighth,
+                              Subdivision::tripletEighth, Subdivision::sixteenth })
+    {
+        const auto read = subdivisionFrom (subdivisionName (subdivision));
+
+        CHECK (read.has_value());
+        CHECK (*read == subdivision);
+    }
+}
+
+TEST ("a feel this version cannot read is refused, never defaulted")
+{
+    /*  The negative control, and the reason the return is an optional. Both
+        `ticksFor` and `subdivisionName` end in a trailing `return` - a reader
+        written to match them would answer `beat` for anything at all, and a
+        style whose feel failed to parse would be read as straight where it
+        asked for triplets. Every triplet a player landed on would then read as
+        outside the style that asked for them, which is the one mistake this
+        parser exists to make impossible. */
+    CHECK (! subdivisionFrom ("quavers").has_value());
+    CHECK (! subdivisionFrom ("").has_value());
+    CHECK (! subdivisionFrom ("eighth").has_value());    // the singular is not the name
+    CHECK (! subdivisionFrom ("Eighths").has_value());   // nor is the capital
+}
+
 TEST ("a position counts the way a player counts")
 {
     // Parenthesised because a brace initialiser's comma would otherwise split

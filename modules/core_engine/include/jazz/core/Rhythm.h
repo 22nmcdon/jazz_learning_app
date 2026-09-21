@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace jazz::core
 {
@@ -47,6 +48,17 @@ enum class Subdivision
 int ticksFor (Subdivision subdivision);
 
 std::string subdivisionName (Subdivision subdivision);
+
+/** The inverse of `subdivisionName`, for text that has to come back in.
+
+    Empty for a name this version does not know, rather than a guess. A style
+    arriving from outside the engine carries its feel as the word the engine
+    itself wrote, and a feel that cannot be read is the one thing about a style
+    that must not be quietly defaulted: the feel is the grid the evaluator
+    measures a player's placement against, so reading "eighth-note triplets" as
+    eighths would mark a ballad's every hit as off the grid.
+*/
+std::optional<Subdivision> subdivisionFrom (std::string_view name);
 
 /** A position within a bar: which beat, and how far into it. */
 struct BarPosition

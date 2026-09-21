@@ -31,6 +31,20 @@ std::string subdivisionName (Subdivision subdivision)
     return "beats";
 }
 
+std::optional<Subdivision> subdivisionFrom (std::string_view name)
+{
+    /*  Against `subdivisionName`'s own output, not against a second list of
+        spellings. The two are one table read in two directions, so a name
+        added to one cannot go missing from the other - which is the way every
+        other catalogue in this engine is kept honest. */
+    for (const auto subdivision : { Subdivision::beat, Subdivision::eighth,
+                                    Subdivision::tripletEighth, Subdivision::sixteenth })
+        if (subdivisionName (subdivision) == name)
+            return subdivision;
+
+    return {};
+}
+
 BarPosition BarPosition::fromTicks (int ticks)
 {
     // Floored rather than truncated, so a position before the downbeat lands in
