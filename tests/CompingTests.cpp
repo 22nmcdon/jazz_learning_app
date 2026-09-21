@@ -105,6 +105,30 @@ TEST ("a feel written down can be read back")
     }
 }
 
+TEST ("there is one list of feels, and everything walks it")
+{
+    /*  `subdivisionFrom` read against a list written out where it stood, and
+        a shell offering the choice would have written out a second. Both now
+        walk this one, so a subdivision added to the enum and forgotten here is
+        a hole with a single place to plug rather than three that drift. */
+    const auto all = allSubdivisions();
+
+    CHECK_EQ (static_cast<int> (all.size()), 4);
+
+    // Every one of them is readable, distinct, and lands on a whole tick.
+    std::set<std::string> names;
+
+    for (const auto subdivision : all)
+    {
+        names.insert (subdivisionName (subdivision));
+
+        CHECK (subdivisionFrom (subdivisionName (subdivision)).has_value());
+        CHECK_EQ (ticksPerBeat % ticksFor (subdivision), 0);
+    }
+
+    CHECK_EQ (static_cast<int> (names.size()), 4);
+}
+
 TEST ("a feel this version cannot read is refused, never defaulted")
 {
     /*  The negative control, and the reason the return is an optional. Both

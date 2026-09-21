@@ -3,6 +3,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace jazz::core
 {
@@ -43,6 +44,15 @@ enum class Subdivision
     tripletEighth,
     sixteenth
 };
+
+/** Every subdivision there is, in the order a player would count them.
+
+    One list, so nothing has to write out the four by hand - `subdivisionFrom`
+    reads against it and a shell builds its menu from it. A fifth added to the
+    enum and not to this is a compile-time hole rather than a silent one,
+    because everything that walks the set walks this.
+*/
+std::vector<Subdivision> allSubdivisions();
 
 /** Ticks between two onsets of @p subdivision. */
 int ticksFor (Subdivision subdivision);

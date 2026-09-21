@@ -1276,6 +1276,81 @@ try {
   const reference = await page.evaluate(() => document.querySelector("#compStyle").value);
   check(`the copy is its own style, not the name of one (${reference})`, reference === "yours");
 
+  /*  A grid you can click.
+
+      The positive half: put a chord where the style had none and the band
+      plays it. Bar 2's downbeat is empty in the Charleston - it starts on one
+      and pushes the and of two - so lighting it is a figure the style did not
+      have, and the comp has to gain a hit.
+  */
+  await page.locator("#menuButton").click();
+  await page.locator("#styleEdit").click();
+  await page.waitForSelector("#styleDialog[open]", { timeout: 10000 });
+
+  const emptyCell = page.locator('#styleGrid .style-cell[aria-pressed="false"]').first();
+  await emptyCell.click();
+
+  check("clicking an empty cell puts a chord there",
+        (await page.locator('#styleGrid .style-cell[aria-pressed="true"]').count()) === 4);
+
+  // Its numbers are the ones under the grid, not in the cell - so the grid
+  // stays one row per position at a phone width.
+  check("and the chord in hand has its own numbers",
+        await page.locator("#styleSlot").isVisible()
+        && (await page.locator("#styleWeight").inputValue()) === "60");
+
+  await page.locator("#styleApply").click();
+  await page.waitForFunction(() => !document.querySelector("#styleDialog").open,
+                             null, { timeout: 10000 });
+
+  const widened = await compRhythmOf("yours");
+
+  check(`a chord added to the figure is a chord the band plays `
+        + `(${charleston.length} -> ${widened.length})`,
+        widened.length > charleston.length);
+
+  /*  And the feel survives the copy - which needs the *right* feel to test.
+
+      A first version of this check copied the ballad and asserted its chords
+      landed on thirds. It passed with the bug deliberately put back, because
+      swing bends exactly one position - the straight eighth at tick 12 - and a
+      triplet bar has no tick 12 in it at all. The check could not fail.
+
+      The feel that can is **sixteenths**, which shares tick 12 with the eighth
+      and is the one no style in the catalogue uses. So: take the Charleston,
+      count it in sixteenths, and its chords on the and of two and the and of
+      four stop being swung eighths and become straight sixteenths - half way
+      through the beat rather than two thirds. Read as eighths they would go
+      back to two thirds, which is what the page did for any style it could not
+      find before `currentCompStyle()` existed.
+  */
+  await page.locator("#menuButton").click();
+  await page.selectOption("#compStyle", "charleston");
+  await page.locator("#styleEdit").click();
+  await page.waitForSelector("#styleDialog[open]", { timeout: 10000 });
+
+  await page.selectOption("#styleFeel", "sixteenths");
+
+  check("counting a style in sixteenths redraws it in four rows",
+        (await page.locator("#styleGrid .style-row").count()) === 4);
+
+  // The Charleston's chords are on ticks 0 and 12, both of which a sixteenth
+  // bar has - so changing the feel keeps the figure rather than dropping it.
+  check("and its figure survives, because those positions exist in both",
+        (await page.locator('#styleGrid .style-cell[aria-pressed="true"]').count()) === 3);
+
+  await page.locator("#styleApply").click();
+  await page.waitForFunction(() => !document.querySelector("#styleDialog").open,
+                             null, { timeout: 10000 });
+
+  const sixteenths = await compRhythmOf("yours");
+  const intoBeat = sixteenths.map((t) => t - Math.floor(t));
+
+  check(`a style counted in sixteenths is not swung `
+        + `(${sixteenths.map((t) => t.toFixed(2)).join(" ")})`,
+        intoBeat.some((o) => Math.abs(o - 0.5) < 0.06)
+        && !intoBeat.some((o) => Math.abs(o - 2 / 3) < 0.06));
+
   /*  The band does not play the same two chords all night.
 
       There used to be exactly one voicing per chord, for ever - the search took
@@ -2536,6 +2611,54 @@ try {
 
   check(`every panel opens onto the screen at 390px${panels.length ? " (" + panels.join(", ") + ")" : ""}`,
         panels.length === 0);
+
+  /*  And the style editor, which is the one thing here whose width is decided
+      by the music rather than by the page: a column per beat, so a chart in
+      seven is a wider grid than a chart in four. A dialog rather than a panel,
+      so the scan above cannot reach it and neither can the narrow scan - both
+      run with everything shut.
+
+      Measured on the grid's own scroll width rather than the dialog's, because
+      a grid that overflows is exactly the right width as far as the dialog is
+      concerned - the same blind spot the tempo box has.
+  */
+  await narrow.locator("#modeSolo").click();
+  if (await narrow.locator("#helpDialog[open]").count()) await narrow.locator("#helpClose").click();
+
+  await narrow.locator("#menuButton").click();
+  await narrow.locator("#styleEdit").click();
+  await narrow.waitForSelector("#styleDialog[open]", { timeout: 10000 });
+
+  const editorSpill = await narrow.evaluate(() => {
+    const spilling = [];
+
+    const dialog = document.querySelector("#styleDialog");
+    const box = dialog.getBoundingClientRect();
+
+    if (box.left < -0.5 || box.right > window.innerWidth + 0.5) spilling.push("the dialog");
+
+    for (const id of ["#styleGrid", "#styleSlot", ".style-controls", ".style-actions"]) {
+      const it = document.querySelector(id);
+      if (it && it.scrollWidth > it.clientWidth + 0.5) spilling.push(id);
+    }
+
+    // Every control in it, the way the narrow scan reads the top bar's rows.
+    for (const element of document.querySelectorAll(
+           "#styleGrid .style-cell, #styleGrid .style-row-head,"
+           + " .style-slot > *, .style-controls > *, .style-actions > *")) {
+      const at = element.getBoundingClientRect();
+
+      if (at.width > 0 && (at.right > window.innerWidth + 0.5 || at.left < -0.5))
+        spilling.push(element.id || element.className);
+    }
+
+    return spilling;
+  });
+
+  check(`the style editor fits a 390px screen${editorSpill.length ? " (" + editorSpill.join(", ") + ")" : ""}`,
+        editorSpill.length === 0);
+
+  await narrow.locator("#styleClose").click();
 
   await narrow.locator("#armTake").click();
   await narrow.close();

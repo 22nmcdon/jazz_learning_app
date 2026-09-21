@@ -5,6 +5,12 @@
 namespace jazz::core
 {
 
+std::vector<Subdivision> allSubdivisions()
+{
+    return { Subdivision::beat, Subdivision::eighth,
+             Subdivision::tripletEighth, Subdivision::sixteenth };
+}
+
 int ticksFor (Subdivision subdivision)
 {
     switch (subdivision)
@@ -37,8 +43,7 @@ std::optional<Subdivision> subdivisionFrom (std::string_view name)
         spellings. The two are one table read in two directions, so a name
         added to one cannot go missing from the other - which is the way every
         other catalogue in this engine is kept honest. */
-    for (const auto subdivision : { Subdivision::beat, Subdivision::eighth,
-                                    Subdivision::tripletEighth, Subdivision::sixteenth })
+    for (const auto subdivision : allSubdivisions())
         if (subdivisionName (subdivision) == name)
             return subdivision;
 

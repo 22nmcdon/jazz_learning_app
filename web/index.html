@@ -1477,6 +1477,51 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
 .style-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 14px; }
 
+.style-slot,
+.style-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 12px;
+  min-width: 0;
+}
+
+.style-slot-at {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.style-field,
+.style-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--text-soft);
+  min-width: 0;
+}
+
+.style-number {
+  width: 58px;
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--text);
+}
+
+.style-select { width: auto; min-width: 0; max-width: 150px; }
+
+/* The cell the numbers above belong to. */
+.style-cell[data-chosen="yes"] { outline: 2px solid var(--blush-deep); outline-offset: 1px; }
+
 
 .dialog-head {
   display: flex;
@@ -2135,7 +2180,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           <div class="menu-group">
             <span class="menu-title">About</span>
             <div class="colophon">
-              <span>Engine: <code>modules/core_engine</code> - 475 unit tests, no JUCE.</span>
+              <span>Engine: <code>modules/core_engine</code> - 476 unit tests, no JUCE.</span>
               <span id="colophonEngine"></span>
               <span id="colophonFraming"></span>
               <span id="colophonBuild"></span>
@@ -2721,6 +2766,41 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     <div class="style-grid" id="styleGrid"></div>
 
+    <!-- The chord under the cursor. Its three numbers live here rather than in
+         the cell, so the grid stays one row per position and stays readable at
+         a phone width. -->
+    <div class="style-slot" id="styleSlot" hidden>
+      <span class="style-slot-at" id="styleSlotAt"></span>
+      <label class="style-field">Weight
+        <input class="style-number" type="number" id="styleWeight" min="0" max="100" step="5">
+      </label>
+      <label class="style-check">
+        <input type="checkbox" id="stylePushes"> Pushed
+      </label>
+      <label class="style-field">Rings
+        <input class="style-number" type="number" id="styleRings" min="0" max="96" step="6">
+      </label>
+      <button class="link-btn" type="button" id="styleDrop">Take it out</button>
+    </div>
+
+    <div class="style-controls">
+      <label class="style-field">Counted in
+        <select class="menu-select style-select" id="styleFeel"></select>
+      </label>
+      <label class="style-field">Straying
+        <input class="style-number" type="number" id="styleStray" min="0" max="100" step="5">
+      </label>
+      <!-- The two ends of the density window are one question, so they stay
+           one item and wrap together rather than leaving a stray "to". -->
+      <span class="style-field">Chords a bar
+        <input class="style-number" type="number" id="styleFewest" min="0" max="8"
+               aria-label="Fewest chords a bar">
+        <span>to</span>
+        <input class="style-number" type="number" id="styleMost" min="0" max="8"
+               aria-label="Most chords a bar">
+      </span>
+    </div>
+
     <p class="menu-note" id="styleAdvice"></p>
 
     <div class="style-actions">
@@ -2979,7 +3059,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "showVoicing", "playChord", "nameChord", "named", "namedText",
    "planButton", "planDialog", "planClose", "planList", "planTitle", "planIntro",
    "styleEdit", "styleDialog", "styleClose", "styleFrom", "styleGrid", "styleAdvice",
-   "styleIntro", "styleApply", "styleRevert",
+   "styleIntro", "styleApply", "styleRevert", "styleSlot", "styleSlotAt", "styleWeight",
+   "stylePushes", "styleRings", "styleDrop", "styleFeel", "styleStray", "styleFewest",
+   "styleMost",
    "guideButton", "leadLegend", "leadChord",
    "ioButton", "ioDialog", "ioClose", "chartFile", "importStatus", "pasteBox",
    "readPaste", "printChart", "copyIReal", "exportStatus", "irealLink",
@@ -6471,6 +6553,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   /** The style the copy was taken from, for *Back to the original*. */
   var editingFrom = null;
 
+  /** The slot whose numbers the row under the grid is showing. */
+  var chosenSlot = null;
+
+  /** The weight a chord gets when you put one somewhere new.
+
+      Middling on purpose. The catalogue's own figures run 20 to 100 and the
+      ones that carry a style sit near the top, so a new chord arriving at 100
+      would quietly become the most important thing in the bar, while one
+      arriving at 0 would not sound at all and read as a broken grid. */
+  var NEW_CHORD_WEIGHT = 60;
+
   function copyOfStyle(style) {
     return {
       key: YOUR_STYLE,
@@ -6560,9 +6653,20 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       var row = document.createElement("div");
       row.className = "style-row";
 
-      var label = document.createElement("span");
-      label.className = "style-row-head";
+      /*  The row header is the "every beat" switch, and it has to be: an
+          empty beat fills a whole tick row and is how four to the bar is a
+          single slot rather than four. Written as four explicit slots instead
+          it means something different - it stops being every beat and becomes
+          these four beats, which is a different style the moment the metre
+          changes. A property of the row is edited on the row. */
+      var label = document.createElement("button");
+      label.type = "button";
+      label.className = "style-row-head style-every";
+      label.dataset.tick = String(tick);
+      label.setAttribute("aria-pressed", everyBeatAt(tick) ? "true" : "false");
       label.textContent = tickLabel(tick, editing.feel);
+      label.setAttribute("aria-label", tickLabel(tick, editing.feel)
+                                       + " of every beat");
       row.appendChild(label);
 
       for (var beat = 0; beat < beats; beat++) {
@@ -6582,6 +6686,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           cell.setAttribute("aria-label",
             "Beat " + (beat + 1) + ", " + tickLabel(tick, editing.feel)
             + " - weight " + slot.weight + (slot.anticipates ? ", pushed" : ""));
+
+          if (slot === chosenSlot) cell.dataset.chosen = "yes";
         } else {
           cell.setAttribute("aria-label", "Beat " + (beat + 1) + ", "
                                           + tickLabel(tick, editing.feel) + " - empty");
@@ -6593,6 +6699,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       el.styleGrid.appendChild(row);
     });
 
+    drawChosenSlot();
     sayStyleAdvice();
   }
 
@@ -6606,6 +6713,171 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       return column === null || column === beat;
     })[0];
   }
+
+  /** Is this tick row already "every beat"? */
+  function everyBeatAt(tick) {
+    return (editing.slots || []).some(function (slot) {
+      return slot.tick === tick && slot.beat === "";
+    });
+  }
+
+  /** How a cell's column is written down as a beat.
+
+      The last column is written as -1 - counted back from the end of the bar -
+      rather than as the number it happens to be. In four those are the same
+      slot; in three they are not, and every style that ships places its push
+      the first way, which is what makes "the and of the last beat" survive a
+      change of metre. Writing the literal column back is the silent way to
+      lose that, so it is decided here rather than wherever a style is saved.
+  */
+  function beatWritten(column, beats) {
+    return column === beats - 1 ? "-1" : String(column);
+  }
+
+  function chooseSlot(slot) {
+    chosenSlot = slot || null;
+    drawStyleGrid();
+  }
+
+  /** A number box read back, held inside its range. */
+  function clampField(field, low, high, fallback) {
+    var value = Number(field.value);
+
+    if (field.value === "" || !isFinite(value)) return fallback;
+
+    return Math.min(high, Math.max(low, Math.round(value)));
+  }
+
+  el.styleGrid.addEventListener("click", function (event) {
+    if (!editing) return;
+
+    var beats = transport.beats || 4;
+    var every = event.target.closest(".style-every");
+
+    if (every) {
+      var row = Number(every.dataset.tick);
+
+      if (everyBeatAt(row)) {
+        // Off: the row goes back to being cells.
+        editing.slots = editing.slots.filter(function (slot) {
+          return !(slot.tick === row && slot.beat === "");
+        });
+      } else {
+        /*  On: this tick of *every* beat, so whatever single beats were on the
+            row are now said by the one slot replacing them. Leaving them would
+            be two slots resolving to one position, which `slotAt` reads as the
+            first and the rest as a slot written twice. */
+        editing.slots = editing.slots.filter(function (slot) { return slot.tick !== row; });
+        editing.slots.push({ beat: "", tick: row, weight: NEW_CHORD_WEIGHT,
+                             anticipates: false, heldFor: 0 });
+      }
+
+      chooseSlot(null);
+      return;
+    }
+
+    var cell = event.target.closest(".style-cell");
+
+    if (!cell) return;
+
+    var column = Number(cell.dataset.beat);
+    var at = Number(cell.dataset.tick);
+    var already = slotDrawnAt(column, at, beats);
+
+    if (already) {
+      chooseSlot(already);
+      return;
+    }
+
+    var made = { beat: beatWritten(column, beats), tick: at,
+                 weight: NEW_CHORD_WEIGHT, anticipates: false, heldFor: 0 };
+
+    editing.slots.push(made);
+    chooseSlot(made);
+  });
+
+  /** The numbers of the chord in hand, under the grid. */
+  function drawChosenSlot() {
+    el.styleSlot.hidden = !chosenSlot;
+
+    if (!chosenSlot) return;
+
+    var beats = transport.beats || 4;
+    var column = columnOfSlot(chosenSlot, beats);
+
+    el.styleSlotAt.textContent =
+      (chosenSlot.beat === "" ? "Every beat" : "Beat " + (column + 1))
+      + ", " + tickLabel(chosenSlot.tick, editing.feel)
+      + (chosenSlot.beat === "-1" ? " - from the end" : "");
+
+    el.styleWeight.value = String(chosenSlot.weight);
+    el.stylePushes.checked = !!chosenSlot.anticipates;
+    el.styleRings.value = String(chosenSlot.heldFor);
+  }
+
+  el.styleWeight.addEventListener("input", function () {
+    if (!chosenSlot) return;
+
+    chosenSlot.weight = clampField(el.styleWeight, 0, 100, chosenSlot.weight);
+    drawStyleGrid();
+  });
+
+  el.stylePushes.addEventListener("change", function () {
+    if (!chosenSlot) return;
+
+    chosenSlot.anticipates = el.stylePushes.checked;
+    drawStyleGrid();
+  });
+
+  el.styleRings.addEventListener("input", function () {
+    // Zero is "as long as the style says" - the empty case of the engine's own
+    // optional, rather than a chord that rings for no time at all.
+    if (!chosenSlot) return;
+
+    chosenSlot.heldFor = clampField(el.styleRings, 0, 96, chosenSlot.heldFor);
+    drawStyleGrid();
+  });
+
+  el.styleDrop.addEventListener("click", function () {
+    if (!chosenSlot) return;
+
+    editing.slots = editing.slots.filter(function (slot) { return slot !== chosenSlot; });
+    chooseSlot(null);
+  });
+
+  el.styleFeel.addEventListener("change", function () {
+    if (!editing) return;
+
+    /*  A different feel is a different set of positions, and a chord written
+        on the old grid may not sit on the new one at all - an eighth's tick 12
+        is nowhere in a triplet bar. So the figure keeps only what still lands.
+        That is the honest thing: the alternative is silently moving a player's
+        chords to the nearest place that happens to fit. */
+    editing.feel = el.styleFeel.value;
+
+    var lands = ticksOfFeel(editing.feel);
+
+    editing.slots = editing.slots.filter(function (slot) {
+      return lands.indexOf(slot.tick) !== -1;
+    });
+
+    chooseSlot(null);
+  });
+
+  el.styleStray.addEventListener("input", function () {
+    if (!editing) return;
+
+    editing.variation = clampField(el.styleStray, 0, 100, editing.variation);
+    sayStyleAdvice();
+  });
+
+  el.styleFewest.addEventListener("input", function () {
+    if (editing) editing.fewestPerBar = clampField(el.styleFewest, 0, 8, editing.fewestPerBar);
+  });
+
+  el.styleMost.addEventListener("input", function () {
+    if (editing) editing.mostPerBar = clampField(el.styleMost, 0, 8, editing.mostPerBar);
+  });
 
   /*  The one rule the engine documents and does not enforce, said where it can
       be acted on rather than clamped behind the player's back.
@@ -6633,6 +6905,22 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     editing = copyOfStyle(from);
 
     el.styleFrom.textContent = editingFrom ? "From " + editingFrom.name : "Your own";
+
+    el.styleFeel.textContent = "";
+
+    (comping.feels || []).forEach(function (feel) {
+      var option = document.createElement("option");
+      option.value = feel;
+      option.textContent = feel;
+      el.styleFeel.appendChild(option);
+    });
+
+    el.styleFeel.value = editing.feel;
+    el.styleStray.value = String(editing.variation);
+    el.styleFewest.value = String(editing.fewestPerBar);
+    el.styleMost.value = String(editing.mostPerBar);
+
+    chosenSlot = null;
     drawStyleGrid();
 
     if (!el.styleDialog.open) el.styleDialog.showModal();
@@ -6665,7 +6953,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (!editingFrom) return;
 
     editing = copyOfStyle(editingFrom);
-    drawStyleGrid();
+
+    el.styleFeel.value = editing.feel;
+    el.styleStray.value = String(editing.variation);
+    el.styleFewest.value = String(editing.fewestPerBar);
+    el.styleMost.value = String(editing.mostPerBar);
+
+    chooseSlot(null);
   });
 
   el.styleClose.addEventListener("click", function () { el.styleDialog.close(); });
@@ -7112,6 +7406,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         style, fail to find it as a key, and comp four to the bar with the chip
         still reading ready. An engine that sends a style's figure is one that
         can read an edited one back. */
+    // The feels a style may be counted in, from the engine rather than from a
+    // list of four written here - which subdivisions exist is the grid's
+    // business, and the grid is the engine's (docs/RHYTHM.md).
+    comping.feels = result.feels || [];
+
     comping.canEdit = !!(result.styles.length && result.styles[0].slots);
     el.styleEdit.hidden = !comping.canEdit;
 
@@ -7763,6 +8062,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         than from a call's name. */
     custom: null,
     canEdit: false,
+    feels: [],
 
     /*  The plan: what the band plays over the loop, worked out in one go by
         the engine rather than decided beat by beat here. Two things need more

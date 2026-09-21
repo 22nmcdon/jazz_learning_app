@@ -632,6 +632,15 @@ TEST ("a style carries its figure, so a shell can draw one and copy it")
     // The grid the ticks are counted on, so a stored style can tell that the
     // grid itself moved rather than trusting a hand-raised version number.
     CHECK (contains (json, "\"ticksPerBeat\":24"));
+
+    /*  And the feels a style may be counted in. A shell offering that choice
+        would otherwise hold its own list of four - the same drift the scale
+        styles are kept out of the page for. Sixteenths matter most here: no
+        style that ships uses them, so a list derived from the catalogue's own
+        answers would quietly offer three. */
+    CHECK (contains (json, "\"feels\":["));
+    CHECK (contains (json, "\"sixteenths\""));
+    CHECK (contains (json, "\"eighth-note triplets\""));
 }
 
 TEST ("a slot says what it means, not the nearest number to it")

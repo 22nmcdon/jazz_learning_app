@@ -1121,7 +1121,13 @@ std::string styleJson (const CompStyleDefinition& style)
 
 std::string compStyles()
 {
-    return hold ("{\"ok\":true,\"styles\":"
+    /*  The feels a style may be counted in, so a shell offering the choice
+        does not hold its own list of four. Which subdivisions exist is the
+        grid's business - `docs/RHYTHM.md` - and the grid is the engine's. */
+    const auto feels = jsonArray (allSubdivisions(), [] (Subdivision subdivision)
+                                  { return quoted (subdivisionName (subdivision)); });
+
+    return hold ("{\"ok\":true,\"feels\":" + feels + ",\"styles\":"
                  + jsonArray (core::compStyles(), [] (const CompStyleDefinition& style)
                    { return styleJson (style); })
                  + "}");
