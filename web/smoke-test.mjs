@@ -2337,6 +2337,153 @@ try {
     await styleStore.close();
   }
 
+  /*  The tune library.
+
+      Its own context, because what is being proved is what the *store* holds
+      across a reload, and written through the page rather than by reaching
+      into `localStorage` - so what is asserted is the thing the menu actually
+      saves.
+
+      The check that matters most is the one that looks like nothing: a reload
+      on its own must put no tune on the stand. That is the half of "work is
+      not remembered" this feature keeps, and the only way to see it is to save
+      a tune, reload, and find the default chart still there.
+  */
+  {
+    const tunes = await browser.newContext();
+    const stand = await tunes.newPage();
+
+    await stand.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await stand.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await stand.locator("#helpDialog[open]").count()) await stand.locator("#helpClose").click();
+
+    const chordsOn = async () =>
+      (await stand.locator("#systems .chord").allInnerTexts()).join(" ");
+
+    const shipped = await chordsOn();
+
+    // Nothing saved yet, so the picker is not there to be seen.
+    await stand.locator("#chartButton").click();
+    check("with nothing saved, the picker is not shown at all",
+          await stand.locator("#openTuneField").isHidden());
+
+    // Save the chart as it ships, then rewrite it into something else.
+    await stand.fill("#tuneName", "The one it ships with");
+    await stand.locator("#saveTune").click();
+
+    check("saving fills the picker and names the tune",
+          (await stand.locator("#openTuneField").isVisible())
+          && (await stand.locator("#openTune option").count()) === 2
+          && (await stand.locator("#openTune option").nth(1).innerText()) === "The one it ships with");
+
+    await stand.locator("#editToggle").click();
+    await stand.fill("#progression", "| Fm7 | Bb7 | Ebmaj7 | Ebmaj7 |");
+    await stand.waitForFunction(
+      () => document.querySelectorAll("#systems .chord").length === 4, null, { timeout: 15000 });
+
+    const rewritten = await chordsOn();
+
+    check(`rewriting the chart by hand replaces it (${rewritten})`,
+          rewritten !== shipped && rewritten.indexOf("Fm7") === 0);
+
+    // And it is no longer the saved tune, so a take here is not counted
+    // against it - the practice record still gets the take, with no tune.
+    // Asserted through the note the menu actually shows, because the page has
+    // no test hooks and should not grow one: which tune you are on is a thing a
+    // player needs told before they press Start a take.
+    await stand.locator("#chartButton").click();
+
+    check("and the chart on the stand is no longer that saved tune",
+          (await stand.locator("#tuneNote").innerText()).indexOf("not saved") >= 0);
+
+    // The whole point: it comes back, by name.
+    await stand.selectOption("#openTune", { label: "The one it ships with" });
+    await stand.waitForFunction(
+      (want) => Array.from(document.querySelectorAll("#systems .chord"))
+                     .map((c) => c.textContent).join(" ") === want,
+      shipped, { timeout: 15000 });
+
+    check("a saved tune goes back on the stand, chords and all", (await chordsOn()) === shipped);
+
+    await stand.locator("#chartButton").click();
+
+    check("and the menu names the tune it is on",
+          (await stand.locator("#tuneNote").innerText())
+            .indexOf("The one it ships with is on the stand") === 0);
+
+    /*  The one that has to fail loudly if this feature ever overreaches.
+
+        A reload restores no tune. The library survives, the stand does not -
+        which is the amended rule in one assertion: nothing comes back unless
+        you asked for it by name.
+    */
+    await stand.evaluate(() => {
+      document.querySelector("#progression").value = "| Cm7 | F7 |";
+      document.querySelector("#progression").dispatchEvent(new Event("input"));
+    });
+    await stand.waitForFunction(
+      () => document.querySelectorAll("#systems .chord").length === 2, null, { timeout: 15000 });
+
+    await stand.reload({ waitUntil: "load" });
+    await stand.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await stand.locator("#helpDialog[open]").count()) await stand.locator("#helpClose").click();
+
+    await stand.locator("#chartButton").click();
+
+    check("a reload puts no tune on the stand, saved or otherwise",
+          (await chordsOn()) === shipped
+          && (await stand.locator("#tuneNote").innerText()).indexOf("not saved") >= 0);
+
+    check("but the library is still there, by name",
+          (await stand.locator("#openTune option").count()) === 2);
+
+    // Saving under a name already used replaces that tune and keeps its id,
+    // which is what keeps practice already logged against it attached.
+    const wasId = await stand.evaluate(() =>
+      JSON.parse(window.localStorage.getItem("jazzTunes")).tunes[0].id);
+
+    await stand.fill("#tuneName", "the one it ships WITH");
+    await stand.locator("#saveTune").click();
+
+    const library = await stand.evaluate(() =>
+      JSON.parse(window.localStorage.getItem("jazzTunes")));
+
+    check("saving over a name replaces that tune and keeps its id",
+          library.tunes.length === 1 && library.tunes[0].id === wasId);
+
+    /*  Poison the store, the way the comping style's checks do. A tune that
+        cannot be read back is dropped rather than repaired, and what must not
+        happen is a half-read tune reaching the stand. */
+    const good = JSON.stringify(library);
+    const damagedTune = (change) => {
+      const it = JSON.parse(good);
+      change(it);
+      return JSON.stringify(it);
+    };
+
+    for (const [what, poison] of [
+           ["no name", damagedTune((o) => { delete o.tunes[0].name; })],
+           ["no progression", damagedTune((o) => { o.tunes[0].progression = ""; })],
+           ["a metre that is not a number", damagedTune((o) => { o.tunes[0].beats = "four"; })],
+           ["a field this page has never sent", damagedTune((o) => { delete o.tunes[0].composer; })],
+           ["an id that is not one", damagedTune((o) => { o.tunes[0].id = "first"; })],
+           ["nothing that parses", "{not json at all"]]) {
+      await stand.evaluate((text) => window.localStorage.setItem("jazzTunes", text), poison);
+
+      await stand.reload({ waitUntil: "load" });
+      await stand.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+      if (await stand.locator("#helpDialog[open]").count()) await stand.locator("#helpClose").click();
+
+      await stand.locator("#chartButton").click();
+
+      check(`a saved tune with ${what} is dropped, and the stand is untouched`,
+            (await stand.locator("#openTuneField").isHidden())
+            && (await chordsOn()) === shipped);
+    }
+
+    await tunes.close();
+  }
+
   /*  The chart's own tools, which moved off a toolbar above the music and into
       the settings panel's Chart section. Three of the four had no check at all
       - only Import / export and Reharmonise the tune did - and the failure

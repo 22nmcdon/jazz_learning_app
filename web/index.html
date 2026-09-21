@@ -824,6 +824,28 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
   color: var(--text-soft);
   margin-bottom: 5px;
 }
+
+/* A text box that matches the selects beside it. The page had no styled text
+   input outside the editor and the tempo box until a tune needed a name -
+   `prompt()` is what a page reaches for here and this page uses it nowhere,
+   which is right for a webview where it behaves differently per platform. */
+.menu-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 1px;
+  padding: 6px 8px;
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--charcoal);
+}
+.tune-save {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 4px;
+}
 .menu-field + .menu-field,
 .menu-option + .menu-field,
 .menu-note + .menu-field { margin-top: 14px; }
@@ -2367,6 +2389,35 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <p class="menu-note">Open a chart from iReal Pro or a PDF, rewrite this one by hand,
               or take it away. <i>Restore original</i> gives back the tune you brought in.</p>
           </div>
+
+          <!-- Saving a tune belongs here, in the tune's own menu, because that
+               is what this menu is: what is on the stand, and what to do with
+               it. Reading a tune's practice back is a different question and
+               lives in the dashboard.
+
+               Nothing here is loaded on its own. A saved tune comes back when
+               you pick it by name and at no other moment - the page still
+               opens on a clean stand, which is the half of "work is not
+               remembered" that is worth keeping. -->
+          <div class="menu-group">
+            <span class="menu-title">Saved tunes</span>
+
+            <div class="menu-field">
+              <label class="menu-label" for="tuneName">Save this tune as</label>
+              <div class="tune-save">
+                <input class="menu-input" id="tuneName" type="text" maxlength="60"
+                       autocomplete="off" spellcheck="false" placeholder="Name it">
+                <button class="link-btn" type="button" id="saveTune">Save</button>
+              </div>
+              <p class="menu-note" id="tuneNote">Saving keeps the chart, its head and its metre -
+                never a take. Saving under a name you have used replaces that one.</p>
+            </div>
+
+            <div class="menu-field" id="openTuneField" hidden>
+              <label class="menu-label" for="openTune">Put one back on the stand</label>
+              <select class="menu-select" id="openTune"></select>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2989,6 +3040,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     scaleStyle: "modes",  // the soloing vocabulary; the engine names them
     chosenScale: 0,
     mode: "chords",     // "chords" or "solo" - a state, never a route
+
+    /*  The saved tune on the stand, or 0 for a chart that is not one.
+
+        A take over an unsaved chart still counts as practice - it goes in the
+        record with no tune against it. What this number decides is only
+        whether that take also joins one tune's own memory. */
+    tune: 0,
     openFamily: null,
     spotted: null,
     style: "any",
@@ -3053,6 +3111,93 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     }
   }
 
+  /*  Saved tunes.
+
+      This is the one thing on the page that breaks "practice settings are
+      remembered; work is not" as that rule was written, and it is worth being
+      exact about which half of it survives.
+
+      What the rule was protecting is that the page opens on a clean stand:
+      nothing half-played comes back, no take is restored into the session, and
+      you are never handed a chart you did not ask for. All of that still holds.
+      `boot` loads no tune, `solo.take` and `comp.hits` still die with the page,
+      and a tune returns only when somebody picks it by name.
+
+      What changes is that a chart you deliberately saved is yours to open
+      again. The amended rule is **nothing comes back unless you asked for it by
+      name** - see CLAUDE.md.
+
+      Stored as one object under one key, through `rememberObject`, so
+      `localStorage` still has exactly one door on this page.
+  */
+  var TUNE_LIBRARY_KEY = "Tunes";
+  var MOST_SAVED_TUNES = 100;
+
+  /** The fields a saved tune is, and the whole of it.
+
+      The same shape `original` already had - the chart, its head and its metre
+      - plus an id and a name. Nothing about a take is in here: what was
+      practised over this tune lives in the practice record, keyed by the id,
+      and the two are separate because one is a tune and the other is a history.
+  */
+  var TUNE_FIELDS = ["progression", "title", "style", "composer", "beats", "beatUnit"];
+
+  /** Reads the library back, dropping anything that is not exactly right.
+
+      Dropped rather than repaired, for the reason the custom comping style is:
+      a store the page does not own can hold anything, including the last
+      version of this page's idea of what a tune looks like, and a tune that
+      cannot be read back is one you save again in a moment. A migration path
+      for six fields is more code than the feature.
+  */
+  function recallTunes() {
+    var stored = recallObject(TUNE_LIBRARY_KEY);
+    var tunes = [];
+    var next = 1;
+
+    if (stored && Array.isArray(stored.tunes)) {
+      stored.tunes.forEach(function (tune) {
+        if (!tune || typeof tune !== "object") return;
+        if (typeof tune.id !== "number" || !isFinite(tune.id) || tune.id < 1) return;
+        if (typeof tune.name !== "string" || !tune.name) return;
+
+        // Every field, and no extra ones taken on trust: a row written by a
+        // newer page is not a row this one knows how to draw.
+        var readable = TUNE_FIELDS.every(function (field) {
+          var value = tune[field];
+          return field === "beats" || field === "beatUnit"
+                   ? typeof value === "number" && isFinite(value) && value > 0
+                   : typeof value === "string";
+        });
+
+        if (!readable || !tune.progression) return;
+
+        tunes.push(tune);
+        next = Math.max(next, tune.id + 1);
+      });
+    }
+
+    return { tunes: tunes, next: typeof stored === "object" && stored
+                                    && typeof stored.next === "number" && stored.next > next
+                                      ? stored.next : next };
+  }
+
+  function rememberTunes(library) {
+    rememberObject(TUNE_LIBRARY_KEY, library);
+  }
+
+  /** The chart as it stands, in the shape a saved tune is. */
+  function chartRecordNow() {
+    return {
+      progression: state.progression,
+      title: el.sheetTitle.textContent,
+      style: state.chartStyle || el.sheetStyle.textContent,
+      composer: state.composer || "",
+      beats: transport.beats,
+      beatUnit: transport.beatUnit
+    };
+  }
+
   function rememberStyle(style) { remember("VoicingStyle", style); }
   function recallStyle() { return recall("VoicingStyle"); }
 
@@ -3082,6 +3227,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
    "scaleRows", "subs", "advanced", "risky", "spotted", "spottedText", "useSpotted",
    "menuButton", "menuPanel", "menuClose", "chartButton", "chartPanel",
+   "tuneName", "saveTune", "tuneNote", "openTuneField", "openTune",
    "connectMidi", "midiStatus", "styleLabel",
    "showVoicing", "playChord", "nameChord", "named", "namedText",
    "planButton", "planDialog", "planClose", "planList", "planTitle", "planIntro",
@@ -6198,6 +6344,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     // This is the chart now. Restoring should come back here, not to the one
     // that happened to be on screen when the page loaded.
+    // A chart that just arrived is not the saved tune that was on the stand,
+    // whatever was there a moment ago.
+    state.tune = 0;
+
     original = {
       progression: result.progression,
       title: el.sheetTitle.textContent,
@@ -7308,9 +7458,154 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.transportButton.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
+  /*  The tune library's controls.
+
+      Saving is the only thing here that writes, and opening is the only thing
+      that reads - deleting and renaming are in the dashboard, which has room
+      for a list and is where you go to look at a tune anyway.
+  */
+
+  function setTuneNote(text, kind) {
+    el.tuneNote.textContent = text;
+    el.tuneNote.className = kind ? "menu-note " + kind : "menu-note";
+  }
+
+  /** Redraws the picker, and hides it when there is nothing saved.
+
+      A select with only its own placeholder in it is a control that looks
+      broken, so the whole field goes rather than sitting there empty. */
+  function fillTuneList() {
+    var library = recallTunes();
+
+    el.openTuneField.hidden = library.tunes.length === 0;
+    el.openTune.textContent = "";
+
+    var placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = library.tunes.length === 1
+                                ? "1 saved tune" : library.tunes.length + " saved tunes";
+    el.openTune.appendChild(placeholder);
+
+    library.tunes.forEach(function (tune) {
+      var option = document.createElement("option");
+      option.value = String(tune.id);
+      option.textContent = tune.name;
+      el.openTune.appendChild(option);
+    });
+
+    // Never left showing the tune you are on as though it were a thing to
+    // pick: the placeholder is the resting state of this control.
+    el.openTune.value = "";
+  }
+
+  el.saveTune.addEventListener("click", function () {
+    var name = el.tuneName.value.trim();
+
+    if (!name) {
+      setTuneNote("Give the tune a name first.", "warn");
+      el.tuneName.focus();
+      return;
+    }
+
+    var library = recallTunes();
+    var record = chartRecordNow();
+    var already = library.tunes.filter(function (tune) {
+      return tune.name.toLowerCase() === name.toLowerCase();
+    })[0];
+
+    if (already) {
+      // Saving under a name you have used replaces that one, and keeps its id -
+      // which is what keeps the practice already logged against this tune
+      // attached to it. A second tune of the same name would orphan all of it.
+      TUNE_FIELDS.forEach(function (field) { already[field] = record[field]; });
+      already.name = name;
+      state.tune = already.id;
+    } else {
+      if (library.tunes.length >= MOST_SAVED_TUNES) {
+        setTuneNote("That is " + MOST_SAVED_TUNES + " tunes, which is as many as this keeps."
+                    + " Delete one from Your practice to make room.", "warn");
+        return;
+      }
+
+      record.id = library.next;
+      record.name = name;
+      library.tunes.push(record);
+      library.next += 1;
+      state.tune = record.id;
+    }
+
+    rememberTunes(library);
+    fillTuneList();
+    el.tuneName.value = "";
+    setTuneNote("Saved as " + name + ". Takes from here on are counted against it.");
+  });
+
+  el.tuneName.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      el.saveTune.click();
+    }
+  });
+
+  el.openTune.addEventListener("change", async function () {
+    var id = Number(el.openTune.value);
+
+    if (!id) return;
+
+    var picked = recallTunes().tunes.filter(function (tune) { return tune.id === id; })[0];
+
+    el.openTune.value = "";
+
+    if (!picked) {
+      // The store changed under this list - another tab, or a clear. Redraw
+      // rather than load something that is no longer there.
+      fillTuneList();
+      setTuneNote("That tune is no longer saved.", "warn");
+      return;
+    }
+
+    setChartOpen(false);   // what it does is to the chart, so let the chart be seen
+
+    // This is the chart now, so restoring comes back here rather than to
+    // whatever was on the stand before it.
+    original = {
+      progression: picked.progression,
+      title: picked.title,
+      style: picked.style,
+      composer: picked.composer,
+      beats: picked.beats,
+      beatUnit: picked.beatUnit
+    };
+
+    await loadChartRecord(original, picked.id);
+    setTuneNote(picked.name + " is on the stand.");
+  });
+
+  /** Names the tune on the stand, or says there is not one.
+
+      Written into the note the menu already has rather than kept in a variable
+      the page never shows: which tune you are on decides where a take is
+      counted, and a player about to press <i>Start a take</i> is the one person
+      who needs to know it. It is also the only thing on the page that says so,
+      since the picker goes back to its placeholder the moment it has loaded
+      something.
+  */
+  function describeTuneOnTheStand() {
+    var on = recallTunes().tunes.filter(function (tune) { return tune.id === state.tune; })[0];
+
+    setTuneNote(on
+      ? on.name + " is on the stand. Takes are counted against it."
+      : "This chart is not saved. Takes still count as practice - just not against a tune.");
+  }
+
   function setChartOpen(open) {
     el.chartPanel.hidden = !open;
     el.chartButton.setAttribute("aria-expanded", open ? "true" : "false");
+
+    // Opening it is when the answer is wanted, and it is the only moment the
+    // note is read - so it is worked out here rather than kept up to date by
+    // everything that could change it.
+    if (open) describeTuneOnTheStand();
   }
 
   el.menuButton.addEventListener("click", function () {
@@ -9413,27 +9708,58 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (!el.editor.hidden) el.progression.focus();
   });
 
+  /** Puts a chart record on the stand.
+
+      This was `restoreChart`'s handler and is now shared with the tune
+      library, because opening a saved tune and restoring the one you brought
+      in are the same act: a record of six fields becomes the chart. Written
+      out twice they would have drifted the first time the record grew a field.
+
+      @param tuneId  the saved tune this record is, or 0 for one that is not
+                     saved. It rides along rather than being worked out,
+                     because "which tune is this" is a fact about where the
+                     record came from and nothing in the record itself says it.
+  */
+  function loadChartRecord(record, tuneId) {
+    state.progression = record.progression;
+    el.progression.value = record.progression;
+    state.composer = record.composer;
+    state.chartStyle = record.style;
+    state.reharmonised = {};
+    state.tune = tuneId || 0;
+    showChartHead(record.title, record.style, record.composer);
+    setMetre(record.beats, record.beatUnit);
+    return refreshChart();
+  }
+
   el.restoreChart.addEventListener("click", function () {
     setChartOpen(false);   // what it does is to the chart, so let the chart be seen
 
-    state.progression = original.progression;
-    el.progression.value = original.progression;
-    state.composer = original.composer;
-    state.chartStyle = original.style;
-    state.reharmonised = {};
-    showChartHead(original.title, original.style, original.composer);
-    setMetre(original.beats, original.beatUnit);
-    refreshChart();
+    // Restoring goes back to the chart you brought in, which is the saved tune
+    // itself when a saved tune is what you opened - so the id stays.
+    loadChartRecord(original, state.tune);
   });
 
   el.progression.addEventListener("input", function () {
     state.progression = el.progression.value;
     state.reharmonised = {};
+
+    // Rewriting the chart by hand makes it a different tune, so takes from here
+    // on are not this saved tune's. Reharmonising deliberately does *not* do
+    // this: that is an exercise over the same tune, and it puts the chart back.
+    state.tune = 0;
     refreshChart();
   });
 
   // --- boot ----------------------------------------------------------------
   buildKeyboard();
+
+  /*  The picker is filled, and nothing is opened.
+
+      That is the whole of the amended rule in one line: the library is there
+      the moment the page loads, and the stand is still empty until somebody
+      picks a tune by name. */
+  fillTuneList();
 
   var savedStyle = recallStyle();
 
