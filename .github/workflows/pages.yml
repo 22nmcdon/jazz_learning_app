@@ -31,10 +31,10 @@ jobs:
     name: Build the WebAssembly engine
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Emscripten
-        uses: mymindstorm/setup-emsdk@v14
+        uses: mymindstorm/setup-emsdk@v16
         with:
           version: 3.1.61
           actions-cache-folder: emsdk-cache

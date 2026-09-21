@@ -10,7 +10,7 @@ jobs:
     name: Core engine + tests (no JUCE)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The engine must build and test on a machine with no JUCE and no GUI
       # libraries - that is the module boundary, checked by CI rather than by
@@ -38,7 +38,7 @@ jobs:
     name: Standalone app
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The app's UI is a web page in a webview, so the Linux build needs
       # WebKitGTK on top of the usual JUCE packages.
