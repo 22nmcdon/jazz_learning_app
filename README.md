@@ -423,6 +423,29 @@ puts a chord on every beat; Basie leaves the bar alone and answers at the end of
 pushed across the barline into the next chord; the ballad leans on the triplet inside the
 beat rather than on eighths.
 
+**And you can write your own.** *Write your own* opens the style as the thing it is — a
+grid, one column per beat of the chart you are on, one row per way of dividing that beat.
+A lit cell is a chord the band plays there; click an empty one to add it, and its weight,
+whether it pushes into the next chord, and how long it rings are the three numbers under
+the grid. You always start from a copy: the four the engine ships are the engine's and are
+never edited in place.
+
+Two things the grid gets right by being a grid rather than a list. A cell *is* a slot, so
+you cannot write two chords on one position — a real invalid style that would otherwise
+need a validator. And the last column is written down as "counted back from the end of the
+bar" rather than as beat four, which is what keeps *the and of the last beat* the same idea
+in three as in four; every style that pushes does it that way. The row header is the
+"every beat" switch, because an empty beat fills a whole row and is how four-to-the-bar is
+one chord rather than four.
+
+The style you write is remembered across a reload, and **dropped rather than guessed at**
+if the engine has since changed what any of it means — the grid it is counted on travels
+with it, and a style that no longer fits is one you remake in a minute.
+
+Under the hood a user-made style is not a fifth entry in the engine's catalogue and is not
+held there between calls. It is data the page hands over on every call, exactly the way the
+chart is. The reasoning is in [`docs/COMPING.md`](docs/COMPING.md).
+
 What it plays is **rootless voicings** — no root to fight a bass player, guide tones under
 colour — and it **leads each one from the one before** rather than spelling every chord
 from scratch. Ask what a comper plays over `| Dm7 | G7 | Cmaj7 |` and you get F3 C4 E4 B4,

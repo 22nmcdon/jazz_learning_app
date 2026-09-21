@@ -510,6 +510,84 @@ all.
 voice leading moved. All real, none of them in the definition, all of them words
 if they're ever said.
 
+### A style you can write yourself
+The four the engine ships are a catalogue, not a ceiling. A style can now be
+**described** rather than named, and the page draws one as a grid you can click.
+
+- **The engine gained no registry, and no memory.** A user-made style is not a
+  fifth entry in `compStyles()` and is not held anywhere in the engine between
+  calls. It is **data the shell hands over on every call**, exactly the way a
+  chart's progression text is. `compStyleFor`'s function-local static is
+  untouched and the catalogue is still the catalogue; what changed is that the
+  three comping calls take a style *reference* — a key, or a whole description
+  — and resolve it by value. Core needed nothing at all: every function there
+  already took a `const CompStyleDefinition&`, and two tests already built one
+  by hand, so the catalogue was never really the only caller.
+- **JSON goes one way only.** Results are JSON because encoding them is the
+  shell's business and every shell has a parser. Inputs are flat delimited
+  text, because the engine has no JSON reader and `EngineApi.cpp` says at the
+  top that it must not grow one — `parseNoteList`, `readHit` and `readHitList`
+  are the precedent. So the page holds a *writer* and never a reader, and the
+  engine holds a reader and never a JSON one.
+- **No key, name or summary in the description.** The engine needs none of the
+  three to plan or to grade; it only ever echoed them back. Leaving them out
+  takes every piece of free text out of the grammar and with it the whole
+  question of quoting. What a player calls their own style is the page's.
+- **An unknown key falls back; a malformed description is an error.** Those
+  are different failures on purpose. A key is a name that may have been
+  renamed since a shell last looked, and the promise there — `compStyleFor`
+  makes it in its own doc comment — is comping in *some* style rather than
+  silence. A description is a message, and a broken one has to be refused:
+  falling back would comp four-to-the-bar underneath someone who had just
+  written their own figure, which is working-looking, wrong, and impossible to
+  notice. The two have a test each and the tests are each other's control.
+- **Values are refused rather than clamped, at the wire.** A tick of 900 is not
+  a tick to round down to 23 — it is a message that did not mean what it says,
+  and comping something plausible out of it is how a shell's bug becomes a
+  mystery about the band. Clamping belongs where a value is *computed*.
+
+#### `variation` is advised, never clamped
+The one rule this file documents and the engine does not enforce: `variation`
+above the lightest slot's weight means the density trim replaces the figure
+with the feel's own grid, and the band stops playing the style.
+
+It stays unenforced in all three layers, and the editor says so in a sentence
+instead. Two reasons. `compPlan` is seeded and byte-reproducible, so a clamp is
+a latent change to what every existing style plays — a no-op *today*, which is
+exactly why it would go unnoticed until it wasn't. And the documented
+consequence is a **sound**, not a fault: a player who sets straying to 90 and
+hears the figure dissolve is hearing the engine do what they asked.
+
+#### Two things the grid gets right by being a grid
+- **A cell is a slot**, so two slots on one position cannot be written. That is
+  a real invalid state — `slotAt` takes the first match and the rest are a slot
+  written twice — and the grid rules it out by construction rather than by a
+  validator.
+- **The last column is written as `-1`**, counted back from the end of the bar,
+  not as the number it happens to be. In four those are the same slot; in three
+  they are not, and three of the four shipped styles place their push the first
+  way. Writing the literal column back is the silent way to lose the
+  metre-independence `CompSlot` was designed for.
+
+And one the grid has to be told: **"every beat" is a property of the row**, not
+a cell. An empty `beat` fills a whole tick row and is how four-to-the-bar is one
+slot; written as four explicit slots it means something different the moment the
+metre changes.
+
+#### What the page had to stop assuming
+`compFeelIsEighths()` looked a style up by key in the list the engine sent, and
+a style the player wrote is not in that list — so it fell through to its default
+of *eighths*. That is the exact failure its own comment warns about, arriving by
+a route the comment did not cover: a style counted in anything else would have
+had its chords swung.
+
+The failure needs the right feel to see. Swing bends exactly one position, the
+straight eighth at tick 12, so a **triplet** style cannot expose it — a triplet
+bar has no tick 12 in it. **Sixteenths** shares tick 12 with the eighth, and is
+the one subdivision no shipped style uses. That is what the check uses, and it
+is why `allSubdivisions()` exists: a feel menu built from the catalogue's own
+answers would quietly have offered three of the four.
+
 ### Where the plan got to
 
 Comping was built to a seven-step plan. Steps **1, 2, 3, 5 and the style picker
@@ -539,6 +617,14 @@ of a bug report rather than this plan.
   come back in the same shape, so this is a page change with no engine in it.
 - **Hit duration**, the durations bullet above — the one field the agreed shape
   never got, and the reason nothing may mark a player for holding a chord.
+- **The editor does not edit a style's register.** `lowestNote`/`highestNote`
+  come across the wire and go back unchanged, so a copy keeps whatever the
+  style it came from had. The four ship with near-identical registers (45–76 to
+  48–81) so it is rarely the thing you want, but it is a real gap. Whoever adds
+  it should make the control refuse a span narrower than `twoHandedReach`:
+  `compingVoicing`'s anchor sweep runs `lowestNote <= anchor <= highestNote -
+  24`, so a narrower window yields no anchors and the band goes quiet rather
+  than complaining.
 - ~~**Drums.**~~ Built since. It stayed the one piece of the rhythm section
   needing no theory and no engine call: the page owns the pattern and each shell
   owns the kit, synthesised in both like the click. It follows the **metre**

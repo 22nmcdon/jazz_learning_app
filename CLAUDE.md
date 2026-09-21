@@ -269,6 +269,23 @@ something finished or assume something unfinished is done:
   to put one. That is the decision, not an omission — a style says what the
   *band* does, and a comper holding a chord through a four-to-the-bar is
   reading a style that does not say not to.
+  **The four styles are a catalogue, not a ceiling: a style can be described
+  rather than named.** The three comping calls take a style *reference* - a
+  catalogue key, or a whole description of a style the engine has never seen -
+  and a user-made style is **data the shell hands over on every call**, the way
+  a chart's progression text is. The engine gained no registry and no memory;
+  core needed no change at all, because every function there already took a
+  `const CompStyleDefinition&`. The description is **flat delimited text, never
+  JSON** - results are JSON because encoding them is the shell's business,
+  inputs are text because the engine has no JSON reader and must not grow one.
+  It carries no key, name or summary, which is what keeps the grammar free of
+  quoting. **An unknown key falls back to the first style; a malformed
+  description is an error** - a renamed style should still comp, but a broken
+  message must not comp four-to-the-bar under someone who just wrote their own
+  figure. **`variation` is advised, never clamped**: `compPlan` is seeded and
+  byte-reproducible so a clamp is a latent change to every existing style, and
+  the consequence it guards is a sound rather than a fault. See
+  `docs/COMPING.md`.
   **A style's slots are the figure the band plays, never a fence around the
   player**: placement is read against the grid the style's `feel` implies, and
   the slots keep a tier of their own for words rather than points. Reading the
@@ -399,6 +416,16 @@ that's easy to miss in review:
   since a store the page does not own can hold anything. A recalled loop goes
   back through `fillLoopRange()` — bars 1–12 on a four-bar chart is two numbers,
   not a loop.
+  **A comping style you wrote is remembered too, and it is the one structured
+  value here.** Its accessors (`rememberObject`/`recallObject`) are built *on*
+  the one pair rather than beside it, like the flag and number ones — there is
+  still exactly one door to `localStorage`. It is **dropped rather than
+  migrated** when it stops matching what the engine sends: the grid's own
+  `ticksPerBeat` is stored beside it (derived, never a hand-raised version
+  number), the field list is checked against the engine's *current* answer as
+  well as against the store, and the feel is held to the list the engine just
+  sent. A preference that cannot be read back is one you remake in a minute;
+  a migration path for eleven fields is more code than the editor.
 - **Engine/page version mismatch has no symptom of its own, so the page checks
   for it.** A cached engine paired with a fresh page makes a feature simply
   *vanish* — empty menu, engine chip still saying ready — because `ccall` on a
@@ -415,6 +442,14 @@ that's easy to miss in review:
   worse than the silence it replaces. The app needs none of this (one binary,
   no cache between the two) but is covered anyway, out of the `No engine call
   named` answer `WebUi.cpp` already returns.
+  **It tests that a call exists, never what shape its answer has**, so a
+  feature adding no new call is invisible to it. The comping-style editor is
+  the case: an older cached engine takes a described style, fails to find it as
+  a key, and comps four-to-the-bar with the chip still reading ready. A change
+  like that has to **feature-detect on the data** — the page offers the editor
+  only when `compStyles()`'s answer carries a style's `slots` — which is
+  strictly better than a name check, since it also catches an engine that has
+  the call but the old shape.
 - **The frame has four silent failure modes, all of them CSS.** Each looks like
   nothing happening rather than like an error:
   - **`min-height: 0` on `.chart-zone`.** A flex child's `min-height` is `auto`

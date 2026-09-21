@@ -26,7 +26,14 @@ The page's layout was restructured over these commits, and that work is done:
 | `200a44c` | The dock foot regrouped into what you press and what you read. |
 | `f03c65f` | Practice settings remembered across reloads, through one pair of storage accessors. |
 | `d1efdb5` | The chart's tools out of the settings panel into a menu of their own above the music, and the chart justified into its zone instead of leaving a void under it. |
-| *(this one)* | The screenshots reshot against the finished page, in the typeface a visitor actually sees. |
+| `a693f3a` | The screenshots reshot against the finished page, in the typeface a visitor actually sees. |
+
+Since then, two features off the *not built* list below were built: solo
+practice reads a **chord in a line as a chord** (`9f2870b` - see
+`docs/SOLO_PRACTICE.md`), and a comping style can be **written rather than
+chosen** (`5fef784` through this one - see `docs/COMPING.md`). Neither is
+layout work; they are here so a session can see what the branch has done
+without reading eight commit messages.
 
 Verify anything you change:
 
@@ -100,11 +107,6 @@ someone takes it back.
 Each of these needs its design question answered before any code. They are not
 ordered.
 
-- **Comping style customisation / an editor.** A `CompStyleDefinition` is slots
-  on a grid; an editor is a grid you can click. The question is whether a
-  user-made style is a first-class citizen of the engine's catalogue — which
-  `CLAUDE.md`'s single-source-of-truth rule says the engine owns — or a shell-side
-  overlay the engine never sees.
 - **Personal voicing library.** Where does a saved voicing live, and what is it
   saved *against* — a chord symbol, a chord quality, or a bar of a particular
   tune? Storage is the easy half.
@@ -137,6 +139,27 @@ DSP undertaking. Do not start it because a feature seems to want it.
 ## Loose ends
 
 Small, verified, and none of them urgent.
+
+- **The comping-style editor does not edit a style's register.**
+  `lowestNote`/`highestNote` cross the wire and go back unchanged, so a copy
+  keeps whatever the style it came from had. The four ship with near-identical
+  registers (45-76 to 48-81), so it is rarely the thing you want - but it is a
+  real gap. Whoever adds it should make the control refuse a span narrower than
+  `twoHandedReach`: `compingVoicing`'s anchor sweep runs `lowestNote <= anchor
+  <= highestNote - 24`, so a narrower window yields no anchors and the band
+  goes quiet rather than complaining.
+
+- **One saved style, not a library.** The editor keeps exactly one style you
+  wrote, under one key. A list of them is a *library*, and the library question
+  - what a saved thing is saved against, and where it lives - is the one the
+  *Personal voicing library* bullet above asks. It should be answered once, for
+  both, rather than twice differently.
+
+- **Nothing shares or exports a style.** A style in a link is a second wire
+  format and a second "is this trustworthy" question, and the existing share
+  link carries a *chart* in iReal Pro's format via the engine's own encoder -
+  there is no slot in it for a figure. The reusable parts are the plumbing
+  (`copyToClipboard`, the `?chart=` boot hook), not the format.
 
 - **One unexplained smoke-test timeout.** A single run failed with
   `page.waitForFunction: Timeout 15000ms` while the chart menu was half-wired;
