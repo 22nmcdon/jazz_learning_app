@@ -229,6 +229,20 @@ something finished or assume something unfinished is done:
 - **Reharmonization Assistant, Real-Time Chord/Voicing Analyzer** — done.
 - **Solo practice** (line analysis, take scoring, walking-bass reading) —
   done. See `docs/SOLO_PRACTICE.md` before touching `LineAnalyzer`.
+  **A chord in a line is read as a chord, and nothing new reads it.** The line
+  reading is per-note and complete, but a chord is not a fact about any of its
+  notes — Eb Gb A C over Dm7 is a passing Ebdim7, and no reading of that Eb
+  gets to the first sentence. So `chordSoFar()` hands the attack it already
+  groups to `VoicingAnalyzer` (the shape, and whether the notes carry the bar)
+  and `ChordIdentifier` (what they spell instead). That is the boundary the
+  header states — a voicing is a thing, a line is a stream — kept by *calling*
+  the readers rather than growing a second one; a chord reader inside
+  `LineAnalyzer` is the thing not to write. The reading leads with the **top**
+  note, because a block-chord soloist harmonises downwards from the melody. It
+  is read **when struck**, against the symbol that was on the stand at the
+  time, so reharmonising mid-take cannot rewrite it. And `saysTheChord` is not
+  a pass mark: the chords between the chart's own are most of what block-chord
+  playing is, so one that spells something else is named, never marked.
 - **Comping** — done, both halves: the band that plays under a soloist, and the
   exercise. The exercise lives in **chord practice's *In time***, not in a third
   mode; that decision was recorded as a third mode for a long time and was
@@ -309,7 +323,7 @@ something finished or assume something unfinished is done:
   reach Google Fonts will otherwise photograph the fallback face.
 - **Not built, deliberately open**: personal voicing
   library, ear training, progress tracking beyond current per-take/session
-  stats, licks/line suggestions, chordal (not line) reading in solo practice,
+  stats, licks/line suggestions,
   MusicXML/MuseScore import, PDF reading/printing in the JUCE app (the engine's
   reader is shared and format-agnostic; the app just lacks a PDF text-extraction
   library). Each one's open design question is in `docs/HANDOFF.md`.
@@ -349,7 +363,10 @@ that's easy to miss in review:
   comping's `compPlan()` testable.
 - **Rhythm and voice-leading produce words, never points — in solo practice.**
   `score()` is untouched by timing or line-shape; see its own doc comment before
-  changing that. **Comping scores placement, and that is not a contradiction**: a
+  changing that. **The chord reading is the same rule one step further out**: a
+  block chord in a line is named, never scored, and a voicing that spells
+  something other than the bar costs the take nothing — there is no number
+  anywhere that `saysTheChord` moves. **Comping scores placement, and that is not a contradiction**: a
   line has no written standard for where its notes fall, so a number would be one
   the engine invented and then marked a player against, while a
   `CompStyleDefinition` *is* that standard, chosen off a menu and already the

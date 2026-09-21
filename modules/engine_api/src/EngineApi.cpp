@@ -227,6 +227,40 @@ namespace
              + "," + lineStatsJson (stats) + "}";
     }
 
+    /** A chord in the line, read as a chord.
+
+        Sent as `voicing` rather than as `chord` because a line note already
+        carries a `chord` and it is the bar's symbol - the thing this was
+        played *over*. Two keys one letter apart meaning opposite halves of the
+        same sentence is how a shell ends up drawing the wrong one.
+    */
+    std::string lineChordJson (const LineChord& chord)
+    {
+        const auto midiList = [] (const std::vector<int>& notes)
+        {
+            return jsonArray (notes, [] (int note) { return std::to_string (note); });
+        };
+
+        return "{\"notes\":" + midiList (chord.midiNotes)
+             + ",\"names\":" + jsonArray (chord.midiNotes, [] (int note)
+                                           { return quoted (midiNoteName (note)); })
+             // The top note, named as well as numbered, for the same reason the
+             // resolved list carries both: a shell lighting the key it was
+             // played on should not have to work the pitch back out of "E4".
+             + ",\"melody\":" + std::to_string (chord.melodyNote)
+             + ",\"melodyName\":" + quoted (midiNoteName (chord.melodyNote))
+             + ",\"melodyDegree\":" + quoted (chord.melodyDegree)
+             + ",\"melodyColour\":" + quoted (noteColourKey (chord.melodyColour))
+             + ",\"type\":" + quoted (chord.typeName)
+             + ",\"saysTheChord\":" + (chord.saysTheChord ? "true" : "false")
+             + ",\"spelled\":" + quoted (chord.spelled)
+             + ",\"outside\":" + midiList (chord.outsideNotes)
+             + ",\"verdict\":" + quoted (chord.verdict)
+             + ",\"reading\":" + quoted (chord.reading)
+             + ",\"chord\":" + quoted (chord.chordSymbol)
+             + ",\"bar\":" + std::to_string (chord.measureIndex) + "}";
+    }
+
     std::string lineNoteJson (const LineNote& note)
     {
         return "{\"midi\":" + std::to_string (note.midiNote)
@@ -1096,6 +1130,7 @@ std::string soloPlayNote (int midiNote, int beat, int tick, int withPrevious)
                                 : analyzer.play (midiNote, attack);
     const auto& resolved = analyzer.resolvedByLastNote();
     const auto& stranded = analyzer.strandedByLastNote();
+    const auto chordNow = analyzer.chordSoFar();
 
     /*  One note can change the reading of notes behind it, and those may be in
         an earlier bar - running chromatically into the next chord is the whole
@@ -1137,6 +1172,11 @@ std::string soloPlayNote (int midiNote, int beat, int tick, int withPrevious)
 
     return hold ("{\"ok\":true,\"taking\":" + std::string (analyzer.isTaking() ? "true" : "false")
                  + ",\"note\":" + lineNoteJson (note)
+                 /*  The chord this note is part of, if it is part of one, read
+                     as a chord. `null` for an ordinary line, which is almost
+                     every note - a shell shows this instead of the single-note
+                     reading when it is there and is otherwise unaffected. */
+                 + ",\"voicing\":" + (chordNow.has_value() ? lineChordJson (*chordNow) : "null")
                  + ",\"resolved\":" + names (resolved)
                  + ",\"stranded\":" + names (stranded)
                  + ",\"bar\":" + lineBarJson (note.measureIndex, note.chordSymbol,
@@ -1162,6 +1202,11 @@ std::string soloEndTake()
                  + ",\"leaps\":" + std::to_string (take.leaps)
                  + ",\"leapsResolved\":" + std::to_string (take.leapsResolved)
                  + ",\"range\":" + std::to_string (take.rangeInSemitones())
+                 + ",\"chordsPlayed\":" + std::to_string (take.chordsPlayed)
+                 + ",\"chordsSpellingTheBar\":" + std::to_string (take.chordsSpellingTheBar)
+                 + ",\"chordShape\":" + quoted (take.chordShape)
+                 + ",\"chords\":" + jsonArray (take.chords, [] (const LineChord& chord)
+                                                { return lineChordJson (chord); })
                  + ",\"bars\":" + jsonArray (take.bars, [] (const LineBar& bar)
                    { return lineBarJson (bar.measureIndex, bar.chordSymbol, bar.stats,
                                          bar.neverLeftTheChord); })

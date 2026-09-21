@@ -1,12 +1,15 @@
 #include "jazz/core/LineAnalyzer.h"
 
+#include "jazz/core/ChordIdentifier.h"
 #include "jazz/core/Pitch.h"
+#include "jazz/core/VoicingAnalyzer.h"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdlib>
 #include <numeric>
+#include <utility>
 
 namespace jazz::core
 {
@@ -387,6 +390,9 @@ void LineAnalyzer::startTake()
     strandedThisAttack.clear();
     justResolved.clear();
     justStranded.clear();
+    currentChord.reset();
+    takeChords.clear();
+    currentChordBegin = noChordInProgress;
     taking = true;
 }
 
@@ -414,6 +420,14 @@ void LineAnalyzer::endTake()
     // The window starts clean too: the first note after a take is not the
     // resolution of the last note of it.
     recent.clear();
+
+    /*  The chords played stay, for the same reason the notes do - they are the
+        take, and it has just become the thing worth reading. What ends is the
+        one in progress: a chord is a gesture, and nothing is being held once
+        the take is disarmed. */
+    currentChord.reset();
+    currentChordBegin = noChordInProgress;
+
     taking = false;
 }
 
@@ -431,6 +445,110 @@ std::vector<LineAnalyzer::AttackSpan> LineAnalyzer::attacksIn (const std::vector
     }
 
     return attacks;
+}
+
+/** Reads one attack as a chord.
+
+    Every line of this hands the work to something that already does it. The
+    shape comes from `VoicingAnalyzer::classify`, whether the notes carry the
+    bar's chord from `VoicingAnalyzer::analyse`, and what they spell instead
+    from `ChordIdentifier` - the three questions a set of notes sounding at
+    once raises, each answered by the thing written to answer it. Nothing here
+    reads a chord; it arranges three readings and writes a sentence.
+
+    That is the point rather than an economy. The per-note reading and the
+    chord reading are two different questions about the same notes, and the
+    way to keep them from drifting is for the chord half never to have its own
+    idea of what a shell voicing is.
+*/
+std::optional<LineChord> LineAnalyzer::readChord (const std::vector<LineNote>& line,
+                                                  AttackSpan attack,
+                                                  const ChordSymbol& chord)
+{
+    if (attack.end > line.size() || attack.end - attack.begin < 2)
+        return {};
+
+    std::vector<int> struck;
+
+    for (auto i = attack.begin; i < attack.end; ++i)
+        struck.push_back (line[i].midiNote);
+
+    const auto voicing = Voicing::fromNotes (struck);
+
+    /*  Two keys and one pitch: the same note struck twice in one gesture is a
+        note being held, not a chord. `fromNotes` has already dropped the
+        duplicate, so this is asking whether anything was left. */
+    if (voicing.size() < 2)
+        return {};
+
+    LineChord read;
+    read.midiNotes = voicing.midiNotes;
+    read.measureIndex = line[attack.begin].measureIndex;
+    read.chordSymbol = chord.toString();
+    read.type = VoicingAnalyzer::classify (voicing, chord);
+    read.typeName = voicingTypeName (read.type);
+
+    /*  The top note is the line's. See the note on `LineChord`: a block-chord
+        soloist harmonises downwards from the melody, so the note to lead with
+        is the one they were singing. Its colour and degree are taken from the
+        reading it already has rather than worked out again - it is the same
+        note, read once. */
+    read.melodyNote = voicing.highestNote();
+
+    for (auto i = attack.begin; i < attack.end; ++i)
+        if (line[i].midiNote == read.melodyNote)
+        {
+            read.melodyDegree = line[i].degree;
+            read.melodyColour = line[i].colour;
+        }
+
+    /*  No examples. The analyser offers idiomatic alternatives when a voicing
+        could be better, which is the right thing to say to someone drilling a
+        shape and the wrong thing to say to someone in the middle of a line -
+        they are not trying to play the chart's chord, they are playing over
+        it. */
+    VoicingAnalyzer::Options reading;
+    reading.includeExamples = false;
+
+    const auto analysis = VoicingAnalyzer { reading }.analyse (voicing, chord);
+
+    read.saysTheChord = analysis.matchesChord;
+    read.outsideNotes = analysis.outsideNotes;
+
+    if (! read.saysTheChord)
+    {
+        /*  One name, not four. A panel choosing between readings is chord
+            practice's question; here the line has already moved on, and the
+            useful thing is the best single name for what went past. */
+        ChordIdentifier::Options naming;
+        naming.maxCandidates = 1;
+
+        const auto names = ChordIdentifier { naming }.identify (voicing);
+
+        if (! names.empty())
+            read.spelled = names.front().chord.toString();
+    }
+
+    auto said = midiNoteName (read.melodyNote) + " on top";
+
+    /*  Spelled out in the sentence and kept short in the data. Every other
+        degree is already the word for itself - "the b3", "the #11" - and "the
+        R" is the one that is not, because it is an abbreviation rather than a
+        name. The field keeps `R`, which is what every other caller reads. */
+    if (! read.melodyDegree.empty())
+        said += read.melodyDegree == "R" ? ", the root" : ", the " + read.melodyDegree;
+
+    if (read.saysTheChord)
+        read.verdict = "A " + read.typeName + " - that says " + read.chordSymbol + ".";
+    else if (! read.spelled.empty())
+        read.verdict = "That reads as " + read.spelled + " over " + read.chordSymbol + ".";
+    else
+        read.verdict = plural (static_cast<int> (voicing.size()), "note", "notes")
+                     + " over " + read.chordSymbol + ", and no one name accounts for them.";
+
+    read.reading = said + ". " + read.verdict;
+
+    return read;
 }
 
 /** Rebuilds the two public lists from the indices behind them.
@@ -565,6 +683,43 @@ LineNote LineAnalyzer::play (int midiNote, Attack attack)
     }
 
     publishJust (line);
+
+    /*  The attack this note belongs to, read as a chord when it is one.
+
+        Last, after the window has settled everything it is going to, so the
+        melody note carries the colour the player is about to be shown rather
+        than the one it had a line of code ago. And here rather than in
+        `summary()`, because a chord has to be read against the symbol that was
+        on the stand when it was struck: reharmonise-as-you-play moves a bar's
+        chord mid-take, and reading the take's first voicing against the bar's
+        current symbol would be rewriting history.
+
+        With no bar to read against there is no chord reading at all. A set of
+        notes has a name of its own, but "how does this sit against nothing" is
+        not a question with a chord in it. */
+    const auto attackNow = attacksIn (line).back();
+
+    currentChord.reset();
+
+    if (target.has_value())
+        currentChord = readChord (line, attackNow, target->chord);
+
+    if (! currentChord.has_value())
+    {
+        currentChordBegin = noChordInProgress;
+    }
+    else if (taking)
+    {
+        // The same chord one note wider, or a new one. A four-note voicing
+        // arrives as four calls and is one chord, so it replaces its own
+        // entry instead of leaving three behind it.
+        if (currentChordBegin == attackNow.begin && ! takeChords.empty())
+            takeChords.back() = *currentChord;
+        else
+            takeChords.push_back (*currentChord);
+
+        currentChordBegin = attackNow.begin;
+    }
 
     return note;
 }
@@ -1174,6 +1329,38 @@ TakeSummary LineAnalyzer::summary() const
         and the reading they most need is the one that used to be wrong: the
         inner voices of a voicing moving into the next one are resolutions, not
         a handful of notes that went nowhere. */
+    /*  What the chords were, as against how many of them there were. Read off
+        the readings taken as they were played - see `takeChords` - so this
+        says what the player was looking at when they struck each one.
+
+        The shape is settled by a plain count and nothing breaks a tie, which
+        is the right amount of confidence for a sentence that says "mostly". */
+    std::vector<std::pair<VoicingType, int>> shapes;
+
+    take.chords = takeChords;
+
+    for (const auto& chordPlayed : takeChords)
+    {
+        if (chordPlayed.saysTheChord)
+            ++take.chordsSpellingTheBar;
+
+        const auto seen = std::find_if (shapes.begin(), shapes.end(),
+                                        [&chordPlayed] (const std::pair<VoicingType, int>& shape)
+                                        { return shape.first == chordPlayed.type; });
+
+        if (seen != shapes.end())
+            ++seen->second;
+        else
+            shapes.push_back ({ chordPlayed.type, 1 });
+    }
+
+    if (! shapes.empty())
+        take.chordShape = voicingTypeName (
+            std::max_element (shapes.begin(), shapes.end(),
+                              [] (const std::pair<VoicingType, int>& a,
+                                  const std::pair<VoicingType, int>& b)
+                              { return a.second < b.second; })->first);
+
     if (take.chordsPlayed > 0)
     {
         auto said = plural (take.chordsPlayed, "chord", "chords") + " in the line";
@@ -1187,6 +1374,34 @@ TakeSummary LineAnalyzer::summary() const
         else
             said += ". Every note of one is read against the bar on its own, and the"
                     " voices resolve into the next voicing rather than into each other.";
+
+        take.observations.push_back (said);
+    }
+
+    /*  And what those chords were, which is a different question from what
+        their voices did. Two takes can have the same chord count, the same
+        resolutions and the same score while one of them played the chart's
+        own harmony in four voices and the other played the chords between
+        them - and until this was said back, nothing in the summary could tell
+        those two apart.
+
+        It is a count, never a ratio to be improved. A chord that reads as
+        something else over the bar is not a chord that missed it. */
+    if (! takeChords.empty() && ! take.chordShape.empty())
+    {
+        auto said = "Mostly " + take.chordShape + "s, and "
+                  + std::to_string (take.chordsSpellingTheBar) + " of "
+                  + plural (static_cast<int> (takeChords.size()), "chord", "chords")
+                  + " carried the bar's own harmony.";
+
+        if (take.chordsSpellingTheBar < static_cast<int> (takeChords.size()))
+            said += " The rest read as something else over it, which is not a miss -"
+                    " the chords in between the chart's own are most of what block-chord"
+                    " playing is made of.";
+        else
+            said += " Every one of them spelled what was written. The thing to try next"
+                    " is the chords in between: a diminished shape, or the same voicing a"
+                    " semitone above, passing through on the way to the next chord.";
 
         take.observations.push_back (said);
     }

@@ -19,7 +19,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
-| `tests` | Engine unit tests (451), no JUCE, no third-party framework. | core engine, engine API |
+| `tests` | Engine unit tests (464), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
 target possible without a rewrite, and the build enforces it (see below).
@@ -674,6 +674,36 @@ on-screen keyboard always plays a line.
 A note struck with three others is still one note: counted, coloured and scored like any
 other. The gesture changes which notes can resolve which, and nothing else.
 
+**And the chord is read as a chord.** Everything above is the line reading, and it is
+complete — but a chord is not a fact about any of its notes. Four notes over Dm7 that are
+each a scale tone might be an Ebdim7 passing through or might be nothing at all, and nothing
+said about the Eb on its own tells you which. So the moment two keys go down together, the
+page stops reporting whichever of them arrived last and says what they came to:
+
+```
+C4 - the b7, on top of 4 notes struck together.
+That reads as Ebdim7 over Dm7.
+```
+
+The note it leads with is the one on **top**, because that is the line: a player soloing in
+blocks plays the melody in the top voice and harmonises underneath it. Underneath is a
+voicing, and it gets the reading a voicing gets — its shape, and whether the notes carry the
+bar's own chord or spell something else over it.
+
+**Spelling something else is not a miss.** The diminished chord through a bar, the same
+voicing a semitone above on its way to the next one — the chords *between* the chart's chords
+are most of what block-chord playing is made of, so the app names what you played rather than
+grading it against what was written. Nothing here scores a chord, and the take's numbers are
+the note numbers they always were. What the summary gains is a sentence: which shape you
+mostly played, and how many of your chords carried the bar's own harmony — because a take of
+passing chords and a take of the chart's harmony in four voices look identical in every other
+number on the page.
+
+It is the same two readers chord practice uses, asked from the other side. The voicing
+analyser says whether a set of notes says a symbol; the chord identifier names a set of notes
+with no symbol in mind. A line is a stream and a voicing is a thing, and the way to keep both
+true is to hand the thing to the readers that read things.
+
 ### Reading where a note fell
 
 Solo practice reads the same grid the band plays on. With the clock running, every note you
@@ -1030,11 +1060,6 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   practice loop ship, as In time above.
 - **Licks.** Solo mode tells you the scale; suggesting a *line* to play over a bar needs
   generated or curated patterns, rhythm and register, and is a feature of its own.
-- **Reading a block chord as a chord.** Solo practice now reads chordal playing voice by
-  voice — each note on its own way home — which is what a *line* needs. What it does not do
-  is ask whether the voicing you played said what the bar said; that is chord practice's
-  question, and answering both at once would mean deciding which one a block-chord solo
-  wants. The notes struck together are already marked, so the seam is there.
 - **Rhythm in a *solo's* score.** The readings exist (above) and deliberately produce words
   rather than points: a line has no written standard for where its notes fall, so a number
   would be one the app invented and then marked you against. Comping is scored on placement

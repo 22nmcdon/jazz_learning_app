@@ -628,6 +628,19 @@ try {
   check("neither voice was left hanging",
         (await page.locator('#keyboard .key[data-colour="outside"]').count()) === 0);
 
+  /*  And read as a chord, which is the other half of what "struck together"
+      buys. With four keys down the page stops reporting whichever of them
+      arrived last - the line's note is the one on top, and underneath it is a
+      chord with a name. The verdict is the engine's sentence, so this asserts
+      that one arrived rather than checking its wording. */
+  const chordLine = (await page.locator("#soloNote").innerText()).trim();
+  const chordVerdict = (await page.locator("#soloAgainst").innerText()).trim();
+
+  check(`a chord in the line is read as a chord (${chordLine})`,
+        chordLine.includes("on top of 4 notes struck together"));
+  check(`and it is named against the bar (${chordVerdict})`,
+        /says|reads as|no one name/.test(chordVerdict));
+
   // The control, and the reason the shell has to be the one to say it: the
   // same pitches clicked one at a time are the line they actually are.
   for (const note of [53, 56, 59, 63]) { await soloKey(note).click(); await page.waitForTimeout(90); }
@@ -638,6 +651,11 @@ try {
     null, { timeout: 10000 });
 
   check("the same notes played one at a time are read as the line they are", true);
+
+  // The same control, for the chord reading: one note at a time is a line, and
+  // a line has no chord in it to read.
+  check("and a line is not read as a chord",
+        ! (await page.locator("#soloNote").innerText()).includes("struck together"));
 
   // Nothing is counted until a take is armed.
   check("nothing is counted before arming", await page.locator("#soloTallies").isHidden());

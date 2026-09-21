@@ -203,6 +203,47 @@ TEST ("a played note comes back with its colour, its degree and the running coun
     CHECK (contains (json, "\"chordTones\":1"));
 }
 
+TEST ("a chord in the line crosses the wire read as a chord")
+{
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "");
+
+    soloPlayNote (57);                        // A3, on its own: a line, not a chord
+    const auto alone = soloPlayNote (53, -1, 0, 0);
+
+    CHECK (contains (alone, "\"voicing\":null"));
+
+    // Struck with the one before it, and there is a chord to read: F and C
+    // under Dm7 are the b3 and the b7, which is the whole of what it needs.
+    const auto pair = soloPlayNote (60, -1, 0, 1);
+
+    CHECK (contains (pair, "\"melodyName\":\"C4\""));
+    CHECK (contains (pair, "\"saysTheChord\":true"));
+    CHECK (contains (pair, "\"chord\":\"Dm7\""));
+}
+
+TEST ("a passing chord crosses the wire named, not marked")
+{
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "");
+
+    soloPlayNote (51);                        // Eb Gb A C - Ebdim7 through the bar
+    soloPlayNote (54, -1, 0, 1);
+    soloPlayNote (57, -1, 0, 1);
+
+    const auto json = soloPlayNote (60, -1, 0, 1);
+
+    CHECK (contains (json, "\"saysTheChord\":false"));
+    CHECK (contains (json, "\"spelled\":\"Ebdim7\""));
+    CHECK (contains (json, "\"reading\":\"C4 on top"));
+
+    const auto take = soloEndTake();
+
+    CHECK (contains (take, "\"chordsPlayed\":1"));
+    CHECK (contains (take, "\"chordsSpellingTheBar\":0"));
+    CHECK (contains (take, "\"chords\":[{"));
+}
+
 TEST ("a chart brings its time signature with it")
 {
     /*  iReal Pro writes the metre into the body of the link as a T token, not

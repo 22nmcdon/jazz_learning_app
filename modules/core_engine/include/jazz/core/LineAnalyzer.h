@@ -3,6 +3,7 @@
 #include "jazz/core/ChordSymbol.h"
 #include "jazz/core/Rhythm.h"
 #include "jazz/core/ScaleSuggester.h"
+#include "jazz/core/Voicing.h"
 
 #include <cstddef>
 #include <optional>
@@ -186,6 +187,79 @@ struct LineNote
     bool struckWithPrevious {};
 };
 
+/** One chord in a line, read as a chord.
+
+    The reading the note-by-note one cannot give, and the reason it cannot is
+    not that it lacks the notes - it has every one of them, and colours and
+    counts each correctly. It is that a chord is not a fact about any of its
+    notes. Four notes over Dm7 that are each a scale tone may be an Ebdim7
+    passing chord or may be nothing at all, and nothing said about the Eb on
+    its own distinguishes those.
+
+    So this is *additive*, exactly like `at` above: every note of a chord is
+    still read, coloured, counted and scored on its own, the numbers are the
+    numbers they always were, and a line with nothing struck together never
+    produces one of these. What it adds is words about the gesture, and words
+    only - see the note on `LineStats::score()`.
+
+    **The top note is the line.** A player soloing in block chords plays the
+    melody in the top voice and harmonises underneath it, so that is the note
+    the reading leads with and the rest is what was put under it. Read the
+    other way round - as a chord that happens to have a note on top - it says
+    the same thing about a voicing whichever of its notes the line was
+    actually singing, which is the half a soloist came for.
+
+    Read by `VoicingAnalyzer` and `ChordIdentifier` rather than by anything
+    new here. Those already answer "what is this set of notes, and does it say
+    the symbol" - `LineAnalyzer`'s own note above says a voicing is a thing and
+    a line is a stream, and the way to keep that true is to hand the thing to
+    the thing that reads things, not to grow a second chord reader inside the
+    stream.
+*/
+struct LineChord
+{
+    std::vector<int> midiNotes;   ///< low to high, however they were struck
+    int measureIndex {};
+
+    /** The bar's chord, as written - what this was played *over*. */
+    std::string chordSymbol;
+
+    /** How the hand laid it out, as `VoicingAnalyzer` classifies it. */
+    VoicingType type {};
+    std::string typeName;
+
+    /** The top note: the one the line is on, and what it is over the bar. */
+    int melodyNote {};
+    std::string melodyDegree;
+    NoteColour melodyColour {};
+
+    /** The notes carry the bar's chord: its guide tones are there and nothing
+        is outside it. **Not a pass mark.** A block-chord soloist plays
+        diminished and chromatic chords through a bar on purpose, and the
+        reading below says what those *are* rather than that they are not the
+        symbol. Nothing here scores a chord, and nothing should. */
+    bool saysTheChord {};
+
+    /** What the notes spell when they do not spell the bar's chord - the
+        passing diminished, the chord a semitone above, the dominant being
+        approached. Empty when they do, and empty when no name accounts for
+        them, which is a real answer for a cluster and not a failure. */
+    std::string spelled;
+
+    /** The notes outside both the chord and its scale. */
+    std::vector<int> outsideNotes;
+
+    /** What the notes come to, as a sentence: "A rootless left-hand voicing -
+        that says Dm7", "That reads as Ebdim7 over Dm7". The half of the
+        reading that is about the chord rather than about the note on top. */
+    std::string verdict;
+
+    /** The whole of it - the note on top, then the verdict. Exactly
+        `"<melody phrase>. " + verdict`, so a shell wanting the two halves
+        separately takes `verdict` rather than splitting this one. */
+    std::string reading;
+};
+
 /** How a stretch of line divided up. Counts rather than percentages: a
     percentage of nothing is not zero, it is nothing, and the difference matters
     at the start of a take.
@@ -332,6 +406,28 @@ struct TakeSummary
         counted, coloured and scored exactly like any other note. */
     int chordsPlayed {};
     int chordVoicesResolved {};
+
+    /** Of `chordsPlayed`, the ones whose notes carried the bar's own chord.
+
+        The rest are not mistakes and the gap between the two numbers is not an
+        error rate - a chord that reads as something else over the bar is the
+        whole vocabulary of block-chord playing. It is here so the summary can
+        say which of the two things the player was doing, since a take of
+        diminished passing chords and a take of the chart's own harmony in
+        four voices are different practice and look identical in every other
+        number on this struct. */
+    int chordsSpellingTheBar {};
+
+    /** The shape played most, named - "two-handed rootless voicing". Empty
+        when no chords were played, and settled by a simple count: a take that
+        used two shapes evenly gets whichever came first, which is the right
+        amount of confidence for a sentence saying "mostly". */
+    std::string chordShape;
+
+    /** Every chord of the take, in the order they were played, each read
+        against the bar's chord as it stood when it was struck. Empty for a
+        line played one note at a time, which is most of them. */
+    std::vector<LineChord> chords;
 
     int rangeInSemitones() const noexcept
     {
@@ -545,6 +641,21 @@ public:
     */
     const std::vector<LineNote>& strandedByLastNote() const noexcept { return justStranded; }
 
+    /** The chord being played now, when the last attack is one.
+
+        Empty for a line played one note at a time, which is almost all of
+        them: two notes have to have been struck together before there is
+        anything here at all.
+
+        It grows with the chord rather than waiting for it. A shell asking
+        after each note of a four-note voicing gets the reading of two notes,
+        then of three, then of four - the same way `resolvedByLastNote()`
+        accumulates across an attack, and for the same reason: nothing may
+        buffer a note to see what arrives next, so the reading improves in
+        front of the player instead of appearing late.
+    */
+    std::optional<LineChord> chordSoFar() const noexcept { return currentChord; }
+
     const std::vector<LineNote>& notes() const noexcept { return played; }
 
     /** What the take has done on one bar so far. Zeroed stats for a bar that
@@ -593,6 +704,12 @@ private:
     /** Rebuilds the two public lists from the indices behind them. */
     void publishJust (const std::vector<LineNote>& line);
 
+    /** Reads one attack as a chord. Empty for an attack of one note - a line
+        is not a chord - and for a span this cannot read against a chord. */
+    static std::optional<LineChord> readChord (const std::vector<LineNote>& line,
+                                               AttackSpan attack,
+                                               const ChordSymbol& chord);
+
     Options options;
 
     struct Target
@@ -628,6 +745,26 @@ private:
 
     std::vector<LineNote> justResolved;
     std::vector<LineNote> justStranded;
+
+    /*  The attack in progress, read as a chord, and every chord of the take.
+
+        Both are worked out as the notes arrive rather than in `summary()`,
+        because a chord has to be read against the chord the player was looking
+        at when they struck it. Reharmonise-as-you-play moves a bar's symbol
+        mid-take, and a summary re-reading the take's first chord against the
+        bar's *current* symbol would be rewriting history to match a decision
+        made after the fact - which is the same reason `setOptions` leaves the
+        notes already played with the reading they were given.
+
+        `currentChordBegin` is where in the line the attack being read starts,
+        so a chord growing from two notes to four replaces its own entry
+        instead of leaving three. */
+    static constexpr std::size_t noChordInProgress = static_cast<std::size_t> (-1);
+
+    std::optional<LineChord> currentChord;
+    std::vector<LineChord> takeChords;
+    std::size_t currentChordBegin { noChordInProgress };
+
     bool taking {};
 
     /*  Where the note now being played fell, for the moment it takes `play()`

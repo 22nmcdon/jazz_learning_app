@@ -120,9 +120,6 @@ ordered.
 - **PDF reading and printing in the JUCE app.** The engine's reader is shared and
   format-agnostic; the app simply lacks a PDF text-extraction library. This is a
   dependency decision, not a design one.
-- **Chordal (not line) reading in solo practice.** `LineAnalyzer` reads notes
-  one at a time and already knows which were struck together; block-chord
-  *reading* is a different question from the per-voice reading it does now.
 - **Metronome jitter.** Not investigated. Every beat time is an origin plus a
   beat count at one spacing (see `CLAUDE.md`), so start by checking whether the
   jitter is in the scheduling or in the reporting.

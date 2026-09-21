@@ -1570,3 +1570,209 @@ TEST ("the window without a take holds whole chords, not three notes of one")
     CHECK (analyzer.strandedByLastNote().empty());
     CHECK (analyzer.notes().empty());           // still no take: nothing counted
 }
+
+//==============================================================================
+// Chords in a line, read as chords. The per-note reading above is untouched by
+// every one of these: a chord reading is words about a gesture, added to the
+// notes rather than taken out of them.
+
+TEST ("a chord in a line is read as a chord, and a line is not")
+{
+    /*  The whole distinction. Two notes struck together are a thing with a
+        name; the same two notes one after the other are two notes, and asking
+        what chord they spell would be inventing a gesture the player did not
+        make. */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.startTake();
+
+    analyzer.play (53);
+    CHECK (! analyzer.chordSoFar().has_value());
+
+    analyzer.play (57, Attack::withPrevious);
+    CHECK (analyzer.chordSoFar().has_value());
+
+    // And a fresh note after it is a line again, not a chord that grew.
+    analyzer.play (60);
+    CHECK (! analyzer.chordSoFar().has_value());
+}
+
+TEST ("a chord's reading leads with the note on top")
+{
+    /*  A block-chord soloist harmonises downwards from the melody, so the note
+        the reading is about is the highest one - whichever order the keys went
+        down in. */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.startTake();
+
+    playChord (analyzer, { 64, 53, 60, 57 });   // E4 struck first, still on top
+
+    const auto read = analyzer.chordSoFar();
+    CHECK (read.has_value());
+    CHECK_EQ (read->melodyNote, 64);
+    CHECK_EQ (read->melodyDegree, std::string ("9"));
+    CHECK (read->reading.find ("E4 on top") == 0);
+}
+
+TEST ("a voicing that carries the bar says so, and names its shape")
+{
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.startTake();
+
+    playChord (analyzer, { 53, 57, 60, 64 });   // F A C E - rootless Dm9
+
+    const auto read = analyzer.chordSoFar();
+    CHECK (read.has_value());
+    CHECK (read->saysTheChord);
+    CHECK (read->spelled.empty());              // it spells the bar, so there is nothing else to say
+    CHECK (read->type == VoicingType::rootlessLeftHand);
+    CHECK (read->reading.find ("says Dm7") != std::string::npos);
+}
+
+TEST ("a passing chord is named rather than marked wrong")
+{
+    /*  The reading this feature exists for. Ebdim7 through a bar of Dm7 is
+        vocabulary, not a miss, and the useful thing to say about it is what it
+        was - which nothing said about any one of its notes can get to. */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.startTake();
+
+    playChord (analyzer, { 51, 54, 57, 60 });   // Eb Gb A C
+
+    const auto read = analyzer.chordSoFar();
+    CHECK (read.has_value());
+    CHECK (! read->saysTheChord);
+    CHECK_EQ (read->spelled, std::string ("Ebdim7"));
+    CHECK (read->reading.find ("reads as Ebdim7 over Dm7") != std::string::npos);
+
+    // Nothing anywhere in it calls the chord wrong.
+    CHECK (read->reading.find ("wrong") == std::string::npos);
+}
+
+TEST ("the reading grows with the chord instead of waiting for it")
+{
+    /*  A four-note voicing arrives as four calls and no shell buffers them, so
+        the reading improves in front of the player. What it must not do is
+        leave three chords behind where one was played. */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Cmaj7"));
+    analyzer.startTake();
+
+    playChord (analyzer, { 48, 52 });
+    CHECK_EQ (static_cast<int> (analyzer.chordSoFar()->midiNotes.size()), 2);
+
+    analyzer.play (55, Attack::withPrevious);
+    analyzer.play (59, Attack::withPrevious);
+
+    CHECK_EQ (static_cast<int> (analyzer.chordSoFar()->midiNotes.size()), 4);
+    CHECK_EQ (static_cast<int> (analyzer.summary().chords.size()), 1);
+}
+
+TEST ("a chord is read against the bar as it was, not as it has become")
+{
+    /*  Reharmonise-as-you-play moves a bar's symbol in the middle of a take.
+        The notes already played keep the reading they were given, and so does
+        the chord they were struck as - re-reading it against the new symbol
+        would be rewriting history to match a decision made afterwards. */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.startTake();
+
+    playChord (analyzer, { 53, 57, 60, 64 });
+
+    analyzer.setTarget (0, chordFrom ("Db7"));   // the bar is reharmonised under them
+
+    CHECK_EQ (static_cast<int> (analyzer.summary().chords.size()), 1);
+    CHECK_EQ (analyzer.summary().chords.front().chordSymbol, std::string ("Dm7"));
+}
+
+TEST ("a chord across a barline is two gestures, and neither is a chord")
+{
+    /*  The attack already refuses to cross a bar - two notes read against
+        different bars were played against different chords. So there is
+        nothing for the chord reading to be about either. */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.startTake();
+
+    analyzer.play (53);
+
+    analyzer.setTarget (1, chordFrom ("G7"));
+    analyzer.play (57, Attack::withPrevious);
+
+    CHECK (! analyzer.chordSoFar().has_value());
+    CHECK (analyzer.summary().chords.empty());
+}
+
+TEST ("the same key twice in one gesture is a held note, not a chord")
+{
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.startTake();
+
+    playChord (analyzer, { 53, 53 });
+
+    CHECK (! analyzer.chordSoFar().has_value());
+}
+
+TEST ("a chord read against nothing is not read at all")
+{
+    /*  A set of notes has a name of its own, but this is a reading of a chord
+        *over a bar* and there is no bar. The notes are still counted and
+        coloured exactly as they always were. */
+    LineAnalyzer analyzer;
+    analyzer.startTake();
+
+    playChord (analyzer, { 53, 57, 60, 64 });
+
+    CHECK (! analyzer.chordSoFar().has_value());
+    CHECK_EQ (analyzer.stats().total(), 4);
+}
+
+TEST ("the take says what the chords were, not only how many")
+{
+    /*  Two takes with the same chord count, the same resolutions and the same
+        score - one playing the chart's own harmony in four voices, the other
+        playing the chords in between them. Until this was said back, nothing
+        in the summary could tell them apart. */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.startTake();
+
+    playChord (analyzer, { 53, 57, 60, 64 });   // says Dm7
+    playChord (analyzer, { 51, 54, 57, 60 });   // Ebdim7 over it
+    analyzer.endTake();
+
+    const auto take = analyzer.summary();
+
+    CHECK_EQ (take.chordsPlayed, 2);
+    CHECK_EQ (take.chordsSpellingTheBar, 1);
+    CHECK_EQ (take.chordShape, std::string ("rootless left-hand voicing"));
+    CHECK (mentions (take, "1 of 2 chords carried the bar's own harmony"));
+    CHECK (mentions (take, "is not a miss"));
+}
+
+TEST ("reading a chord adds words and no numbers")
+{
+    /*  The rule this file is built on, applied to one more reading. A chord
+        that does not spell the bar costs the take nothing: every note of it is
+        counted, coloured and scored exactly as the same note played on its own
+        would be.  */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, chordFrom ("Dm7"));
+    analyzer.startTake();
+
+    playChord (analyzer, { 51, 54, 57, 60 });   // Ebdim7: Eb and Gb are outside D dorian
+    analyzer.endTake();
+
+    const auto take = analyzer.summary();
+
+    CHECK (! analyzer.summary().chords.front().saysTheChord);
+    CHECK_EQ (take.overall.total(), 4);
+    CHECK_EQ (take.overall.chordTones, 2);      // A and C
+    CHECK_EQ (take.overall.outside, 2);         // Eb and Gb, which nothing took home
+    CHECK_EQ (take.overall.score(), statsOf (2, 0, 2).score());
+}

@@ -2064,7 +2064,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           <div class="menu-group">
             <span class="menu-title">About</span>
             <div class="colophon">
-              <span>Engine: <code>modules/core_engine</code> - 451 unit tests, no JUCE.</span>
+              <span>Engine: <code>modules/core_engine</code> - 464 unit tests, no JUCE.</span>
               <span id="colophonEngine"></span>
               <span id="colophonFraming"></span>
               <span id="colophonBuild"></span>
@@ -2568,9 +2568,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <li data-mode="solo"><b>Take the target from both sides</b>
         <span>- above, below, then the note - and that is an <b>enclosure</b>, with a colour
         of its own. It counts as an approach note does.</span></li>
-      <li data-mode="solo"><b>Each voice of a chord is read on its own way home.</b>
-        <span>Sliding a voicing chromatically into the next is several lines at once. Needs
-        a MIDI keyboard.</span></li>
+      <li data-mode="solo"><b>A chord is read as voices, and as a chord.</b>
+        <span>Each voice finds its own way home - sliding a voicing into the next is several
+        lines at once - and what the notes came to is named under the one on top. Needs a
+        MIDI keyboard.</span></li>
       <li data-mode="solo"><b>The vocabulary you work out of</b>
         <span>comes from <i>Practice</i> - the modes, melodic minor, bebop, the pentatonics.</span></li>
     </ul>
@@ -5056,6 +5057,36 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
                + (note.wantsToReachDegree ? " - " + degreeName(note.wantsToReachDegree) : "");
 
     el.soloAgainst.textContent = against ? against + "." : "";
+
+    /*  A chord, when this note turned out to be part of one.
+
+        The per-note reading above is still true and still counted - nothing
+        here takes a note out of the numbers. What changes is which true thing
+        is worth the space: once the fourth key of a voicing is down, "Eb4 - a
+        b9, outside" is the least interesting reading on the page, and the one
+        the player wants is what the four notes came to.
+
+        The line's note is the one on **top**, because a player soloing in
+        block chords harmonises downwards from the melody - so that is the note
+        in the big hand, rather than whichever key happened to arrive last. The
+        words are the engine's; the page picks which half goes where and writes
+        none of them.  */
+    var voicing = result.voicing;
+
+    if (voicing) {
+      el.soloNote.textContent = "";
+      el.soloNote.dataset.colour = voicing.melodyColour;
+
+      var top = document.createElement("b");
+      top.textContent = voicing.melodyName;
+      el.soloNote.appendChild(top);
+
+      el.soloNote.appendChild(document.createTextNode(
+        " - " + (voicing.melodyDegree ? degreeName(voicing.melodyDegree) + ", " : "")
+        + "on top of " + voicing.notes.length + " notes struck together."));
+
+      el.soloAgainst.textContent = voicing.verdict;
+    }
 
     // What became of the note the line left open. One chip, in one place, in
     // the colour of the answer - because the answer is about a note one or two

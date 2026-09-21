@@ -283,3 +283,53 @@ outside — which is what it sounds like.
   was doing, not so it can weigh it. The one rhythmic adjustment: a chord
   isn't passed through by its own notes — what says how long the line
   stayed there is the next thing *struck*.
+
+### Reading the chord itself
+Everything above is the line reading applied to a gesture that happens to have
+several notes in it, and it's complete — every note of a voicing is coloured,
+counted and scored exactly as the same note played alone would be. What it
+can't reach is the chord, because **a chord is not a fact about any of its
+notes**. Eb Gb A C over Dm7 is an Ebdim7 passing through; Eb on its own over
+Dm7 is a b9, and no reading of that Eb, however correct, gets to the first
+sentence.
+
+So `LineAnalyzer::chordSoFar()` reads the attack as a chord, and `TakeSummary`
+carries every chord of the take.
+
+- **Nothing new reads a chord.** The shape comes from
+  `VoicingAnalyzer::classify`, whether the notes carry the bar's chord from
+  `VoicingAnalyzer::analyse`, and what they spell instead from
+  `ChordIdentifier`. `LineAnalyzer`'s own header says a voicing is a thing and
+  a line is a stream; the way to keep that true is for the chord half never to
+  grow its own idea of what a shell voicing is. `readChord` arranges three
+  readings and writes a sentence — that's the whole of it.
+- **The top note is the line.** A block-chord soloist harmonises downwards from
+  the melody, so the reading leads with the highest note and the rest is what
+  was put under it. Read the other way round it says the same thing about a
+  voicing whichever of its notes the player was actually singing, which is the
+  half they came for. Its colour and degree are taken from the reading that
+  note already has rather than worked out twice.
+- **`saysTheChord` is not a pass mark**, and the gap between it and
+  `chordsPlayed` is not an error rate. The chords *between* the chart's own are
+  most of what block-chord playing is made of, so a voicing that doesn't spell
+  the bar gets named — `spelled` is what it was — rather than marked. Both
+  numbers are on the summary so it can say which of the two things a take was;
+  neither touches the score, and **no chord is scored anywhere**. Same rule as
+  rhythm and voice-leading, one reading further out.
+- **Read when struck, not when summarised.** Reharmonise-as-you-play moves a
+  bar's symbol mid-take, so a summary re-reading the take's first voicing
+  against the bar's *current* chord would be rewriting history to match a
+  decision made afterwards — the same reason `setOptions` leaves the notes
+  already played with the reading they were given. Each chord is read against
+  what was on the stand when it was struck, and kept.
+- **It grows with the chord rather than waiting for it.** Four keys arrive as
+  four calls and nothing buffers them, so the reading goes two notes, three,
+  four in front of the player — and replaces its own entry each time, so one
+  voicing leaves one chord behind it and not three.
+- **No examples offered.** The voicing analyser suggests idiomatic
+  alternatives when a voicing could be better, which is the right thing to say
+  to someone drilling a shape and the wrong thing to say to someone mid-line:
+  they aren't trying to play the chart's chord, they're playing over it.
+- **No bar, no reading.** A set of notes has a name of its own, but this is a
+  reading of a chord *over* something. "How does this sit against nothing" is
+  not a question with a chord in it.
