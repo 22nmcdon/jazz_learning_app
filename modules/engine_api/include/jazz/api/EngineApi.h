@@ -59,15 +59,62 @@ std::string idiomaticVoicings (const char* symbol, int anchorNote, const char* p
     played @p previousNotesCsv (empty for the first chord of a tune). */
 std::string compingVoicing (const char* symbol, const char* previousNotesCsv);
 
-/** Every comping style the engine knows, for a shell to build a menu from. */
+/** Every comping style the engine knows, for a shell to build a menu from.
+
+    Each one carries its whole self - the figure included - so a shell can
+    draw a style and hand an edited one back. That is not a second opinion
+    about placement: `compHit` and `compTake` still answer whether a hit is in
+    style, and still nothing else does.
+
+    Two fields are for a shell that stores a style rather than shows it.
+    `ticksPerBeat` is the grid its ticks are counted on, so a stored style can
+    tell that the grid itself moved rather than trusting a version number
+    somebody has to remember to raise. `reference` is the same style as one
+    line of text, ready to pass straight back as the @c styleRef below.
+*/
 std::string compStyles();
+
+/** How the three calls below name a comping style.
+
+    Either a **key** out of `compStyles()` - "charleston" - or a **description**
+    of a style the engine has never seen, which is the string `compStyles()`
+    hands back as `reference`:
+
+    @verbatim
+    custom:<feel>|<fewest>|<most>|<lowest>|<highest>|<variation>|<heldFor>|<slots>
+        <slots> := <slot> (";" <slot>)*
+        <slot>  := <beat>:<tick>:<weight>:<anticipates>:<heldFor>
+    @endverbatim
+
+    Flat text, not JSON, because that is the direction this wire runs: results
+    are JSON because encoding them is the shell's business, inputs are
+    delimited text because the engine has no JSON reader and must not grow one.
+
+    `<feel>` is the word `compStyles()` writes ("eighths", "eighth-note
+    triplets"). `<anticipates>` is 0 or 1, the way every other boolean on this
+    wire crosses. An **empty** `<beat>` means *every* beat, which is how four
+    to the bar is one slot rather than four; a negative one counts back from
+    the end of the bar, which is what keeps "the and of the last beat" the
+    same idea in three as in four. A `<heldFor>` of 0 on a slot means "ask the
+    style". No key, name or summary: the engine needs none of the three to
+    plan or to grade, so the grammar has no free text in it and needs no
+    quoting. What a player calls their own style is the shell's business.
+
+    **The two halves fail differently, on purpose.** An unknown *key* falls
+    back to the first style, which is a promise `compStyleFor` makes: a shell
+    asking for a style that has since been renamed should get comping in some
+    style rather than silence. A malformed *description* is an error, because
+    that is a broken message rather than a renamed style - falling back would
+    comp four to the bar underneath someone who had just written their own
+    figure, which is working-looking, wrong, and impossible to notice.
+*/
 
 /** What a comper plays over a range of bars, in a style, reproducibly.
 
     Positions come back as beat and tick, never as times: the shell owns the
     clock and turns one into the other.
 */
-std::string compPlan (const char* progressionText, const char* styleKey,
+std::string compPlan (const char* progressionText, const char* styleRef,
                       int fromBar, int toBar, int seed);
 
 /** A walking bass line over a range of bars, one note to the beat. Positions
@@ -92,7 +139,7 @@ std::string walkingBass (const char* progressionText, int fromBar, int toBar, in
     @param hitsAlreadyInBar  how many chords are already in this bar. A count,
                  not a judgement - the style decides what it means.
 */
-std::string compHit (const char* progressionText, const char* styleKey,
+std::string compHit (const char* progressionText, const char* styleRef,
                      int measureIndex, int beat, int tick,
                      const char* midiNotesCsv, int hitsAlreadyInBar);
 
@@ -107,7 +154,7 @@ std::string compHit (const char* progressionText, const char* styleKey,
                      about. A bar the take stopped part-way through belongs
                      outside this range.
 */
-std::string compTake (const char* progressionText, const char* styleKey,
+std::string compTake (const char* progressionText, const char* styleRef,
                       int fromBar, int toBar, const char* hitsText);
 
 //==============================================================================

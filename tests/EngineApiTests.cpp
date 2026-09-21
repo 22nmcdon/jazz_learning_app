@@ -18,6 +18,51 @@ namespace
     {
         return json.find (fragment) != std::string::npos;
     }
+
+    /** Just the hits of a comp plan - what the band actually plays.
+
+        Compared instead of the whole reply because the reply also echoes the
+        style's *name*, and a described style deliberately has none to echo: it
+        carries no key, name or summary, which is what keeps its grammar free
+        of quoting. Two plans being the same comp is a question about the
+        hits, and this is the part that answers it.
+    */
+    std::string hitsOf (const std::string& json)
+    {
+        const auto at = json.find ("\"hits\":");
+
+        if (at == std::string::npos)
+            return "(no hits)";
+
+        const auto close = json.find ("}]", at);
+
+        return json.substr (at, close == std::string::npos ? std::string::npos
+                                                          : close + 2 - at);
+    }
+
+    /** One style's `reference` out of `compStyles()`'s answer.
+
+        Read back out of the engine's own reply rather than written here, so
+        the round-trip test holds no second copy of the catalogue - the thing
+        a fixture would quietly become.
+    */
+    std::string referenceFor (const std::string& styles, const std::string& key)
+    {
+        const auto at = styles.find ("\"key\":\"" + key + "\"");
+
+        if (at == std::string::npos)
+            return {};
+
+        const std::string marker = "\"reference\":\"";
+        const auto from = styles.find (marker, at);
+
+        if (from == std::string::npos)
+            return {};
+
+        const auto begin = from + marker.size();
+
+        return styles.substr (begin, styles.find ('"', begin) - begin);
+    }
 }
 
 TEST ("a chart comes back as JSON the page can read")
@@ -611,6 +656,113 @@ TEST ("a slot says what it means, not the nearest number to it")
     // And the same two, in the flat form a shell hands back.
     CHECK (contains (json, "\"reference\":\"custom:beats|"));
     CHECK (contains (json, ";-1:"));
+}
+
+TEST ("a style described plays exactly what the same style named plays")
+{
+    /*  The load-bearing one. `reference` is written by the engine and read
+        back by the engine, so if the two ever disagree - a field added to one
+        side and not the other, an optional flattened on the way out - this is
+        where it shows, for every style that ships rather than for one
+        hand-written fixture.
+
+        Byte for byte, because `compPlan` is seeded and reproducible: two runs
+        of the same style over the same bars at the same seed are the same
+        comp, and anything less than identical means a field did not survive.
+    */
+    const auto styles = compStyles();
+
+    for (const auto& key : { "four", "basie", "charleston", "ballad" })
+    {
+        // The engine's own description of that style, out of its own answer.
+        const auto reference = referenceFor (styles, key);
+
+        CHECK (reference.rfind ("custom:", 0) == 0);
+
+        const auto named = compPlan ("| Dm7 | G7 | Cmaj7 | A7 |", key, 0, 3, 9);
+        const auto described = compPlan ("| Dm7 | G7 | Cmaj7 | A7 |", reference.c_str(), 0, 3, 9);
+
+        // The style's own name is the one thing that cannot survive, because
+        // a description deliberately carries no name to survive with.
+        CHECK_EQ (hitsOf (described), hitsOf (named));
+    }
+}
+
+TEST ("and a described style that differs plays differently")
+{
+    /*  The negative control, and without it the test above is satisfied by a
+        reader that ignored the description and fell back to the catalogue -
+        which is exactly the bug it is there to catch.
+    */
+    const auto onOne   = compPlan ("| Dm7 | G7 |", "custom:eighths|0|3|48|79|0|12|0:0:100:0:0", 0, 1, 9);
+    const auto onThree = compPlan ("| Dm7 | G7 |", "custom:eighths|0|3|48|79|0|12|2:0:100:0:0", 0, 1, 9);
+
+    CHECK (contains (onOne, "\"ok\":true"));
+    CHECK (contains (onThree, "\"ok\":true"));
+
+    // The same figure moved two beats over. If the description were being
+    // ignored these would be the same comp - which is the bug this catches.
+    CHECK (hitsOf (onOne) != hitsOf (onThree));
+    CHECK (contains (onOne, "\"beat\":0"));
+    CHECK (contains (onThree, "\"beat\":2"));
+}
+
+TEST ("a description that cannot be read is an error, not a shrug")
+{
+    /*  A broken message is not a renamed style. Falling back would comp four
+        to the bar underneath someone who had just written their own figure -
+        working-looking, wrong, and impossible to notice.
+    */
+    for (const auto& broken : { "custom:",                                     // nothing at all
+                                "custom:quavers|0|3|48|79|20|24|0:0:90:0:0",   // a feel nobody writes
+                                "custom:eighths|0|3|48|79|20|24|",             // a figure with no slots
+                                "custom:eighths|0|3|48|79|20|24|0:900:90:0:0", // a tick off the grid
+                                "custom:eighths|0|3|48|79|20|24|0:0:-5:0:0",   // a weight below nothing
+                                "custom:eighths|0|3|79|48|20|24|0:0:90:0:0",   // register upside down
+                                "custom:eighths|0|3|48|200|20|24|0:0:90:0:0",  // a note off the keyboard
+                                "custom:eighths|0|3|48|79|20|24" })            // a field short
+    {
+        const auto json = compPlan ("| Dm7 |", broken, 0, 0, 1);
+
+        CHECK (contains (json, "\"ok\":false"));
+
+        // Named, so this cannot pass by falling back and looking successful.
+        CHECK (! contains (json, "\"hits\""));
+    }
+}
+
+TEST ("but an unknown style name still comps, which is the opposite rule")
+{
+    /*  These two are each other's control. A key is a name that may have been
+        renamed since a shell last looked, and the promise there is comping in
+        some style rather than silence; a description is a message, and the
+        promise there is that a broken one is refused. A change that made both
+        strict, or both forgiving, would break one of the two.
+    */
+    const auto json = compPlan ("| Dm7 |", "no such style", 0, 0, 1);
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"hits\""));
+}
+
+TEST ("a described style grades a player too, not only the band")
+{
+    /*  Both directions, or the editor would let you write a figure the band
+        plays and the reading still marks against something else.
+
+        The and of two is the Charleston's second slot and is nowhere in a
+        style whose only slot is the downbeat - so the same hit reads one way
+        under each, which is the whole of what it means for a description to
+        reach the evaluator.
+    */
+    const auto onlyOne = "custom:eighths|0|3|48|79|0|12|0:0:100:0:0";
+
+    const auto inStyle = compHit ("| Dm7 | G7 |", "charleston", 0, 1, 12, "53,57,60,64", 0);
+    const auto outside = compHit ("| Dm7 | G7 |", onlyOne, 0, 1, 12, "53,57,60,64", 0);
+
+    CHECK (contains (inStyle, "\"placement\":\"figure\""));
+    CHECK (contains (outside, "\"ok\":true"));
+    CHECK (! contains (outside, "\"placement\":\"figure\""));
 }
 
 TEST ("a comped chord is read back over the wire")

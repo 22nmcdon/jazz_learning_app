@@ -823,6 +823,213 @@ std::string compingVoicing (const char* symbol, const char* previousNotesCsv)
     back. What a player calls their own style is the page's business, and
     leaving the strings out is what keeps this grammar free of quoting.
 */
+namespace
+{
+    /*  Reading a style in, and writing one out. Internal: the flat grammar
+        is this file's business, and `splitOn`/`numberIn` are names general
+        enough that they should not be anyone else's.  */
+/** The prefix that marks a style described rather than named.
+
+    A catalogue key is a bare word, so the two can never be confused - but the
+    marker is a stated one rather than a sniff at the text's shape, because
+    this wire's convention for "this argument can mean a second thing" is a
+    documented sentinel and not an inference. `soloPlayNote`'s beat of -1 and
+    `exportIRealPro`'s `beats <= 0` are the same move.
+*/
+const std::string describedStylePrefix = "custom:";
+
+/** More slots than any figure a bar could want, so a broken message cannot
+    ask for a million of them. Eight beats of sixteenths is 32; this is twice
+    that and still nowhere near a number that costs anything. */
+constexpr int mostSlotsInAFigure = 64;
+
+/** The longest a chord may ring, in ticks: sixteen beats, or four bars of
+    four. A style that holds longer is not a style, it is a drone. */
+constexpr int longestRing = ticksPerBeat * 16;
+
+/** Splits on one character, keeping empty fields - an empty field is a value
+    in this grammar, not a gap. */
+std::vector<std::string> splitOn (const std::string& text, char separator)
+{
+    std::vector<std::string> fields { "" };
+
+    for (auto c : text)
+    {
+        if (c == separator)
+            fields.push_back ("");
+        else
+            fields.back() += c;
+    }
+
+    return fields;
+}
+
+/** A whole number inside a stated range, or nothing at all.
+
+    Refuses rather than clamps, and refuses trailing rubbish as well as an
+    out-of-range value. A tick of 900 is not a tick this reader should round
+    down to 23 - it is a message that did not mean what it says, and comping
+    something plausible out of it is how a shell's bug becomes a mystery about
+    the band. Clamping belongs where a value is *computed*; this is where one
+    is *received*.
+*/
+std::optional<int> numberIn (const std::string& text, int low, int high)
+{
+    if (text.empty())
+        return {};
+
+    try
+    {
+        std::size_t read = 0;
+        const auto value = std::stoi (text, &read);
+
+        if (read != text.size() || value < low || value > high)
+            return {};
+
+        return value;
+    }
+    catch (...)
+    {
+        return {};
+    }
+}
+
+/** A style written out by `styleReference`, read back.
+
+    The exact inverse, and the pair is tested by round-tripping the catalogue
+    rather than by hand-written fixtures - so a field added to one side and
+    not the other fails immediately instead of silently travelling as a
+    default.
+
+    False on anything malformed, and false all the way rather than partly: a
+    caller gets a style or an error, never a style with one field quietly
+    filled in from a default it did not ask for.
+*/
+bool readStyle (const std::string& text, CompStyleDefinition& into)
+{
+    const auto fields = splitOn (text, '|');
+
+    if (fields.size() != 8)
+        return false;
+
+    const auto feel = subdivisionFrom (fields[0]);
+
+    if (! feel.has_value())
+        return false;
+
+    const auto fewest    = numberIn (fields[1], 0, mostSlotsInAFigure);
+    const auto most      = numberIn (fields[2], 0, mostSlotsInAFigure);
+    const auto lowest    = numberIn (fields[3], 0, 127);
+    const auto highest   = numberIn (fields[4], 0, 127);
+    const auto variation = numberIn (fields[5], 0, 100);
+    const auto heldFor   = numberIn (fields[6], 1, longestRing);
+
+    if (! fewest || ! most || ! lowest || ! highest || ! variation || ! heldFor)
+        return false;
+
+    // A register with its ends the wrong way round is not a narrow register,
+    // it is two numbers that were not meant to be these two numbers.
+    if (*lowest > *highest)
+        return false;
+
+    CompStyleDefinition built;
+    built.feel = *feel;
+    built.fewestPerBar = *fewest;
+    built.mostPerBar = *most;
+    built.lowestNote = *lowest;
+    built.highestNote = *highest;
+    built.variation = *variation;
+    built.heldFor = *heldFor;
+
+    for (const auto& one : splitOn (fields[7], ';'))
+    {
+        const auto parts = splitOn (one, ':');
+
+        if (parts.size() != 5)
+            return false;
+
+        CompSlot slot;
+
+        /*  An empty beat is every beat, which is a value rather than a missing
+            one - it is how four-to-the-bar is a single slot. Every number is
+            already taken by something real, negatives included, so "no number
+            at all" is the only spelling left for it. */
+        if (! parts[0].empty())
+        {
+            const auto beat = numberIn (parts[0], -mostSlotsInAFigure, mostSlotsInAFigure);
+
+            if (! beat)
+                return false;
+
+            slot.beat = *beat;
+        }
+
+        const auto tick   = numberIn (parts[1], 0, ticksPerBeat - 1);
+        const auto weight = numberIn (parts[2], 0, 100);
+        const auto pushes = numberIn (parts[3], 0, 1);
+        const auto rings  = numberIn (parts[4], 0, longestRing);
+
+        if (! tick || ! weight || ! pushes || ! rings)
+            return false;
+
+        slot.tick = *tick;
+        slot.weight = *weight;
+        slot.anticipates = *pushes == 1;
+
+        // Zero is "ask the style", which is what the optional's empty case
+        // means. A slot that rings for no ticks is not a thing a style says.
+        if (*rings > 0)
+            slot.heldFor = *rings;
+
+        built.slots.push_back (slot);
+
+        if (static_cast<int> (built.slots.size()) > mostSlotsInAFigure)
+            return false;
+    }
+
+    // A figure with nothing in it is not a figure. The catalogue's sparsest
+    // style still has three slots, and its emptiest bar comes from the density
+    // window rather than from having nothing to play.
+    if (built.slots.empty())
+        return false;
+
+    into = std::move (built);
+
+    return true;
+}
+
+/** A style reference: the name of one the engine ships, or a description of
+    one it has never seen.
+
+    The two halves fail differently, and deliberately.
+
+    An unknown **key** still falls back to the first style, because that is a
+    promise `compStyleFor` makes in its own doc comment - a shell asking for a
+    style that has since been renamed should get comping in some style rather
+    than silence.
+
+    A malformed **description** is an error. It is not a renamed style, it is
+    a broken message, and falling back would comp four-to-the-bar underneath
+    someone who had just written their own figure - working-looking, wrong,
+    and impossible to notice. `readHitList` already states the principle: a
+    caller should be able to refuse the lot rather than silently grade
+    something shorter than what was played.
+
+    By value, because a described style has no storage to hand out a reference
+    to. The copy is a few ints and a small vector, on calls that have just
+    parsed a whole chart.
+*/
+bool styleFrom (const std::string& reference, CompStyleDefinition& into)
+{
+    if (reference.rfind (describedStylePrefix, 0) != 0)
+    {
+        into = compStyleFor (reference);
+        return true;
+    }
+
+    return readStyle (reference.substr (describedStylePrefix.size()), into);
+}
+
 std::string styleReference (const CompStyleDefinition& style)
 {
     auto text = "custom:" + subdivisionName (style.feel)
@@ -910,6 +1117,7 @@ std::string styleJson (const CompStyleDefinition& style)
            })
          + "}";
 }
+}
 
 std::string compStyles()
 {
@@ -919,7 +1127,7 @@ std::string compStyles()
                  + "}");
 }
 
-std::string compPlan (const char* progressionText, const char* styleKey,
+std::string compPlan (const char* progressionText, const char* styleRef,
                       int fromBar, int toBar, int seed)
 {
     const auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
@@ -927,7 +1135,10 @@ std::string compPlan (const char* progressionText, const char* styleKey,
     if (! parsed.ok())
         return hold (jsonError (parsed.error));
 
-    const auto& style = compStyleFor (styleKey != nullptr ? styleKey : "");
+    CompStyleDefinition style;
+
+    if (! styleFrom (styleRef != nullptr ? styleRef : "", style))
+        return hold (jsonError ("That comping style could not be read."));
     const auto plan = core::compPlan (*parsed.chart, style, fromBar, toBar,
                                       static_cast<std::uint32_t> (seed));
 
@@ -1106,7 +1317,7 @@ namespace
     }
 }
 
-std::string compHit (const char* progressionText, const char* styleKey,
+std::string compHit (const char* progressionText, const char* styleRef,
                      int measureIndex, int beat, int tick,
                      const char* midiNotesCsv, int hitsAlreadyInBar)
 {
@@ -1115,7 +1326,10 @@ std::string compHit (const char* progressionText, const char* styleKey,
     if (! parsed.ok())
         return hold (jsonError (parsed.error));
 
-    const auto& style = compStyleFor (styleKey != nullptr ? styleKey : "");
+    CompStyleDefinition style;
+
+    if (! styleFrom (styleRef != nullptr ? styleRef : "", style))
+        return hold (jsonError ("That comping style could not be read."));
 
     PlayedHit hit;
     hit.measureIndex = measureIndex;
@@ -1131,7 +1345,7 @@ std::string compHit (const char* progressionText, const char* styleKey,
                  + ",\"hit\":" + hitReadingJson (reading) + "}");
 }
 
-std::string compTake (const char* progressionText, const char* styleKey,
+std::string compTake (const char* progressionText, const char* styleRef,
                       int fromBar, int toBar, const char* hitsText)
 {
     const auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
@@ -1144,7 +1358,10 @@ std::string compTake (const char* progressionText, const char* styleKey,
     if (! readHitList (hitsText != nullptr ? hitsText : "", hits))
         return hold (jsonError ("Not a list of comped chords"));
 
-    const auto& style = compStyleFor (styleKey != nullptr ? styleKey : "");
+    CompStyleDefinition style;
+
+    if (! styleFrom (styleRef != nullptr ? styleRef : "", style))
+        return hold (jsonError ("That comping style could not be read."));
     const auto comp = evaluateComp (*parsed.chart, style, hits, fromBar, toBar);
 
     return hold ("{\"ok\":true,\"style\":" + quoted (style.key)
