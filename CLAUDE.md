@@ -94,6 +94,16 @@ means CSS, not per-platform builds.
   measures the wrong page** — so the check runs a second pass with
   `ascent-override`/`descent-override` forcing taller metrics, which needs no
   network.
+- **There is one settings panel, `#menuPanel`, and it has sections.** Seven of
+  them: Sound, The band, Voicings (chords), Scales (solo), MIDI keyboard, Chart,
+  About. There were two panels in opposite corners and a toolbar above the
+  chart, and nothing said which held what — the band's piano sound and your own
+  were in different panels, both called *Sound*. A new setting goes in a section
+  or starts one; it does not start a second panel. Below 760px the panel is a
+  bottom sheet, which is why it has a `.menu-head` close row — at that width it
+  covers the button that would otherwise close it. The transport's own popover
+  (`#transportButton`) is the one exception and stays where it is: it belongs to
+  the take, not to the settings.
 - **Viewport-relative heights are `dvh`, never `vh`.** On a phone `vh` is the
   window with the browser's own chrome collapsed, and the part that goes under
   it is the bottom of the frame — the dock.
@@ -267,9 +277,10 @@ something finished or assume something unfinished is done:
   anything before — there was no `scrollIntoView`, `scrollTo` or `scrollTop` in
   the file at all, so on a tune longer than the chart zone the mark simply
   rolled off the bottom. The transport is out of the menu and onto a strip of
-  its own (see UI Conventions above). **Still to come** (see `docs/HANDOFF.md`):
-  the two settings dropdowns merged into one panel, the dock foot regrouped, and
-  practice settings remembered across reloads.
+  its own, and the two settings dropdowns and the chart's toolbar are one
+  sectioned panel (see UI Conventions above). **Still to come** (see
+  `docs/HANDOFF.md`): the dock foot regrouped, and practice settings remembered
+  across reloads.
 - **Not built, deliberately open**: personal voicing
   library, ear training, progress tracking beyond current per-take/session
   stats, licks/line suggestions, chordal (not line) reading in solo practice,

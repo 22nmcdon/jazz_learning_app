@@ -94,10 +94,28 @@ hand on the keys. The strip is the same height whatever is showing - most of wha
 needs a clock, and if the row grew when the clock came on it would shove the music down
 under the eye reading it.
 
+Everything that is a setting rather than a gesture is behind one button. **Practice**, top
+right, opens a panel in seven sections - Sound, The band, Voicings, Scales, MIDI keyboard,
+Chart, About. There used to be two panels in opposite corners, and nothing said which held
+what: the band's piano sound was in one and your own was in the other, both of them called
+*Sound*. The chart's own tools - import, reharmonise, edit, restore - were a third place, a
+toolbar above the music. Below 760px the panel becomes a bottom sheet with a close row of
+its own, because at that width it is drawn over the button that would otherwise dismiss it.
+
+Emptying the sheet of everything that was not music is most of what the chart gained:
+
+| | music starts | bars in view at 390x780 |
+|---|---|---|
+| before | 124px into the chart zone | 4/12 |
+| after | 71px | 8/12 |
+
+At 430x860 the chart stopped needing to scroll at all - 572px of content in a 382px zone
+became 382px in 382px.
+
 The desktop app and the browser page are not merely alike: they are the same page. A
 screenshot of one is a screenshot of the other, because there is one file. What differs is
 what is behind it - native C++ in the app, WebAssembly in the browser - and which of the
-two is answering is written in the colophon, at the foot of the chart.
+two is answering is written in the colophon, under *About* in the settings panel.
 
 **Chords** and **Solo**, at the top, are the two things you can practise against that one
 chart. Chord practice asks whether the voicing you played says what the bar says. Solo
@@ -271,7 +289,7 @@ when the horn players it is all stolen from use the range. None of the three tou
 score: they are advice about how a line moves, the score is a reading of where its notes sat,
 and mixing the two would make a number nobody could explain out of one that can be.
 
-**Scale style**, in the Practice menu, is the vocabulary you are working out of: the modes,
+**Scales**, in the settings panel, is the vocabulary you are working out of: the modes,
 melodic minor, harmonic minor, bebop, pentatonics and blues, whole tone and diminished, or
 everything. It decides which scales a bar is offered and which one it is read against, so
 practising the modes over a tune and practising bebop over the same tune are two different
@@ -373,9 +391,9 @@ click agree in both - what the app gives up is a few milliseconds of jitter on t
 
 ### Comping
 
-**Comping** — next to *Reharmonise the tune*, above the chart — is the band behind you. It
-opens on a list of who is playing: **piano comping**, **bass walking** and **drums**, all
-three of which work. The piano and the bass have their own sound pickers, because the band
+**The band**, in the settings panel, is who is playing behind you: **piano comping**,
+**bass walking** and **drums**, all three of which work. The section appears wherever there
+is a band to hear — solo practice, and chord practice once the clock is running. The piano and the bass have their own sound pickers, because the band
 is not playing your instrument; the kit is synthesised in both shells, like the click.
 
 **Comping style** picks what the band plays: *Four to the bar*, *Basie — sparse*,
@@ -695,7 +713,7 @@ the drawn keys it does not, because they latch — a note sounds until you click
 there is nothing for a pedal to hold, and a control that does nothing you can see is one
 nobody can learn.
 
-The Practice menu carries the sound bank: an **electric piano**, a **grand**, or silent. The
+The settings panel's **Sound** section carries the bank: an **electric piano**, a **grand**, or silent. The
 electric piano is synthesised the same way in both shells rather than sampled - one sine
 ringing another, with the modulation dying away faster than the note, so the attack barks and
 the tail settles - the page through Web Audio and the app through its own audio device. A mouse can only press one
@@ -724,9 +742,9 @@ mode and not the other) and what the page is reading (a voicing against a symbol
 against a bar). Every entry is a bold line you can scan and a quieter one underneath saying
 *why*, which is the half that makes open notes and latching keys make sense.
 
-It appears once per mode; the **?** beside the Practice menu brings it back.
+It appears once per mode; the **?** beside the **Practice** button brings it back.
 
-**Import / export**, in the Practice menu, opens a chart that came from somewhere else and
+**Import / export**, under *Chart* in the settings panel, opens a chart that came from somewhere else and
 writes the one on screen back out. Both shells read an iReal Pro link, the `.html` file
 iReal Pro sends when you share a song, or a progression typed as `| Dm7 | G7 | Cmaj7 |`,
 pasted in or picked as a file, and both put an `irealbook://` link back on the clipboard

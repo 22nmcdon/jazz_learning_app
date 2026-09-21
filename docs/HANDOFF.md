@@ -20,7 +20,9 @@ The last four commits restructured the page's layout:
 | `a296503` | Three-zone frame: `body` is a flex column at `100dvh`, a new `.chart-zone` takes the remaining height and scrolls itself, `.dock` stopped being sticky. The rolling bar now brings itself into view — nothing in the page scrolled anything before. |
 | `6bf5152` | Cut the masthead's prose and moved the chart's head into a one-row `.top-bar`. Bars readable went 4/12 → 12/12 at 1280×860 and **0/12 → 12/12** at 430×860. |
 | `603ffd6` | Sectioned the cheat sheet into five tabs so it never has to be scrolled, and added six topics it never covered. |
-| *(this one)* | The transport onto a strip of its own — Static/In time, the metre, the tempo, the take button and the beat dots, all of them out of the Practice menu. What is left of the *Playing* group is one popover off the strip. |
+| `c418613` | The transport onto a strip of its own — Static/In time, the metre, the tempo, the take button and the beat dots, all of them out of the Practice menu. What is left of the *Playing* group is one popover off the strip. |
+| `c4c5eea` | Reserved the strip's height in **both** of the page's typefaces. The first version sized it against the fallback face alone and shipped a chart that moved when the clock came on. |
+| *(this one)* | One settings panel: the comping panel and the chart's toolbar merged into `#menuPanel` in seven sections, and the colophon with them. |
 
 Verify anything you change:
 
@@ -32,43 +34,11 @@ cmake --build build          # the page is copied into the JUCE shell
 
 ---
 
-## The layout work: commits 4 to 7
+## The layout work: commits 5 to 7
 
-Three of seven are done. These four are planned in detail and agreed; the shape
+Four of seven are done. These three are planned in detail and agreed; the shape
 of the finished thing is a top bar with its head and its transport, a chart that
-takes every remaining pixel, and a dock — with **one** settings panel instead of
-two dropdowns in opposite corners.
-
-The problem being solved, so a cold reader can judge the plan rather than just
-follow it: settings live in `#menuPanel` (top right, 310px, seven groups,
-seventeen controls, already scrolling) **and** `#compingPanel` (hanging off the
-chart toolbar, four more groups). Nothing says which holds what. The smoke test
-opens one or the other **38 times** to drive the app — it was 62 before the
-transport left the menu, and the 24 that went were exactly the pairs that
-existed only to reach a control behind a dropdown.
-
-### 4 — One settings panel
-
-Merge `#compingPanel` into `#menuPanel`; delete `#compingWrap`,
-`#compingButton`, `setCompingOpen()` and its listener. The `.menu-wrap`
-outside-click rule keeps working with one panel. Widen to
-`min(420px, calc(100vw - 32px))` and section it: **Sound**, **The band**,
-**Voicings** (chords), **Scales** (solo), **MIDI keyboard**, **Chart**
-(`#ioButton`, `#planButton`, `#editToggle`, `#restoreChart`), **About** (the
-colophon, which is currently parked at the foot of the chart zone). Delete
-`.sheet-tools` and `.tools-right`; `#editor` moves with `#editToggle`. At narrow
-widths, reuse the bottom-sheet pattern the 760px query already gives dialogs.
-
-**This is where the unbuilt features land**, which is most of why it is worth
-doing: the comping style editor and voicing library as dialogs off *The band*
-and *Voicings*, progress tracking off a new *Practice history* section, ear
-training as a section that opens its own exercise the way *Chart* does. The
-current growth pattern — another row in *Playing*, another button in
-`.dock-foot` — is out of road.
-
-All 29 `#compingButton` sites become `#menuButton`; the colophon check must open
-the panel first. Note the strip's own popover (`#transportButton`) is a third
-`.menu-wrap` and stays where it is — it is the take's, not the settings panel's.
+takes every remaining pixel, and a dock.
 
 ### 5 — Regroup the dock foot
 
@@ -78,6 +48,11 @@ Twelve children on one wrapping row become two groups: **actions**
 `#leadLegend`). `#armTake` and `#beatRow` have already left for the strip, so the
 row is ten children rather than twelve. Drop the inline `margin-left: auto` on
 `#clearKeys` in favour of the group split.
+
+**Where the unbuilt features land is settled**: they are sections of
+`#menuPanel`, which is what commit 4 was mostly for. A comping-style editor off
+*The band*, a voicing library off *Voicings*, practice history and ear training
+as sections of their own.
 
 ### 6 — Remember practice settings
 
@@ -168,6 +143,15 @@ DSP undertaking. Do not start it because a feature seems to want it.
 
 Small, verified, and none of them urgent.
 
+- **The band lost its at-a-glance mark.** The old *Comping* button wore
+  `aria-pressed` when any of the three players was on, so you could see the band
+  was playing without opening anything. Merging the panels deleted the button
+  and `updateCompingButton()` with it. Nothing replaced it: the checkboxes say
+  it once the panel is open, and the band says it out loud when it is not. If
+  someone is ever surprised by a band they did not know was on, the answer is a
+  mark on the **Practice** button — but do not add one speculatively, it would
+  be the only thing that button says about its contents.
+
 - **Nothing else on the page is measured in two faces.** The cheat sheet's
   no-scroll checks and the 390px narrow scan are pixel assertions too, and both
   run against whichever face the machine happens to render. They pass today in
@@ -225,6 +209,14 @@ It scans `.top-bar`, `.top-bar-right`, `.transport-clock`, `.transport-take`,
 new container must add that container to the scan**, or the net has a hole in
 it.
 
+- **The settings panel** — that the editor and *Restore original* still work
+  now that they are buttons inside a panel rather than on a toolbar, and that
+  each closes the panel it was pressed from. Three of the four chart tools had
+  no check at all before they moved. Also that every panel opens onto the screen
+  at 390px, **and** that nothing inside one is wider than it is. The second half is the
+  one with teeth: a panel's own box can land perfectly while a row of four chart
+  tools or a long select option hangs off its edge, and the narrow scan cannot
+  see inside a panel that is shut while it runs.
 - **The transport strip** — that the chart's top edge is the same number in
   every corner of mode × In time, at a laptop size and a phone one, **and in two
   typefaces**. The second face is the one that matters: it shipped broken past

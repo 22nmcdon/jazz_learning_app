@@ -907,7 +907,8 @@ try {
       follow". Same list, same descriptions - listing them again in the menu
       would be a second copy of six write-ups to go stale - and the Static /
       In time split decides which question is being asked. */
-  await page.locator("#planButton").click();
+  await page.locator("#menuButton").click();
+  await page.locator("#planButton").click();   // which closes the panel behind it
   await page.waitForSelector("#planDialog[open]", { timeout: 10000 });
 
   const planTitle = (await page.locator("#planTitle").innerText()).trim();
@@ -1006,13 +1007,20 @@ try {
     window.__gains = [];
   });
 
-  /*  Two things sit between this and a bar: the comping panel, which is drawn
-      over the chart it hangs under, and the bar's own dialog, which a second
-      click on the bar already selected opens. Close both, or everything after
-      this is clicking on something else. */
+  /*  Whether the band is on offer at all. It is a section of the settings
+      panel now rather than a button beside the chart, so `isVisible` would be
+      answering "is the panel open" - read the section's own `hidden` instead,
+      which is the thing `applyMode` sets and is true of it whether or not
+      anyone has opened anything. */
+  const bandOffered = () => page.evaluate(() => !document.querySelector("#bandGroup").hidden);
+
+  /*  Two things sit between this and a bar: the settings panel, which at a
+      phone width is drawn over most of the page, and the bar's own dialog,
+      which a second click on the bar already selected opens. Close both, or
+      everything after this is clicking on something else. */
   const goToBar = async (n) => {
-    if (!(await page.locator("#compingPanel").isHidden()))
-      await page.locator("#compingButton").click();
+    if (!(await page.locator("#menuPanel").isHidden()))
+      await page.locator("#menuButton").click();
 
     await bars.nth(n).click();
 
@@ -1020,14 +1028,14 @@ try {
       await page.locator("#dialogClose").click();
   };
 
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   // Three instruments, all three of them playable. This asserted that one was
   // disabled for as long as the drummer was named and not built; the kit is
   // the thing that changed, not the test's opinion of it.
   check("comping offers a band of three, all of them playable",
-        (await page.locator("#compingPanel").isVisible())
-        && (await page.locator("#compingPanel input[type=checkbox]").count()) === 3
-        && (await page.locator("#compingPanel input:disabled").count()) === 0);
+        (await page.locator("#bandGroup").isVisible())
+        && (await page.locator("#bandGroup input[type=checkbox]").count()) === 3
+        && (await page.locator("#bandGroup input:disabled").count()) === 0);
 
   // Two recorded basses, and neither is on the player's own sound menu: nobody
   // practises voicings on a double bass.
@@ -1048,9 +1056,9 @@ try {
 
   // On bar one first: clicking a bar closes whichever panel is open, so the
   // toggle has to be the last thing touched before the sound is read.
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await goToBar(0);
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await forgetSounds();
   await page.locator("#compPiano").check();
   await page.waitForFunction(() => window.__sounded.length >= 8, null, { timeout: 10000 });
@@ -1078,7 +1086,7 @@ try {
   check(`moving on leads the voicing from the last one (${overG7.join(" ")}, ${held} held)`,
         held >= 2);
 
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await page.selectOption("#compSound", "silent");
   await forgetSounds();
   await goToBar(2);
@@ -1089,7 +1097,7 @@ try {
   // The generator's output only means something if it reaches the speakers, so
   // these read the times the page scheduled rather than the plan it was given.
 
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
 
   // The check above left the band silent, and a silent band schedules nothing
   // for these to read.
@@ -1104,7 +1112,7 @@ try {
   // Loop one bar, fast, no count-in, so a few bars go by quickly. The options
   // are selected by value: their labels are bar numbers, and "1" as a label is
   // bar index 0, which is a one-bar loop when you wanted two.
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await page.locator("#transportButton").click();
   await page.uncheck("#countIn");
   await page.selectOption("#loopFrom", { value: "0" });
@@ -1117,10 +1125,10 @@ try {
   /** Rolls a take in one comping style and returns when each chord was struck,
       in beats from the first click. */
   const compRhythmOf = async (style) => {
-    await page.locator("#compingButton").click();
+    await page.locator("#menuButton").click();
     await page.selectOption("#compStyle", style);
     await page.locator("#compPiano").check();
-    await page.locator("#compingButton").click();
+    await page.locator("#menuButton").click();
 
     await forgetSounds();
     await page.keyboard.press("Space");
@@ -1209,10 +1217,10 @@ try {
       choruses of that loop and counts what was actually struck: more shapes
       than there are chords means the band is choosing rather than repeating.
   */
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await page.selectOption("#compStyle", "charleston");
   await page.locator("#compPiano").check();
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
 
   await forgetSounds();
   await page.keyboard.press("Space");
@@ -1258,10 +1266,10 @@ try {
       what is booked is not what is heard - a node stopped before its start
       time never sounds at all, which is exactly how the rest of the bar is
       taken back. */
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await page.locator("#compBass").check();
   await page.locator("#compDrums").check();
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
 
   await forgetSounds();
   await page.keyboard.press("Space");
@@ -1304,17 +1312,17 @@ try {
     () => document.querySelector("#armTake").getAttribute("aria-pressed") === "false",
     null, { timeout: 10000 });
 
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await page.locator("#compBass").uncheck();
   await page.locator("#compDrums").uncheck();
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
 
   /*  The grand piano is a recording where the electric piano is synthesised, so
       the same comp on the same bar comes out of a different kind of node. That
       is the check: not that it made a sound, but that it made it the new way. */
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await page.selectOption("#compSound", { value: "grand" });
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await goToBar(1);
   await forgetSounds();
   await goToBar(0);
@@ -1325,17 +1333,17 @@ try {
         (await page.evaluate(() =>
           window.__sounded.filter((s) => s.type === "sample").length)) >= 4);
 
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await page.selectOption("#compSound", { value: "ep" });
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
 
   /*  The bass. A recording rather than a synth, so these read buffer sources -
       and a walking line is one note to the beat, which is what separates it
       from the piano's comping at a glance. */
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await page.locator("#compPiano").uncheck();
   await page.locator("#compBass").check();
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
 
   await forgetSounds();
   await page.keyboard.press("Space");
@@ -1360,9 +1368,9 @@ try {
 
   check(`the walking line lands on beats (${bassOffBeats.length} off)`, bassOffBeats.length === 0);
 
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await page.locator("#compBass").uncheck();
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
 
   /*  The drummer. The one member of the band that asks the engine nothing, so
       what is worth checking is not that a call came back but that the kit
@@ -1372,9 +1380,9 @@ try {
       Two signatures, and they are distinct by construction: the cymbals and
       the snare are noise read out of a buffer, so they arrive as samples, and
       the kick is a falling sine, which nothing else on this page is. */
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await page.locator("#compDrums").check();
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
 
   await forgetSounds();
   await page.keyboard.press("Space");
@@ -1404,9 +1412,9 @@ try {
   check(`the ride skips off the beat rather than marking it (${skips.length} off)`,
         skips.length > 0);
 
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await page.locator("#compDrums").uncheck();
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
 
   /*  The grid's other consumer, over the same clock. A note played while the
       transport rolls carries where in the bar it fell; the engine reads it and
@@ -1432,7 +1440,7 @@ try {
         whileRolling.length > 0 && /D/.test(whileRolling));
 
   // Put it back the way the rest of the checks expect to find it.
-  await page.locator("#compingButton").click();
+  await page.locator("#menuButton").click();
   await page.selectOption("#compSound", "ep");
   await page.locator("#compPiano").uncheck();
   await goToBar(0);
@@ -1562,8 +1570,7 @@ try {
 
   await page.locator("#modeChords").click();
   check("switching back restores chord practice", await page.locator("#feedback").isVisible());
-  check("and chord practice has no band to comp for it",
-        !(await page.locator("#compingButton").isVisible()));
+  check("and chord practice has no band to comp for it", await bandOffered() === false);
   check("and the chart stops carrying the take's marks",
         (await page.locator("#systems .bar .bar-take:not([hidden])").count()) === 0);
 
@@ -1587,8 +1594,7 @@ try {
 
   check("in time, chord practice gets a clock and a take",
         (await page.locator("#armTake").isVisible()) && (await page.locator("#metreRow").isVisible()));
-  check("and a band to comp against",
-        await page.locator("#compingButton").isVisible());
+  check("and a band to comp against", await bandOffered() === true);
   check("and the same button asks the question this setting is about",
         (await page.locator("#showVoicing").innerText()).trim().toLowerCase() === "show me a comp");
 
@@ -1693,13 +1699,18 @@ try {
   check("and static chord practice is exactly as it was",
         (await page.locator('#keyboard .key[aria-pressed="true"]').count()) === 4
           && !(await page.locator("#compPlace").isVisible())
-          && !(await page.locator("#compingButton").isVisible()));
+          && await bandOffered() === false);
 
   // The colophon names the build, which is how anyone looking at the site can
   // tell whether it is serving what was pushed. "development" is the right
   // answer for a copy that was not deployed, so this only asks that it says
   // something - the workflow itself checks the stamp was replaced.
+  // In the panel's About section now, so the panel has to be opened to read
+  // it: `innerText` of something `display: none` is the empty string, which
+  // would have passed a check for "it says something" by saying nothing.
+  await page.locator("#menuButton").click();
   const build = (await page.locator("#colophonBuild").innerText()).trim();
+  await page.locator("#menuButton").click();
   check(`the page names its build (${build})`, build.startsWith("Build:"));
 
   // The page checks at boot that the engine beside it exports every call it
@@ -1841,6 +1852,54 @@ try {
 
     await framed.locator("#armTake").click();
     await framed.close();
+  }
+
+  /*  The chart's own tools, which moved off a toolbar above the music and into
+      the settings panel's Chart section. Three of the four had no check at all
+      - only Import / export and Reharmonise the tune did - and the failure
+      they now share is new: a button inside a panel that is shut is a button
+      nothing can press, and each of them shows you something down in the chart
+      that the panel is in front of.
+
+      On a page of its own, because it rewrites the chart and the ordering of
+      the sequence above is deliberate. */
+  {
+    const edited = await browser.newPage({ viewport: { width: 1100, height: 800 } });
+    await edited.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await edited.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await edited.locator("#helpDialog[open]").count()) await edited.locator("#helpClose").click();
+
+    const chordsNow = async () =>
+      (await edited.locator("#systems .chord").allInnerTexts()).join(" ");
+
+    const opening = await chordsNow();
+
+    await edited.locator("#menuButton").click();
+    await edited.locator("#editToggle").click();
+
+    check("the editor opens from the panel, and closes it on the way",
+          (await edited.locator("#editor").isVisible())
+          && (await edited.locator("#menuPanel").isHidden()));
+
+    await edited.fill("#progression", "| Fmaj7 | Bb7 |");
+    await edited.dispatchEvent("#progression", "input");
+    await edited.waitForFunction(
+      () => document.querySelectorAll("#systems .chord").length === 2, null, { timeout: 10000 });
+
+    check(`and typing into it rewrites the chart (${await chordsNow()})`,
+          (await chordsNow()) === "Fmaj7 B\u266d7");
+
+    await edited.locator("#menuButton").click();
+    await edited.locator("#restoreChart").click();
+    await edited.waitForFunction(
+      (was) => [...document.querySelectorAll("#systems .chord")]
+                 .map((c) => c.textContent).join(" ") === was,
+      opening, { timeout: 10000 });
+
+    check("and Restore original gives back the tune it opened with",
+          (await edited.locator("#menuPanel").isHidden()));
+
+    await edited.close();
   }
 
   /*  And the strip above the chart holds still. Most of what is on it needs a
@@ -2128,7 +2187,6 @@ try {
   const panels = [];
 
   for (const [button, panel] of [["#menuButton", "#menuPanel"],
-                                 ["#compingButton", "#compingPanel"],
                                  ["#transportButton", "#transportPanel"]]) {
     if (!(await narrow.locator(button).isVisible())) continue;
 
@@ -2137,7 +2195,21 @@ try {
     const box = await narrow.locator(panel).boundingBox();
     if (box && (box.x < -0.5 || box.x + box.width > 390 + 0.5)) panels.push(panel);
 
-    await narrow.locator(button).click();
+    /*  And nothing inside it is wider than it is. The box check above says the
+        panel landed on the screen; it says nothing about the four chart tools
+        or a select with a long option sitting outside its edge, which is where
+        the settings panel's new sections could go wrong. */
+    if (await narrow.evaluate((id) => {
+      const it = document.querySelector(id);
+      return it.scrollWidth > it.clientWidth + 0.5;
+    }, panel)) panels.push(`${panel} contents`);
+
+    /*  Closed by its own way out rather than by the button again. At this
+        width the settings panel is a bottom sheet drawn over the top bar, so
+        the button that opened it is underneath it - which is what the sheet's
+        close row is for, and why it only exists here. */
+    if (panel === "#menuPanel") await narrow.locator("#menuClose").click();
+    else await narrow.locator(button).click();
   }
 
   check(`every panel opens onto the screen at 390px${panels.length ? " (" + panels.join(", ") + ")" : ""}`,
