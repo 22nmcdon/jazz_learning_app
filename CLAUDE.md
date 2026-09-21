@@ -4,9 +4,9 @@ Guidance for Claude Code (or any Claude instance) working in this repository.
 
 For **what the app does and how each feature behaves**, see `README.md`. For
 the reasoning behind solo practice, see `docs/SOLO_PRACTICE.md`; for comping,
-`docs/COMPING.md`; for the rhythm grid they share, `docs/RHYTHM.md`. Read the
-relevant one before touching `LineAnalyzer`, `Comping.h`/`compPlan()`, or
-`Rhythm.h`. This file is only for what you need to not break the repo or redo
+`docs/COMPING.md`; for the rhythm grid they share, `docs/RHYTHM.md`; for the
+practice record, `docs/PROGRESS.md`. Read the relevant one before touching
+`LineAnalyzer`, `Comping.h`/`compPlan()`, `Rhythm.h` or `PracticeLog.h`. This file is only for what you need to not break the repo or redo
 settled work. For what is **left** to do — work in progress, unbuilt features
 and their open design questions, and known loose ends — see `docs/HANDOFF.md`.
 
@@ -65,6 +65,16 @@ means CSS, not per-platform builds.
   the chart got whatever was left over and lost: four bars of twelve were
   readable at 1280×860, and **none at all** at 430×860. Anything added to the
   top bar or the dock is taken out of the chart, so it has to earn it.
+- **The top bar has room for one more labelled control, and does not currently
+  have it spare.** This was measured when the practice record needed a button:
+  `.top-bar-right` wraps, and a labelled button there costs **38px of chart** at
+  1024px — a laptop, not an edge case. Even a three-letter label does. So that
+  button is a glyph, with its name on `aria-label`, and the measurements are in
+  the stylesheet beside the rule. Two things to know before putting anything
+  else up there: something has to leave first, and **390px is not the width
+  that catches it** — `.top-bar-right` is already four lines deep there, so one
+  more control changes nothing. Measure bar height with the control and without
+  it, at a narrow width *and* at 1024.
 - **The chart's head is in the top bar**, not in the sheet. A lead sheet is
   engraved feel / title / credit and still reads that way, along a line; in the
   sheet it scrolled away with the music, so the one thing naming what you are
@@ -338,9 +348,29 @@ something finished or assume something unfinished is done:
   Conventions above). The three screenshots in `docs/` are shot against this
   shape, in the webfont; `docs/HANDOFF.md` says how, since a machine that cannot
   reach Google Fonts will otherwise photograph the fallback face.
+- **Progress tracking** — done, and it is a record of *what was practised*
+  rather than a scoreboard. A take writes one row of counts; the dashboard
+  hands the rows back to the engine and draws what it says. **The one thing it
+  keeps no version of is a mark.** `score()` calls itself a reading of a bar
+  and not a grade for a player, and the same number plotted over weeks is
+  exactly that grade — so the row has no field for one, the wire has its own
+  score-free emitter rather than reusing `lineStatsJson`, and a check reads the
+  rendered panel and fails on the word. A count beside an earlier count is
+  still a fact; a mark beside an earlier mark is a verdict about a person.
+  **The engine learns nothing.** `readPractice` and `readTuneProgress` are free
+  functions over a vector the caller owns, `today` arrives as an argument the
+  way a `BarPosition` does, and a history is data the shell hands over on every
+  call — the third time that answer has been the right one here, after the
+  chart's progression text and a described comping style.
+  **A tune's own memory is the half no single take can give.** It counts how
+  many takes ever *reached* each bar, which is how the back eight of a standard
+  turns out to have been played twice in eleven takes. It says nothing at all
+  below three takes, nothing about a tune played end to end every time, and
+  names a hard bar only when it stands apart. See `docs/PROGRESS.md`.
+  **Saved tunes came with it**, and with them the amendment to the
+  remembered-settings invariant below — the page still opens on a clean stand.
 - **Not built, deliberately open**: personal voicing
-  library, ear training, progress tracking beyond current per-take/session
-  stats, licks/line suggestions,
+  library, ear training, licks/line suggestions,
   MusicXML/MuseScore import, PDF reading/printing in the JUCE app (the engine's
   reader is shared and format-agnostic; the app just lacks a PDF text-extraction
   library). Each one's open design question is in `docs/HANDOFF.md`.
@@ -403,12 +433,13 @@ that's easy to miss in review:
   with all the rest. Check what a new name costs the chords that already
   resolve correctly (e.g. a complete but obscure name beating a common
   rootless voicing) before adding it.
-- **Practice settings are remembered; work is not.** One pair of accessors
+- **Nothing comes back unless you asked for it by name.** One pair of accessors
   (`remember`/`recall`, plus `rememberFlag`/`recallFlag`/`recallNumber`) is the
   only thing on the page that touches `localStorage`, under flat `jazz*` keys.
   What survives a reload is how the room is set up — tempo, metre, In time, the
   sound bank, the band, the comping style, guide tones, the loop. What must
-  never survive is the chart, a take, or anything mid-exercise. Three rules the
+  never survive **on its own** is the chart, a take, or anything mid-exercise.
+  Three rules the
   recall keeps: it **makes no sound** (turning the piano on by hand sounds the
   bar you are on, which is wrong for a page that has just opened); it **never
   overrides the chart** (a metre is remembered in the picker's handler, not in
@@ -426,6 +457,26 @@ that's easy to miss in review:
   well as against the store, and the feel is held to the list the engine just
   sent. A preference that cannot be read back is one you remake in a minute;
   a migration path for eleven fields is more code than the editor.
+  **This rule used to read "practice settings are remembered; work is not",
+  and that was over-stated rather than wrong.** What it was protecting is that
+  the page opens on a clean stand: nothing half-played returns, no take is
+  restored into the session, and you are never handed a chart you did not ask
+  for. All of that still holds — `boot` puts no tune up, and `solo.take` and
+  `comp.hits` still die with the page. What the tune library adds is that a
+  chart you *deliberately saved and named* is yours to open again, by picking
+  it. So the line is not settings-versus-work; it is **asked-for versus
+  assumed**, and a check enforces exactly that: save a tune, reload, and the
+  stand still holds the chart the page shipped with.
+  **The practice record is remembered on the same terms, and it is a record
+  that you practised rather than a copy of what you played.** A row is counts,
+  a day number and two bitmasks saying which harmony was underneath; there is
+  no line, no voicing and no note in it, so nothing here could reconstruct a
+  performance. It is **dropped a row at a time** when a row stops matching
+  what this page writes — one unreadable row is not a reason to forget a year,
+  and a row reaching the engine that its grammar refuses reads back as an
+  error over the *whole* history rather than as one lost take. Both stores can
+  be forgotten from the panel, separately, because not wanting a history kept
+  and tidying a shelf of tunes are different things to want.
 - **Engine/page version mismatch has no symptom of its own, so the page checks
   for it.** A cached engine paired with a fresh page makes a feature simply
   *vanish* — empty menu, engine chip still saying ready — because `ccall` on a

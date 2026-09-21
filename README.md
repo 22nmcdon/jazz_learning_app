@@ -1072,15 +1072,80 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   Solo practice needs the same fact and does not want it grouped, so it is told per note
   instead — see *Chords in a line*.
 
+## What you have been practising
+
+Every finished take writes one line in a practice record, and *Your practice* — the round
+button beside the **?** — reads the whole thing back.
+
+**It keeps counts and never a mark.** There is no score in it anywhere: not the take score,
+not comping's fit, nothing that could be drawn as a line going up or down. The reason is in
+the score's own description — it is a reading of a bar, not a grade for a player, and the
+same number plotted over six weeks is exactly the grade it refuses to be. What you get
+instead are facts, and comparisons between facts:
+
+```
+14 takes over 6 days, 48 minutes playing. The last one was today.
+
+Nothing yet over half-diminished and suspended chords. A half-diminished chord
+is half of every minor ii-V, so it is the one most worth going looking for.
+
+3 keys so far — C, F and G. A tune moved to a key you have not played is the
+same tune and a different set of fingerings.
+
+Lately your line is 11% notes outside the harmony, against 24% across the
+earlier half of this record.
+```
+
+The coverage half is the part a take cannot give you. What you *have* played is something
+you already know; what has never once come up is the thing worth being told, so the chords
+and the keys are drawn as two rows of chips — solid for the ones you have played over,
+outlined for the ones you have not.
+
+It says nothing until it can say something true. Movement needs six takes before it
+compares anything, and a rate that moved less than eight points is not narrated at all —
+that is two afternoons differing, which is weather.
+
+**And each tune remembers being practised.** Save a tune from the chart's own menu and
+*Your tunes* lists it; click one and you get its own page, including a strip with one cell
+per bar, shaded by how many takes ever reached it:
+
+```
+Bars 1-4 have been in every take, 9-12 in no more than 2 takes of 8.
+Starting a take somewhere other than the top is the cheapest way to even that out.
+
+Bars 5-8 have never been reached with a take running.
+
+Bar 10 (D7alt) is the one that keeps pulling away: 62% of what you have
+played there sat outside, against 19% across the tune.
+```
+
+That shape — the front of the tune solid, the back of it pale — is how almost everybody
+practises a standard, and it is invisible from inside any one take. It is also the reason
+this half exists.
+
+It holds its tongue in the same way. Below three takes it says nothing across them at all,
+since with one take every bar you reached was reached in "every take". A tune you play end
+to end every time gets no sentence about neglect. And a bar is called difficult only when
+it stands apart from the rest of the tune.
+
+**Nothing comes back unless you ask for it by name.** Opening the page still puts up the
+chart it always did — a saved tune returns when you pick it, and never on its own. Both the
+record and the tune list can be forgotten from the panel, separately, each behind a second
+press. Forgetting a tune keeps its practice: those takes happened, and the record is about
+you rather than about the tune.
+
+The reasoning, including why the engine gained no memory to do any of this, is in
+[`docs/PROGRESS.md`](docs/PROGRESS.md).
+
 ## Not in this POC
 
 - **MusicXML / MuseScore import.** iReal Pro and PDF import both ship (see above); which
   further format comes next is still an open question in the design doc.
 - **Audio/pitch-detection input**, deliberately out of scope for this phase.
-- **Voicing library, ear training, progress tracking.** The analyser reports a per-voicing
-  score, the feedback panel keeps a session average and a solo take now keeps its own
-  numbers — between them, the hook progress tracking would build on. The metronome and the
-  practice loop ship, as In time above.
+- **Voicing library and ear training.** The analyser reports a per-voicing score and the
+  feedback panel keeps a session average — between them, the hook a voicing library would
+  build on. The metronome and the practice loop ship, as In time above. Progress tracking
+  *does* ship now; see *What you have been practising*.
 - **Licks.** Solo mode tells you the scale; suggesting a *line* to play over a bar needs
   generated or curated patterns, rhythm and register, and is a feature of its own.
 - **Rhythm in a *solo's* score.** The readings exist (above) and deliberately produce words

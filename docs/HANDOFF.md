@@ -28,6 +28,12 @@ The page's layout was restructured over these commits, and that work is done:
 | `d1efdb5` | The chart's tools out of the settings panel into a menu of their own above the music, and the chart justified into its zone instead of leaving a void under it. |
 | `a693f3a` | The screenshots reshot against the finished page, in the typeface a visitor actually sees. |
 
+Since then, two features off the list below have been built and their bullets
+deleted: the **comping-style editor** (`9f2870b`…`7b8d3a9`) and **progress
+tracking** (`f061863`…`65eeb67`). What each one's design question turned out to
+need is in `docs/COMPING.md` and `docs/PROGRESS.md` respectively; what they left
+undone is in *Loose ends* below.
+
 Since then, two features off the *not built* list below were built: solo
 practice reads a **chord in a line as a chord** (`9f2870b` - see
 `docs/SOLO_PRACTICE.md`), and a comping style can be **written rather than
@@ -110,9 +116,13 @@ ordered.
 - **Personal voicing library.** Where does a saved voicing live, and what is it
   saved *against* — a chord symbol, a chord quality, or a bar of a particular
   tune? Storage is the easy half.
-- **Progress tracking beyond per-take stats.** Needs a decision on what is worth
-  keeping across sessions, and on whether the engine ever learns about history
-  (today it has no memory at all, which is what keeps it testable).
+  **Half of this question now has an answer to copy.** The tune library saves a
+  named thing under a numeric id, in one object through `rememberObject`, and
+  drops any record it cannot read back rather than migrating it — and the
+  practice record attaches to a tune *by that id* rather than by name, which is
+  what survives a rename. A voicing library saved against a chord symbol would
+  work the same way; saved against a bar of a tune, it already has the tune ids
+  to hang off. What is still genuinely open is only the *against what*.
 - **Ear training.** The one item that is arguably a third mode rather than a
   setting, so it collides with `state.mode` being two-valued. Read
   `docs/COMPING.md`'s argument about what a third mode costs before deciding.
@@ -160,6 +170,41 @@ Small, verified, and none of them urgent.
   link carries a *chart* in iReal Pro's format via the engine's own encoder -
   there is no slot in it for a figure. The reusable parts are the plumbing
   (`copyToClipboard`, the `?chart=` boot hook), not the format.
+
+- **The practice record keeps the last 300 takes, and then forgets.** The
+  oldest go first and the panel says so rather than pretending to be complete.
+  300 is a year of practising most days; the reason for a cap at all is that
+  this is somebody's browser and a store that only grows is one that fails to
+  write at the worst moment. Nothing warns you as it approaches.
+
+- **A take over an unsaved chart is practice against no tune.** It counts in
+  the record - the minutes, the coverage, the movement - but joins no tune's
+  memory, because there is no tune to join. Nothing tells you that at the time;
+  the chart menu says which tune is on the stand, which is the nearest thing.
+  Whether a take should be able to adopt a tune saved *afterwards* is a real
+  question and deliberately unanswered.
+
+- **The top bar has room for one more labelled control and does not have it
+  spare.** Measured when the practice record needed a button: a labelled one
+  costs 38px of chart at 1024px, and even three letters do. The numbers are in
+  the stylesheet beside `.record-button`. This bears directly on the planned
+  move of *The band* out of `#menuPanel` into a button of its own - something
+  has to leave the bar first, and the engine-status chip is the obvious
+  candidate. Note also that 390px does **not** catch this: `.top-bar-right` is
+  already four lines deep there.
+
+- **`#menuPanel` is mid-restructure, and its own comment is now out of date.**
+  The markup at `.menu-wrap` still says practice history and ear training will
+  land as sections of it. Practice history did not - it is a dialog behind its
+  own button - and the panel is being cut back to things that are genuinely
+  settings. That comment should be rewritten by whoever does the move rather
+  than patched now.
+
+- **Nothing exports a practice record.** The same shape of gap as a comping
+  style: it would be a second wire format and a second "is this trustworthy"
+  question. The history text the engine already reads is a plausible basis, but
+  it carries numeric tune ids that mean nothing outside the browser that wrote
+  them.
 
 - **One unexplained smoke-test timeout.** A single run failed with
   `page.waitForFunction: Timeout 15000ms` while the chart menu was half-wired;
