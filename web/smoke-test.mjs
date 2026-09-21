@@ -443,9 +443,14 @@ try {
   // and what opens is the solo half of the sheet - the chord half explains a
   // page that is not on screen.
   await page.waitForSelector("#helpDialog[open]", { timeout: 10000 });
+  /*  The sheet is sectioned now, and the per-mode split moved off the lists
+      and onto the entries inside them - most of what it says means the same in
+      both modes and is written once. So the question is asked of the section
+      that is open: the solo wording is there, the chord wording is not. */
   check("the first visit to solo practice gets its own cheat sheet",
-        (await page.locator(".help-list[data-mode='solo']").isVisible())
-        && (await page.locator(".help-list[data-mode='chords']").isHidden()));
+        (await page.locator("#helpPanelChart li[data-mode='solo']").first().isVisible())
+        && (await page.locator("#helpPanelChart li[data-mode='chords']").first().isHidden())
+        && (await page.locator("#helpDialog .bar-label[data-mode='solo']").isVisible()));
   check(`the ? says which mode it explains (${chordsHelp} / `
         + `${await page.locator("#helpButton").getAttribute("aria-label")})`,
         chordsHelp === "How chord practice works"
@@ -1832,6 +1837,75 @@ try {
 
     await framed.locator("#armTake").click();
     await framed.close();
+  }
+
+  /*  The cheat sheet fits, section by section, on a desktop window and a phone
+      one. It is sectioned precisely because it stopped fitting: solo practice's
+      sheet was 2,650px of content in 590px of dialog at a phone width, four and
+      a half screens of scrolling, and a sheet you scroll is one people stop
+      reading at the fold.
+
+      Measured rather than eyeballed, and measured on every section in both
+      modes, because the sections are different lengths and the mode decides
+      which entries inside them are showing. The body keeps `overflow-y: auto`
+      as a safety valve for a browser with larger text - what this asserts is
+      that it never has to use it. */
+  for (const [label, viewport] of [["a desktop window", { width: 1280, height: 860 }],
+                                   ["a phone", { width: 390, height: 780 }]]) {
+    const sheet = await browser.newPage({ viewport });
+    await sheet.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await sheet.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+
+    const over = [];
+
+    for (const mode of ["chords", "solo"]) {
+      if (await sheet.locator("#helpDialog[open]").count()) await sheet.locator("#helpClose").click();
+      await sheet.locator(`#mode${mode === "solo" ? "Solo" : "Chords"}`).click();
+      if (!(await sheet.locator("#helpDialog[open]").count())) await sheet.locator("#helpButton").click();
+      await sheet.waitForSelector("#helpDialog[open]", { timeout: 10000 });
+
+      for (const tab of ["helpTabChart", "helpTabPlaying", "helpTabReading",
+                         "helpTabTime", "helpTabBand"]) {
+        await sheet.locator("#" + tab).click();
+        await sheet.waitForTimeout(80);
+
+        const spill = await sheet.evaluate(() => {
+          const body = document.querySelector("#helpDialog .tab-body");
+          return Math.round(body.scrollHeight - body.clientHeight);
+        });
+
+        if (spill > 0) over.push(`${mode}/${tab.replace("helpTab", "")} by ${spill}px`);
+      }
+    }
+
+    check(`the cheat sheet never has to be scrolled on ${label}`
+          + `${over.length ? " (" + over.join(", ") + ")" : ""}`,
+          over.length === 0);
+
+    await sheet.close();
+  }
+
+  /*  And every section says something. A tab that opens on nothing is worse
+      than no tab, and the per-mode entries make that a real risk: a section
+      whose entries were all written for the other mode would be an empty
+      panel with a name on it. */
+  {
+    const filled = await page.evaluate(() => {
+      const panels = ["helpPanelChart", "helpPanelPlaying", "helpPanelReading",
+                      "helpPanelTime", "helpPanelBand"];
+      return panels.map((id) => {
+        const li = [...document.querySelectorAll(`#${id} > li`)];
+        const chords = li.filter((e) => e.dataset.mode !== "solo").length;
+        const solo = li.filter((e) => e.dataset.mode !== "chords").length;
+        return { id, chords, solo };
+      });
+    });
+
+    const thin = filled.filter((p) => p.chords < 3 || p.solo < 3);
+
+    check(`every section of the cheat sheet is worth opening in both modes `
+          + `(${filled.map((p) => p.id.replace("helpPanel", "") + " " + p.chords + "/" + p.solo).join(", ")})`,
+          thin.length === 0);
   }
 
   // A phone-sized window, in both modes. Everything that has ever overlapped
