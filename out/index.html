@@ -2380,7 +2380,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           <div class="menu-group">
             <span class="menu-title">About</span>
             <div class="colophon">
-              <span>Engine: <code>modules/core_engine</code> - 520 unit tests, no JUCE.</span>
+              <span>Engine: <code>modules/core_engine</code> - 527 unit tests, no JUCE.</span>
               <span id="colophonEngine"></span>
               <span id="colophonFraming"></span>
               <span id="colophonBuild"></span>
@@ -2660,6 +2660,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
               </select>
               <p class="menu-note">Everything you play is checked against this shape, on every bar.
                 <i>Show me one</i> keeps going: press it again for the next shape.</p>
+            </div>
+
+            <!-- Your own shapes, saved against a chord *quality* rather than a
+                 chord - so one you found over Dm7 comes back on every minor
+                 chord in every key, in the register you found it in. -->
+            <div class="menu-field">
+              <span class="menu-label">Your voicings</span>
+              <button class="link-btn" type="button" id="saveVoicing">Save what is under your hands</button>
+              <p class="menu-note" id="voicingLibraryNote"></p>
+              <ul class="tune-list" id="voicingList"></ul>
             </div>
           </div>
 
@@ -3561,6 +3571,65 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   */
   var TUNE_FIELDS = ["progression", "title", "style", "composer", "beats", "beatUnit"];
 
+  /** A shelf of saved things, under one key, with ids that are never reused.
+
+      **Written once because three things want it.** The tune library was here
+      first, the voicing library is the second, and the custom comping style is
+      the third - it saves exactly one today, and `docs/HANDOFF.md` asked for
+      this question to be answered once for all of them rather than three times
+      differently. What is shared is the envelope: an array and a counter, ids
+      that only go up, a cap, and **dropping a record rather than migrating it**.
+
+      What is *not* shared is what makes a record readable, so that arrives as a
+      function. A tune's fields and a voicing's are not the same fields and
+      pretending otherwise would be a validator that checks nothing in
+      particular.
+
+      The array's property name is a parameter for one unglamorous reason:
+      tunes are already stored under `tunes`, and renaming the envelope would
+      drop every tune anybody has saved. Dropping what cannot be read is the
+      rule; dropping what reads perfectly well because the code was tidied is
+      not.
+  */
+  function savedCollection(key, field, cap, isReadable) {
+    function recall() {
+      var stored = recallObject(key);
+      var items = [];
+      var next = 1;
+
+      if (stored && Array.isArray(stored[field])) {
+        stored[field].forEach(function (item) {
+          if (!item || typeof item !== "object") return;
+          if (typeof item.id !== "number" || !isFinite(item.id) || item.id < 1) return;
+          if (!isReadable(item)) return;
+
+          items.push(item);
+          next = Math.max(next, item.id + 1);
+        });
+      }
+
+      // The counter only ever goes up, so an id freed by a deletion is not
+      // handed to something else - which is what keeps a practice record
+      // attached to the tune it was practised over.
+      return { items: items,
+               next: stored && typeof stored === "object"
+                       && typeof stored.next === "number" && stored.next > next
+                         ? stored.next : next };
+    }
+
+    return {
+      key: key,
+      cap: cap,
+      recall: recall,
+      remember: function (library) {
+        var envelope = { next: library.next };
+        envelope[field] = library.items;
+        rememberObject(key, envelope);
+      },
+      isFull: function (library) { return library.items.length >= cap; }
+    };
+  }
+
   /** Reads the library back, dropping anything that is not exactly right.
 
       Dropped rather than repaired, for the reason the custom comping style is:
@@ -3569,41 +3638,73 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       cannot be read back is one you save again in a moment. A migration path
       for six fields is more code than the feature.
   */
+  var tuneShelf = savedCollection(TUNE_LIBRARY_KEY, "tunes", MOST_SAVED_TUNES, function (tune) {
+    if (typeof tune.name !== "string" || !tune.name) return false;
+
+    // Every field, and no extra ones taken on trust: a row written by a
+    // newer page is not a row this one knows how to draw.
+    var readable = TUNE_FIELDS.every(function (field) {
+      var value = tune[field];
+      return field === "beats" || field === "beatUnit"
+               ? typeof value === "number" && isFinite(value) && value > 0
+               : typeof value === "string";
+    });
+
+    return readable && !!tune.progression;
+  });
+
   function recallTunes() {
-    var stored = recallObject(TUNE_LIBRARY_KEY);
-    var tunes = [];
-    var next = 1;
-
-    if (stored && Array.isArray(stored.tunes)) {
-      stored.tunes.forEach(function (tune) {
-        if (!tune || typeof tune !== "object") return;
-        if (typeof tune.id !== "number" || !isFinite(tune.id) || tune.id < 1) return;
-        if (typeof tune.name !== "string" || !tune.name) return;
-
-        // Every field, and no extra ones taken on trust: a row written by a
-        // newer page is not a row this one knows how to draw.
-        var readable = TUNE_FIELDS.every(function (field) {
-          var value = tune[field];
-          return field === "beats" || field === "beatUnit"
-                   ? typeof value === "number" && isFinite(value) && value > 0
-                   : typeof value === "string";
-        });
-
-        if (!readable || !tune.progression) return;
-
-        tunes.push(tune);
-        next = Math.max(next, tune.id + 1);
-      });
-    }
-
-    return { tunes: tunes, next: typeof stored === "object" && stored
-                                    && typeof stored.next === "number" && stored.next > next
-                                      ? stored.next : next };
+    var library = tuneShelf.recall();
+    return { tunes: library.items, next: library.next };
   }
 
   function rememberTunes(library) {
-    rememberObject(TUNE_LIBRARY_KEY, library);
+    tuneShelf.remember({ items: library.tunes, next: library.next });
   }
+
+  /*  Your voicings - the second shelf, and the one the helper above was
+      extracted for.
+
+      **A shape is saved against a chord quality, not a chord.** Saved against
+      the literal symbol, a voicing you found over Dm7 never appears again
+      unless you happen to be on Dm7; saved against a bar of a tune it is a
+      fingering note rather than a vocabulary. What is stored is the offsets
+      from the root and the register the shape sat in, both of which the engine
+      works out - putting that arithmetic here would be theory in the page.
+
+      No names. A tune has a name because you go looking for one by name; a
+      voicing is recognised by looking at it, and the list shows the notes it
+      makes on the chord in front of you rather than the ones it was saved on.
+  */
+  var VOICING_LIBRARY_KEY = "Voicings";
+  var MOST_SAVED_VOICINGS = 60;
+
+  /*  What the page knows about the bar it is on, and about the shelf.
+
+      `qualities` is the engine's own list, kept so a stored record can be
+      checked against it rather than against a copy written here - it arrives
+      with every `jazzVoicingShape` answer, the way `compStyles()` sends the
+      feels. Empty until the first answer, which is why the shelf's check lets
+      every quality through until then: refusing records before the list has
+      arrived would empty the shelf on a slow boot.
+  */
+  var voicings = { qualities: [], quality: "", qualityName: "", saved: [] };
+
+  var voicingShelf = savedCollection(VOICING_LIBRARY_KEY, "voicings", MOST_SAVED_VOICINGS,
+    function (saved) {
+      if (typeof saved.quality !== "string" || !saved.quality) return false;
+      if (typeof saved.anchor !== "number" || !isFinite(saved.anchor)) return false;
+      if (!Array.isArray(saved.offsets) || saved.offsets.length === 0) return false;
+
+      // A quality this engine no longer uses is a shape it cannot place, so the
+      // record goes rather than sitting in the list never matching anything.
+      if (voicings.qualities.length && voicings.qualities.indexOf(saved.quality) === -1) return false;
+
+      return saved.offsets.every(function (offset) {
+        return typeof offset === "number" && isFinite(offset) && offset >= 0 && offset < 96;
+      });
+    });
+
 
   /*  The practice record.
 
@@ -3835,6 +3936,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "readingWrap", "readingButton", "readingPanel", "readingTitle", "readingClose",
    "voicingStyle", "soundBank",
    "scaleStyle", "scaleStyleNote", "chordTabs",
+   "saveVoicing", "voicingLibraryNote", "voicingList",
    "tabTake", "panelTake", "takeHead", "takeRows", "takeNote"].forEach(function (id) {
     el[id] = document.getElementById(id);
   });
@@ -3946,6 +4048,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     "jazzParseChart", "jazzScalesForChord", "jazzScaleStyles", "jazzReharmonise",
     "jazzReharmPlans", "jazzReharmStyles", "jazzVoicedGuideTones", "jazzAnalyseVoicing", "jazzIdiomaticVoicings",
     "jazzIdentifyChord", "jazzRecogniseSubstitution",
+    "jazzVoicingShape", "jazzVoicingFromShape",
     "jazzImportIRealPro", "jazzExportIRealPro", "jazzChartFromPage",
     "jazzCompStyles", "jazzCompingVoicing", "jazzCompPlan", "jazzCompHit",
     "jazzCompTake", "jazzWalkingBass",
@@ -8779,12 +8882,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.readingButton.setAttribute("aria-expanded", open ? "true" : "false");
   }
 
-  el.readingButton.addEventListener("click", function () {
+  el.readingButton.addEventListener("click", async function () {
     setChartOpen(false);
     setMenuOpen(false);
     setTransportOpen(false);
     setBandOpen(false);
     setReadingOpen(el.readingPanel.hidden);
+
+    // Drawn when the panel opens rather than kept up to date behind it: what
+    // fits depends on the bar, and the bar moves while this is shut.
+    if (!el.readingPanel.hidden && state.mode === "chords") await drawVoicingList();
   });
 
   el.readingClose.addEventListener("click", function () { setReadingOpen(false); });
@@ -9199,6 +9306,148 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   /** Puts an idiomatic voicing of the chosen shape on the keyboard - the
       "sentence starter" for a chord the player does not have under their hands. */
+  /*  Your voicings, on the bar in front of you.
+
+      Asked of the engine every time the bar changes, because a saved shape is
+      only offered when the chord's *quality* matches the one it was saved for -
+      and what quality a symbol has is theory the page must not work out for
+      itself. The same answer carries the engine's list of every quality, which
+      is what the shelf validates a stored record against.
+  */
+  async function refreshVoicingQuality() {
+    var chord = selectedChord();
+
+    if (!chord) {
+      voicings.quality = "";
+      voicings.qualityName = "";
+      return;
+    }
+
+    var result = await call("jazzVoicingShape", ["string", "string"], [chord, ""]);
+
+    if (result === null || !result.ok) return;
+
+    voicings.qualities = result.qualities || [];
+    voicings.quality = result.quality;
+    voicings.qualityName = result.qualityName;
+  }
+
+  /** The saved shapes that belong on this bar, realised onto its chord.
+
+      Asks the quality first rather than trusting whatever the last panel-open
+      left behind: the bar moves under this - a click, a chorus coming round,
+      a reharmonisation mid-take - and a list that was right a moment ago is
+      the kind of wrong nobody notices. One call, on a path that already makes
+      one.
+  */
+  async function savedVoicingsHere() {
+    await refreshVoicingQuality();
+
+    var chord = selectedChord();
+
+    if (!chord || !voicings.quality) return [];
+
+    var shelf = voicingShelf.recall();
+    var mine = shelf.items.filter(function (saved) { return saved.quality === voicings.quality; });
+    var realised = [];
+
+    for (var i = 0; i < mine.length; i++) {
+      var result = await call("jazzVoicingFromShape", ["string", "string", "number"],
+                              [chord, mine[i].offsets.join(","), mine[i].anchor]);
+
+      if (result !== null && result.ok && result.notes.length) {
+        realised.push({ id: mine[i].id, notes: result.notes, describe: result.describe });
+      }
+    }
+
+    return realised;
+  }
+
+  async function drawVoicingList() {
+    var shelf = voicingShelf.recall();
+
+    el.voicingList.textContent = "";
+
+    if (shelf.items.length === 0) {
+      el.voicingLibraryNote.textContent = "Nothing saved yet. Play a voicing you want to keep, "
+                                        + "then save it - it comes back on every chord of the "
+                                        + "same kind, in every key.";
+      return;
+    }
+
+    var here = await savedVoicingsHere();
+
+    el.voicingLibraryNote.textContent = here.length
+      ? here.length + (here.length === 1 ? " of yours fits " : " of yours fit ")
+        + selectedChord() + ". Show me one plays them first."
+      : shelf.items.length + (shelf.items.length === 1 ? " saved shape, none" : " saved shapes, none")
+        + " for a " + (voicings.qualityName || "chord") + " chord.";
+
+    here.forEach(function (one) {
+      var row = document.createElement("li");
+      var name = document.createElement("span");
+
+      name.textContent = one.describe;
+      row.appendChild(name);
+
+      var drop = document.createElement("button");
+      drop.type = "button";
+      drop.className = "link-btn";
+      drop.textContent = "Forget";
+      drop.addEventListener("click", async function () {
+        var library = voicingShelf.recall();
+        library.items = library.items.filter(function (saved) { return saved.id !== one.id; });
+        voicingShelf.remember(library);
+        await drawVoicingList();
+      });
+
+      row.appendChild(drop);
+      el.voicingList.appendChild(row);
+    });
+  }
+
+  el.saveVoicing.addEventListener("click", async function () {
+    var chord = selectedChord();
+
+    if (!chord || state.heldNotes.length === 0) {
+      el.voicingLibraryNote.textContent = "Play the voicing first - this saves what is under "
+                                        + "your hands.";
+      return;
+    }
+
+    var shape = await call("jazzVoicingShape", ["string", "string"],
+                           [chord, state.heldNotes.join(",")]);
+
+    if (shape === null || !shape.ok) return;
+
+    var library = voicingShelf.recall();
+
+    if (voicingShelf.isFull(library)) {
+      el.voicingLibraryNote.textContent = "That is " + MOST_SAVED_VOICINGS
+                                        + " shapes, which is as many as this keeps. Forget one first.";
+      return;
+    }
+
+    // The same shape twice is one shape. Compared on what it *is* - the quality
+    // and the offsets - rather than on the notes, which differ by key.
+    var already = library.items.some(function (saved) {
+      return saved.quality === shape.quality
+             && saved.offsets.join(",") === shape.offsets.join(",");
+    });
+
+    if (already) {
+      el.voicingLibraryNote.textContent = "You have that shape already.";
+      return;
+    }
+
+    library.items.push({ id: library.next, quality: shape.quality,
+                         offsets: shape.offsets, anchor: shape.anchor });
+    library.next += 1;
+    voicingShelf.remember(library);
+
+    await drawVoicingList();
+  });
+
   el.showVoicing.addEventListener("click", async function () {
     var chord = selectedChord();
     if (!chord) return;
@@ -9261,16 +9510,27 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     if (result === null || !result.ok || !result.voicings.length) return;
 
-    // Every shape on offer, flattened, so pressing the button again moves on to
-    // the next one rather than showing the same voicing over and over.
-    var options = [];
+    /*  Yours first, then the engine's.
+
+        This is what the library is *for* - a catalogue of your own beside the
+        one the app ships, in the same control, rather than a list you have to
+        go and read. Yours lead because you saved them on purpose; the engine's
+        follow, so pressing again still walks off the end of your vocabulary
+        into the wider one rather than looping round three shapes for ever.
+
+        Not filtered by the shape being practised, which the engine's are: a
+        saved shape is one you chose to keep, and hiding it because the picker
+        says "shell" this minute would be the app overruling you about your own
+        vocabulary. The engine's catalogue is a suggestion and yours is not. */
+    var options = await savedVoicingsHere();
+
     result.voicings.forEach(function (group) {
       group.options.forEach(function (option) { options.push(option); });
     });
 
     if (!options.length) return;
 
-    var key = chord + "/" + state.style + "/" + state.colour;
+    var key = chord + "/" + state.style + "/" + state.colour + "/" + options.length;
     state.shownIndex = state.shownFor === key ? (state.shownIndex + 1) % options.length : 0;
     state.shownFor = key;
 

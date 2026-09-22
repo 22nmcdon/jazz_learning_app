@@ -31,6 +31,21 @@ std::string reharmonise (const char* progressionText, int measureIndex, int incl
     rather than prepended by a shell, so there is one menu and one owner of it.
 */
 std::string reharmStyles();
+
+/** A played voicing read as a shape, and the quality of the chord it sits on.
+
+    What a personal voicing library saves. The answer carries `qualities` -
+    every key the engine uses - alongside the one this chord has, so a shell
+    validating something out of its own store does not hold a list of eight.
+    `compStyles()` sends the feels the same way and for the same reason.
+
+    With no notes it answers the chord alone, which is what a page asks when it
+    wants to know which saved shapes belong on the bar it just moved to.
+*/
+std::string voicingShape (const char* symbol, const char* midiNotesCsv);
+
+/** A saved shape put back on a chord, in the register it was saved in. */
+std::string voicingFromShape (const char* symbol, const char* offsetsCsv, int anchorNote);
 std::string analyseVoicing (const char* symbol, const char* midiNotesCsv, const char* practiseStyle);
 std::string importIRealPro (const char* text);
 

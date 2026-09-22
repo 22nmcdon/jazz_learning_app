@@ -26,6 +26,22 @@ enum class ChordQuality
     minorMajor      ///< CmMaj7
 };
 
+/** The stable key for a quality, as it crosses the wire and is stored.
+
+    Separate from the display name on purpose: what a player reads may be
+    reworded, and a saved voicing keyed on the wording would stop matching the
+    chord it was saved for the first time somebody improved a label.
+*/
+std::string qualityKey (ChordQuality quality);
+
+/** What a player reads - "Minor seventh family", not "minor". */
+std::string qualityName (ChordQuality quality);
+
+/** Every quality, so a shell validating a stored key does not hold its own
+    list of eight. Same reason `compStyles()` sends the feels alongside.
+*/
+const std::vector<ChordQuality>& allChordQualities();
+
 /** Which seventh (if any) the symbol carries. */
 enum class SeventhType
 {

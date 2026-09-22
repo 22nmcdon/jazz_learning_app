@@ -151,6 +151,49 @@ Voicing compingVoicing (const ChordSymbol& chord,
                         int highestNote,
                         std::uint32_t seed);
 
+/** A voicing with the key taken out of it - what a player actually saves.
+
+    **A shape is saved against a chord quality, not against a chord.** The
+    alternative was tried on paper and does not work: saved against the literal
+    symbol, a shape you found over Dm7 is invisible on Gm7, which makes a
+    library useless in eleven keys out of twelve. Saved against a bar of a
+    particular tune it is a fingering annotation rather than a vocabulary you
+    carry between tunes. Offsets from the root transpose, which is already how
+    `idiomaticVoicings` thinks - it stacks `{0, third, seventh}` at an anchor
+    rather than moving absolute notes around.
+
+    **The register is part of the shape**, which is the same argument
+    `voiceGuideTones` makes about naming a guide tone versus voicing one: the
+    same chord asked of a left hand low down and of two hands in the middle
+    gives answers an octave apart, and the octave is the half a chart cannot
+    give you. So a shape remembers where its lowest voice sat, and comes back
+    there rather than wherever a default anchor would put it.
+*/
+struct VoicingShape
+{
+    ChordQuality quality {};   ///< what this is a shape *for*
+    std::vector<int> offsets;  ///< semitones above the root, ascending, lowest first
+    int anchorNote {};         ///< where the lowest voice sat when it was saved
+};
+
+/** Reads a played voicing as a shape: what it is, apart from the key it is in.
+
+    The root is taken at or below the voicing's lowest note, so the offsets of a
+    rootless voicing start above zero rather than going negative - F A C E over
+    Dm7 is 3, 7, 10, 14 rather than a shape hanging under its own root.
+*/
+VoicingShape shapeOf (const Voicing& voicing, const ChordSymbol& chord);
+
+/** Puts a shape back on a chord, in the register it was saved in.
+
+    The root octave is the one that lands the shape's lowest voice nearest its
+    anchor, so a shape saved under the left hand comes back under the left hand
+    whatever key it is asked for. Nothing here checks that the quality matches -
+    a caller offering a minor shape over a dominant chord is asking for
+    something, and this answers rather than second-guesses.
+*/
+Voicing voicingFromShape (const ChordSymbol& chord, const VoicingShape& shape);
+
 /** The register a shape belongs in - the lowest note it should reach for.
 
     A solo left hand lives an octave and a half below a rootless one, so handing

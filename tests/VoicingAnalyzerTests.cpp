@@ -1,6 +1,11 @@
 #include "TestFramework.h"
 #include "jazz/core/VoicingAnalyzer.h"
 
+#include <algorithm>
+#include <cstdlib>
+#include <string>
+#include <vector>
+
 using namespace jazz::core;
 
 namespace
@@ -586,4 +591,109 @@ TEST ("comping stays in its register over a long tune")
         CHECK (voicing.lowestNote() >= 45);    // A2
         CHECK (voicing.highestNote() <= 84);   // C6
     }
+}
+
+//==============================================================================
+// A saved shape: what a voicing is once the key is taken out of it.
+
+TEST ("a shape is read against the root below the voicing, never above it")
+{
+    // F A C E over Dm7 is a rootless left hand. Its root is the D below the F,
+    // so the shape sits above a root nobody played rather than hanging under it.
+    const auto shape = shapeOf (Voicing::fromNotes ({ 53, 57, 60, 64 }), chordFrom ("Dm7"));
+
+    CHECK (shape.quality == ChordQuality::minor);
+    CHECK (shape.anchorNote == 53);
+    CHECK_EQ (shape.offsets.size(), std::size_t (4));
+    CHECK (shape.offsets[0] == 3);
+    CHECK (shape.offsets[1] == 7);
+    CHECK (shape.offsets[2] == 10);
+    CHECK (shape.offsets[3] == 14);
+
+    for (const auto offset : shape.offsets)
+        CHECK (offset >= 0);
+}
+
+TEST ("a shape saved over one chord comes back over the same one unchanged")
+{
+    const auto chord = chordFrom ("Ebmaj7");
+    const auto played = Voicing::fromNotes ({ 51, 55, 58, 62 });
+
+    CHECK_EQ (voicingFromShape (chord, shapeOf (played, chord)).describe(), played.describe());
+}
+
+TEST ("a shape transposes, which is the whole reason it is a shape")
+{
+    /*  The case that decided what a voicing is saved *against*. Saved against
+        the literal symbol this shape would be invisible on Gm7; saved as
+        offsets from the root it is the same shape a fourth up, note for note. */
+    const auto shape = shapeOf (Voicing::fromNotes ({ 53, 57, 60, 64 }), chordFrom ("Dm7"));
+    const auto moved = voicingFromShape (chordFrom ("Gm7"), shape);
+
+    CHECK_EQ (moved.size(), std::size_t (4));
+
+    for (std::size_t i = 0; i < moved.size(); ++i)
+        CHECK (moved.midiNotes[i] - 53 == shape.offsets[i] + 5 - 3);
+
+    // And the intervals between the voices are the shape, so they survive.
+    CHECK (moved.midiNotes[1] - moved.midiNotes[0] == 4);
+    CHECK (moved.midiNotes[2] - moved.midiNotes[1] == 3);
+    CHECK (moved.midiNotes[3] - moved.midiNotes[2] == 4);
+}
+
+TEST ("a shape comes back in the register it was saved in, in every key")
+{
+    /*  The half a chart cannot give you. A shape found under the left hand has
+        to come back under the left hand rather than wherever a default anchor
+        would put it - so the root octave is chosen by the anchor, and the
+        answer never lands an octave out however far the root has to move. */
+    const auto shape = shapeOf (Voicing::fromNotes ({ 53, 57, 60, 64 }), chordFrom ("Dm7"));
+
+    for (const auto* symbol : { "Cm7", "C#m7", "Dm7", "Ebm7", "Em7", "Fm7",
+                                "F#m7", "Gm7", "Abm7", "Am7", "Bbm7", "Bm7" })
+    {
+        const auto moved = voicingFromShape (chordFrom (symbol), shape);
+
+        CHECK (! moved.isEmpty());
+
+        // Within a tritone of where it was saved: any further and the octave
+        // was chosen wrongly rather than the key simply being far away.
+        CHECK (std::abs (moved.lowestNote() - shape.anchorNote) <= 6);
+    }
+}
+
+TEST ("a shape whose root sits above its own anchor still lands in register")
+{
+    /*  The off-by-an-octave case. A voicing low on the keyboard whose root
+        pitch class is high in the octave is what breaks the arithmetic that
+        looks obviously right, so it is walked rather than divided. */
+    const auto shape = shapeOf (Voicing::fromNotes ({ 40, 47, 50 }), chordFrom ("Bm7"));
+    const auto same = voicingFromShape (chordFrom ("Bm7"), shape);
+
+    CHECK_EQ (same.describe(), Voicing::fromNotes ({ 40, 47, 50 }).describe());
+}
+
+TEST ("an empty voicing is an empty shape, and an empty shape sounds nothing")
+{
+    const auto nothing = shapeOf (Voicing {}, chordFrom ("Dm7"));
+
+    CHECK (nothing.offsets.empty());
+    CHECK (voicingFromShape (chordFrom ("Dm7"), nothing).isEmpty());
+}
+
+TEST ("every chord quality has a key and a name, and the keys are distinct")
+{
+    std::vector<std::string> keys;
+
+    for (const auto quality : allChordQualities())
+    {
+        CHECK (! qualityKey (quality).empty());
+        CHECK (! qualityName (quality).empty());
+        keys.push_back (qualityKey (quality));
+    }
+
+    CHECK_EQ (keys.size(), allChordQualities().size());
+
+    std::sort (keys.begin(), keys.end());
+    CHECK (std::adjacent_find (keys.begin(), keys.end()) == keys.end());
 }

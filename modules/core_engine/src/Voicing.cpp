@@ -600,6 +600,59 @@ Voicing compingVoicing (const ChordSymbol& chord, const std::vector<int>& previo
     return searchCompingVoicing (chord, previousNotes, lowestNote, highestNote, true, seed);
 }
 
+VoicingShape shapeOf (const Voicing& voicing, const ChordSymbol& chord)
+{
+    VoicingShape shape;
+    shape.quality = chord.quality();
+
+    if (voicing.isEmpty())
+        return shape;
+
+    const auto lowest = voicing.lowestNote();
+    shape.anchorNote = lowest;
+
+    /*  The root at or below the lowest note, so the offsets are never negative.
+        A rootless voicing then reads as a shape sitting above a root that is
+        not played, which is what it is - rather than as one hanging under it. */
+    auto rootNote = lowest - toPitchClass (lowest - chord.root());
+
+    for (const auto note : voicing.midiNotes)
+        shape.offsets.push_back (note - rootNote);
+
+    return shape;
+}
+
+Voicing voicingFromShape (const ChordSymbol& chord, const VoicingShape& shape)
+{
+    if (shape.offsets.empty())
+        return {};
+
+    /*  Every octave of the root is a candidate; the one that lands the lowest
+        voice nearest where it was saved wins. Walked rather than divided,
+        because the arithmetic that "obviously" works is off by an octave
+        whenever the root's pitch class sits above the anchor's. */
+    auto bestRoot = toPitchClass (chord.root());
+    auto bestDistance = std::abs (bestRoot + shape.offsets.front() - shape.anchorNote);
+
+    for (auto root = toPitchClass (chord.root()); root < 128; root += 12)
+    {
+        const auto distance = std::abs (root + shape.offsets.front() - shape.anchorNote);
+
+        if (distance < bestDistance)
+        {
+            bestDistance = distance;
+            bestRoot = root;
+        }
+    }
+
+    std::vector<int> notes;
+
+    for (const auto offset : shape.offsets)
+        notes.push_back (bestRoot + offset);
+
+    return Voicing::fromNotes (std::move (notes));
+}
+
 int naturalAnchorFor (VoicingType type)
 {
     switch (type)

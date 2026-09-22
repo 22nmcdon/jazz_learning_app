@@ -87,6 +87,17 @@ JAZZ_EXPORT const char* jazzReharmStyles()
     return hold (jazz::api::reharmStyles());
 }
 
+JAZZ_EXPORT const char* jazzVoicingShape (const char* symbol, const char* midiNotesCsv)
+{
+    return hold (jazz::api::voicingShape (orEmpty (symbol), orEmpty (midiNotesCsv)));
+}
+
+JAZZ_EXPORT const char* jazzVoicingFromShape (const char* symbol, const char* offsetsCsv,
+                                              int anchorNote)
+{
+    return hold (jazz::api::voicingFromShape (orEmpty (symbol), orEmpty (offsetsCsv), anchorNote));
+}
+
 JAZZ_EXPORT const char* jazzAnalyseVoicing (const char* symbol, const char* midiNotesCsv,
                                             const char* practiseStyle)
 {

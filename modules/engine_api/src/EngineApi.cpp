@@ -775,6 +775,48 @@ std::string recogniseSubstitution (const char* progressionText,
                  + ",\"score\":" + std::to_string (found->score) + "}");
 }
 
+std::string voicingShape (const char* symbol, const char* midiNotesCsv)
+{
+    const auto chord = ChordSymbol::parse (symbol != nullptr ? symbol : "");
+
+    if (! chord.has_value())
+        return hold (jsonError ("Not a chord symbol"));
+
+    /*  Every key the engine knows, so a shell dropping a stored shape it can no
+        longer place is checking against this rather than against a copy. */
+    const auto qualities = jsonArray (core::allChordQualities(), [] (ChordQuality quality)
+                                      { return quoted (qualityKey (quality)); });
+
+    const auto voicing = Voicing::fromNotes (parseNoteList (midiNotesCsv != nullptr ? midiNotesCsv : ""));
+    const auto shape = shapeOf (voicing, *chord);
+
+    return hold ("{\"ok\":true,\"qualities\":" + qualities
+                 + ",\"quality\":" + quoted (qualityKey (chord->quality()))
+                 + ",\"qualityName\":" + quoted (qualityName (chord->quality()))
+                 + ",\"offsets\":" + jsonArray (shape.offsets, [] (int offset)
+                                                { return std::to_string (offset); })
+                 + ",\"anchor\":" + std::to_string (shape.anchorNote) + "}");
+}
+
+std::string voicingFromShape (const char* symbol, const char* offsetsCsv, int anchorNote)
+{
+    const auto chord = ChordSymbol::parse (symbol != nullptr ? symbol : "");
+
+    if (! chord.has_value())
+        return hold (jsonError ("Not a chord symbol"));
+
+    VoicingShape shape;
+    shape.quality = chord->quality();
+    shape.offsets = parseNoteList (offsetsCsv != nullptr ? offsetsCsv : "");
+    shape.anchorNote = anchorNote;
+
+    const auto voicing = core::voicingFromShape (*chord, shape);
+
+    return hold ("{\"ok\":true,\"notes\":"
+                 + jsonArray (voicing.midiNotes, [] (int note) { return std::to_string (note); })
+                 + ",\"describe\":" + quoted (voicing.describe()) + "}");
+}
+
 /** Idiomatic "sentence starter" voicings for a chord.
 
     Each shape has a register it belongs in - a solo left hand lives an octave

@@ -723,4 +723,49 @@ bool ChordSymbol::operator== (const ChordSymbol& other) const
            && sorted (namedExtensions) == sorted (other.namedExtensions);
 }
 
+std::string qualityKey (ChordQuality quality)
+{
+    switch (quality)
+    {
+        case ChordQuality::major:          return "major";
+        case ChordQuality::minor:          return "minor";
+        case ChordQuality::dominant:       return "dominant";
+        case ChordQuality::halfDiminished: return "halfDiminished";
+        case ChordQuality::diminished:     return "diminished";
+        case ChordQuality::augmented:      return "augmented";
+        case ChordQuality::suspended:      return "suspended";
+        case ChordQuality::minorMajor:     return "minorMajor";
+    }
+
+    return "major";
+}
+
+std::string qualityName (ChordQuality quality)
+{
+    switch (quality)
+    {
+        case ChordQuality::major:          return "major";
+        case ChordQuality::minor:          return "minor";
+        case ChordQuality::dominant:       return "dominant";
+        case ChordQuality::halfDiminished: return "half-diminished";
+        case ChordQuality::diminished:     return "diminished";
+        case ChordQuality::augmented:      return "augmented";
+        case ChordQuality::suspended:      return "suspended";
+        case ChordQuality::minorMajor:     return "minor-major";
+    }
+
+    return "major";
+}
+
+const std::vector<ChordQuality>& allChordQualities()
+{
+    static const std::vector<ChordQuality> qualities {
+        ChordQuality::major, ChordQuality::minor, ChordQuality::dominant,
+        ChordQuality::halfDiminished, ChordQuality::diminished,
+        ChordQuality::augmented, ChordQuality::suspended, ChordQuality::minorMajor
+    };
+
+    return qualities;
+}
+
 } // namespace jazz::core

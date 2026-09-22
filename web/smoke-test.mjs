@@ -307,6 +307,110 @@ try {
     () => document.querySelectorAll("#keyboard .key[aria-pressed=\"true\"]").length > 2, null, { timeout: 10000 });
   check("Show me one puts a voicing under the hands", true);
 
+  /*  The voicing library, and the claim it lives or dies by: a shape saved on
+      one chord comes back on another chord of the same kind, in another key.
+
+      Done on its own page and its own context, because it writes to the store
+      and the rest of the suite should not inherit somebody's saved shapes.
+      Bar 1 of the shipped chart is Dm7 and bar 3 is Cmaj7, so a minor shape
+      saved on the first has to be offered on a *minor* bar and not on the
+      major one - which is the difference between saving against a quality and
+      saving against a chord. */
+  {
+    const mine = await browser.newContext();
+    const keeper = await mine.newPage();
+
+    await keeper.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await keeper.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await keeper.locator("#helpDialog[open]").count()) await keeper.locator("#helpClose").click();
+
+    // A rootless left hand over Dm7: F3 A3 C4 E4. Played on the keys rather
+    // than poked into state, so what is saved is what a player would save.
+    const heldNow = () => keeper.evaluate(() =>
+      [...document.querySelectorAll("#keyboard .key[aria-pressed=\"true\"]")]
+        .map((key) => Number(key.dataset.note)).sort((a, b) => a - b));
+
+    // Clicked, the way the rest of the suite plays keys - in chord practice the
+    // keys latch, so four clicks are one voicing held.
+    for (const note of [53, 57, 60, 64]) {
+      await keeper.locator(`#keyboard .key[data-note="${note}"]`).click();
+    }
+
+    await keeper.waitForFunction(
+      () => document.querySelectorAll("#keyboard .key[aria-pressed=\"true\"]").length === 4,
+      null, { timeout: 10000 });
+
+    const saved = await heldNow();
+
+    await keeper.locator("#readingButton").click();
+    await keeper.locator("#saveVoicing").click();
+    await keeper.waitForFunction(
+      () => document.querySelectorAll("#voicingList li").length > 0, null, { timeout: 10000 });
+
+    check(`a voicing you played is saved (${saved.join(" ")})`,
+          (await keeper.locator("#voicingList li").count()) === 1);
+
+    // Bar 3 is Cmaj7 - a different quality - so the shape must not be offered.
+    await keeper.locator("#readingButton").click();
+    await keeper.locator("#systems .bar").nth(2).click();
+    await keeper.locator("#readingButton").click();
+    await keeper.waitForFunction(
+      () => document.querySelector("#voicingLibraryNote").textContent.length > 0,
+      null, { timeout: 10000 });
+
+    const onMajor = await keeper.locator("#voicingList li").count();
+    const majorNote = (await keeper.locator("#voicingLibraryNote").innerText()).trim();
+
+    check(`and is not offered on a chord of another kind (${majorNote})`, onMajor === 0);
+
+    /*  Now the half that matters. Bar 7 of the shipped chart is another minor
+        chord in a different key, so the same shape has to come back there -
+        transposed, and in the register it was saved in rather than wherever a
+        default anchor would put it. */
+    await keeper.locator("#readingButton").click();
+    const minorBar = await keeper.evaluate(() => {
+      const bars = [...document.querySelectorAll("#systems .bar[data-index]")];
+      const index = bars.findIndex((bar, i) => i > 0 && /m7\b/.test(bar.textContent)
+                                               && !/m7b5/.test(bar.textContent));
+      return index;
+    });
+
+    if (minorBar > 0) {
+      await keeper.locator("#systems .bar").nth(minorBar).click();
+      await keeper.locator("#readingButton").click();
+      await keeper.waitForFunction(
+        () => document.querySelectorAll("#voicingList li").length > 0, null, { timeout: 10000 });
+
+      const shown = (await keeper.locator("#voicingList li span").first().innerText()).trim();
+      const chordThere = await keeper.evaluate((i) =>
+        document.querySelectorAll("#systems .bar[data-index]")[i].textContent.replace(/\s/g, ""),
+        minorBar);
+
+      check(`a saved shape comes back on another minor chord (${chordThere}: ${shown})`,
+            shown.length > 0 && shown !== "F3 A3 C4 E4");
+
+      await keeper.locator("#readingButton").click();
+      await keeper.locator("#showVoicing").click();
+      await keeper.waitForFunction(
+        () => document.querySelectorAll("#keyboard .key[aria-pressed=\"true\"]").length > 2,
+        null, { timeout: 10000 });
+
+      const played = await heldNow();
+
+      // The intervals are the shape; the notes are the key. Yours comes first,
+      // so this is the saved shape rather than one of the engine's.
+      const gaps = (notes) => notes.slice(1).map((note, i) => note - notes[i]).join(",");
+
+      check(`and Show me one plays it, in that key (${played.join(" ")})`,
+            gaps(played) === gaps(saved) && played.join(" ") !== saved.join(" "));
+    } else {
+      check("a saved shape comes back on another minor chord (no second minor bar)", false);
+    }
+
+    await keeper.close();
+    await mine.close();
+  }
+
   const verdict = (await page.locator("#verdict").innerText()).trim();
   check(`the voicing is judged (${verdict || "nothing"})`, verdict.length > 0);
 
