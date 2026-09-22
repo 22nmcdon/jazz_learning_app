@@ -26,9 +26,18 @@ juce_add_gui_app(JazzLearningApp
 
 # The page is the UI, so it ships inside the binary: no files beside the app,
 # and no local server to start.
-# The page, and the band's recorded instruments. The samples live in assets/
-# rather than in web/ or app/ because both shells need them: the app compiles
-# them in here, and web/build.sh copies the same files next to the page.
+#
+# The page, the band's recorded instruments, and pdf.js. Everything but the page
+# lives in assets/ rather than in web/ or app/ because both shells need it: the
+# app compiles it in here, and web/build.sh copies the same files next to the
+# page.
+#
+# pdf.js is 1.4MB of the binary, which is most of what assets/ weighs - it was
+# 296KB before. That is the price of reading a PDF without a C++ PDF library and
+# without running somebody else's script off a CDN, and it was chosen rather
+# than arrived at. The samples are recordings and cannot shrink; this one could
+# be dropped again by giving the app a native extractor instead, which is a much
+# larger change than it sounds.
 juce_add_binary_data(JazzWebUiData
     HEADER_NAME BinaryData.h
     NAMESPACE BinaryData
@@ -36,7 +45,9 @@ juce_add_binary_data(JazzWebUiData
         ${CMAKE_CURRENT_SOURCE_DIR}/../web/index.html
         ${CMAKE_CURRENT_SOURCE_DIR}/../assets/bass-upright.wav
         ${CMAKE_CURRENT_SOURCE_DIR}/../assets/bass-electric.wav
-        ${CMAKE_CURRENT_SOURCE_DIR}/../assets/piano-grand.wav)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../assets/piano-grand.wav
+        ${CMAKE_CURRENT_SOURCE_DIR}/../assets/pdf.min.js
+        ${CMAKE_CURRENT_SOURCE_DIR}/../assets/pdf.worker.min.js)
 
 target_sources(JazzLearningApp PRIVATE
     src/Main.cpp

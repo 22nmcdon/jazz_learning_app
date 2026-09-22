@@ -10997,6 +10997,22 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         return;
       }
 
+      /*  A PDF arrives as bytes rather than as text, because it is not text.
+
+          Rebuilt into a real `File` rather than handed over as a look-alike,
+          so `readPdf` sees exactly the same kind of thing whether it came from
+          the page's own file input or from the shell's native picker. One code
+          path, and the app stops being the shell that cannot read a PDF. */
+      if (typeof result.pdf === "string") {
+        var binary = atob(result.pdf);
+        var bytes = new Uint8Array(binary.length);
+
+        for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+        readPdf(new File([bytes], result.name || "chart.pdf", { type: "application/pdf" }));
+        return;
+      }
+
       readChartText(result.text, "that file");
     });
 
@@ -11043,7 +11059,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     if (kind === "native") {
       el.colophonEngine.textContent = "Running natively, in the desktop app.";
-      el.colophonFraming.textContent = "Reading and printing a PDF are the browser's, not this shell's.";
+      el.colophonFraming.textContent = "Printing is the browser's, not this shell's.";
       return;
     }
 

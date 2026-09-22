@@ -47,6 +47,16 @@ namespace
         return 0;
     }
 
+    /** Lays one compiled-in resource down on disk, saying whether it landed. */
+    bool writeResource (const File& target, const char* resourceName)
+    {
+        int size = 0;
+        const auto* data = BinaryData::getNamedResource (resourceName, size);
+
+        return data != nullptr
+                 && target.replaceWithData (data, static_cast<std::size_t> (size));
+    }
+
     /** Answers one of the engine's questions.
 
         Named rather than dispatched by table so an unknown name is an answer
@@ -176,8 +186,9 @@ WebUi::~WebUi()
     // The page is rewritten every launch, so there is never a reason to leave
     // one behind - and a copy of the interface sitting in a shared directory
     // between runs is part of what the unpredictable name exists to avoid.
-    if (pageFile.existsAsFile())
-        pageFile.deleteFile();
+    // Recursively, because it is a folder now: the page has pdf.js beside it.
+    if (pageFolder.isDirectory())
+        pageFolder.deleteRecursively();
 }
 
 void WebUi::resized()
@@ -208,26 +219,66 @@ void WebUi::resized()
     specifically - which is exactly the sort that goes unnoticed on a Mac.
 
     `createTempFile` gives a name nobody can guess, and the sticky bit on `/tmp`
-    does the rest: a file somebody else owns cannot be replaced, and a name they
-    cannot predict cannot be staked out in advance.
+    does the rest: a directory somebody else owns cannot be replaced, and a name
+    they cannot predict cannot be staked out in advance.
+
+    **It is a directory now, and it used to be a single file.** The note here
+    used to say that nothing in the page is fetched relative to itself, so the
+    name was free to be random - true when the styles and the script were inline
+    and the engine came over the bridge. pdf.js broke it: reading a PDF needs a
+    real script file, and the page asks for it at `assets/pdf.min.js`, which is
+    a sibling. So the unguessable name names a folder instead, holding the page
+    and that one directory. The security argument is untouched by the change -
+    an unpredictable directory is no easier to stake out than an unpredictable
+    file - but it is now a claim about a folder, which is why this paragraph
+    exists rather than the one it replaced.
 */
 String WebUi::pageUrl()
 {
-    int size = 0;
-    const auto* data = BinaryData::getNamedResource ("index_html", size);
+    // A name nobody can guess, used as a folder rather than as a file.
+    pageFolder = File::createTempFile ({});
 
-    if (data == nullptr)
+    // Nothing should be here - the name is random and this process just made it
+    // up - but a folder that already exists is one whose contents are somebody
+    // else's, and the page must not be laid down beside them.
+    if (pageFolder.exists())
+        pageFolder.deleteRecursively();
+
+    const auto assets = pageFolder.getChildFile ("assets");
+
+    // Creates the parent on the way, so the folder itself needs no separate
+    // call. A failure here is a shell with nowhere to put its interface.
+    if (! assets.createDirectory())
         return {};
 
-    // Nothing in the page is fetched relative to itself - the styles and script
-    // are inline, and in the app the engine arrives over the bridge rather than
-    // as a file - so the name is free to be random.
-    pageFile = File::createTempFile (".html");
-    pageFile.replaceWithData (data, static_cast<std::size_t> (size));
+    const auto page = pageFolder.getChildFile ("index.html");
 
-    return pageFile.getFullPathName().startsWith ("/")
-             ? "file://" + pageFile.getFullPathName()
-             : pageFile.getFullPathName();
+    if (! writeResource (page, "index_html"))
+        return {};
+
+    /*  pdf.js, beside the page where it asks for it.
+
+        Best effort on purpose. Reading a PDF is one feature; the interface is
+        everything. A shell that could not write these two files should still
+        start and let somebody paste an iReal Pro link, which is exactly what
+        the page does when the library will not load - `readPdf` says so in
+        words rather than failing silently.
+
+        The worker is written even though nothing ends up running in one.
+        Measured from a `file://` page: WebKitGTK constructs the `Worker`
+        happily and Chromium refuses it outright ("cannot be accessed from
+        origin 'null'") - and in both, pdf.js settles on its own fake worker
+        and parses on the main thread. Slower, and fine for one import. It is
+        laid down because that fallback still loads the file, and because the
+        two engines disagreeing about the same page is exactly the sort of
+        thing to write down rather than rediscover.
+    */
+    writeResource (assets.getChildFile ("pdf.min.js"), "pdf_min_js");
+    writeResource (assets.getChildFile ("pdf.worker.min.js"), "pdf_worker_min_js");
+
+    return page.getFullPathName().startsWith ("/")
+             ? "file://" + page.getFullPathName()
+             : page.getFullPathName();
 }
 
 //==============================================================================
@@ -392,12 +443,32 @@ void WebUi::handleFileOpen (const var&)
 
         auto* result = new DynamicObject();
 
-        // A PDF is not text, and this shell has no library to make it text.
+        /*  A PDF is not text, so it goes over as bytes and the page's own
+            pdf.js turns it into positioned text.
+
+            This shell has no PDF library and does not need one. The engine's
+            reader was always format-agnostic - `ChartFormats.h` says pulling
+            text out of a file is the shell's job and deciding what it means is
+            the engine's - and the missing half was never theory, it was the
+            extractor. The page already had one. What it lacked in the app was
+            the file, which `pageUrl` now writes beside it.
+
+            Base64 because the bridge carries a `var`, and a `var` carries a
+            string. A lead sheet is well under a megabyte; this is not the path
+            to send a scanned book down.
+        */
         if (file.hasFileExtension ("pdf"))
-            result->setProperty ("error",
-                                 "This app cannot read a PDF yet - it has no PDF library. "
-                                 "Export the tune as an iReal Pro link, or share it as HTML, "
-                                 "and paste that instead.");
+        {
+            if (MemoryBlock bytes; file.loadFileAsData (bytes) && bytes.getSize() > 0)
+            {
+                result->setProperty ("name", file.getFileName());
+                result->setProperty ("pdf", Base64::toBase64 (bytes.getData(), bytes.getSize()));
+            }
+            else
+            {
+                result->setProperty ("error", "That file is empty, or could not be opened.");
+            }
+        }
         else if (const auto text = file.loadFileAsString(); text.isNotEmpty())
             result->setProperty ("text", text);
         else

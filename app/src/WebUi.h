@@ -38,7 +38,7 @@ public:
     void resized() override;
 
 private:
-    /** Lays the page down where the webview can load it, and says where. */
+    /** Lays the page and its siblings down where the webview can load them. */
     juce::String pageUrl();
 
     /** The page asking the engine a question; the answer goes back by id. */
@@ -67,7 +67,8 @@ private:
     DeviceRelay relay { *this };
 
     std::unique_ptr<juce::WebBrowserComponent> browser;
-    juce::File pageFile;
+    /** The unguessable temp folder holding index.html and assets/. */
+    juce::File pageFolder;
     std::unique_ptr<juce::FileChooser> chooser;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WebUi)
