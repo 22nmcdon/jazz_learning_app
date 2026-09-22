@@ -1030,7 +1030,9 @@ try {
       answering "is the panel open" - read the section's own `hidden` instead,
       which is the thing `applyMode` sets and is true of it whether or not
       anyone has opened anything. */
-  const bandOffered = () => page.evaluate(() => !document.querySelector("#bandGroup").hidden);
+  // The band group became a panel of its own, so what says there is a band
+  // to hear is whether its button is there at all.
+  const bandOffered = () => page.evaluate(() => !document.querySelector("#bandWrap").hidden);
 
   /*  Two things sit between this and a bar: the settings panel, which at a
       phone width is drawn over most of the page, and the bar's own dialog,
@@ -1040,6 +1042,13 @@ try {
     if (!(await page.locator("#menuPanel").isHidden()))
       await page.locator("#menuButton").click();
 
+    // The band's panel hangs over the chart, so it has to be out of the way
+    // before a bar can be clicked. The page closes it on any outside click,
+    // which is the same thing a person experiences - but Playwright refuses to
+    // click through a covering element, so the test does it in the open.
+    if (!(await page.locator("#bandPanel").isHidden()))
+      await page.locator("#bandButton").click();
+
     await bars.nth(n).click();
 
     if (await page.locator("#chordDialog[open]").count())
@@ -1047,16 +1056,43 @@ try {
   };
 
   await page.locator("#menuButton").click();
+  /*  The band moved out of the settings panel and into one of its own, hung
+      from the right of the chart's row - so reaching a band control means
+      opening that panel rather than Practice.
+
+      Idempotent on purpose. The checks below toggle panels freely and clicking
+      a bar closes whichever is open, so asking for the band panel before every
+      band control is more robust than pairing each open with its close. */
+  const openBand = async (target = page) => {
+    /*  Practice hangs down over the chart's row and covers this button, so it
+        gets out of the way first - which is what a person does too.
+
+        Below 760px that panel is a bottom sheet sitting over its own button,
+        which is why it has a close row at all, so the way out depends on the
+        width. Clicking the button there waits forever on a sheet that is
+        covering it. */
+    if (!(await target.locator("#menuPanel").isHidden())) {
+      if (await target.locator("#menuClose").isVisible())
+        await target.locator("#menuClose").click();
+      else
+        await target.locator("#menuButton").click();
+    }
+
+    if (await target.locator("#bandPanel[hidden]").count())
+      await target.locator("#bandButton").click();
+  };
+
   // Three instruments, all three of them playable. This asserted that one was
   // disabled for as long as the drummer was named and not built; the kit is
   // the thing that changed, not the test's opinion of it.
   check("comping offers a band of three, all of them playable",
-        (await page.locator("#bandGroup").isVisible())
-        && (await page.locator("#bandGroup input[type=checkbox]").count()) === 3
-        && (await page.locator("#bandGroup input:disabled").count()) === 0);
+        (await page.locator("#bandButton").isVisible())
+        && (await page.locator("#bandPanel input[type=checkbox]").count()) === 3
+        && (await page.locator("#bandPanel input:disabled").count()) === 0);
 
   // Two recorded basses, and neither is on the player's own sound menu: nobody
   // practises voicings on a double bass.
+  await openBand();
   const bassSounds = await page.locator("#bassSound option").allInnerTexts();
 
   check(`the bass has its own recorded instruments (${bassSounds.join(", ")})`,
@@ -1065,6 +1101,7 @@ try {
         && !(await page.locator("#soundBank option[value=upright]").count()));
 
   // One registry of sounds, not a second copy of the list.
+  await openBand();
   const compSounds = await page.locator("#compSound option").allInnerTexts();
   const menuSounds = await page.locator("#soundBank option").allInnerTexts();
 
@@ -1078,6 +1115,7 @@ try {
   await goToBar(0);
   await page.locator("#menuButton").click();
   await forgetSounds();
+  await openBand();
   await page.locator("#compPiano").check();
   await page.waitForFunction(() => window.__sounded.length >= 8, null, { timeout: 10000 });
 
@@ -1105,6 +1143,7 @@ try {
         held >= 2);
 
   await page.locator("#menuButton").click();
+  await openBand();
   await page.selectOption("#compSound", "silent");
   await forgetSounds();
   await goToBar(2);
@@ -1119,10 +1158,13 @@ try {
 
   // The check above left the band silent, and a silent band schedules nothing
   // for these to read.
+  await openBand();
   await page.selectOption("#compSound", { value: "ep" });
 
+  await openBand();
   const compStyleNames = await page.locator("#compStyle option").allInnerTexts();
 
+  await openBand();
   check(`the comping styles come from the engine (${compStyleNames.length})`,
         compStyleNames.length >= 2
         && (await page.locator("#compStyleNote").innerText()).trim().length > 0);
@@ -1144,7 +1186,9 @@ try {
       in beats from the first click. */
   const compRhythmOf = async (style) => {
     await page.locator("#menuButton").click();
+    await openBand();
     await page.selectOption("#compStyle", style);
+    await openBand();
     await page.locator("#compPiano").check();
     await page.locator("#menuButton").click();
 
@@ -1241,7 +1285,7 @@ try {
   */
   const charleston = await compRhythmOf("charleston");
 
-  await page.locator("#menuButton").click();
+  await openBand();
   check("the engine offers the style editor", await page.locator("#styleEdit").isVisible());
 
   await page.locator("#styleEdit").click();
@@ -1273,6 +1317,7 @@ try {
 
   // And the page put the whole style on the wire, not a key the engine would
   // have quietly failed to find and fallen back to four-to-the-bar for.
+  await openBand();
   const reference = await page.evaluate(() => document.querySelector("#compStyle").value);
   check(`the copy is its own style, not the name of one (${reference})`, reference === "yours");
 
@@ -1284,6 +1329,7 @@ try {
       have, and the comp has to gain a hit.
   */
   await page.locator("#menuButton").click();
+  await openBand();
   await page.locator("#styleEdit").click();
   await page.waitForSelector("#styleDialog[open]", { timeout: 10000 });
 
@@ -1325,7 +1371,9 @@ try {
       find before `currentCompStyle()` existed.
   */
   await page.locator("#menuButton").click();
+  await openBand();
   await page.selectOption("#compStyle", "charleston");
+  await openBand();
   await page.locator("#styleEdit").click();
   await page.waitForSelector("#styleDialog[open]", { timeout: 10000 });
 
@@ -1360,7 +1408,9 @@ try {
       than there are chords means the band is choosing rather than repeating.
   */
   await page.locator("#menuButton").click();
+  await openBand();
   await page.selectOption("#compStyle", "charleston");
+  await openBand();
   await page.locator("#compPiano").check();
   await page.locator("#menuButton").click();
 
@@ -1409,7 +1459,9 @@ try {
       time never sounds at all, which is exactly how the rest of the bar is
       taken back. */
   await page.locator("#menuButton").click();
+  await openBand();
   await page.locator("#compBass").check();
+  await openBand();
   await page.locator("#compDrums").check();
   await page.locator("#menuButton").click();
 
@@ -1455,7 +1507,9 @@ try {
     null, { timeout: 10000 });
 
   await page.locator("#menuButton").click();
+  await openBand();
   await page.locator("#compBass").uncheck();
+  await openBand();
   await page.locator("#compDrums").uncheck();
   await page.locator("#menuButton").click();
 
@@ -1463,6 +1517,7 @@ try {
       the same comp on the same bar comes out of a different kind of node. That
       is the check: not that it made a sound, but that it made it the new way. */
   await page.locator("#menuButton").click();
+  await openBand();
   await page.selectOption("#compSound", { value: "grand" });
   await page.locator("#menuButton").click();
   await goToBar(1);
@@ -1476,6 +1531,7 @@ try {
           window.__sounded.filter((s) => s.type === "sample").length)) >= 4);
 
   await page.locator("#menuButton").click();
+  await openBand();
   await page.selectOption("#compSound", { value: "ep" });
   await page.locator("#menuButton").click();
 
@@ -1483,7 +1539,9 @@ try {
       and a walking line is one note to the beat, which is what separates it
       from the piano's comping at a glance. */
   await page.locator("#menuButton").click();
+  await openBand();
   await page.locator("#compPiano").uncheck();
+  await openBand();
   await page.locator("#compBass").check();
   await page.locator("#menuButton").click();
 
@@ -1511,6 +1569,7 @@ try {
   check(`the walking line lands on beats (${bassOffBeats.length} off)`, bassOffBeats.length === 0);
 
   await page.locator("#menuButton").click();
+  await openBand();
   await page.locator("#compBass").uncheck();
   await page.locator("#menuButton").click();
 
@@ -1523,6 +1582,7 @@ try {
       the snare are noise read out of a buffer, so they arrive as samples, and
       the kick is a falling sine, which nothing else on this page is. */
   await page.locator("#menuButton").click();
+  await openBand();
   await page.locator("#compDrums").check();
   await page.locator("#menuButton").click();
 
@@ -1555,6 +1615,7 @@ try {
         skips.length > 0);
 
   await page.locator("#menuButton").click();
+  await openBand();
   await page.locator("#compDrums").uncheck();
   await page.locator("#menuButton").click();
 
@@ -1583,7 +1644,9 @@ try {
 
   // Put it back the way the rest of the checks expect to find it.
   await page.locator("#menuButton").click();
+  await openBand();
   await page.selectOption("#compSound", "ep");
+  await openBand();
   await page.locator("#compPiano").uncheck();
   await goToBar(0);
 
@@ -2118,10 +2181,15 @@ try {
 
     await before.locator("#menuButton").click();
     await before.selectOption("#soundBank", "grand");
+    await openBand(before);
     await before.locator("#compBass").check();
+    await openBand(before);
     await before.locator("#compDrums").check();
+    await openBand(before);
     await before.selectOption("#bassSound", { index: 1 });
+    await openBand(before);
     const styleWanted = await before.locator("#compStyle option").nth(1).getAttribute("value");
+    await openBand(before);
     await before.selectOption("#compStyle", styleWanted);
     await before.locator("#menuButton").click();
 
@@ -2267,7 +2335,9 @@ try {
     if (await wrote.locator("#helpDialog[open]").count()) await wrote.locator("#helpClose").click();
 
     await wrote.locator("#menuButton").click();
+    await openBand(wrote);
     await wrote.selectOption("#compStyle", "ballad");
+    await openBand(wrote);
     await wrote.locator("#styleEdit").click();
     await wrote.waitForSelector("#styleDialog[open]", { timeout: 10000 });
     await wrote.locator("#styleApply").click();
@@ -2291,6 +2361,7 @@ try {
     if (await wrote.locator("#helpDialog[open]").count()) await wrote.locator("#helpClose").click();
 
     await wrote.locator("#menuButton").click();
+    await openBand(wrote);
     await wrote.locator("#styleEdit").click();
     await wrote.waitForSelector("#styleDialog[open]", { timeout: 10000 });
 
@@ -3350,6 +3421,7 @@ try {
   if (await narrow.locator("#helpDialog[open]").count()) await narrow.locator("#helpClose").click();
 
   await narrow.locator("#menuButton").click();
+  await openBand(narrow);
   await narrow.locator("#styleEdit").click();
   await narrow.waitForSelector("#styleDialog[open]", { timeout: 10000 });
 

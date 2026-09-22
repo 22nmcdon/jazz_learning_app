@@ -807,6 +807,34 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
 .record-chip[data-met="no"] { color: var(--text-soft); border-style: dashed; }
 .record-empty { font-size: 13.5px; line-height: 1.6; color: var(--text-soft); }
 
+/* Right-aligned in the chart's own row. `auto` on the first of them pushes
+   everything after it over; the row's own `gap` keeps them apart. */
+.chart-bar-end { margin-left: auto; }
+.chart-bar-end ~ .chart-bar-end { margin-left: 0; }
+
+/*  The band's own panel, hung from the right of the chart's row.
+
+    Wider than the settings panel it came out of - that one was a 300px column
+    sharing its height with five other sections - and its fields sit two abreast
+    where there is width for them. The switches and the notes about them stay
+    full width, because they read as sentences rather than as a column. */
+#bandPanel {
+  right: 0;
+  left: auto;
+  width: min(460px, calc(100vw - 32px));
+}
+#bandBody > .menu-option,
+#bandBody > .menu-note { grid-column: 1 / -1; }
+
+@media (min-width: 620px) {
+  #bandBody {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 22px;
+    align-items: start;
+  }
+}
+
 /*  Your tunes, and one tune's memory.
 
     The list is rows you press, not a select: a select shows one at a time and
@@ -2325,63 +2353,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <p class="menu-note" id="soundNote">Browsers start audio on the first click, so the first key you press may be quiet.</p>
           </div>
 
-          <!-- Shown whenever there is a band to hear: solo practice, and chord
-               practice once the clock is running. `applyMode` decides, because
-               this depends on the transport as well as the mode and
-               `data-mode` only knows about the mode. -->
-          <div class="menu-group" id="bandGroup">
-            <span class="menu-title">The band</span>
-            <!-- The piano is yours in chord practice, so it is not on offer
-                 there: a comp under a player being asked to comp would be
-                 playing the very thing they are reaching for. The bass player
-                 stays, which is what makes the root under a voicing worth
-                 mentioning. -->
-            <label class="menu-option" data-mode="solo">
-              <input type="checkbox" id="compPiano"> Piano comping
-            </label>
-            <label class="menu-option">
-              <input type="checkbox" id="compBass"> Bass walking
-            </label>
-            <!-- No sound picker for this one, unlike the two below: the piano
-                 and the bass each offer a recording *or* a synth and the
-                 choice is a real one, while the kit is synthesised and there is
-                 only the one. A menu offering a single option is a menu asking
-                 a question with one answer. -->
-            <label class="menu-option">
-              <input type="checkbox" id="compDrums"> Drums
-            </label>
-            <p class="menu-note" id="compingNote">Two-handed rootless voicings, led from the
-              chord before rather than spelled afresh. The clock plays them in time; without
-              it, each bar sounds as you land on it. The kit keeps time rather than
-              following the chart, so it needs the clock and nothing else.</p>
-
-            <div class="menu-field">
-              <label class="menu-label" for="compStyle">Comping style</label>
-              <select class="menu-select" id="compStyle"></select>
-              <p class="menu-note" id="compStyleNote"></p>
-              <!-- Hidden until the engine's answer proves it can be used. The
-                   boot-time guard checks that a call *exists* and cannot see a
-                   call whose answer changed shape, so this feature-detects on
-                   the data: an engine that does not send a style's slots
-                   cannot be handed an edited one back. -->
-              <button class="link-btn" type="button" id="styleEdit" hidden>Write your own</button>
-            </div>
-
-            <div class="menu-field">
-              <label class="menu-label" for="compSound">Piano sound</label>
-              <select class="menu-select" id="compSound"></select>
-              <p class="menu-note">The same sounds offered at the top of this panel, chosen
-                separately - the band is not playing your instrument.</p>
-            </div>
-
-            <div class="menu-field">
-              <label class="menu-label" for="bassSound">Bass sound</label>
-              <select class="menu-select" id="bassSound"></select>
-              <p class="menu-note">An upright and an electric, both recorded. Nobody
-                practises voicings on a bass, so these are the band's alone.</p>
-            </div>
-          </div>
-
           <!-- A list of one-of-these choices is a dropdown, not a stack of
                radios. Six voicing shapes and two colour settings came to eight
                rows of the menu between them, which was most of its height for
@@ -2650,6 +2621,93 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <div class="menu-field" id="openTuneField" hidden>
               <label class="menu-label" for="openTune">Put one back on the stand</label>
               <select class="menu-select" id="openTune"></select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right-aligned, and the row is the reason they are here rather than in
+           the top bar. It exists already and is 16px tall whatever is in it, so
+           a control added here costs the chart **nothing** - measured at eight
+           widths from 390 to 1440, with the sheet's top edge unmoved at every
+           one. The top bar could hold no second labelled button at any width,
+           and between 850 and 1010 it could not hold a first.
+
+           They scroll away with a long chart, which is what this placement
+           costs. `Chart` beside them has always done that: these are things you
+           set the room up with and then play, not things you reach for
+           mid-take. -->
+      <!-- A panel rather than a dialog, which is what it replaces and what it
+           should still behave like. These are switches you flick and then
+           listen to: ticking Drums sounds the bar you are on while the panel is
+           still open, and a modal that dimmed the page to do that would make
+           changing the drummer mid-practice a heavier gesture than it is.
+
+           What it gains over the dropdown it came from is room. It was a 300px
+           column inside a panel of six sections, sharing height with the sound
+           bank and the colophon; here it is as wide as it needs to be and lays
+           its fields out two abreast. -->
+      <div class="menu-wrap chart-bar-end" id="bandWrap" hidden>
+        <button class="link-btn" type="button" id="bandButton"
+                aria-expanded="false" aria-controls="bandPanel">The band</button>
+
+        <div class="menu-panel" id="bandPanel" hidden>
+          <div class="menu-head">
+            <span class="menu-head-title">The band</span>
+            <button class="close-btn" type="button" id="bandClose" aria-label="Close">&times;</button>
+          </div>
+
+          <div id="bandBody">
+
+
+            <!-- The piano is yours in chord practice, so it is not on offer
+                 there: a comp under a player being asked to comp would be
+                 playing the very thing they are reaching for. The bass player
+                 stays, which is what makes the root under a voicing worth
+                 mentioning. -->
+            <label class="menu-option" data-mode="solo">
+              <input type="checkbox" id="compPiano"> Piano comping
+            </label>
+            <label class="menu-option">
+              <input type="checkbox" id="compBass"> Bass walking
+            </label>
+            <!-- No sound picker for this one, unlike the two below: the piano
+                 and the bass each offer a recording *or* a synth and the
+                 choice is a real one, while the kit is synthesised and there is
+                 only the one. A menu offering a single option is a menu asking
+                 a question with one answer. -->
+            <label class="menu-option">
+              <input type="checkbox" id="compDrums"> Drums
+            </label>
+            <p class="menu-note" id="compingNote">Two-handed rootless voicings, led from the
+              chord before rather than spelled afresh. The clock plays them in time; without
+              it, each bar sounds as you land on it. The kit keeps time rather than
+              following the chart, so it needs the clock and nothing else.</p>
+
+            <div class="menu-field">
+              <label class="menu-label" for="compStyle">Comping style</label>
+              <select class="menu-select" id="compStyle"></select>
+              <p class="menu-note" id="compStyleNote"></p>
+              <!-- Hidden until the engine's answer proves it can be used. The
+                   boot-time guard checks that a call *exists* and cannot see a
+                   call whose answer changed shape, so this feature-detects on
+                   the data: an engine that does not send a style's slots
+                   cannot be handed an edited one back. -->
+              <button class="link-btn" type="button" id="styleEdit" hidden>Write your own</button>
+            </div>
+
+            <div class="menu-field">
+              <label class="menu-label" for="compSound">Piano sound</label>
+              <select class="menu-select" id="compSound"></select>
+              <p class="menu-note">The same sounds offered at the top of this panel, chosen
+                separately - the band is not playing your instrument.</p>
+            </div>
+
+            <div class="menu-field">
+              <label class="menu-label" for="bassSound">Bass sound</label>
+              <select class="menu-select" id="bassSound"></select>
+              <p class="menu-note">An upright and an electric, both recorded. Nobody
+                practises voicings on a bass, so these are the band's alone.</p>
             </div>
           </div>
         </div>
@@ -3723,7 +3781,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "helpButton", "helpDialog", "helpClose", "helpTabs",
    "helpTabChart", "helpTabPlaying", "helpTabReading", "helpTabTime", "helpTabBand",
    "helpPanelChart", "helpPanelPlaying", "helpPanelReading", "helpPanelTime", "helpPanelBand",
-   "bandGroup", "compPiano", "compSound", "compingNote",
+   "bandWrap", "bandButton", "bandPanel", "bandClose", "bandBody",
+   "compPiano", "compSound", "compingNote",
    "compStyle", "compStyleNote", "compBass", "bassSound", "compDrums",
    "transportButton", "transportPanel",
    "playStatic", "playLive", "playingNote", "metreRow", "tempo", "timeSig", "countInRow", "countIn",
@@ -5415,7 +5474,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // very voicing they are reaching for, which is the same argument that used
     // to keep the whole band out of chord practice. The bass player stays, and
     // is what makes a doubled root worth mentioning.
-    el.bandGroup.hidden = !(soloing || compingNow);
+    // The button appears exactly when there is a band to hear, which is what
+    // the group inside it used to do. Behind a button that reads honestly: no
+    // band, no button, rather than a settings panel with a section that comes
+    // and goes.
+    el.bandWrap.hidden = !(soloing || compingNow);
+
+    // ...and it cannot be left open over a mode that has no band in it.
+    if (el.bandWrap.hidden) setBandOpen(false);
 
     compingPianoForMode(soloing);
 
@@ -8536,6 +8602,22 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       : "This chart is not saved. Takes still count as practice - just not against a tune.");
   }
 
+  function setBandOpen(open) {
+    el.bandPanel.hidden = !open;
+    el.bandButton.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  el.bandButton.addEventListener("click", function () {
+    // It sits in the chart's own row, so the chart menu gets out of its way -
+    // the same courtesy the three menus already show one another.
+    setChartOpen(false);
+    setMenuOpen(false);
+    setTransportOpen(false);
+    setBandOpen(el.bandPanel.hidden);
+  });
+
+  el.bandClose.addEventListener("click", function () { setBandOpen(false); });
+
   function setChartOpen(open) {
     el.chartPanel.hidden = !open;
     el.chartButton.setAttribute("aria-expanded", open ? "true" : "false");
@@ -8547,18 +8629,21 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   el.menuButton.addEventListener("click", function () {
+    setBandOpen(false);
     setTransportOpen(false);
     setChartOpen(false);
     setMenuOpen(el.menuPanel.hidden);
   });
 
   el.transportButton.addEventListener("click", function () {
+    setBandOpen(false);
     setMenuOpen(false);
     setChartOpen(false);
     setTransportOpen(el.transportPanel.hidden);
   });
 
   el.chartButton.addEventListener("click", function () {
+    setBandOpen(false);
     setMenuOpen(false);
     setTransportOpen(false);
     setChartOpen(el.chartPanel.hidden);
@@ -8569,18 +8654,26 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.menuButton.focus();
   });
 
-  // All three panels are `.menu-wrap` children, so one rule closes whichever
-  // is open the moment a click lands anywhere else on the page.
+  // All four panels are `.menu-wrap` children, so one rule closes whichever
+  // is open the moment a click lands anywhere else on the page - including on
+  // a bar, which is why the band's panel can sit over the chart without
+  // getting in the way of it.
   document.addEventListener("click", function (event) {
     if (event.target.closest(".menu-wrap")) return;
 
     setMenuOpen(false);
     setTransportOpen(false);
     setChartOpen(false);
+    setBandOpen(false);
   });
 
   document.addEventListener("keydown", function (event) {
     if (event.key !== "Escape") return;
+
+    if (!el.bandPanel.hidden) {
+      setBandOpen(false);
+      el.bandButton.focus();
+    }
 
     if (!el.menuPanel.hidden) {
       setMenuOpen(false);
