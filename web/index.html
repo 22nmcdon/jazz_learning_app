@@ -3835,6 +3835,20 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // served page alone.
   el.shareRow.hidden = !onTheWeb;
 
+  /*  And so does printing, for a plainer reason: there is nothing behind the
+      button in the app.
+
+      `window.print()` inside JUCE's webview opens no dialog on any platform -
+      the shell has no printer driver and JUCE's `WebBrowserComponent` exposes
+      none - so the button sat there doing nothing at all, while the colophon a
+      few thousand lines below said in as many words that printing is the
+      browser's and not this shell's. The button and the colophon disagreed, and
+      the colophon was the one telling the truth.
+
+      A button that does nothing is worse than an absent one: it reads as a
+      broken app rather than as a feature this shell does not have. */
+  el.printChart.hidden = !onTheWeb;
+
   var tabs = [
     { button: document.getElementById("tabScales"), panel: document.getElementById("panelScales") },
     { button: document.getElementById("tabReharm"), panel: document.getElementById("panelReharm") },

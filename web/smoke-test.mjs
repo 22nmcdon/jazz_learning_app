@@ -289,6 +289,12 @@ try {
   const shared = await page.locator("#shareLink").inputValue();
   check("a shareable link is offered", shared.startsWith(origin) && shared.includes("?chart="));
 
+  // Printing is the served page's, the same way sharing is - `window.print()`
+  // opens nothing inside JUCE's webview. This is only the half a browser can
+  // see: it catches the gate being written the wrong way round, which is the
+  // way that hides the button from everybody.
+  check("and so is printing", await page.locator("#printChart").isVisible());
+
   if (shared) {
     const second = await browser.newPage();
     await second.goto(shared, { waitUntil: "load" });
