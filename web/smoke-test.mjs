@@ -3174,6 +3174,52 @@ try {
 
   await narrow.locator("#progressClose").click();
 
+  /*  The engine's dot must not move the chart when the engine arrives.
+
+      It used to be a 133px chip reading "engine ready", and the first attempt
+      at freeing that width simply hid it once ready. Measuring caught what that
+      does: `.top-bar-right` wraps differently without it, so the chart jumped
+      38px at 900 and 40px at 430 at the moment the page finished loading - a
+      chart moving under somebody, which is what this page's frame exists to
+      prevent.
+
+      A dot the same size in every state cannot do that, and this is what says
+      so. The widths are the ones where the wrap actually changed.
+  */
+  {
+    const states = await browser.newPage({ viewport: { width: 900, height: 800 } });
+    await states.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await states.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000, state: "attached" });
+    if (await states.locator("#helpDialog[open]").count()) await states.locator("#helpClose").click();
+
+    for (const width of [430, 900, 1024]) {
+      await states.setViewportSize({ width, height: 800 });
+
+      const heights = await states.evaluate(() => {
+        const bar = () => Math.round(document.querySelector(".top-bar").getBoundingClientRect().height);
+        const chip = document.querySelector("#engineStatus");
+        const was = chip.dataset.state;
+        const seen = {};
+
+        for (const state of ["loading", "ready", "failed", "stale"]) {
+          chip.dataset.state = state;
+          seen[state] = bar();
+        }
+
+        chip.dataset.state = was;
+        return seen;
+      });
+
+      const all = Object.values(heights);
+
+      check(`the engine's state never moves the chart at ${width}px `
+            + `(${all.join("/")})`,
+            all.every((h) => h === all[0]));
+    }
+
+    await states.close();
+  }
+
   /*  And again at a laptop width, which is where a labelled button cost 38px.
       390 was never the size that caught this: the bar is already four lines
       deep there and one more control changed nothing. */

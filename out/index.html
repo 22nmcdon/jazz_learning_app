@@ -243,22 +243,43 @@ body > .wrap {
   justify-content: space-between;
   gap: 8px 24px;
 }
+/*  The engine's state, as a dot rather than a sentence.
+
+    It used to be a 133px chip reading "engine ready", which is the state it
+    spends its whole life in and the one state nobody needs told about: the
+    chart is drawn and the keys make sounds, so the engine is plainly working.
+    That width was the only thing in a full top bar that could be given up, and
+    giving it up is what buys a labelled button - see the top-bar budget in
+    `CLAUDE.md`.
+
+    The first attempt simply hid it once ready, and measuring caught what that
+    does: the row wraps differently at some widths, so the chart jumped 38px at
+    900 and 40px at 430 at the moment the engine arrived. A chart that moves
+    under somebody is the thing this page's whole frame is built to avoid.
+
+    So the box is **the same size in every state** and only its colour changes.
+    Nothing can wrap differently because nothing changes width. The words are
+    still there for a screen reader, and on `title` for a pointer; the one state
+    a visitor has to *act* on - an engine a deploy behind the page - has had its
+    own banner above the chart all along, which is where that belongs anyway. */
 .status {
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: var(--text-soft);
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
   border: 1px solid var(--line);
-  border-radius: 30px;
-  padding: 5px 15px;
-  white-space: nowrap;
+  background: var(--text-soft);
+  padding: 0;
+  overflow: hidden;
+  font-size: 0;          /* the words stay in the element, for anything reading it aloud */
+  color: transparent;
 }
-.status[data-state="ready"] { color: var(--gold); border-color: var(--gold); }
-.status[data-state="failed"] { color: var(--rust); border-color: var(--rust); }
+.status[data-state="ready"] { background: var(--gold); border-color: var(--gold); }
+.status[data-state="failed"] { background: var(--rust); border-color: var(--rust); }
 /* An engine a deploy behind the page it is paired with is neither loading nor
    failed: it answered, and it is wrong. Its own state, so the chip cannot say
    "ready" over the top of the banner below. */
-.status[data-state="stale"] { color: var(--rust); border-color: var(--rust); }
+.status[data-state="stale"] { background: var(--rust); border-color: var(--rust); }
 
 /* --- an engine a deploy behind the page ---------------------------------- */
 /* The loudest thing on this page, and the only one that is about something
@@ -2250,7 +2271,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         <button class="mode-option" type="button" id="modeSolo" role="radio" aria-checked="false">Solo</button>
       </div>
 
-      <div class="status" id="engineStatus" data-state="loading">starting engine</div>
+      <div class="status" id="engineStatus" data-state="loading"
+           title="starting engine">starting engine</div>
 
       <button class="record-button" type="button" id="recordButton"
               aria-label="Your practice" title="Your practice">&#9683;</button>
@@ -3889,6 +3911,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.staleEngine.hidden = false;
     el.engineStatus.dataset.state = "stale";
     el.engineStatus.textContent = "engine out of date";
+    el.engineStatus.title = "engine out of date";
   }
 
   /** The app's answer for a call it does not have, word for word. A shell that
@@ -10928,6 +10951,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   startEngine().then(async function (kind) {
     el.engineStatus.dataset.state = "ready";
     el.engineStatus.textContent = "engine ready";
+    el.engineStatus.title = "engine ready";
     writeColophon(kind);
 
     // Before anything is drawn or asked for, because everything below this
@@ -10991,6 +11015,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }).catch(function (error) {
     el.engineStatus.dataset.state = "failed";
     el.engineStatus.textContent = "engine failed";
+    el.engineStatus.title = "engine failed";
     el.parseError.textContent = "The engine did not start: " + error;
     el.editor.hidden = false;
   });
