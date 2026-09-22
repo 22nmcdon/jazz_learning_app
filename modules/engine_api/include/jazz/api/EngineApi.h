@@ -18,7 +18,19 @@ namespace jazz::api
 */
 std::string parseChart (const char* progressionText);
 std::string scalesForChord (const char* symbol, const char* style);
-std::string reharmonise (const char* progressionText, int measureIndex, int includeAdvanced, int includeRisky);
+std::string reharmonise (const char* progressionText, int measureIndex, int includeAdvanced, int includeRisky,
+                         const char* styleKey);
+
+/** Every reharmonisation vocabulary the engine offers, in menu order.
+
+    The shells build their picker from this rather than holding a list of their
+    own - which substitutions belong together is theory, and a second copy of it
+    in a page is a second copy that goes stale.
+
+    The first row is `all`, which filters nothing. It is in the engine's list
+    rather than prepended by a shell, so there is one menu and one owner of it.
+*/
+std::string reharmStyles();
 std::string analyseVoicing (const char* symbol, const char* midiNotesCsv, const char* practiseStyle);
 std::string importIRealPro (const char* text);
 

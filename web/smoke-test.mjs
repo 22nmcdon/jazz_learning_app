@@ -264,6 +264,41 @@ try {
   check("substitutions are offered", (await page.locator("#subs details.family").count()) > 0);
   check("and scales are not, in chord practice", await page.locator("#panelScales").isHidden());
 
+  /*  Picking a vocabulary actually narrows what is offered.
+
+      The tags behind this filter went unreachable from every shell for a long
+      time, and when they were finally counted two of the five had nothing
+      behind them - so the thing worth asserting is not that a select exists,
+      it is that choosing one changes the answer. A picker that filtered
+      nothing would look identical to one that worked. */
+  // `textContent`, not `innerText`: the families are `<details>` and only one is
+  // open at a time, so `innerText` reports whichever disclosure happens to be
+  // expanded rather than what the bar was offered.
+  const namesOffered = async () => page.evaluate(() => document.querySelector("#subs").textContent);
+
+  const everything = await namesOffered();
+
+  await page.selectOption("#reharmStyle", "bebop");
+  await page.waitForFunction(
+    (was) => document.querySelector("#subs").textContent !== was, everything, { timeout: 15000 });
+
+  const bebopOnly = await namesOffered();
+
+  // A bebop move stays and a borrowed one goes. Asserting on the names rather
+  // than only on a count, because a count that moved for some other reason
+  // would pass a check that cannot say which moves survived.
+  check(`choosing a vocabulary narrows what the bar is offered `
+        + `(${everything.length} chars -> ${bebopOnly.length})`,
+        bebopOnly.length < everything.length
+          && bebopOnly.includes("Tritone substitution")
+          && !bebopOnly.includes("Suspend the dominant"));
+
+  await page.selectOption("#reharmStyle", "all");
+  await page.waitForFunction(
+    (was) => document.querySelector("#subs").textContent !== was, bebopOnly, { timeout: 15000 });
+
+  check("and All puts them back", (await namesOffered()) === everything);
+
   await page.locator("#dialogClose").click();
 
   // The other half of the app: play something and be told about it.
@@ -2368,6 +2403,14 @@ try {
 
     await before.locator("#guideButton").click();
 
+    // The reharmonisation vocabulary lives in the bar dialog, so it is set the
+    // way a player sets it: open a bar and choose.
+    await before.locator("#systems .bar").nth(1).click();
+    await before.locator("#systems .bar").nth(1).click();
+    await before.waitForSelector("#chordDialog[open]", { timeout: 10000 });
+    await before.selectOption("#reharmStyle", "bebop");
+    await before.locator("#dialogClose").click();
+
     // Something to prove is *not* remembered: a chart that is not the one the
     // page ships with.
     await before.locator("#chartButton").click();
@@ -2395,7 +2438,8 @@ try {
       from: document.querySelector("#loopFrom").value,
       to: document.querySelector("#loopTo").value,
       bars: document.querySelectorAll("#systems .bar[data-index]").length,
-      armed: document.querySelector("#armTake").getAttribute("aria-pressed")
+      armed: document.querySelector("#armTake").getAttribute("aria-pressed"),
+      reharmStyle: document.querySelector("#reharmStyle").value
     }));
 
     check(`the practice settings come back (${back.tempo}bpm, ${back.metre}, `
@@ -2406,6 +2450,26 @@ try {
     check(`and so does the band (${back.style}, bass ${back.bassSound})`,
           back.bass === true && back.drums === true && back.style === styleWanted
           && back.bassSound !== "upright" && back.guide === "true");
+
+    /*  Which vocabulary you are reharmonising in is a practice setting, the
+        same way the scale style is - practising bebop over a tune and
+        practising the modes over it are two different exercises. */
+    check(`and the reharmonisation vocabulary (${back.reharmStyle})`,
+          back.reharmStyle === "bebop");
+
+    /*  A key the engine no longer offers falls back to the catalogue's first
+        row, which is All. The safe direction for a filter is showing too much:
+        falling back to nothing would look exactly like a bar with no ideas,
+        and the player would have no way to tell which had happened. */
+    await before.evaluate(() => window.localStorage.setItem("jazzReharmStyle", "brazilian"));
+    await before.reload({ waitUntil: "load" });
+    await before.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await before.locator("#helpDialog[open]").count()) await before.locator("#helpClose").click();
+
+    const fellBack = await before.evaluate(() => document.querySelector("#reharmStyle").value);
+
+    check(`a vocabulary the engine dropped falls back to all of them (${fellBack})`,
+          fellBack === "all");
 
     // Two things it must not bring back. The chart is the tune on the stand,
     // not a setting; a take is work, and a page that opened mid-take would be

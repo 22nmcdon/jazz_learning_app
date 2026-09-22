@@ -75,10 +75,16 @@ JAZZ_EXPORT const char* jazzScaleStyles()
 }
 
 JAZZ_EXPORT const char* jazzReharmonise (const char* progressionText, int measureIndex,
-                                         int includeAdvanced, int includeRisky)
+                                         int includeAdvanced, int includeRisky,
+                                         const char* styleKey)
 {
     return hold (jazz::api::reharmonise (orEmpty (progressionText), measureIndex,
-                                         includeAdvanced, includeRisky));
+                                         includeAdvanced, includeRisky, orEmpty (styleKey)));
+}
+
+JAZZ_EXPORT const char* jazzReharmStyles()
+{
+    return hold (jazz::api::reharmStyles());
 }
 
 JAZZ_EXPORT const char* jazzAnalyseVoicing (const char* symbol, const char* midiNotesCsv,

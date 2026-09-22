@@ -426,9 +426,22 @@ std::string scaleStyles()
                  + "}");
 }
 
+std::string reharmStyles()
+{
+    return hold ("{\"ok\":true,\"styles\":"
+                 + jsonArray (core::reharmStyles(), [] (const ReharmStyleDefinition& style)
+                   {
+                       return "{\"key\":" + quoted (style.key)
+                            + ",\"name\":" + quoted (style.name)
+                            + ",\"summary\":" + quoted (style.summary) + "}";
+                   })
+                 + "}");
+}
+
 /** Reharmonisation options for one measure of a progression. */
 std::string reharmonise (const char* progressionText, int measureIndex,
-                                         int includeAdvanced, int includeRisky)
+                                         int includeAdvanced, int includeRisky,
+                                         const char* styleKey)
 {
     auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
 
@@ -438,6 +451,12 @@ std::string reharmonise (const char* progressionText, int measureIndex,
     Reharmonizer::Options options;
     options.includeAdvanced = includeAdvanced != 0;
     options.includeRisky = includeRisky != 0;
+
+    /*  A key the engine does not know widens to everything rather than failing.
+        A bar with no suggestions and no explanation is indistinguishable from a
+        bar with no ideas, and this is a filter rather than a sound - nothing
+        here can play the wrong thing under somebody. */
+    options.style = core::styleFrom (styleKey != nullptr ? styleKey : "");
 
     const Reharmonizer reharmonizer { options };
 

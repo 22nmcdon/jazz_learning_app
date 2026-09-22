@@ -2380,7 +2380,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           <div class="menu-group">
             <span class="menu-title">About</span>
             <div class="colophon">
-              <span>Engine: <code>modules/core_engine</code> - 516 unit tests, no JUCE.</span>
+              <span>Engine: <code>modules/core_engine</code> - 520 unit tests, no JUCE.</span>
               <span id="colophonEngine"></span>
               <span id="colophonFraming"></span>
               <span id="colophonBuild"></span>
@@ -3305,6 +3305,12 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         same substitution can work here and fall flat two bars later.
       </p>
       <div id="subs"></div>
+      <!-- Empty on purpose: which vocabularies exist is theory, so the engine
+           fills this. A list written here is a second copy that goes stale the
+           first time the catalogue changes. -->
+      <label class="menu-label" for="reharmStyle">The vocabulary you are working in</label>
+      <select class="menu-select" id="reharmStyle"></select>
+      <p class="menu-note" id="reharmStyleNote"></p>
       <label class="toggle-row" for="advanced">
         <input type="checkbox" id="advanced" checked>
         Include advanced substitutions
@@ -3450,6 +3456,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     scales: [],
     scalesFor: "",      // the chord state.scales was fetched for
     scaleStyle: "modes",  // the soloing vocabulary; the engine names them
+    reharmStyle: "all",   // the reharmonising vocabulary; the engine names these too
     chosenScale: 0,
     mode: "chords",     // "chords" or "solo" - a state, never a route
 
@@ -3786,7 +3793,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "parseError", "systems", "feedback", "verdict", "played", "expecting", "findingRow", "meter",
    "meterFill", "keyboard", "clearKeys", "sustainPedal", "chordDialog", "dialogBar", "dialogChord",
    "dialogClose", "scaleName", "scaleNotes", "scaleWhy", "scaleAvoid", "scaleCount",
-   "scaleRows", "subs", "advanced", "risky", "spotted", "spottedText", "useSpotted",
+   "scaleRows", "subs", "advanced", "risky", "reharmStyle", "reharmStyleNote",
+   "spotted", "spottedText", "useSpotted",
    "menuButton", "menuPanel", "menuClose", "chartButton", "chartPanel",
    "tuneName", "saveTune", "tuneNote", "openTuneField", "openTune",
    "connectMidi", "midiStatus", "styleLabel",
@@ -3936,7 +3944,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   */
   var ENGINE_CALLS = [
     "jazzParseChart", "jazzScalesForChord", "jazzScaleStyles", "jazzReharmonise",
-    "jazzReharmPlans", "jazzVoicedGuideTones", "jazzAnalyseVoicing", "jazzIdiomaticVoicings",
+    "jazzReharmPlans", "jazzReharmStyles", "jazzVoicedGuideTones", "jazzAnalyseVoicing", "jazzIdiomaticVoicings",
     "jazzIdentifyChord", "jazzRecogniseSubstitution",
     "jazzImportIRealPro", "jazzExportIRealPro", "jazzChartFromPage",
     "jazzCompStyles", "jazzCompingVoicing", "jazzCompPlan", "jazzCompHit",
@@ -4607,8 +4615,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         in a browser. Exactly the silent failure that comment warns about. */
     var result = await call(
       "jazzReharmonise",
-      ["string", "number", "number", "number"],
-      [state.progression, state.selected, el.advanced.checked ? 1 : 0, el.risky.checked ? 1 : 0]
+      ["string", "number", "number", "number", "string"],
+      [state.progression, state.selected, el.advanced.checked ? 1 : 0, el.risky.checked ? 1 : 0,
+       state.reharmStyle]
     );
     if (result === null || !result.ok) return;
 
@@ -5426,6 +5435,64 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     state.scalesFor = "";
 
     await soloMoveToBar();
+  });
+
+  /*  The reharmonisation vocabulary, filled from the engine like the scale one.
+
+      Which substitutions belong together is theory, so the page holds no list -
+      the `all` row that filters nothing is in the engine's catalogue too rather
+      than prepended here, so there is one menu and one owner of it.
+  */
+  async function loadReharmStyles() {
+    var result = await call("jazzReharmStyles", [], []);
+
+    // Same failure as the scale styles: an engine older than the page answers
+    // nothing, and an empty menu with no explanation is how that looked before
+    // anybody said it out loud.
+    if (result === null || !result.ok) {
+      el.reharmStyle.disabled = true;
+      el.reharmStyleNote.textContent = "The engine this page loaded is older than the page. "
+                                     + "Reload to pick the styles up.";
+      el.reharmStyleNote.className = "menu-note warn";
+      return;
+    }
+
+    el.reharmStyle.disabled = false;
+    el.reharmStyleNote.className = "menu-note";
+
+    el.reharmStyle.textContent = "";
+    result.styles.forEach(function (style) {
+      var option = document.createElement("option");
+      option.value = style.key;
+      option.textContent = style.name;
+      option.dataset.summary = style.summary;
+      el.reharmStyle.appendChild(option);
+    });
+
+    /*  Checked against the list the engine just sent rather than trusted: a key
+        that has been renamed or dropped since last time is one this page must
+        not claim to be filtering by. Falling back to whatever the catalogue
+        puts first means falling back to `all`, which shows everything - the
+        safe direction for a filter. */
+    var remembered = recall("ReharmStyle");
+    var known = result.styles.some(function (style) { return style.key === remembered; });
+
+    state.reharmStyle = known ? remembered : result.styles[0].key;
+    el.reharmStyle.value = state.reharmStyle;
+    showReharmStyleSummary();
+  }
+
+  function showReharmStyleSummary() {
+    var option = el.reharmStyle.selectedOptions[0];
+    el.reharmStyleNote.textContent = option ? option.dataset.summary : "";
+  }
+
+  el.reharmStyle.addEventListener("change", async function () {
+    state.reharmStyle = el.reharmStyle.value;
+    remember("ReharmStyle", state.reharmStyle);
+    showReharmStyleSummary();
+
+    await renderSubstitutions();
   });
 
   function soloChosenScale() {
@@ -6422,10 +6489,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
                       ? was.map(function (c) { return c.symbol; }).join(" ")
                       : "";
 
-    var result = await call("jazzReharmonise", ["string", "number", "number", "number"],
+    // Same vocabulary the bar dialog is filtered to. Picking Bebop and then
+    // hearing borrowed chords arrive under you is the "choose a style and watch
+    // nothing happen" trap the scale picker already warns about.
+    var result = await call("jazzReharmonise", ["string", "number", "number", "number", "string"],
                             [state.progression, chosen,
                              reharm.reach === "safe" ? 0 : 1,
-                             reharm.reach === "risky" ? 1 : 0]);
+                             reharm.reach === "risky" ? 1 : 0,
+                             state.reharmStyle]);
 
     if (result === null || !result.ok || !result.substitutions
           || !result.substitutions.length) return "";
@@ -11199,6 +11270,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // is an engine; and the mode groups have to be put into the state they
     // describe rather than the state the markup happened to ship in.
     await loadScaleStyles();
+    await loadReharmStyles();
     await loadCompStyles();
     fillMetres();
     fillBeatRow();
