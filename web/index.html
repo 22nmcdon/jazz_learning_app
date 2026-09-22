@@ -716,9 +716,10 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
 /*  The practice record's own button, beside the help one.
 
     Not a section of the settings panel, which is what an earlier comment in
-    this file predicted. That panel is being cut back to things that are
-    genuinely settings - MIDI, sound, about - and what is behind this button is
-    a *reading* rather than a preference.
+    this file predicted. That panel has since been cut back to the machine -
+    sound, MIDI, about - and what is behind this button is a *reading* rather
+    than a preference. This was the first button to be put outside it on that
+    argument; The band and Voicings followed, into the chart's row.
 
     A glyph rather than a label, and that was measured rather than chosen. Every
     pixel of top-bar height comes out of the chart (see UI Conventions), and
@@ -1058,13 +1059,17 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
   padding: 18px 20px 16px;
   text-align: left;
 
-  /* The menu is taller than a laptop window once the chart group is in it. */
+  /* Any of these can outgrow a laptop window - the band's is seven controls
+     and the notes under them - so a panel scrolls rather than running off the
+     bottom of the screen with its last row unreachable. */
   max-height: calc(100dvh - 120px);
   overflow-y: auto;
 }
 
-/* Wider than a corner dropdown needs to be, because it is not one any more:
-   seven sections, and the widest rows are a label over a select. */
+/* Wider than the 310px default because its rows are a label over a select with
+   a note under it, rather than a link. Set when the panel held six sections and
+   kept at three: the width is a property of its widest row, and that row did
+   not change. */
 #menuPanel { width: min(420px, calc(100vw - 32px)); }
 
 /* The sheet's way out. Hidden at every width where the panel hangs off its
@@ -2156,15 +2161,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   #helpDialog .tab-body { padding: 14px 18px 14px; }
   .chord { top: 22px; padding-left: 8px; }
 
-  /*  And so does the settings panel, which is the one thing here that is a
-      dialog in everything but markup: seven sections, most of the height of
-      the screen, and nothing behind it to look at while it is open. Hung off
-      its button in the top right it was a 358px column pinned to one corner
-      with the page showing down the other side, which reads as something that
-      slid out rather than something you opened.
+  /*  And so does the Practice panel, which is the one thing here that is a
+      dialog in everything but markup. Hung off its button in the top right it
+      was a column pinned to one corner with the page showing down the other
+      side, which reads as something that slid out rather than something you
+      opened - and it is opened from the top bar, where there is nothing else
+      to look at while it is up.
 
-      `#menuPanel` alone - the transport's popover is four settings deep and
-      genuinely is a popover, so it stays hanging off its own row. */
+      `#menuPanel` alone. The transport's popover is four settings deep and
+      genuinely is a popover; the chart row's two hang *below* their buttons
+      rather than over them, so at this width there is still something to press
+      to close them. */
   #menuPanel {
     position: fixed;
     inset: auto 0 0 0;
@@ -2319,23 +2326,23 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           Practice
         </button>
 
-        <!-- One panel, seven sections. There were two, in opposite corners -
-             this one, and a Comping panel hanging off the chart's toolbar -
-             and nothing said which held what: the band's piano sound was in
-             that one and your own was in this one, both of them called Sound.
-             The smoke test opened one or the other 38 times just to reach a
-             control.
+        <!-- Three sections, and all three are about the machine: what it is
+             making sound with, what it is listening to, and what is running.
 
-             Sectioned rather than left a flat list because this is where the
-             unbuilt features land (`docs/HANDOFF.md`): a comping-style editor
-             off The band, a voicing library off Voicings, practice history and
-             ear training as sections of their own.
+             It held six, and before that there were two panels in opposite
+             corners with nothing to say which held what - the band's piano
+             sound in one and your own in the other, both called Sound. One
+             panel fixed that and bought a filing cabinet: The band, Voicings
+             and Scales are things you change *looking at the music*, and they
+             are three clicks deep in a dropdown in the far corner from it.
+             They are in the chart's own row now, which costs the chart nothing
+             (see `.chart-bar-end`).
 
-             Six sections, not seven. The chart's own tools were here briefly
-             and are above the music again, in a menu of their own: everything
-             in this panel is how you practise, and which tune is on the stand
-             is a different question. Seven sections was also simply more than
-             one dropdown wants to hold. -->
+             So the rule for a new section is not "is it a setting" - it is
+             whether it is about the machine or about the music. An unbuilt
+             feature off `docs/HANDOFF.md` mostly is not: a voicing library
+             belongs behind Voicings, and ear training is a mode rather than a
+             menu. -->
         <div class="menu-panel" id="menuPanel" hidden>
           <!-- Shown only where the panel is a bottom sheet. As a dropdown it
                is closed by its own button, by a click anywhere else, or by
@@ -2358,14 +2365,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <p class="menu-note" id="soundNote">Browsers start audio on the first click, so the first key you press may be quiet.</p>
           </div>
 
-          <!-- A list of one-of-these choices is a dropdown, not a stack of
-               radios. Six voicing shapes and two colour settings came to eight
-               rows of the menu between them, which was most of its height for
-               two answers - and the pickers that were already selects (the
-               scale style, the comping style) are the same kind of choice.
-               What stays a switch is the mode switch in the top bar and the
-               transport's: those are two-state and read as one thing with a
-               side chosen, which a dropdown does not. -->
           <div class="menu-group">
             <span class="menu-title">MIDI keyboard</span>
             <button class="link-btn" type="button" id="connectMidi">Connect a keyboard</button>
@@ -2639,6 +2638,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <button class="close-btn" type="button" id="readingClose" aria-label="Close">&times;</button>
           </div>
 
+          <!-- A list of one-of-these choices is a dropdown, not a stack of
+               radios. Six voicing shapes were six rows of a menu for one
+               answer, and the pickers that were already selects - the scale
+               style below, the comping style - are the same kind of choice.
+               What stays a switch is the mode switch in the top bar and the
+               transport's: those are two-state and read as one thing with a
+               side chosen, which a dropdown does not. -->
           <div class="menu-group" data-mode="chords">
             <div class="menu-field">
               <label class="menu-label" for="voicingStyle">The shape you are practising</label>
@@ -8649,7 +8655,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.bandButton.addEventListener("click", function () {
     // It sits in the chart's own row, so the chart menu gets out of its way -
-    // the same courtesy the three menus already show one another.
+    // the same courtesy all five of these show one another.
     setChartOpen(false);
     setMenuOpen(false);
     setTransportOpen(false);

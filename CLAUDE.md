@@ -75,6 +75,22 @@ means CSS, not per-platform builds.
   that catches it** — `.top-bar-right` is already four lines deep there, so one
   more control changes nothing. Measure bar height with the control and without
   it, at a narrow width *and* at 1024.
+- **The row above the chart is where a control goes instead, and it is free.**
+  `.chart-bar` exists either way and is the same height whatever is in it, so a
+  button hung from it (`.chart-bar-end`, right-aligned) costs the chart **zero**
+  — measured at 390, 900, 1024 and 1440, with the sheet's top edge unmoved at
+  every one. That is not a cheaper version of the top bar's 38px; it is
+  different arithmetic, because the row is already there. It is where two of the
+  three groups that left `#menuPanel` went. What this placement does cost is
+  that those buttons scroll away with a long chart — which is right for things
+  you set the room up with and wrong for anything you reach for mid-take, so the
+  transport strip is still the place for those.
+  **The check measures `.chart-bar`, never `.chart-zone`.** The zone is the flex
+  child that takes whatever the window has left and therefore never changes size
+  whatever is inside it, so measuring it asks nothing — a negative control
+  caught exactly that: forcing both buttons onto a row of their own passed the
+  version of this check that measured the zone, and fails the one that measures
+  the bar by 48px at all four widths.
 - **The chart's head is in the top bar**, not in the sheet. A lead sheet is
   engraved feel / title / credit and still reads that way, along a line; in the
   sheet it scrolled away with the music, so the one thing naming what you are
@@ -104,22 +120,37 @@ means CSS, not per-platform builds.
   measures the wrong page** — so the check runs a second pass with
   `ascent-override`/`descent-override` forcing taller metrics, which needs no
   network.
-- **There is one settings panel, `#menuPanel`, and it has sections.** Six of
-  them: Sound, The band, Voicings (chords), Scales (solo), MIDI keyboard, About.
-  There were two panels in opposite corners and nothing said which held what —
-  the band's piano sound and your own were in different panels, both called
-  *Sound*. A new **setting** goes in a section or starts one; it does not start a
-  second panel. Below 760px the panel is a bottom sheet, which is why it has a
-  `.menu-head` close row — at that width it covers the button that would
-  otherwise close it.
-- **Two menus are deliberately not in it, and both are about a moment rather
-  than a preference.** `#transportButton` is the take's — count-in, loop, ramp,
-  reharmonise-as-you-go — and lives on the transport strip. `#chartButton` is
-  the tune's — import/export, reharmonise, edit, restore — and lives above the
-  chart it acts on. The chart's tools spent one commit inside `#menuPanel` and
-  it was the wrong room: what is behind *Practice* is how you practise, and
-  which tune is on the stand is a different question. **Three menus is the
-  ceiling**; a fourth means something is in the wrong one.
+- **`#menuPanel` is the machine, and it is three sections**: Sound, MIDI
+  keyboard, About. What the app is running on — not what you are practising. It
+  held six for a while, and three of them were in the wrong room. *The band* is
+  three switches, a style picker with an editor button and two sound pickers —
+  seven controls wanting two columns, which a 300px column sharing its height
+  with five other sections could not give them; *Voicings* and *Scales* are the
+  reading the page holds you to, which you change **looking at the music**
+  rather than looking at a menu. Both left for panels of their own on the
+  chart's row. What is left is a settings panel in the honest sense — you open
+  it when something about the machine is wrong, not while you are playing.
+  Below 760px it is a bottom sheet, which is why it has a `.menu-head` close
+  row: at that width it covers the button that would otherwise close it.
+  **The line to check before adding a section is about the machine versus about
+  the music**, and it is the line the six-section version did not draw.
+- **Five popovers, each one question asked where it applies.** *Practice*
+  (`#menuPanel`, top bar) — the machine. *Take setup* (`#transportPanel`,
+  transport strip) — this take: count-in, loop, ramp, reharmonise-as-you-go.
+  *Chart* (`#chartPanel`, left of the chart's row) — which tune: import/export,
+  reharmonise, edit, restore, saved tunes. *Voicings* / *Scales*
+  (`#readingPanel`, right of that row) — what the page is reading you against,
+  under **one** button whose label follows the mode, because the two are never
+  both on offer and a button that changed what it opened would be a trap. *The
+  band* (`#bandPanel`, beside it) — who is playing with you.
+  **This replaces a rule that said three menus was the ceiling, and the ceiling
+  was the wrong shape of rule.** It counted panels when the thing worth counting
+  is questions: it expected a fourth panel to mean something was in the wrong
+  room, and what actually happened is that one panel turned out to be holding
+  three questions. The half that was doing the work survives — **a panel is one
+  question, and its button sits where that question is asked.** A new one names
+  its question and says why the row it is on is the row it belongs to; something
+  with no question of its own is a section of an existing panel, not a sixth.
 - **The chart is justified into its zone, by `layOutChart()`.** A twelve-bar
   tune is 404px of music in a 560px zone on a 1440×900 window, and top-anchored
   the difference banks at the bottom as dead cream. It is given away in two
@@ -341,8 +372,8 @@ something finished or assume something unfinished is done:
   anything before — there was no `scrollIntoView`, `scrollTo` or `scrollTop` in
   the file at all, so on a tune longer than the chart zone the mark simply
   rolled off the bottom. The transport is out of the menu and onto a strip of
-  its own, the two settings dropdowns are one sectioned panel with the chart's
-  tools in a menu of their own above the music, the dock foot is two groups —
+  its own, the settings are five popovers each hung beside what they act on
+  rather than two dropdowns in opposite corners, the dock foot is two groups —
   what you press and what you read — practice settings survive a reload, and the
   chart is justified into its zone rather than leaving a void under it (see UI
   Conventions above). The three screenshots in `docs/` are shot against this
@@ -545,9 +576,11 @@ that's easy to miss in review:
   out as an instrument rather than an article — a fixed three-zone frame with
   the chart taking every pixel the other two do not — but it stays *one
   responsive column*. No side panel, no wide-screen layout of its own. If that
-  is revisited, the thing to weigh is that settings are moving into one panel
-  (`docs/HANDOFF.md`, commit 4), and a persistent side panel is that panel
-  pinned open.
+  is revisited, the thing to weigh is no longer what it was: settings did *not*
+  converge into one panel to be pinned open. They spread into five, each hung
+  beside the thing it acts on (see UI Conventions), so a side panel now means
+  moving a control **away** from what it changes — which is the move the chart's
+  row was chosen over.
 
 If work touches one of these, flag the ambiguity rather than silently picking a direction.
 

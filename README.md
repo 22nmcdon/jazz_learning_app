@@ -93,18 +93,41 @@ hand on the keys. The strip is the same height whatever is showing - most of wha
 needs a clock, and if the row grew when the clock came on it would shove the music down
 under the eye reading it.
 
-Everything that is a setting rather than a gesture is behind one button. **Practice**, top
-right, opens a panel in six sections - Sound, The band, Voicings, Scales, MIDI keyboard,
-About. There used to be two panels in opposite corners, and nothing said which held what:
-the band's piano sound was in one and your own was in the other, both of them called
-*Sound*. Below 760px the panel becomes a bottom sheet with a close row of its own, because
-at that width it is drawn over the button that would otherwise dismiss it.
+Everything that is a setting rather than a gesture is behind a button, and **the button
+sits beside the thing it changes**. There are five, and each one is a question:
 
-Two menus are deliberately not in it, because neither is a preference. **Take setup**, on
-the transport strip, is the take's: count in, loop, speed up each chorus, reharmonise as
-you play. **Chart**, above the music, is the tune's: import and export, reharmonise the
-tune, edit it, restore it. Which tune is on the stand is a different question from how you
-practise, and you reach for those between tunes rather than between takes.
+| | where | what it asks |
+|---|---|---|
+| **Practice** | top right | the machine: which sound bank, a MIDI keyboard, what is running |
+| **Take setup** | transport strip | this take: count in, loop, speed up each chorus, reharmonise as you play |
+| **Chart** | left of the chart's row | which tune: import and export, reharmonise, edit, restore, and your saved tunes |
+| **Voicings** / **Scales** | right of the chart's row | what you are being read against: the shape in chord practice, the vocabulary in solo |
+| **The band** | beside it | who is playing with you: piano, bass, drums, their style and their sound |
+
+There used to be two panels in opposite corners and nothing said which held what: the
+band's piano sound was in one and your own was in the other, both of them called *Sound*.
+Putting all of it behind **Practice** fixed that and bought a different problem - a panel
+of six sections is a filing cabinet, and three of those sections were things you change
+while **looking at the music** rather than while looking at a menu. So the band and the
+reading moved to buttons of their own in the chart's own row, right-aligned beside *Chart*.
+What is left under *Practice* is the machine, which is what you open a settings panel for.
+
+That row is free, which is why they went there rather than up beside *Practice*: it is
+there either way and the same height whatever is in it, so a button hung from it takes no
+music away - measured at 390, 900, 1024 and 1440, with the top of the sheet unmoved at
+every one. The top bar cannot say that of even one labelled button: three letters there
+cost 38px of chart at 1024px, which is a laptop rather than an edge case. What the row does
+cost is that its buttons scroll away with a long tune - right for what you set up before
+you play, wrong for anything you reach for mid-take, which is why the transport keeps its
+own.
+
+**Voicings** and **Scales** share one button, because they are never both on offer: one is
+chord practice's question and the other is solo practice's, so the label follows the mode.
+A button that changed what it opened would be a trap; a button that changes its name is
+just the label for what is behind it.
+
+Below 760px the **Practice** panel becomes a bottom sheet with a close row of its own,
+because at that width it is drawn over the button that would otherwise dismiss it.
 
 Emptying the sheet of everything that was not music is most of what the chart gained:
 
@@ -151,14 +174,13 @@ of it: whether it is the chord the bar asks for, what is missing, what is outsid
 clashing or muddy, and what would improve it. **Expecting Dm7** at the right of the dock
 says which bar it is being checked against.
 
-The **Practice** menu sets a voicing shape for the whole session - root position, shell,
-rootless left hand, two-handed rootless, solo - and every voicing you play is then checked
-against it, so a rootless voicing played during a root-position exercise is reported even
-though the notes spell the chord. The same menu says how much colour **Show me one** should
-put in what it plays: the base shape, or the same shape with the tensions. Pressing the
-button again walks on to the next shape rather than repeating the last one. What it shows
-goes under your hands rather than merely onto the screen, so it sounds, is analysed, and
-can be named - the same path a played chord takes.
+**Voicings**, in the chart's row, sets a shape for the whole session - root position,
+shell, rootless left hand, two-handed rootless, solo - and every voicing you play is then
+checked against it, so a rootless voicing played during a root-position exercise is
+reported even though the notes spell the chord. **Show me one** offers the base shape, and
+pressing the button again walks on to the next one rather than repeating the last. What it
+shows goes under your hands rather than merely onto the screen, so it sounds, is analysed,
+and can be named - the same path a played chord takes.
 
 **Name it** asks the other question - not "is this the right chord for the bar" but "what
 did I just play", with no chart involved. **Edit chart** types chords into bars directly,
@@ -309,9 +331,9 @@ when the horn players it is all stolen from use the range. None of the three tou
 score: they are advice about how a line moves, the score is a reading of where its notes sat,
 and mixing the two would make a number nobody could explain out of one that can be.
 
-**Scales**, in the settings panel, is the vocabulary you are working out of: the modes,
-melodic minor, harmonic minor, bebop, pentatonics and blues, whole tone and diminished, or
-everything. It decides which scales a bar is offered and which one it is read against, so
+**Scales** - the same button, in solo practice - is the vocabulary you are working out of:
+the modes, melodic minor, harmonic minor, bebop, pentatonics and blues, whole tone and
+diminished, or everything. It decides which scales a bar is offered and which one it is read against, so
 practising the modes over a tune and practising bebop over the same tune are two different
 exercises. A style with nothing for a bar - bebop over a diminished chord - shows the whole
 catalogue instead and says so, rather than calling every note you play outside.
@@ -411,8 +433,8 @@ click agree in both - what the app gives up is a few milliseconds of jitter on t
 
 ### Comping
 
-**The band**, in the settings panel, is who is playing behind you: **piano comping**,
-**bass walking** and **drums**, all three of which work. The section appears wherever there
+**The band**, in the chart's row, is who is playing behind you: **piano comping**,
+**bass walking** and **drums**, all three of which work. The button appears wherever there
 is a band to hear — solo practice, and chord practice once the clock is running. The piano and the bass have their own sound pickers, because the band
 is not playing your instrument; the kit is synthesised in both shells, like the click.
 
@@ -786,7 +808,7 @@ the drawn keys it does not, because they latch — a note sounds until you click
 there is nothing for a pedal to hold, and a control that does nothing you can see is one
 nobody can learn.
 
-The settings panel's **Sound** section carries the bank: an **electric piano**, a **grand**, or silent. The
+The **Practice** panel's *Sound* section carries the bank: an **electric piano**, a **grand**, or silent. The
 electric piano is synthesised the same way in both shells rather than sampled - one sine
 ringing another, with the modulation dying away faster than the note, so the attack barks and
 the tail settles - the page through Web Audio and the app through its own audio device. A mouse can only press one
@@ -850,10 +872,11 @@ JAZZ_UI_SIZE=430x860 ./build/app/JazzLearningApp_artefacts/Debug/"Jazz Learning 
 
 Below 760px the page lays itself out narrow: the bars and the keyboard both shorten, so
 more of the tune fits, every dialog becomes a bottom sheet rather than a floating panel,
-and the settings panel becomes one too - with a close row of its own, since at that width
-it covers the button that opened it. The chart's head needs nothing said to it: it is a
-line in the top bar rather than three columns over the music, so it wraps the way the
-controls beside it do, and the transport under it takes two rows instead of one. That is
+and the **Practice** panel becomes one too - with a close row of its own, since at that
+width it covers the button that opened it. The panels in the chart's row stay dropdowns:
+they hang below their buttons rather than over them, so there is nothing to close past.
+The chart's head needs nothing said to it: it is a line in the top bar rather than three
+columns over the music, so it wraps the way the controls beside it do, and the transport under it takes two rows instead of one. That is
 the page's own CSS doing it, so the browser at the same width does the same thing - there
 is no second layout to keep in step.
 
@@ -1171,6 +1194,7 @@ These were left open rather than silently decided:
 4. **A dense, DAW-style desktop layout** — **answered: denser yes, multi-column not yet.**
    The page is laid out as an instrument rather than an article now - a fixed three-zone
    frame with the chart taking every pixel the other two do not - but it stays one
-   responsive column. No side panel, no wide-screen layout of its own, and no size classes;
-   if it is revisited, a persistent side panel is the settings panel pinned open rather than
-   a second UI.
+   responsive column. No side panel, no wide-screen layout of its own, and no size classes.
+   If it is revisited, the thing to weigh has changed: the settings did not end up in one
+   panel that a side panel would simply pin open. They ended up in five, each beside what
+   it acts on - so a side panel now means moving a control away from the thing it changes.

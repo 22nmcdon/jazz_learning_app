@@ -28,6 +28,13 @@ The page's layout was restructured over these commits, and that work is done:
 | `d1efdb5` | The chart's tools out of the settings panel into a menu of their own above the music, and the chart justified into its zone instead of leaving a void under it. |
 | `a693f3a` | The screenshots reshot against the finished page, in the typeface a visitor actually sees. |
 
+Since then the settings were restructured again, and `#menuPanel` gave three of
+its six sections away: the engine chip became a dot (`74c984c`), *The band* took
+a button of its own in the chart's row (`6d6ecaf`), and *Voicings* and *Scales*
+took one between them (`776a616`), with the colour picker deleted rather than
+moved. What is left under *Practice* is the machine - Sound, MIDI, About. The
+rule that replaced "three menus is the ceiling" is in `CLAUDE.md`.
+
 Since then, two features off the list below have been built and their bullets
 deleted: the **comping-style editor** (`9f2870b`…`7b8d3a9`) and **progress
 tracking** (`f061863`…`65eeb67`). What each one's design question turned out to
@@ -53,12 +60,14 @@ cmake --build build          # the page is copied into the JUCE shell
 
 ## Where the unbuilt features land
 
-Settled, and most of why the settings panel was worth merging: they are sections
-of `#menuPanel`. A comping-style editor off *The band*, a voicing library off
-*Voicings*, practice history and ear training as sections of their own. What
-does **not** go there is anything about the tune on the stand or about a
-particular take — those have menus of their own, and `CLAUDE.md` says three is
-the ceiling.
+**Each one lands beside the question it answers**, which is the rule the panels
+now follow rather than the old "everything is a section of `#menuPanel`". A
+comping-style editor is off *The band* and a voicing library is off *Voicings* —
+both of which are buttons in the chart's row now, not sections of the settings
+panel. Ear training is a **mode**, not a menu; practice history turned out to be
+a dialog of its own behind the top bar's record button, which is the first thing
+that broke the old rule. What lands under *Practice* is what is about the
+machine: a sound, a device, a version.
 
 ## Reshooting the screenshots
 
@@ -187,18 +196,23 @@ Small, verified, and none of them urgent.
 - **The top bar has room for one more labelled control and does not have it
   spare.** Measured when the practice record needed a button: a labelled one
   costs 38px of chart at 1024px, and even three letters do. The numbers are in
-  the stylesheet beside `.record-button`. This bears directly on the planned
-  move of *The band* out of `#menuPanel` into a button of its own - something
-  has to leave the bar first, and the engine-status chip is the obvious
-  candidate. Note also that 390px does **not** catch this: `.top-bar-right` is
-  already four lines deep there.
+  the stylesheet beside `.record-button`. Note also that 390px does **not**
+  catch this: `.top-bar-right` is already four lines deep there, so measure with
+  the control and without it, at a narrow width *and* at 1024.
+  **What the restructure did about it was stop using the bar.** The engine chip
+  became a dot, which bought back width, and then *The band* and *Voicings* went
+  to `.chart-bar` instead - a row that already exists and costs the chart zero
+  at every width. That row is where the next one should go too.
 
-- **`#menuPanel` is mid-restructure, and its own comment is now out of date.**
-  The markup at `.menu-wrap` still says practice history and ear training will
-  land as sections of it. Practice history did not - it is a dialog behind its
-  own button - and the panel is being cut back to things that are genuinely
-  settings. That comment should be rewritten by whoever does the move rather
-  than patched now.
+- **`#readingPanel` and `#bandPanel` carry a `.menu-head` that never shows.**
+  `.menu-head { display: none }` is overridden for `#menuPanel` alone, below
+  760px, so `#readingClose` and `#bandClose` are wired to handlers nothing can
+  click and `#readingTitle` is set by script and never seen. Harmless and
+  untidy. The fix is a decision rather than a line: those two hang *below* their
+  buttons rather than over them, so they need no way out at any width — in which
+  case delete the two heads — unless a title inside a narrow sheet is worth
+  having, in which case the rule wants widening to `.menu-panel .menu-head` and
+  re-measuring.
 
 - **Nothing exports a practice record.** The same shape of gap as a comping
   style: it would be a second wire format and a second "is this trustworthy"
@@ -245,10 +259,12 @@ Small, verified, and none of them urgent.
   `aria-pressed` when any of the three players was on, so you could see the band
   was playing without opening anything. Merging the panels deleted the button
   and `updateCompingButton()` with it. Nothing replaced it: the checkboxes say
-  it once the panel is open, and the band says it out loud when it is not. If
-  someone is ever surprised by a band they did not know was on, the answer is a
-  mark on the **Practice** button — but do not add one speculatively, it would
-  be the only thing that button says about its contents.
+  it once the panel is open, and the band says it out loud when it is not.
+  **The band has its own button again** (`6d6ecaf`), so if someone is ever
+  surprised by a band they did not know was on, `#bandButton` is the place for
+  the mark and `aria-pressed` is what it wore before — but do not add one
+  speculatively. No other button on the page says anything about its contents,
+  and one that did would be the odd one out until a second joined it.
 
 - **Nothing else on the page is measured in two faces.** The cheat sheet's
   no-scroll checks and the 390px narrow scan are pixel assertions too, and both

@@ -121,8 +121,10 @@ Two decisions inside that are worth keeping:
 ## The dashboard, and why it is not in the settings panel
 
 `#progressDialog` opens from a button of its own in the top bar. What is behind
-it is a **reading**, and `#menuPanel` holds settings — a distinction this page
-is in the middle of sharpening.
+it is a **reading**, and `#menuPanel` holds settings. This was the first thing
+to break the page's old rule that a fourth menu meant something was in the wrong
+one; the restructure that followed took that rule apart and replaced it — see
+CLAUDE.md's UI Conventions.
 
 The button is a glyph rather than a label, and that was measured rather than
 preferred. Top-bar height comes straight out of the chart, `.top-bar-right` is
