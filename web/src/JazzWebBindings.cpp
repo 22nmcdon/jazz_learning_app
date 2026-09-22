@@ -37,6 +37,28 @@ namespace
     }
 }
 
+/*  There is deliberately no try/catch around these, and that is worth writing
+    down because adding one is the obvious move and it does not work.
+
+    Emscripten compiles with exception *catching* off by default, so a `throw`
+    inside the engine calls `abort()` whatever a `catch (...)` here says. A
+    try/catch in this file would be dead code that reads as protection, which
+    is worse than none. Turning catching on with `-fexceptions` was measured:
+    the engine goes from 704KB to 1050KB, half again as large, on a page people
+    open on a phone.
+
+    It is not needed either. `call()` in `web/index.html` already wraps `ccall`
+    in a try/catch and turns whatever comes out into `{"ok":false}`, which every
+    call site on that page already handles - so an abort here is one failed
+    call, not a dead module. That was verified rather than assumed: after one,
+    the next call answers normally.
+
+    The desktop app is the opposite case and does have a catch, in
+    `WebUi::handleEngineCall`. There is no JavaScript between the engine and
+    JUCE's message loop there, so an exception is `std::terminate` - the whole
+    app - and it costs nothing to stop.
+*/
+
 JAZZ_EXPORT const char* jazzParseChart (const char* progressionText)
 {
     return hold (jazz::api::parseChart (orEmpty (progressionText)));

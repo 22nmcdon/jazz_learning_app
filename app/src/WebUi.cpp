@@ -220,9 +220,35 @@ void WebUi::handleEngineCall (const var& request)
         const auto name = object->getProperty ("name").toString();
         const auto args = object->getProperty ("args");
 
+        /*  Nothing the engine throws may reach the message loop.
+
+            This is native code with no sandbox under it: an exception out of
+            `answer` propagates through JUCE's webview callback with nothing to
+            catch it, which is `std::terminate` - the whole app, gone. That was
+            not hypothetical. A shared iReal Pro link whose metre was twenty
+            digits threw `std::out_of_range` out of the chart reader and closed
+            the app on whoever opened it.
+
+            The reader no longer throws, and this is the floor under that. The
+            page gets an error it can show, which is what every other failure
+            here already does. */
         auto* reply = new DynamicObject();
         reply->setProperty ("id", id);
-        reply->setProperty ("json", String (answer (name, args)));
+
+        try
+        {
+            reply->setProperty ("json", String (answer (name, args)));
+        }
+        catch (const std::exception& problem)
+        {
+            reply->setProperty ("json", String ("{\"ok\":false,\"error\":\"The engine could not read what "
+                                                + name + " was given: " + String (problem.what()) + ".\"}"));
+        }
+        catch (...)
+        {
+            reply->setProperty ("json", String ("{\"ok\":false,\"error\":\"The engine could not read what "
+                                                + name + " was given.\"}"));
+        }
 
         sendToPage (engineReplyEvent, var (reply));
     }
