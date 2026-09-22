@@ -110,6 +110,112 @@ TEST ("filters by style preset")
         CHECK (substitution.style == ReharmStyle::modal || substitution.style == ReharmStyle::common);
 }
 
+TEST ("no style preset asks for nothing, and filters nothing")
+{
+    // The default is an empty optional, which used to be `common` doing double
+    // duty. A caller that has not chosen sees every vocabulary at once.
+    const Reharmonizer everything;
+    const auto chart = chartFrom ("| G7 | Cmaj7 |");
+    const auto all = everything.substitutionsFor (chart, 0);
+
+    Reharmonizer::Options bebopOptions;
+    bebopOptions.style = ReharmStyle::bebop;
+
+    CHECK (! all.empty());
+    CHECK (all.size() > Reharmonizer { bebopOptions }.substitutionsFor (chart, 0).size());
+
+    auto sawSomethingOtherThanCommon = false;
+
+    for (const auto& substitution : all)
+        if (substitution.style != ReharmStyle::common)
+            sawSomethingOtherThanCommon = true;
+
+    CHECK (sawSomethingOtherThanCommon);
+}
+
+TEST ("the bebop preset keeps the dominant moves and drops the borrowed ones")
+{
+    Reharmonizer::Options bebopOptions;
+    bebopOptions.style = ReharmStyle::bebop;
+    const Reharmonizer bebop { bebopOptions };
+    const auto substitutions = bebop.substitutionsFor (chartFrom ("| G7 | Cmaj7 |"), 0);
+
+    CHECK (! substitutions.empty());
+    CHECK (find (substitutions, "Tritone substitution") != nullptr);
+    CHECK (find (substitutions, "Suspend the dominant") == nullptr);
+
+    for (const auto& substitution : substitutions)
+        CHECK (substitution.style == ReharmStyle::bebop || substitution.style == ReharmStyle::common);
+}
+
+TEST ("a style key makes the round trip, and an unknown one widens")
+{
+    for (const auto& style : reharmStyles())
+    {
+        CHECK (! style.key.empty());
+        CHECK (! style.name.empty());
+        CHECK (! style.summary.empty());
+    }
+
+    // The menu's own first row is the off switch, and it is a row rather than
+    // something a shell prepends - so it has to answer with nothing.
+    CHECK (reharmStyles().front().key == "all");
+    CHECK (! styleFrom ("all").has_value());
+
+    CHECK (styleFrom ("bebop") == ReharmStyle::bebop);
+    CHECK (styleFrom ("modal") == ReharmStyle::modal);
+
+    // A key this engine has never heard of - a page newer than it, or a store
+    // holding something that was renamed - offers everything rather than
+    // nothing. An empty list would look exactly like a bar with no ideas.
+    CHECK (! styleFrom ("brazilian").has_value());
+    CHECK (! styleFrom ("").has_value());
+    CHECK (! styleFrom ("Bebop").has_value());
+}
+
+TEST ("every style in the menu has rules behind it")
+{
+    /*  The check that was missing, and the reason two enumerators were deleted
+        rather than wired up.
+
+        `brazilian` was tagged on **no rule at all** and `quartal` on exactly
+        one, so choosing either offered the five generic rules and called them
+        a vocabulary. Nothing said so, because nothing counted. This does.
+
+        A style has to earn its row on some bar - not on every bar, since a
+        vocabulary may have nothing to say about a particular chord, which is
+        the honest case the UI already handles.
+    */
+    const std::vector<std::string> bars { "| Cmaj7 | Dm7 |",
+                                          "| Dm7 | G7 |",
+                                          "| G7 | Cmaj7 |",
+                                          "| Cm7 | F7 |",
+                                          "| G7 |" };
+
+    for (const auto& style : reharmStyles())
+    {
+        const auto asked = styleFrom (style.key);
+
+        if (! asked.has_value())
+            continue;   // the `all` row filters nothing, so it has nothing to earn
+
+        auto everMatched = false;
+
+        for (const auto& progression : bars)
+        {
+            Reharmonizer::Options options;
+            options.style = asked;
+            options.includeRisky = true;
+
+            for (const auto& substitution : Reharmonizer { options }.substitutionsFor (chartFrom (progression), 0))
+                if (substitution.style == *asked)
+                    everMatched = true;
+        }
+
+        CHECK (everMatched);
+    }
+}
+
 TEST ("options are grouped by family, nearest the original harmony first")
 {
     const Reharmonizer reharmonizer;

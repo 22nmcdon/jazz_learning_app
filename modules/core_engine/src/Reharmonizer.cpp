@@ -40,14 +40,40 @@ std::string styleName (ReharmStyle style)
 {
     switch (style)
     {
-        case ReharmStyle::bebop:     return "Bebop";
-        case ReharmStyle::modal:     return "Modal";
-        case ReharmStyle::quartal:   return "Quartal";
-        case ReharmStyle::brazilian: return "Brazilian";
-        case ReharmStyle::common:    break;
+        case ReharmStyle::bebop: return "Bebop";
+        case ReharmStyle::modal: return "Modal";
+        case ReharmStyle::common: break;
     }
 
     return "Common";
+}
+
+const std::vector<ReharmStyleDefinition>& reharmStyles()
+{
+    /*  Menu order, widest first, because the widest is the default: somebody
+        who has not chosen wants to see everything the bar can do.
+
+        `all` is a row here rather than something a page prepends, so there is
+        one list and the engine owns it. It is not a `ReharmStyle` - see
+        `styleFrom`, which answers it with nothing at all.
+    */
+    static const std::vector<ReharmStyleDefinition> styles {
+        { "all",   "All styles", "Every substitution this bar can take." },
+        { "bebop", "Bebop",      "Tritone subs, ii-Vs in front of things, chromatic approaches." },
+        { "modal", "Modal",      "Borrowed chords, suspensions and colour over movement." }
+    };
+
+    return styles;
+}
+
+std::optional<ReharmStyle> styleFrom (const std::string& key)
+{
+    if (key == "bebop") return ReharmStyle::bebop;
+    if (key == "modal") return ReharmStyle::modal;
+
+    // "all", and anything this engine has never heard of. A key from a newer
+    // page widens the list rather than emptying it.
+    return std::nullopt;
 }
 
 std::string familyName (SubstitutionFamily family)
@@ -572,7 +598,7 @@ std::vector<Substitution> Reharmonizer::substitutionsFor (const Chart& chart, in
                "Stacked fourths over a minor 7th - the 9th comes with the 11th - for the quartal "
                "sound, and safe because every added note is diatonic to Dorian.",
                SubstitutionDifficulty::safe,
-               ReharmStyle::quartal,
+               ReharmStyle::modal,
                SubstitutionFamily::extension });
 
         add ({ "Turn it into a ii-V",
@@ -784,8 +810,10 @@ std::vector<Substitution> Reharmonizer::substitutionsFor (const Chart& chart, in
                                                  && substitution.difficulty == SubstitutionDifficulty::risky)
                                                  return true;
 
-                                             return options.style != ReharmStyle::common
-                                                    && substitution.style != options.style
+                                             // Nothing asked for, nothing filtered. A style
+                                             // keeps its own rules and the generic ones.
+                                             return options.style.has_value()
+                                                    && substitution.style != *options.style
                                                     && substitution.style != ReharmStyle::common;
                                          }),
                          substitutions.end());

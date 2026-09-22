@@ -23,17 +23,59 @@ enum class SubstitutionDifficulty
 
 std::string difficultyName (SubstitutionDifficulty difficulty);
 
-/** A vocabulary the substitution belongs to, for the style-preset filter. */
+/** A vocabulary the substitution belongs to, for the style-preset filter.
+
+    **Only ever a tag on a rule.** `common` means "belongs to no particular
+    vocabulary, offer it whatever the player asked for" - it does not mean
+    "no filter". Not filtering is `Options::style` holding nothing; see there.
+
+    **Two values were deleted rather than shipped, and that is the lesson this
+    comment exists for.** There used to be a `quartal` and a `brazilian` here.
+    Counted against the rules that actually carried them: quartal was **one**
+    rule, reachable only on a minor bar, and brazilian was **none at all**. A
+    menu offering a Brazilian reharmonisation and answering with the five
+    generic rules is worse than a menu that does not offer one - so a style
+    lives here only while at least one rule is tagged with it, and
+    `ReharmonizerTests` asserts exactly that. Adding `brazilian` back means
+    writing the bossa rules first, not the enumerator first.
+*/
 enum class ReharmStyle
 {
     common,
     bebop,
-    modal,
-    quartal,
-    brazilian
+    modal
 };
 
+/** The display name, as it appears beside a substitution. */
 std::string styleName (ReharmStyle style);
+
+/** One row of the style menu, as the shells build it.
+
+    The shells hold no list of their own - which vocabularies exist is theory,
+    and a second copy of it in a page is a second copy that goes stale. Same
+    reason `scaleStyles()` and `compStyles()` are shaped this way.
+
+    **The "no filter" row is in here too**, as the `all` key, so the engine owns
+    the whole menu rather than a page inventing its first entry.
+*/
+struct ReharmStyleDefinition
+{
+    std::string key;      ///< stable, lowercase, what crosses the wire
+    std::string name;     ///< what a player reads
+    std::string summary;  ///< one line saying what it is for
+};
+
+/** Every style the menu offers, in menu order, the `all` row first. */
+const std::vector<ReharmStyleDefinition>& reharmStyles();
+
+/** The style a key names, or nothing for `all` - and for anything unknown.
+
+    An unrecognised key falls back to offering everything rather than to an
+    error. A renamed or dropped style should still reharmonise; the asymmetry
+    with a malformed comping style is deliberate, because there the broken
+    message would put a sound under a player and here it only widens a list.
+*/
+std::optional<ReharmStyle> styleFrom (const std::string& key);
 
 /** Whether a substitution actually works where it is being offered.
 
@@ -187,10 +229,17 @@ public:
         */
         bool includeRisky { false };
 
-        /** When set to anything but `common`, only substitutions tagged with
-            this style (or tagged `common`) are returned.
+        /** Hold a style and only substitutions tagged with it - or tagged
+            `common` - are returned. Hold nothing and nothing is filtered.
+
+            **This used to be a plain `ReharmStyle` defaulting to `common`, and
+            that made `common` do two jobs.** As a tag on a rule it means
+            "generic"; as a value here it meant "do not filter" - so a style
+            menu could not offer Common as a peer of the others without it
+            silently meaning All. An empty optional says "no filter" without
+            borrowing a word that already means something else.
         */
-        ReharmStyle style { ReharmStyle::common };
+        std::optional<ReharmStyle> style;
     };
 
     Reharmonizer() = default;
