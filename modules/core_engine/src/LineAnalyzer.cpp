@@ -1416,4 +1416,15 @@ TakeSummary LineAnalyzer::summary() const
     return take;
 }
 
+std::optional<ScaleSuggestion> readingScaleFor (const ChordSymbol& chord,
+                                                const LineAnalyzer::Options& options)
+{
+    const auto scales = scalesFor (chord, options);
+
+    if (scales.empty())
+        return std::nullopt;
+
+    return scales.front();
+}
+
 } // namespace jazz::core

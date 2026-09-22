@@ -777,4 +777,20 @@ private:
 /** "chord tone", "scale tone", "outside" - for a UI that shows the word. */
 std::string noteColourName (NoteColour colour);
 
+/** The scale a take would read this chord against, given these options.
+
+    Public for one reason, and it is worth stating so nobody narrows it back:
+    **`LineWriter` writes a line this analyser has to read back as written**,
+    and the two cannot be allowed to disagree about which scale that is. A
+    generator picking "the primary suggestion" while a take reads against the
+    scale the player chose would colour half its own notes wrong - the note it
+    wrote as a scale tone read as outside, the approach it was careful to make
+    chromatic read as an ordinary step.
+
+    Empty only when nothing at all fits the chord, which is what
+    `LineAnalyzer`'s own fallback already treats as "read against everything".
+*/
+std::optional<ScaleSuggestion> readingScaleFor (const ChordSymbol& chord,
+                                                const LineAnalyzer::Options& options);
+
 } // namespace jazz::core
