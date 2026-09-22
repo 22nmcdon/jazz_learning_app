@@ -163,10 +163,11 @@ await page.addInitScript(() => {
 // a broken handler still looks fine in a screenshot, and this is the only
 // place that difference gets caught.
 //
-// Only what came from this origin counts. The webfonts and the PDF library are
-// both allowed to be unreachable - the page is built to work without either,
-// and a smoke test that goes red when a CDN is slow teaches everyone to ignore
-// it.
+// Only what came from this origin counts. The webfonts are allowed to be
+// unreachable - the page is built to work without them, and a smoke test that
+// goes red when a CDN is slow teaches everyone to ignore it. pdf.js used to be
+// on that list and no longer is: it is served from here now, so a failure to
+// load it is this page's fault and should be heard.
 const complaints = [];
 const ours = (url) => !url || url.startsWith(origin);
 
@@ -184,6 +185,49 @@ const checks = [];
 const check = (what, ok) => {
   checks.push(`${ok ? "ok  " : "FAIL"} ${what}`);
   if (!ok) process.exitCode = 1;
+};
+
+// Chords evenly spaced across a line, which is what tells the reader where
+// the bars are - `chartFromPlacedText` takes the median gap and treats a
+// notably smaller one as two chords sharing a bar. Even spacing means one
+// chord per bar, so eight of them are eight bars.
+const chartPdf = () => {
+  let stream = "";
+
+  [{ y: 700, chords: ["Dm7", "G7", "Cmaj7", "Cmaj7"] },
+   { y: 650, chords: ["Em7", "A7", "Dm7", "Dm7"] }].forEach((line) => {
+    line.chords.forEach((chord, i) => {
+      stream += `BT /F1 12 Tf ${72 + i * 128} ${line.y} Td (${chord}) Tj ET\n`;
+    });
+  });
+
+  const objects = [
+    "<</Type/Catalog/Pages 2 0 R>>",
+    "<</Type/Pages/Kids[3 0 R]/Count 1>>",
+    "<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]"
+      + "/Resources<</Font<</F1 5 0 R>>>>/Contents 4 0 R>>",
+    `<</Length ${stream.length}>>\nstream\n${stream}endstream`,
+    "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>"
+  ];
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [];
+
+  objects.forEach((body, i) => {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+
+  const startxref = pdf.length;
+
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.forEach((at) => { pdf += `${String(at).padStart(10, "0")} 00000 n \n`; });
+  pdf += `trailer\n<</Size ${objects.length + 1}/Root 1 0 R>>\n`
+       + `startxref\n${startxref}\n%%EOF\n`;
+
+  // latin1: every byte written above is one character, and the xref
+  // offsets counted characters. Encoding as UTF-8 would move them.
+  return Buffer.from(pdf, "latin1");
 };
 
 try {
@@ -301,6 +345,81 @@ try {
           exported.includes("[T34"));
 
     await third.close();
+  }
+
+  /*  A PDF is read by the page's own copy of pdf.js, and by nobody else's.
+
+      This is a *transport* check, not a check of the chart reader: it proves
+      the library loads from `assets/`, that the bytes reach
+      `jazzChartFromPage`, and that a chart comes back. What the reader makes
+      of real-world spacing is `ChartFormatsTests`' job, against real exports -
+      `CLAUDE.md` is explicit that an invented fixture has never once caught an
+      import bug, and this one is not pretending to.
+
+      What it does catch is the thing that was actually wrong: pdf.js used to
+      come from cdnjs on every visit, unhashed. So the route to cdnjs is cut
+      before the import, and every request for the library is recorded and has
+      to have come from this origin. If somebody puts the CDN back, this fails
+      rather than quietly working. */
+  {
+
+    const fourth = await browser.newPage();
+    const libraryFrom = [];
+
+    fourth.on("request", (request) => {
+      if (/pdf\.(min|worker\.min)\.js/.test(request.url())) libraryFrom.push(request.url());
+    });
+
+    // Nothing may reach for the CDN. If anything does, it fails here rather
+    // than working in development and shipping a third party to everyone else.
+    await fourth.route("https://cdnjs.cloudflare.com/**", (route) => route.abort());
+
+    await fourth.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await fourth.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+
+    if (await fourth.locator("#helpDialog[open]").count())
+      await fourth.locator("#helpClose").click();
+
+    // The library is not in the page's head any more, so nothing has asked for
+    // it yet. That is the other half of this change and worth saying out loud.
+    check("the PDF library is not fetched until a PDF is opened", libraryFrom.length === 0);
+
+    await fourth.locator("#chartButton").click();
+    await fourth.locator("#ioButton").click();
+    await fourth.waitForSelector("#ioDialog[open]", { timeout: 10000 });
+
+    await fourth.locator("#chartFile").setInputFiles(
+      { name: "chart.pdf", mimeType: "application/pdf", buffer: chartPdf() });
+
+    /*  Reading is a fetch, a parse and an engine call, and the library has to
+        arrive first - so this is given longer than a click would be.
+
+        Caught rather than thrown, so that a failure still reaches the two
+        checks below. Left to throw, the negative control for this block - put
+        the CDN back and watch it go red - reported a bare
+        `waitForFunction: Timeout` and never said why, because the check that
+        names the cause had not run yet. */
+    let drew = true;
+
+    try {
+      await fourth.waitForFunction(
+        () => document.querySelectorAll("#systems .bar").length === 8, null, { timeout: 30000 });
+    } catch (never) {
+      drew = false;
+    }
+
+    const opening = drew
+      ? (await fourth.locator("#systems .bar").first().innerText()).replace(/\s/g, "")
+      : (await fourth.locator("#importStatus").innerText()).trim() || "nothing was drawn";
+
+    check(`a PDF is read into a chart (${drew ? opening + ", 8 bars" : opening})`,
+          drew && opening === "Dm7");
+    check(`and the library came from this origin `
+          + `(${libraryFrom.length ? libraryFrom.map((url) => new URL(url).origin).join(", ")
+                                   : "never asked for"})`,
+          libraryFrom.length > 0 && libraryFrom.every((url) => url.startsWith(origin)));
+
+    await fourth.close();
   }
 
   await page.locator("#ioClose").click();
@@ -1983,6 +2102,40 @@ try {
 
   check(`the worker stocks its cache on the first visit (${inCache.length} files)`,
         inCache.length >= 3);
+
+  /*  pdf.js is not among them, and that is the decision rather than an
+      oversight. It is 1.4MB for a feature most visits never touch, so it is
+      deliberately left out of the worker's `ESSENTIALS` and picked up by the
+      fetch handler the first time somebody actually opens a PDF - which is the
+      visit that proves they want it. Both halves are asserted here, because
+      only the second one makes the first one safe: leaving it out would be a
+      bug rather than a decision if it never got cached at all. */
+  const holdsLibrary = (files) => files.some((path) => path.endsWith("/pdf.min.js"));
+
+  check("and leaves the PDF library out of them", !holdsLibrary(inCache));
+
+  // A fresh context is a first visit, so the cheat sheet is in front of the
+  // page and a modal dialog swallows every click behind it.
+  if (await revisit.locator("#helpDialog[open]").count())
+    await revisit.locator("#helpClose").click();
+
+  await revisit.locator("#chartButton").click();
+  await revisit.locator("#ioButton").click();
+  await revisit.waitForSelector("#ioDialog[open]", { timeout: 10000 });
+  await revisit.locator("#chartFile").setInputFiles(
+    { name: "chart.pdf", mimeType: "application/pdf", buffer: chartPdf() });
+  await revisit.waitForFunction(
+    () => document.querySelectorAll("#systems .bar").length === 8, null, { timeout: 30000 });
+
+  for (let tick = 0; tick < 80 && !holdsLibrary(inCache); tick++) {
+    inCache = await cached();
+    if (!holdsLibrary(inCache)) await revisit.waitForTimeout(250);
+  }
+
+  check(`until a PDF is opened, and then keeps it (${inCache.length} files)`,
+        holdsLibrary(inCache));
+
+  await revisit.locator("#ioClose").click();
 
   await offline.setOffline(true);
   await revisit.reload({ waitUntil: "load" });

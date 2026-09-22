@@ -29,18 +29,20 @@
      covers the recorded samples under `assets/`, which is the one thing the
      page fetches at runtime.
 
-     `cdnjs.cloudflare.com` is pdf.js, which is the one third-party script this
-     page runs. Writing it here is not an endorsement - see the note on that
-     tag below - but a CSP that blocked it would simply break PDF import, and a
-     policy nobody can ship is worth nothing.
+     **There is no third-party origin here, and that is recent.** pdf.js used
+     to be fetched from `cdnjs.cloudflare.com`, which had to be written into
+     both `script-src` and `worker-src` - a script with the full run of this
+     page, served by somebody else, on every visit. It is vendored under
+     `assets/` now, so both entries are gone and `'self'` covers it. If either
+     ever comes back, so has the third party.
 
      `frame-ancestors` is deliberately absent: it does nothing in a meta tag and
      writing it here would look like protection that is not there. GitHub Pages
      cannot set headers, so that one has no home. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'none';
-  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com;
-  worker-src 'self' blob: https://cdnjs.cloudflare.com;
+  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval';
+  worker-src 'self' blob:;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src 'self' https://fonts.gstatic.com;
   img-src 'self' data:;
@@ -3327,26 +3329,30 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
 <!-- Reading a PDF is the one job the engine cannot do: pdf.js pulls the text
      and its positions off the page, and the engine works out which of it is a
-     chord chart. If the library is blocked, the paste box still works.
+     chord chart. If the library will not load, the paste box still works.
 
-     `defer` because this used to block parsing. A `<script src>` to a CDN sat
-     directly above the page's own script, so a request that hung - rather than
-     failed - meant the interface never ran at all, which is the exact failure
-     the webfont note above this file's stylesheet exists to avoid. Nothing
-     needs pdf.js until somebody opens a PDF: every use of it is inside the
-     import handler, behind a `typeof window.pdfjsLib === "undefined"` guard
-     that already says so politely.
+     **There is no tag for it here, and that is the point twice over.**
 
-     **This still wants Subresource Integrity, and has none.** It is a
-     third-party script with the full run of this page, fetched fresh on every
-     visit - so whoever serves it can run whatever they like here. An
-     `integrity="sha384-..."` plus `crossorigin="anonymous"` fixes that, and
-     vendoring the library into `assets/` fixes it better by removing the
-     third party altogether. Neither is done here because this environment
-     cannot reach cdnjs to hash the file, and an integrity attribute guessed at
-     is an integrity attribute that breaks PDF import for everybody. See
-     `docs/HANDOFF.md`. -->
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+     It used to be `<script defer src="https://cdnjs.cloudflare.com/...">`,
+     sitting directly above the page's own script. Two things were wrong with
+     that. It was a third party with the full run of a page that holds a native
+     bridge to the engine, the MIDI devices and the file system, fetched fresh
+     on every visit, with no Subresource Integrity - so whoever served it could
+     run whatever they liked here. And every visitor paid 320KB for a library
+     most of them never use.
+
+     Both are answered by the same move. The library is vendored under
+     `assets/` beside the band's recordings - `web/build.sh` copies it next to
+     the page and `app/CMakeLists.txt` compiles it into the binary, which is
+     what `assets/` is for - and `loadPdfLibrary()` injects the tag the first
+     time somebody actually opens a PDF. Nothing is fetched until then, and
+     nothing is fetched from anybody else, which is why `cdnjs.cloudflare.com`
+     is out of the CSP above rather than pinned with a hash.
+
+     Pinned at pdf.js 3.11.174, the version that URL named. Refreshing it means
+     replacing both files under `assets/` from the npm tarball and checking the
+     tarball against the `dist.integrity` the registry publishes - not hashing
+     whatever a CDN happened to serve. -->
 <script>
 (function () {
   "use strict";
@@ -7103,25 +7109,75 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     });
   });
 
+  /** The one promise for pdf.js, made the first time somebody opens a PDF.
+
+      Nothing needs the library until then, and most visits never do - so it is
+      not in the page's head. Asking twice while the first request is still in
+      the air has to give the same promise rather than a second script tag,
+      which is what makes this a variable rather than a function that appends
+      one each time.
+
+      **A failure is not remembered.** The promise is dropped when it rejects,
+      so somebody whose network went out mid-visit gets a real second attempt
+      rather than the first refusal played back at them for ever. Caching the
+      rejection would be indistinguishable from the library being unavailable
+      on this machine, which is a different and much rarer thing.
+  */
+  var pdfLibrary = null;
+
+  function loadPdfLibrary() {
+    if (pdfLibrary !== null) return pdfLibrary;
+
+    pdfLibrary = new Promise(function (resolve, reject) {
+      // The app compiles the library in beside the page, so in both shells
+      // this is a sibling file and never a network request.
+      if (typeof window.pdfjsLib !== "undefined") {
+        resolve(window.pdfjsLib);
+        return;
+      }
+
+      var tag = document.createElement("script");
+
+      tag.src = "assets/pdf.min.js";
+      tag.onload = function () {
+        // A script that loads and defines nothing is a different fault from
+        // one that does not load, and it must not resolve to undefined.
+        if (typeof window.pdfjsLib === "undefined") reject(new Error("pdf.js defined nothing"));
+        else resolve(window.pdfjsLib);
+      };
+      tag.onerror = function () { reject(new Error("assets/pdf.min.js could not be loaded")); };
+
+      document.head.appendChild(tag);
+    });
+
+    pdfLibrary.catch(function () { pdfLibrary = null; });
+
+    return pdfLibrary;
+  }
+
   /** Pulls the text off every page of a PDF and hands it to the engine. */
-  function readPdf(file) {
-    if (typeof window.pdfjsLib === "undefined") {
+  async function readPdf(file) {
+    setImportStatus("Reading " + file.name + "...");
+
+    var pdfjsLib;
+
+    try {
+      pdfjsLib = await loadPdfLibrary();
+    } catch (error) {
       setImportStatus("The PDF reader did not load here. Paste an iReal Pro link or the chords "
                       + "instead.", "bad");
       return;
     }
 
-    setImportStatus("Reading " + file.name + "...");
-
-    // Without a worker pdf.js runs on this thread, which is slower but works
-    // where a cross-origin worker is not allowed.
+    // Without a worker pdf.js parses on this thread instead: slower, and the
+    // fallback that matters, because a `file://` page may not start one at all
+    // and the app's page is exactly that.
     try {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "assets/pdf.worker.min.js";
     } catch (error) { /* the fake worker will take over */ }
 
     file.arrayBuffer().then(function (buffer) {
-      return window.pdfjsLib.getDocument({ data: buffer, isEvalSupported: false }).promise;
+      return pdfjsLib.getDocument({ data: buffer, isEvalSupported: false }).promise;
     }).then(function (pdf) {
       var rows = [];
       var pageTop = 0;

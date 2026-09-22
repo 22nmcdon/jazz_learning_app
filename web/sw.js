@@ -22,6 +22,14 @@ const CACHE = "jazz-learning-app";
 // What a visit needs and nothing else: the page, and the engine behind it.
 // Paths are relative, so they resolve against wherever this is served from -
 // a project site lives under a path, not at a domain root.
+//
+// **pdf.js is deliberately not here, though it is now served from this origin
+// too.** It is 1.4MB, and it is needed only by somebody importing a PDF, which
+// most visits never do - so precaching it on install would make every first
+// visit pay for a feature it is not using. The fetch handler below stores it
+// like anything else the moment it is first asked for, which is the visit that
+// proves somebody wants it; from then on PDF import works offline. The rule
+// this list follows is "what a visit needs", not "what the page can do".
 const ESSENTIALS = ["./", "index.html", "jazz-engine.js"];
 
 /* Fetched on install rather than left to the fetch handler below, and that is
@@ -86,7 +94,8 @@ self.addEventListener("fetch", (event) => {
         ? await fetch(request.url, { cache: "reload", credentials: "same-origin" })
         : await fetch(request);
 
-      // Opaque responses - the PDF library from its CDN - have a status of 0
+      // Opaque responses - the webfonts, which are the only cross-origin
+      // request left now that pdf.js is served from here - have a status of 0
       // and are still worth keeping: they cannot be read here, only replayed,
       // which is exactly what is wanted. A partial response is not.
       if (response.status !== 206) {

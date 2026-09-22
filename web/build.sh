@@ -28,10 +28,17 @@ em++ -O2 -std=c++17 \
 
 echo "Built $out/jazz-engine.js ($(du -h "$out/jazz-engine.js" | cut -f1))"
 
-# The band's recorded instruments. They live in assets/ rather than in web/
-# because both shells want them: the app compiles the same files in, and the
-# page fetches them from here. Copied rather than symlinked, so the deployed
+# Everything both shells want, which is why it lives in assets/ rather than in
+# web/ or app/: the app compiles these same files into its binary, and the page
+# fetches them from here. Copied rather than symlinked, so the deployed
 # directory stands on its own.
+#
+#   *.wav              the band's recorded instruments
+#   pdf.min.js         pdf.js, and the worker it hands the parsing to. Vendored
+#   pdf.worker.min.js  rather than fetched from a CDN - see the note above the
+#                      script tag in index.html for why.
 mkdir -p "$out/assets"
 cp "$here"/../assets/*.wav "$out/assets/"
-echo "Copied $(ls "$out/assets" | wc -l | tr -d ' ') samples into $out/assets"
+cp "$here"/../assets/pdf.min.js "$here"/../assets/pdf.worker.min.js "$out/assets/"
+cp "$here"/../assets/pdf.js-LICENSE "$out/assets/"
+echo "Copied $(ls "$out"/assets/*.wav | wc -l | tr -d ' ') samples and pdf.js into $out/assets"
