@@ -703,10 +703,9 @@ try {
   await page.locator("#dialogClose").click();
 
   // The style picker narrows the vocabulary, and its list comes from the engine.
-  await page.locator("#menuButton").click();
+  // A `count()` reads a hidden element perfectly well, so this needs no panel.
   const styles = await page.locator("#scaleStyle option").count();
   check(`the engine's styles fill the menu (${styles})`, styles >= 5);
-  await page.locator("#menuButton").click();
 
   /*  In time puts a clock behind the chart. Driven fast and looped over two
       bars, so the test watches a real roll rather than a stubbed one.
@@ -1063,6 +1062,21 @@ try {
       Idempotent on purpose. The checks below toggle panels freely and clicking
       a bar closes whichever is open, so asking for the band panel before every
       band control is more robust than pairing each open with its close. */
+  /*  Voicings and Scales left the settings panel too, into one panel of their
+      own beside the band's - one button between them, since the two questions
+      are never both on offer. */
+  const openReading = async (target = page) => {
+    if (!(await target.locator("#menuPanel").isHidden())) {
+      if (await target.locator("#menuClose").isVisible())
+        await target.locator("#menuClose").click();
+      else
+        await target.locator("#menuButton").click();
+    }
+
+    if (await target.locator("#readingPanel[hidden]").count())
+      await target.locator("#readingButton").click();
+  };
+
   const openBand = async (target = page) => {
     /*  Practice hangs down over the chart's row and covers this button, so it
         gets out of the way first - which is what a person does too.
@@ -1652,9 +1666,9 @@ try {
 
   // Back to static for the checks that follow, which click bars themselves.
   await page.locator("#playStatic").click();
-  await page.locator("#menuButton").click();
+  await openReading();
   await page.selectOption("#scaleStyle", "pentatonic");
-  await page.locator("#menuButton").click();
+  await page.locator("#readingButton").click();
   await bars.first().click();
   await page.waitForSelector("#chordDialog[open]", { timeout: 10000 });
 
@@ -1663,9 +1677,9 @@ try {
         narrowed.length > 0 && narrowed.every((row) => /Pentatonic|Blues/.test(row)));
 
   await page.locator("#dialogClose").click();
-  await page.locator("#menuButton").click();
+  await openReading();
   await page.selectOption("#scaleStyle", "modes");
-  await page.locator("#menuButton").click();
+  await page.locator("#readingButton").click();
 
   await page.locator("#armTake").click();
   await page.waitForSelector("#armTake[aria-pressed='true']", { timeout: 10000 });
@@ -3244,6 +3258,60 @@ try {
         }));
 
   await narrow.locator("#progressClose").click();
+
+  /*  The two panels hung from the chart's row, and what they cost.
+
+      They are here rather than in the top bar because that row already exists
+      and is the same height whatever is in it - so these cost the chart
+      nothing, at any width, which is what the top bar could not manage for even
+      one of them. This measures it rather than trusting it.
+
+      And one button carries both: Voicings is chord practice's question, Scales
+      is solo practice's, and they are never both on offer - so the label
+      follows the mode rather than the button changing what it opens.
+  */
+  for (const width of [390, 900, 1024, 1440]) {
+    await narrow.setViewportSize({ width, height: 800 });
+
+    const cost = await narrow.evaluate(() => {
+      /*  The *row's* height, not the zone's. The zone is the flex child that
+          takes whatever is left of the window and never changes size - so
+          measuring it says nothing at all, which a negative control caught:
+          forcing these two onto a row of their own passed that version of this
+          check. What grows is the bar they sit in, and what it takes is the
+          music underneath. */
+      const row = () => Math.round(document.querySelector(".chart-bar").getBoundingClientRect().height);
+      const reading = document.querySelector("#readingWrap");
+      const band = document.querySelector("#bandWrap");
+      const withThem = row();
+
+      reading.style.display = "none";
+      band.style.display = "none";
+      const without = row();
+
+      reading.style.display = "";
+      band.style.display = "";
+      return withThem - without;
+    });
+
+    check(`the band and the reading panel cost the chart nothing at ${width}px (${cost}px)`,
+          cost === 0);
+  }
+
+  await narrow.setViewportSize({ width: 390, height: 780 });
+
+  const labels = await narrow.evaluate(async () => {
+    const seen = {};
+
+    document.querySelector("#modeChords").click();
+    seen.chords = document.querySelector("#readingButton").textContent.trim();
+    document.querySelector("#modeSolo").click();
+    seen.solo = document.querySelector("#readingButton").textContent.trim();
+    return seen;
+  });
+
+  check(`one button names what the mode is asking (${labels.chords} / ${labels.solo})`,
+        labels.chords === "Voicings" && labels.solo === "Scales");
 
   /*  The engine's dot must not move the chart when the engine arrives.
 

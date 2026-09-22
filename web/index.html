@@ -823,6 +823,11 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
   left: auto;
   width: min(460px, calc(100vw - 32px));
 }
+#readingPanel {
+  right: 0;
+  left: auto;
+  width: min(360px, calc(100vw - 32px));
+}
 #bandBody > .menu-option,
 #bandBody > .menu-note { grid-column: 1 / -1; }
 
@@ -2361,39 +2366,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
                What stays a switch is the mode switch in the top bar and the
                transport's: those are two-state and read as one thing with a
                side chosen, which a dropdown does not. -->
-          <div class="menu-group" data-mode="chords">
-            <span class="menu-title">Voicings</span>
-
-            <div class="menu-field">
-              <label class="menu-label" for="voicingStyle">The shape you are practising</label>
-              <select class="menu-select" id="voicingStyle">
-                <option value="any" selected>Any shape</option>
-                <option value="root">Root position</option>
-                <option value="shell">Shell - root, 3rd, 7th</option>
-                <option value="rootless">Rootless, left hand</option>
-                <option value="twohanded">Two-handed rootless</option>
-                <option value="solo">Solo - root in the left hand</option>
-              </select>
-              <p class="menu-note">Everything you play is checked against this shape, on every bar.</p>
-            </div>
-
-            <div class="menu-field">
-              <label class="menu-label" for="voicingColour">What Show me one offers</label>
-              <select class="menu-select" id="voicingColour">
-                <option value="plain" selected>The base shape</option>
-                <option value="rich">With the tensions</option>
-              </select>
-              <p class="menu-note">Show me one keeps going: press it again for the next shape.</p>
-            </div>
-          </div>
-
-          <div class="menu-group" data-mode="solo">
-            <span class="menu-title">Scales</span>
-            <label class="sr-only" for="scaleStyle">Scale style</label>
-            <select class="menu-select" id="scaleStyle"></select>
-            <p class="menu-note" id="scaleStyleNote"></p>
-          </div>
-
           <div class="menu-group">
             <span class="menu-title">MIDI keyboard</span>
             <button class="link-btn" type="button" id="connectMidi">Connect a keyboard</button>
@@ -2647,6 +2619,50 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
            column inside a panel of six sections, sharing height with the sound
            bank and the colophon; here it is as wide as it needs to be and lays
            its fields out two abreast. -->
+      <!-- One button for two panels, because they are never both on offer:
+           Voicings is chord practice's question and Scales is solo practice's,
+           and the mode picks. A button that changed what it opened would be a
+           trap; a button that changes its *name* with the mode is just the
+           label for what is behind it.
+
+           The colour picker that was in Voicings - "what Show me one offers" -
+           is gone rather than moved. `state.colour` stays on its default, so
+           Show me one offers the base shape and presses through the rest, which
+           is what it did for anyone who never opened that menu. -->
+      <div class="menu-wrap chart-bar-end" id="readingWrap">
+        <button class="link-btn" type="button" id="readingButton"
+                aria-expanded="false" aria-controls="readingPanel">Voicings</button>
+
+        <div class="menu-panel" id="readingPanel" hidden>
+          <div class="menu-head">
+            <span class="menu-head-title" id="readingTitle">Voicings</span>
+            <button class="close-btn" type="button" id="readingClose" aria-label="Close">&times;</button>
+          </div>
+
+          <div class="menu-group" data-mode="chords">
+            <div class="menu-field">
+              <label class="menu-label" for="voicingStyle">The shape you are practising</label>
+              <select class="menu-select" id="voicingStyle">
+                <option value="any" selected>Any shape</option>
+                <option value="root">Root position</option>
+                <option value="shell">Shell - root, 3rd, 7th</option>
+                <option value="rootless">Rootless, left hand</option>
+                <option value="twohanded">Two-handed rootless</option>
+                <option value="solo">Solo - root in the left hand</option>
+              </select>
+              <p class="menu-note">Everything you play is checked against this shape, on every bar.
+                <i>Show me one</i> keeps going: press it again for the next shape.</p>
+            </div>
+          </div>
+
+          <div class="menu-group" data-mode="solo">
+            <label class="sr-only" for="scaleStyle">Scale style</label>
+            <select class="menu-select" id="scaleStyle"></select>
+            <p class="menu-note" id="scaleStyleNote"></p>
+          </div>
+        </div>
+      </div>
+
       <div class="menu-wrap chart-bar-end" id="bandWrap" hidden>
         <button class="link-btn" type="button" id="bandButton"
                 aria-expanded="false" aria-controls="bandPanel">The band</button>
@@ -3796,7 +3812,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
    "armTake", "armLabel", "practising",
    "compPlace", "compSummary", "compSummaryHead", "compObservations",
-   "voicingStyle", "voicingColour", "soundBank",
+   "readingWrap", "readingButton", "readingPanel", "readingTitle", "readingClose",
+   "voicingStyle", "soundBank",
    "scaleStyle", "scaleStyleNote", "chordTabs",
    "tabTake", "panelTake", "takeHead", "takeRows", "takeNote"].forEach(function (id) {
     el[id] = document.getElementById(id);
@@ -5479,6 +5496,14 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // band, no button, rather than a settings panel with a section that comes
     // and goes.
     el.bandWrap.hidden = !(soloing || compingNow);
+
+    /*  One button, two panels, and the mode picks which. The two questions are
+        never both on offer - what shape you are being read against is chord
+        practice's, what vocabulary your line is read against is solo
+        practice's - so this is a label for what is behind it rather than a
+        button that changes what it does. */
+    el.readingButton.textContent = soloing ? "Scales" : "Voicings";
+    el.readingTitle.textContent = el.readingButton.textContent;
 
     // ...and it cannot be left open over a mode that has no band in it.
     if (el.bandWrap.hidden) setBandOpen(false);
@@ -8602,6 +8627,21 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       : "This chart is not saved. Takes still count as practice - just not against a tune.");
   }
 
+  function setReadingOpen(open) {
+    el.readingPanel.hidden = !open;
+    el.readingButton.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  el.readingButton.addEventListener("click", function () {
+    setChartOpen(false);
+    setMenuOpen(false);
+    setTransportOpen(false);
+    setBandOpen(false);
+    setReadingOpen(el.readingPanel.hidden);
+  });
+
+  el.readingClose.addEventListener("click", function () { setReadingOpen(false); });
+
   function setBandOpen(open) {
     el.bandPanel.hidden = !open;
     el.bandButton.setAttribute("aria-expanded", open ? "true" : "false");
@@ -8613,6 +8653,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     setChartOpen(false);
     setMenuOpen(false);
     setTransportOpen(false);
+    setReadingOpen(false);
     setBandOpen(el.bandPanel.hidden);
   });
 
@@ -8630,6 +8671,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.menuButton.addEventListener("click", function () {
     setBandOpen(false);
+    setReadingOpen(false);
     setTransportOpen(false);
     setChartOpen(false);
     setMenuOpen(el.menuPanel.hidden);
@@ -8637,6 +8679,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.transportButton.addEventListener("click", function () {
     setBandOpen(false);
+    setReadingOpen(false);
     setMenuOpen(false);
     setChartOpen(false);
     setTransportOpen(el.transportPanel.hidden);
@@ -8644,6 +8687,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   el.chartButton.addEventListener("click", function () {
     setBandOpen(false);
+    setReadingOpen(false);
     setMenuOpen(false);
     setTransportOpen(false);
     setChartOpen(el.chartPanel.hidden);
@@ -8665,6 +8709,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     setTransportOpen(false);
     setChartOpen(false);
     setBandOpen(false);
+    setReadingOpen(false);
   });
 
   document.addEventListener("keydown", function (event) {
@@ -8673,6 +8718,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (!el.bandPanel.hidden) {
       setBandOpen(false);
       el.bandButton.focus();
+    }
+
+    if (!el.readingPanel.hidden) {
+      setReadingOpen(false);
+      el.readingButton.focus();
     }
 
     if (!el.menuPanel.hidden) {
@@ -8999,10 +9049,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     applyStyle(el.voicingStyle.value);
   });
 
-  el.voicingColour.addEventListener("change", function () {
-    state.colour = el.voicingColour.value;
-    state.shownFor = "";   // start the walk again at the first shape
-  });
 
   /** Puts an idiomatic voicing of the chosen shape on the keyboard - the
       "sentence starter" for a chord the player does not have under their hands. */
