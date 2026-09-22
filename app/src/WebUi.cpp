@@ -172,6 +172,12 @@ WebUi::WebUi (MidiDeviceInput& midiInput, ElectricPiano& piano)
 WebUi::~WebUi()
 {
     midi.removeListener (&relay);
+
+    // The page is rewritten every launch, so there is never a reason to leave
+    // one behind - and a copy of the interface sitting in a shared directory
+    // between runs is part of what the unpredictable name exists to avoid.
+    if (pageFile.existsAsFile())
+        pageFile.deleteFile();
 }
 
 void WebUi::resized()
@@ -190,6 +196,20 @@ void WebUi::resized()
     URL. A file in the app's own temporary directory is the smallest thing that
     behaves the same way on every platform, needs no server and no network, and
     is rewritten on each launch so it can never go stale against the binary.
+
+    **The name has to be unpredictable, and that is a security property rather
+    than a tidiness one.** This wrote to `<temp>/jazz-learning-app-ui/index.html`
+    - a fixed path. On Linux the temp directory is `/tmp`, which every account
+    on the machine can write to, so anything else running there could create
+    that directory first, or replace the file between this write and the
+    webview's read. What it would get is its own HTML inside a webview holding a
+    native bridge to the engine, the MIDI devices and the file system. macOS and
+    Windows give each account a private temp directory, so this was a Linux hole
+    specifically - which is exactly the sort that goes unnoticed on a Mac.
+
+    `createTempFile` gives a name nobody can guess, and the sticky bit on `/tmp`
+    does the rest: a file somebody else owns cannot be replaced, and a name they
+    cannot predict cannot be staked out in advance.
 */
 String WebUi::pageUrl()
 {
@@ -199,11 +219,10 @@ String WebUi::pageUrl()
     if (data == nullptr)
         return {};
 
-    pageFile = File::getSpecialLocation (File::tempDirectory)
-                   .getChildFile ("jazz-learning-app-ui")
-                   .getChildFile ("index.html");
-
-    pageFile.getParentDirectory().createDirectory();
+    // Nothing in the page is fetched relative to itself - the styles and script
+    // are inline, and in the app the engine arrives over the bridge rather than
+    // as a file - so the name is free to be random.
+    pageFile = File::createTempFile (".html");
     pageFile.replaceWithData (data, static_cast<std::size_t> (size));
 
     return pageFile.getFullPathName().startsWith ("/")
