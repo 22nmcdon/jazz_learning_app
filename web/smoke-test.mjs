@@ -765,6 +765,46 @@ try {
 
   check("solo mode shows its own panel", await page.locator("#soloPanel").isVisible());
   check("and puts the chord feedback away", await page.locator("#feedback").isHidden());
+
+  /*  Show me a line: the half solo practice never had.
+
+      The button used to say "Which scale?" and hand back a set, while the same
+      button in chord practice put a voicing under the hands. What is worth
+      asserting is not that some text changed - it is that notes actually
+      sound, that they are the line the engine wrote, and that pressing again
+      gives a different one rather than the same line for ever. */
+  const lineShown = async () => page.evaluate(() =>
+    document.querySelector("#soloAgainst").textContent);
+
+  // `textContent`, not `innerText`: the dock buttons are uppercased in CSS and
+  // `innerText` reports what is rendered, so the assertion would be about the
+  // stylesheet rather than about the label.
+  const lineButton = (await page.locator("#showVoicing").textContent()).trim();
+
+  check(`solo practice offers a line rather than a scale (${lineButton})`,
+        lineButton === "Show me a line");
+
+  await page.locator("#showVoicing").click();
+  await page.waitForFunction(
+    () => /^[A-G]/.test(document.querySelector("#soloAgainst").textContent), null, { timeout: 15000 });
+
+  const firstLine = await lineShown();
+  const lit = await page.evaluate(() =>
+    document.querySelectorAll("#keyboard .key.sounded").length);
+
+  check(`a line is written over the bar (${firstLine.split(".")[0]})`,
+        firstLine.split(" ").length > 2);
+  check(`and its notes are sounded onto the keys (${lit} lit)`, lit > 0);
+
+  // Pressing again is another line. The seed moves, or the button is a
+  // one-shot dressed up as something you can keep asking.
+  await page.waitForTimeout(400);
+  await page.locator("#showVoicing").click();
+  await page.waitForFunction(
+    (was) => document.querySelector("#soloAgainst").textContent !== was,
+    firstLine, { timeout: 15000 });
+
+  check("and pressing again writes a different one", (await lineShown()) !== firstLine);
   check("the voicing shape has no say over a single note",
         await page.locator("[data-mode='chords']").first().isHidden());
 

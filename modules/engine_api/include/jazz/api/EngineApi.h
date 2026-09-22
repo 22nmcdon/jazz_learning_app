@@ -148,6 +148,20 @@ std::string compPlan (const char* progressionText, const char* styleRef,
     come back the same way a comp plan's do: a beat and a tick, never a time. */
 std::string walkingBass (const char* progressionText, int fromBar, int toBar, int seed);
 
+/** A line to play back, over the bars asked for.
+
+    The counterpart to `walkingBass` one register up, and the thing solo
+    practice could never do: read a line, yes - write one, no.
+
+    `chosenScale` and `scaleStyle` are the same two a take is set up with
+    (`soloSetBar`), and passing what the take will read against is what keeps
+    the line's own colours and the reading's the same. A note comes back with
+    the colour `LineAnalyzer` will give it, which is what lets a shell draw a
+    written line in the same ink as a played one.
+*/
+std::string improvisedLine (const char* progressionText, int fromBar, int toBar,
+                            const char* chosenScale, const char* scaleStyle, int seed);
+
 /** One chord the player comped, read against the style they chose.
 
     Stateless, and on purpose. A comping hit has no window over it the way a

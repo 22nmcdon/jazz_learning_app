@@ -178,6 +178,14 @@ JAZZ_EXPORT const char* jazzWalkingBass (const char* progressionText, int fromBa
     return hold (jazz::api::walkingBass (orEmpty (progressionText), fromBar, toBar, seed));
 }
 
+JAZZ_EXPORT const char* jazzImprovisedLine (const char* progressionText, int fromBar, int toBar,
+                                            const char* chosenScale, const char* scaleStyle,
+                                            int seed)
+{
+    return hold (jazz::api::improvisedLine (orEmpty (progressionText), fromBar, toBar,
+                                            orEmpty (chosenScale), orEmpty (scaleStyle), seed));
+}
+
 //==============================================================================
 // Comping as an exercise. No take here and none in jazz::api either: a comped
 // chord is settled the moment it is struck, so there is nothing for a memory

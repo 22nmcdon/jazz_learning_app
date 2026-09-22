@@ -108,6 +108,9 @@ namespace
 
         if (name == "jazzWalkingBass")
             return api::walkingBass (text (0).c_str(), number (1), number (2), number (3));
+        if (name == "jazzImprovisedLine")
+            return api::improvisedLine (text (0).c_str(), number (1), number (2),
+                                        text (3).c_str(), text (4).c_str(), number (5));
 
         if (name == "jazzCompPlan")
             return api::compPlan (text (0).c_str(), text (1).c_str(),

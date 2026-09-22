@@ -14,6 +14,7 @@
 #include "jazz/core/ChordIdentifier.h"
 #include "jazz/core/Comping.h"
 #include "jazz/core/LineAnalyzer.h"
+#include "jazz/core/LineWriter.h"
 #include "jazz/core/PracticeLog.h"
 #include "jazz/core/Reharmonizer.h"
 #include "jazz/core/ScaleSuggester.h"
@@ -1516,6 +1517,34 @@ std::string walkingBass (const char* progressionText, int fromBar, int toBar, in
                             + ",\"name\":" + quoted (midiNoteName (note.midiNote))
                             + ",\"chord\":" + quoted (note.chordSymbol)
                             + ",\"role\":" + quoted (bassRoleName (note.role)) + "}";
+                   })
+                 + "}");
+}
+
+std::string improvisedLine (const char* progressionText, int fromBar, int toBar,
+                            const char* chosenScale, const char* scaleStyle, int seed)
+{
+    const auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
+
+    if (! parsed.ok())
+        return hold (jsonError (parsed.error));
+
+    const auto line = core::improvisedLine (*parsed.chart, fromBar, toBar,
+                                            chosenScale != nullptr ? chosenScale : "",
+                                            scaleStyle != nullptr ? scaleStyle : "",
+                                            static_cast<std::uint32_t> (seed));
+
+    return hold ("{\"ok\":true,\"ticksPerBeat\":" + std::to_string (ticksPerBeat)
+                 + ",\"notes\":"
+                 + jsonArray (line, [] (const WrittenNote& note)
+                   {
+                       return "{\"bar\":" + std::to_string (note.measureIndex)
+                            + ",\"beat\":" + std::to_string (note.at.beat)
+                            + ",\"tick\":" + std::to_string (note.at.tick)
+                            + ",\"midi\":" + std::to_string (note.midiNote)
+                            + ",\"name\":" + quoted (midiNoteName (note.midiNote))
+                            + ",\"chord\":" + quoted (note.chordSymbol)
+                            + ",\"colour\":" + quoted (noteColourName (note.colour)) + "}";
                    })
                  + "}");
 }

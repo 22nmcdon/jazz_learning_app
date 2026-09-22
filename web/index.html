@@ -3095,9 +3095,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       <li data-mode="chords"><b>Show me one</b>
         <span>puts a voicing that works under your hands. Press it again for the next one,
         and again after that.</span></li>
-      <li data-mode="solo"><b>Which scale?</b>
-        <span>names the scale this bar is being read against and puts it on the keyboard, so
-        the target is in front of you before a note is played.</span></li>
+      <li data-mode="solo"><b>Show me a line</b>
+        <span>plays one over this bar - and into the next when the chord moves - lighting
+        the keys as it goes. Press again for another. Play it back and the take reads it
+        like anything else you played.</span></li>
 
       <li data-mode="chords"><b>Name it</b>
         <span>reads back whatever you are holding, with no chart in the way.</span></li>
@@ -4051,7 +4052,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     "jazzVoicingShape", "jazzVoicingFromShape",
     "jazzImportIRealPro", "jazzExportIRealPro", "jazzChartFromPage",
     "jazzCompStyles", "jazzCompingVoicing", "jazzCompPlan", "jazzCompHit",
-    "jazzCompTake", "jazzWalkingBass",
+    "jazzCompTake", "jazzWalkingBass", "jazzImprovisedLine",
     "jazzSoloStartTake", "jazzSoloSetBar", "jazzSoloPlayNote", "jazzSoloEndTake",
     "jazzPracticeReading", "jazzTuneProgress"
   ];
@@ -5713,7 +5714,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // "Play chord" would be sounding over the clock.
     el.playChord.hidden = soloing || compingNow || midi.connected;
     el.nameChord.hidden = soloing || compingNow;
-    el.showVoicing.textContent = soloing ? "Which scale?" : compingNow ? "Show me a comp" : "Show me one";
+    el.showVoicing.textContent = soloing ? "Show me a line" : compingNow ? "Show me a comp" : "Show me one";
     el.practising.hidden = soloing || compingNow;
 
     // The comping style is the standard in time, so the voicing-shape picker
@@ -9452,25 +9453,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var chord = selectedChord();
     if (!chord) return;
 
-    // The same button, asking the question this mode is about. A voicing is
-    // something to put under the hands; a scale is something to be told, and
-    // the engine already knows it - nothing new is being worked out here.
+    /*  The same button, asking the question this mode is about - and until now
+        it answered with homework.
+
+        It used to name the scale, which the page already says twice: the dock
+        reads "Expecting D Dorian" and the Scales panel lists it with its notes
+        and its rationale. Chord practice got something to put under the hands
+        and solo practice got a set. So it plays a line instead.
+    */
     if (state.mode === "solo") {
-      await soloMoveToBar();
-
-      var scale = state.scales[state.chosenScale] || state.scales[0];
-
-      if (!scale) return;
-
-      el.soloNote.removeAttribute("data-colour");
-      el.soloNote.textContent = "";
-
-      var name = document.createElement("b");
-      name.textContent = scale.name;
-      el.soloNote.appendChild(name);
-      el.soloNote.appendChild(document.createTextNode(" over " + chord + "."));
-
-      el.soloAgainst.textContent = scale.noteNames.join(" ") + ". " + scale.rationale;
+      await showMeALine(chord);
       return;
     }
 
@@ -10062,6 +10054,92 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     comping.bassPlan = result;
     comping.bassPlanFor = key;
     return result;
+  }
+
+  /*  A line to play back, over the bar in front of you.
+
+      **It follows the harmony rather than the bar.** A lick lives across a
+      chord change - which is also why the generator wants the next chord, to
+      approach it - so this asks for the selected bar plus the one after when
+      the chord moves, and for the bar alone when it does not.
+
+      The scale and the style are the ones a take would be set up with, which
+      is what keeps the line's own colours and the reading's the same. The seed
+      moves every press, so pressing again is another line rather than the same
+      one.
+  */
+  var line = { seed: 1, timers: [] };
+
+  function stopTheLine() {
+    line.timers.forEach(function (timer) { window.clearTimeout(timer); });
+    line.timers = [];
+  }
+
+  async function showMeALine(chord) {
+    if (solo.armed) {
+      el.soloNote.removeAttribute("data-colour");
+      el.soloNote.textContent = "Not while a take is running - two lines at once is neither.";
+      el.soloAgainst.textContent = "";
+      return;
+    }
+
+    await soloMoveToBar();
+    stopTheLine();
+
+    var chordAt = function (bar) {
+      var measure = state.measures[bar];
+      return measure && measure.chords.length ? measure.chords[0].symbol : null;
+    };
+
+    var from = state.selected;
+    var next = chordAt(from + 1);
+    var to = next && next !== chordAt(from) ? from + 1 : from;
+
+    line.seed = (line.seed + 1) % 1000;
+
+    var result = await call("jazzImprovisedLine",
+                            ["string", "number", "number", "string", "string", "number"],
+                            [state.progression, from, to, soloChosenScale(), state.scaleStyle,
+                             line.seed]);
+
+    if (result === null || !result.ok || !result.notes.length) return;
+
+    el.soloNote.removeAttribute("data-colour");
+    el.soloNote.textContent = "";
+
+    var lead = document.createElement("b");
+    lead.textContent = "A line";
+    el.soloNote.appendChild(lead);
+    el.soloNote.appendChild(document.createTextNode(
+      to > from ? " over " + chordAt(from) + " into " + chordAt(to) + "."
+                : " over " + chord + "."));
+
+    el.soloAgainst.textContent = result.notes.map(function (note) { return note.name; }).join(" ")
+                               + ". Play it back and the take will read it.";
+
+    ensureNotesVisible(result.notes.map(function (note) { return note.midi; }));
+
+    /*  Played by the clock this page already keeps, swung through
+        `beatsIntoBar` rather than by any arithmetic of its own - the engine
+        writes tick 12 and the shell decides where that falls, which is the
+        rule `docs/RHYTHM.md` states and the one thing here that must not be
+        re-derived.
+
+        `setTimeout` rather than scheduled into Web Audio, because the app's
+        bridge has no "play this at" argument - the same honest inequality the
+        click already has, and at a model's tempo it is not audible. */
+    var beat = secondsPerBeat();
+    var beats = transport.beats || 4;
+
+    result.notes.forEach(function (note) {
+      var where = (note.bar - from) * beats + beatsIntoBar(note.beat, note.tick);
+
+      line.timers.push(window.setTimeout(function () {
+        playNote(note.midi, 0.75);
+        flashKey(note.midi, note.colour, Math.round(beat * 460));
+        window.setTimeout(function () { stopNote(note.midi, 0.08); }, beat * 440);
+      }, where * beat * 1000));
+    });
   }
 
   /** Sounds one note of the walking line, at @p when on the web. */
