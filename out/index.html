@@ -3,6 +3,51 @@
      alone everywhere else. It exists so that "is the site actually serving
      what I pushed?" is a question you answer by looking rather than by
      digging through deploy logs - which is exactly how it was asked once. -->
+<!-- What this page is allowed to load, which is very little.
+
+     There is no injection sink here today - the two `innerHTML` writes take
+     string literals and everything data-driven goes through `textContent` - so
+     this is a floor under that rather than a fix for anything. `default-src
+     'none'` means a sink added later cannot reach for a script somewhere else
+     even if it is handed a `<script src>`.
+
+     Three of these need saying:
+
+     `'unsafe-inline'` is unavoidable and honest about itself. The page *is* one
+     inline `<style>` and one inline `<script>` - that is the whole architecture,
+     one file that the app embeds in its binary - so nonces would have to be
+     rewritten at build time in two places for no gain over what is already a
+     single trusted document.
+
+     `'wasm-unsafe-eval'` is what compiling the engine needs. Emscripten builds
+     with `SINGLE_FILE`, so the WebAssembly arrives inside the script rather
+     than over the network, but instantiating it is still what this keyword
+     permits.
+
+     `fonts.googleapis.com` and `fonts.gstatic.com` are the webfonts, requested
+     by script and only when this page is served over the web. `connect-src`
+     covers the recorded samples under `assets/`, which is the one thing the
+     page fetches at runtime.
+
+     `cdnjs.cloudflare.com` is pdf.js, which is the one third-party script this
+     page runs. Writing it here is not an endorsement - see the note on that
+     tag below - but a CSP that blocked it would simply break PDF import, and a
+     policy nobody can ship is worth nothing.
+
+     `frame-ancestors` is deliberately absent: it does nothing in a meta tag and
+     writing it here would look like protection that is not there. GitHub Pages
+     cannot set headers, so that one has no home. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com;
+  worker-src 'self' blob: https://cdnjs.cloudflare.com;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src 'self' https://fonts.gstatic.com;
+  img-src 'self' data:;
+  media-src 'self' data: blob:;
+  connect-src 'self' data: blob:;
+  base-uri 'none';
+  form-action 'none'">
 <meta name="jazz-build" content="__JAZZ_BUILD__">
 <!-- The webfonts are requested by script rather than written here with an href,
      and only when this page is served over the web. The desktop app runs it in a
@@ -3180,8 +3225,26 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
 <!-- Reading a PDF is the one job the engine cannot do: pdf.js pulls the text
      and its positions off the page, and the engine works out which of it is a
-     chord chart. If the library is blocked, the paste box still works. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+     chord chart. If the library is blocked, the paste box still works.
+
+     `defer` because this used to block parsing. A `<script src>` to a CDN sat
+     directly above the page's own script, so a request that hung - rather than
+     failed - meant the interface never ran at all, which is the exact failure
+     the webfont note above this file's stylesheet exists to avoid. Nothing
+     needs pdf.js until somebody opens a PDF: every use of it is inside the
+     import handler, behind a `typeof window.pdfjsLib === "undefined"` guard
+     that already says so politely.
+
+     **This still wants Subresource Integrity, and has none.** It is a
+     third-party script with the full run of this page, fetched fresh on every
+     visit - so whoever serves it can run whatever they like here. An
+     `integrity="sha384-..."` plus `crossorigin="anonymous"` fixes that, and
+     vendoring the library into `assets/` fixes it better by removing the
+     third party altogether. Neither is done here because this environment
+     cannot reach cdnjs to hash the file, and an integrity attribute guessed at
+     is an integrity attribute that breaks PDF import for everybody. See
+     `docs/HANDOFF.md`. -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
 (function () {
   "use strict";

@@ -206,6 +206,25 @@ Small, verified, and none of them urgent.
   it carries numeric tune ids that mean nothing outside the browser that wrote
   them.
 
+- **pdf.js is loaded from a CDN with no Subresource Integrity.**
+  `web/index.html` pulls `pdf.min.js` from cdnjs on every visit, and the worker
+  beside it. It is a third-party script with the full run of the page, so
+  whoever serves it can run whatever they like in it. Two fixes, and the second
+  is better: an `integrity="sha384-..."` with `crossorigin="anonymous"`, or
+  vendoring the library into `assets/` so there is no third party at all. It
+  was not done when it was found because that session's network could not reach
+  cdnjs to hash the file, and an integrity attribute guessed at is one that
+  breaks PDF import for everybody. The CSP added at the same time has to keep
+  `https://cdnjs.cloudflare.com` in `script-src` and `worker-src` until the
+  library is vendored, at which point both entries come out.
+
+- **The page's CSP allows `'unsafe-inline'`, and that is structural.** The page
+  *is* one inline `<style>` and one inline `<script>` - the whole architecture
+  is a single file the app embeds in its binary - so nonces would need
+  rewriting at build time in two places to protect a document that is already
+  trusted end to end. Worth revisiting only if the page ever stops being one
+  file.
+
 - **One unexplained smoke-test timeout.** A single run failed with
   `page.waitForFunction: Timeout 15000ms` while the chart menu was half-wired;
   four runs since have been clean and CI has been clean. Noted rather than

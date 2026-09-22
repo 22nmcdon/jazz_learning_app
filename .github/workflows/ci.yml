@@ -5,6 +5,14 @@ on:
     branches: ["**"]
   pull_request:
 
+# This job only ever reads the checkout and builds it, so it is given exactly
+# that. Without the block a workflow inherits whatever the repository's default
+# is, which on an older repository is read *and write* - a token with more
+# reach than the job has any use for, handed to a build that compiles code from
+# every branch. `pages.yml` already scopes its own.
+permissions:
+  contents: read
+
 jobs:
   engine:
     name: Core engine + tests (no JUCE)
