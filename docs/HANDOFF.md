@@ -48,6 +48,17 @@ chosen** (`5fef784` through this one - see `docs/COMPING.md`). Neither is
 layout work; they are here so a session can see what the branch has done
 without reading eight commit messages.
 
+Since then, PDF and the open questions. `bd4fe12` vendored **pdf.js** into
+`assets/` — it had been fetched from cdnjs on every visit with no Subresource
+Integrity, and the blocker recorded here was a session that could not reach the
+CDN to hash it; the npm registry is reachable and is what the CDN mirrors, so
+the tarball was checked against npm's own `dist.integrity`. `810923e` hid the
+**print button** in the app, where it had been calling `window.print()` into a
+webview that opens no dialog. `ac597f4` made the app **read a PDF** with the
+page's own reader, which is why `WebUi` writes a temp *folder* now rather than a
+temp file. And five open questions were closed rather than left to be
+re-derived — see *Decided, not deferred* below.
+
 Verify anything you change:
 
 ```
@@ -64,10 +75,10 @@ cmake --build build          # the page is copied into the JUCE shell
 now follow rather than the old "everything is a section of `#menuPanel`". A
 comping-style editor is off *The band* and a voicing library is off *Voicings* —
 both of which are buttons in the chart's row now, not sections of the settings
-panel. Ear training is a **mode**, not a menu; practice history turned out to be
-a dialog of its own behind the top bar's record button, which is the first thing
-that broke the old rule. What lands under *Practice* is what is about the
-machine: a sound, a device, a version.
+panel. Practice history turned out to be a dialog of its own behind the top
+bar's record button, which is the first thing that broke the old rule. What
+lands under *Practice* is what is about the machine: a sound, a device, a
+version.
 
 ## Reshooting the screenshots
 
@@ -122,36 +133,79 @@ someone takes it back.
 Each of these needs its design question answered before any code. They are not
 ordered.
 
-- **Personal voicing library.** Where does a saved voicing live, and what is it
-  saved *against* — a chord symbol, a chord quality, or a bar of a particular
-  tune? Storage is the easy half.
-  **Half of this question now has an answer to copy.** The tune library saves a
-  named thing under a numeric id, in one object through `rememberObject`, and
-  drops any record it cannot read back rather than migrating it — and the
-  practice record attaches to a tune *by that id* rather than by name, which is
-  what survives a rename. A voicing library saved against a chord symbol would
-  work the same way; saved against a bar of a tune, it already has the tune ids
-  to hang off. What is still genuinely open is only the *against what*.
-- **Ear training.** The one item that is arguably a third mode rather than a
-  setting, so it collides with `state.mode` being two-valued. Read
-  `docs/COMPING.md`'s argument about what a third mode costs before deciding.
-- **MusicXML / MuseScore import.** Still an open question in `CLAUDE.md`: is it
-  wanted at all, given iReal Pro and PDF both ship? A reader is shell-side work
-  plus nothing in the engine.
-- **PDF reading and printing in the JUCE app.** The engine's reader is shared and
-  format-agnostic; the app simply lacks a PDF text-extraction library. This is a
-  dependency decision, not a design one.
+- **Personal voicing library.** **Both halves have answers now; what is left
+  is the writing.**
+
+  *Where it lives*: exactly where a saved tune lives. The tune library keeps
+  `{ tunes: [...], next: n }` under one key through `rememberObject`, ids
+  monotonic and never reused, every field checked against a list on the way
+  back in, and any record it cannot read **dropped rather than migrated**. That
+  shape is not specific to tunes. Note that the *Loose ends* entry below — "one
+  saved style, not a library" — is asking for the same thing, so **extract the
+  collection once and instantiate it three times** (tunes, comping styles,
+  voicings) rather than writing a second near-copy.
+
+  *Against what*: **a chord quality, stored as semitone offsets from the root.**
+  Against a literal symbol, a shape you saved over Dm7 is invisible on Gm7,
+  which makes the library useless in eleven keys out of twelve. Against a bar
+  of a tune it is a fingering annotation, not a vocabulary you carry between
+  tunes. Offsets transpose, and that is already how the engine thinks:
+  `idiomaticVoicings` builds from `{0, third, seventh}` at an anchor rather
+  than from absolute notes. What earns the feature its place is that *Show me
+  one* then cycles **your** catalogue beside the engine's, in the same control.
+
+  The one piece of new engine work is realising offsets at an anchor —
+  `naturalAnchorFor` knows where a shape belongs and the page must not learn
+  it. One small call, and therefore an entry in `ENGINE_CALLS` **and** in
+  `web/build.sh`'s `EXPORTED_FUNCTIONS`.
+- **Licks / line suggestions.** No longer "named, never designed" — the shape
+  is clear, it is simply unbuilt.
+
+  **The machinery exists at both ends.** `walkingBass` is already an ordered,
+  seeded, register-bounded melodic generator whose notes carry roles
+  (`BassRole { root, chordTone, scaleTone, approach }`); a lick generator is
+  that with a different rule set and the same seed contract — hashed, not
+  `std::mt19937`, so the browser and the app play the same line. And
+  `LineAnalyzer` already *reads* those very categories, `ApproachKind` included.
+  So it closes a loop nothing else here does: the page plays you a line, you
+  play it back, and the reading tells you whether you got it.
+
+  **It also fixes a real asymmetry.** *Show me one* hands you a playable
+  voicing in chord practice; in solo practice the same button says *"Which
+  scale?"* and hands you a **set**. One mode gets something to play, the other
+  gets homework.
+
+  **Generated, not curated.** Curated patterns are data the engine would have
+  to remember, and "the engine gains no memory" is the answer this repo has now
+  reached three times over — the chart's progression text, a described comping
+  style, the practice history. A lick that had to be transposed and fitted to
+  the bar is engine work anyway.
 - **Metronome jitter.** Not investigated. Every beat time is an origin plus a
   beat count at one spacing (see `CLAUDE.md`), so start by checking whether the
   jitter is in the scheduling or in the reporting.
-- **Rule-based vs data-informed reharmonisation.** An open question in
-  `CLAUDE.md`. The rules are deliberately kept separable and each carries its own
-  explanation, so this stays answerable later.
-- **Licks / line suggestions.** Named, never designed.
+- **Rule-based vs data-informed reharmonisation.** Still open in `CLAUDE.md`,
+  but with a cheaper first move recorded there: `ReharmStyle` already tags all
+  36 rules and `Options::style` already filters on them, and **no shell can
+  reach it** — `EngineApi::reharmonise` takes only the two booleans. Collect
+  that before considering a corpus.
 
-**Out of scope, needs an explicit decision to change:** audio / pitch-detection
-input. `CLAUDE.md`'s Input Scope defers it deliberately — it is a much larger
-DSP undertaking. Do not start it because a feature seems to want it.
+**Decided, not deferred — do not re-open without being asked:**
+
+- **Ear training.** Not wanted. This was the one item that argued for a third
+  mode, so `state.mode` stays two-valued with nothing pulling at it.
+- **MusicXML / MuseScore import.** Not wanted. iReal Pro and PDF both ship and
+  both read into the same engine.
+- **Audio / pitch-detection input.** Out, for the reason now written into
+  `CLAUDE.md`'s *Input Scope*: this is a pianist's app end to end and a
+  keyboard already has MIDI. What would reopen it is a non-keyboard audience,
+  not easier DSP.
+- **A dense multi-column desktop layout.** No — and the evidence moved against
+  it, since settings spread into five popovers rather than converging into one
+  pinnable panel. See `CLAUDE.md`'s *Open Questions*.
+- **Scoring rhythm in solo practice.** No: words, permanently. The criterion is
+  in `CLAUDE.md`'s invariants and argued in `docs/SOLO_PRACTICE.md` — comping
+  scores placement because the player chose a `CompStyleDefinition` off a menu,
+  and a chart offers no comparable standard.
 
 ---
 
@@ -179,6 +233,37 @@ Small, verified, and none of them urgent.
   link carries a *chart* in iReal Pro's format via the engine's own encoder -
   there is no slot in it for a figure. The reusable parts are the plumbing
   (`copyToClipboard`, the `?chart=` boot hook), not the format.
+
+- **An abnormal exit leaves the app's page folder in the temp directory.**
+  `~WebUi` deletes it on a clean shutdown, and a `SIGTERM` under test did not
+  run that path - one folder survived every ten-run loop. This is not new
+  behaviour (the single temp *file* had the same fate), but it is 1.8MB now
+  rather than 440KB, so it is worth knowing. The name is unguessable and
+  unique per launch - ten launches gave ten distinct names, checked - so this
+  is litter rather than a hole. Cleaning stale ones at startup means scanning
+  the temp directory and deleting folders this process does not own, which is
+  a worse idea than the litter.
+
+- **The app's PDF import is not in the smoke test, because nothing can click a
+  native file picker.** It was verified with a temporary probe on both ends -
+  an env var standing in for the `FileChooser`, and the page reporting the bar
+  count over `jazz.log` - which is reverted. The page's *own* PDF path is
+  covered. If the app's import breaks, no check here will say so.
+
+- **WKWebView is the one webview nothing has tested.** `file://` behaviour for
+  the vendored pdf.js was measured on WebKitGTK and on Chromium (which stands
+  in for WebView2) and both read a PDF, by different routes - WebKitGTK builds
+  a `Worker` and Chromium refuses to, and both end up on pdf.js's fake worker.
+  macOS and iOS were not reachable from the session that did this. WKWebView is
+  the strictest of the three about `file://` subresources, so it is the one to
+  check first if the app cannot read a PDF on a Mac.
+
+- **The PDF fixtures are generated, and prove transport rather than reading.**
+  Both the smoke test's and the app probe's. `CLAUDE.md`'s rule stands - every
+  import bug so far was one no invented fixture would have had - and reading is
+  still only exercised against real exports in `ChartFormatsTests`. A real
+  iReal Pro or MuseScore PDF export checked into the tests would be worth more
+  than either.
 
 - **The practice record keeps the last 300 takes, and then forgets.** The
   oldest go first and the panel says so rather than pretending to be complete.
@@ -219,18 +304,6 @@ Small, verified, and none of them urgent.
   question. The history text the engine already reads is a plausible basis, but
   it carries numeric tune ids that mean nothing outside the browser that wrote
   them.
-
-- **pdf.js is loaded from a CDN with no Subresource Integrity.**
-  `web/index.html` pulls `pdf.min.js` from cdnjs on every visit, and the worker
-  beside it. It is a third-party script with the full run of the page, so
-  whoever serves it can run whatever they like in it. Two fixes, and the second
-  is better: an `integrity="sha384-..."` with `crossorigin="anonymous"`, or
-  vendoring the library into `assets/` so there is no third party at all. It
-  was not done when it was found because that session's network could not reach
-  cdnjs to hash the file, and an integrity attribute guessed at is one that
-  breaks PDF import for everybody. The CSP added at the same time has to keep
-  `https://cdnjs.cloudflare.com` in `script-src` and `worker-src` until the
-  library is vendored, at which point both entries come out.
 
 - **The page's CSP allows `'unsafe-inline'`, and that is structural.** The page
   *is* one inline `<style>` and one inline `<script>` - the whole architecture

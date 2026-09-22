@@ -19,6 +19,7 @@ responsive UI and one UI-agnostic theory engine.
 | `modules/engine_api` | The engine's answers as JSON - one wire format, read by both shells. Pure C++17. | core engine |
 | `web` | **The user interface.** One page, served on the web and hosted by the app, plus the WebAssembly build, the offline worker and the smoke test that drives the built page. | engine API (as JSON) |
 | `app` | Platform shell: a webview showing `web/`, plus MIDI devices, the audio device and its electric piano, and file reading. | engine API, JUCE |
+| `assets` | What both shells need as files: the band's recorded instruments, and pdf.js. The app compiles these into its binary; `web/build.sh` copies them next to the page. | nothing |
 | `tests` | Engine unit tests (516), no JUCE, no third-party framework. | core engine, engine API |
 
 The core engine links no JUCE at all — that boundary is what keeps a future AUv3/VST3
@@ -845,13 +846,19 @@ iReal Pro sends when you share a song, or a progression typed as `| Dm7 | G7 | C
 pasted in or picked as a file, and both put an `irealbook://` link back on the clipboard
 that iReal Pro opens directly.
 
-Two things are the browser page's alone, and both for the same reason - they need something
-the JUCE shell has no library for. The page reads a **PDF lead sheet** (iReal Pro exports
-one, and so does the page) using pdf.js; the app says so and points you at the link instead
-of reading a PDF as gibberish. And **Print or save as PDF** prints the lead sheet alone,
-menus and keyboard left off the page, which is the browser's print pipeline doing the work.
-The chart reader itself is in the engine either way: what the app is missing is a way to get
-text out of a PDF, not a way to understand one.
+**A PDF lead sheet reads in both shells** (iReal Pro exports one, and so does the page).
+pdf.js pulls the text and its positions off the page and the engine works out which of it
+is a chord chart - the split `ChartFormats` has always drawn. The library is **vendored**
+under `assets/`, beside the band's recordings and for the same reason: both shells want it.
+The page loads it from there the first time somebody opens a PDF, and the app compiles it
+into its binary and writes it next to the page, which is why the app lays its interface
+down in a temp *folder* rather than a temp file. It used to come from a CDN on every visit,
+unhashed, which is a third-party script with the full run of a page holding a native bridge
+to the engine, MIDI and the file system.
+
+**Print or save as PDF** is still the browser's alone - it is the browser's print pipeline
+doing the work, and `window.print()` opens no dialog inside JUCE's webview - so the button
+is hidden in the app.
 
 A chart that arrives with a chord the engine cannot read says so and names it rather than
 quietly dropping it, and the title, composer, style **and metre** survive a round trip - they
@@ -1162,36 +1169,39 @@ The reasoning, including why the engine gained no memory to do any of this, is i
 
 ## Not in this POC
 
-- **MusicXML / MuseScore import.** iReal Pro and PDF import both ship (see above); which
-  further format comes next is still an open question in the design doc.
-- **Audio/pitch-detection input**, deliberately out of scope for this phase.
-- **Voicing library and ear training.** The analyser reports a per-voicing score and the
-  feedback panel keeps a session average — between them, the hook a voicing library would
-  build on. The metronome and the practice loop ship, as In time above. Progress tracking
-  *does* ship now; see *What you have been practising*.
+- **Voicing library.** The analyser reports a per-voicing score and the feedback panel
+  keeps a session average — between them, the hook a library would build on. Where it
+  lives and what a shape is saved *against* are both answered in
+  [`docs/HANDOFF.md`](docs/HANDOFF.md); it is unbuilt rather than undecided.
 - **Licks.** Solo mode tells you the scale; suggesting a *line* to play over a bar needs
-  generated or curated patterns, rhythm and register, and is a feature of its own.
-- **Rhythm in a *solo's* score.** The readings exist (above) and deliberately produce words
-  rather than points: a line has no written standard for where its notes fall, so a number
-  would be one the app invented and then marked you against. Comping is scored on placement
-  for exactly the reason a solo is not — there the standard is the style you picked — and
-  the two are not in tension. See [`docs/COMPING.md`](docs/COMPING.md).
-- **Reading a PDF, and printing one, in the desktop app.** Both need a PDF library the
-  JUCE shell does not have; the engine's reader is shared, so only the bytes are missing.
+  generated patterns, rhythm and register, and is a feature of its own. The generator it
+  would be shaped like — `walkingBass` — already exists, and `LineAnalyzer` already reads
+  the categories it would produce.
+- **Printing, in the desktop app.** `window.print()` opens no dialog inside JUCE's
+  webview, so the button is hidden there. Reading a PDF *does* ship in both shells now.
+- **Decided against, not pending**: MusicXML / MuseScore import and ear training are not
+  wanted; audio/pitch-detection input is out because this is a pianist's app end to end
+  and a keyboard already has MIDI; and **rhythm stays out of a solo's score** — the
+  readings produce words, permanently. A line has no written standard for where its notes
+  fall, so a number would be one the app invented and then marked you against. Comping is
+  scored on placement for exactly the reason a solo is not: there the standard is the
+  style you picked off a menu. See [`docs/COMPING.md`](docs/COMPING.md).
 
 ## Open questions carried over from the design doc
 
 These were left open rather than silently decided:
 
-1. **Import scope** — iReal Pro and PDF now both import, which answers the immediate half
-   of this. Whether MusicXML/MuseScore is needed as well is still open, and the page
-   reader is format-agnostic enough that a MusicXML path would feed the same code.
-2. **Rule-based vs. data-informed reharmonisation** — the POC is entirely rule-based, with
-   every rule in one file (`Reharmonizer.cpp`) and its own difficulty and style tag, so a
-   data-informed ranking could replace the ordering without touching the rules.
+1. **Import scope** — **answered.** iReal Pro and PDF both import, in both shells.
+   MusicXML/MuseScore is not wanted.
+2. **Rule-based vs. data-informed reharmonisation** — the one still genuinely open. The
+   POC is entirely rule-based, with every rule in one file (`Reharmonizer.cpp`) carrying
+   its own difficulty and style tag, so a data-informed ranking could replace the ordering
+   without touching the rules. Before that is worth doing, note that the **style** tag is
+   currently unreachable: `EngineApi::reharmonise` never sets it, so the bebop / modal /
+   quartal / brazilian classification those 36 rules already carry does nothing.
 3. **Solo/improv feedback layer** — in, both static and in time: you arm a take and either
-   walk the chart yourself or let the clock walk it. What is still open is rhythm, above.
-4. **A dense, DAW-style desktop layout** — **answered: denser yes, multi-column not yet.**
+   walk the chart yourself or let the clock walk it. Rhythm is answered above: words.
+4. **A dense, DAW-style desktop layout** — **answered: denser yes, multi-column no.**
    The page is laid out as an instrument rather than an article now - a fixed three-zone
    frame with the chart taking every pixel the other two do not - but it stays one
    responsive column. No side panel, no wide-screen layout of its own, and no size classes.

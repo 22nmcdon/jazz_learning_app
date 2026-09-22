@@ -210,11 +210,22 @@ means CSS, not per-platform builds.
 - Do not introduce a second platform-specific UI layer (JUCE screen, native
   sheet, separate mobile stylesheet) — this was a deliberate scope decision.
 
-## Input Scope (Current Phase)
+## Input Scope
 
 In scope: MIDI keyboard (USB/Bluetooth), on-screen keyboard (touch/mouse).
-Out of scope: audio/pitch-detection input — do not add without an explicit
-decision to expand scope (much larger DSP undertaking, deferred deliberately).
+
+**Audio / pitch-detection input is out, and that is an answer rather than a
+deferral.** It was recorded for a long time as "much larger DSP undertaking,
+deferred" — true, and not the reason. The reason is that this is a pianist's
+app the whole way down: `twoHandedReach`, guide tones badged on *keys*, the
+low-interval limit, `compingVoicing`'s anchor sweep, `chordSoFar()` reading an
+attack as a voicing. Every reader downstream assumes several notes at once from
+a keyboard, and a keyboard already has MIDI. Pitch detection buys monophonic
+input for a horn player, which is a different app.
+
+So the thing that would reopen it is **a non-keyboard audience**, not the DSP
+getting easier. `app/CMakeLists.txt` already says as much in the line that
+turns the microphone permission off.
 
 ## Platform Notes
 
@@ -400,11 +411,21 @@ something finished or assume something unfinished is done:
   names a hard bar only when it stands apart. See `docs/PROGRESS.md`.
   **Saved tunes came with it**, and with them the amendment to the
   remembered-settings invariant below — the page still opens on a clean stand.
-- **Not built, deliberately open**: personal voicing
-  library, ear training, licks/line suggestions,
-  MusicXML/MuseScore import, PDF reading/printing in the JUCE app (the engine's
-  reader is shared and format-agnostic; the app just lacks a PDF text-extraction
-  library). Each one's open design question is in `docs/HANDOFF.md`.
+- **Reading a PDF** — done in **both** shells. The engine's reader was always
+  format-agnostic, and the app's missing half was never theory: it was the
+  extractor. pdf.js is vendored under `assets/` like the band's recordings, so
+  the app compiles it in and `WebUi` writes it beside the page — which is why
+  the page is written to a temp **folder** now rather than a temp file. The
+  shell sends a PDF's bytes over the bridge and the page's own `readPdf` does
+  the rest, so there is one reader and not two. **Printing is still the
+  browser's alone**, and the button is hidden in the app.
+- **Not built, deliberately open**: personal voicing library, licks / line
+  suggestions. Each one's design question — and, for both, how far it is
+  already answered — is in `docs/HANDOFF.md`.
+- **Closed, so nobody re-plans them**: ear training and MusicXML/MuseScore
+  import are **not wanted** (decided, not deferred); audio input is out for the
+  reason under *Input Scope*; the dense multi-column layout is answered under
+  *Open Questions*.
 
 ## Critical Invariants
 
@@ -451,6 +472,17 @@ that's easy to miss in review:
   thing the generator is held to in both directions. The argument is in
   `docs/COMPING.md`; what matters here is that the two rules answer two different
   questions and neither may be quoted at the other.
+  **This was an open question and is now closed, so here is the test rather
+  than the taste.** Whether a solo's rhythm should score is not a matter of how
+  strict anyone feels like being; it turns on one thing — *is there a standard
+  the player chose?* Comping has one, and it is a `CompStyleDefinition` off a
+  menu. A chart names the chord and has never said where in the bar a note
+  belongs, so solo practice has none, and a number there would be the engine
+  inventing a standard and then marking somebody against it. Words, therefore,
+  and permanently: the only thing that would reopen it is a player-chosen
+  rhythmic standard actually existing, not a better scoring idea. There is a
+  test holding the line — the same notes score the same with and without
+  positions.
 - **Single source of truth for anything on the wire.** `scaleStyles()`,
   `compStyles()` etc. come from the engine via `EngineApi`; never hardcode a
   copy in a shell — it will drift the first time the engine's catalogue
@@ -569,10 +601,20 @@ that's easy to miss in review:
 
 ## Open Questions (Don't Assume — Ask)
 
-- iReal Pro and PDF import both ship. Is MusicXML/MuseScore import needed too?
 - How much of the reharm suggestion engine should be rule-based vs. data/ML-informed?
+  **Collect the dead feature before reaching for a model.** `ReharmStyle`
+  (`Reharmonizer.h`) tags all 36 rules bebop / modal / quartal / brazilian and
+  `Options::style` filters on it — but `EngineApi::reharmonise` takes only the
+  two booleans and never sets it, so **the style filter is unreachable from
+  every shell**. Wiring it through is the honest version of "data-informed":
+  the player informs the ranking, off a picker, using classification that
+  already exists and explains itself. A corpus-ranked reharmoniser would
+  replace 36 rules that each carry their own explanation with a number that
+  carries none, which is a bad trade in a teaching app.
+- ~~Is MusicXML/MuseScore import needed, given iReal Pro and PDF both ship?~~
+  **Answered: no.** Not wanted.
 - ~~Is a future dense, DAW-style desktop layout worth designing for now, or
-  deferred?~~ **Answered: denser yes, multi-column not yet.** The page is laid
+  deferred?~~ **Answered: no, and the evidence moved against it.** The page is laid
   out as an instrument rather than an article — a fixed three-zone frame with
   the chart taking every pixel the other two do not — but it stays *one
   responsive column*. No side panel, no wide-screen layout of its own. If that
@@ -580,7 +622,7 @@ that's easy to miss in review:
   converge into one panel to be pinned open. They spread into five, each hung
   beside the thing it acts on (see UI Conventions), so a side panel now means
   moving a control **away** from what it changes — which is the move the chart's
-  row was chosen over.
+  row was chosen over. So this is a no with a reason, not a "not yet".
 
 If work touches one of these, flag the ambiguity rather than silently picking a direction.
 

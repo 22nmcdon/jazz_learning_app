@@ -224,6 +224,17 @@ and documented once in `docs/RHYTHM.md`. What's specific to solo practice:
   better or worse note, and the moment placement moved the number the number
   would stop being explainable. There's a test that says so: the same notes
   score the same whether or not positions were sent.
+- **Whether that's final was an open question, and it's closed: it is.** The
+  question was put as "rhythm produces words, is that the answer or a stage",
+  and answered as neither a preference nor a matter of nerve. It turns on one
+  test — **is there a standard the player chose?** Comping has one, a
+  `CompStyleDefinition` picked off a menu, which is exactly why placement
+  scores there and why that isn't a contradiction. A chart names the chord and
+  has never said where in a bar a note belongs, so there is no such standard
+  here and a number would be one the engine made up and then marked somebody
+  against. What would reopen it is that standard coming to exist — a rhythmic
+  vocabulary a player deliberately picks to be held to — not a cleverer way of
+  counting. Until then, words.
 
 ### Chords in a line
 Players comp behind themselves and solo in block chords, and the most
