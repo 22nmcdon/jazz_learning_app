@@ -91,11 +91,29 @@ namespace
         std::vector<int> notes;
         std::string current;
 
+        /*  A note that will not read is dropped, not thrown over.
+
+            `readHit` wraps its own three conversions and then calls this one
+            *outside* that try, so a hit whose notes were rubbish threw straight
+            through `compHit` and out of the shell. Both shells now catch as
+            well, but the reader should not be the thing that needs catching.
+
+            Dropping is the same answer `coverageOf` gives a chord symbol it
+            cannot name: the caller gets a shorter list, which every analyser
+            here already handles, because an empty one is an ordinary case. */
         const auto flush = [&notes, &current]
         {
             if (! current.empty())
             {
-                notes.push_back (std::stoi (current));
+                try
+                {
+                    notes.push_back (std::stoi (current));
+                }
+                catch (...)
+                {
+                    // Not a note. The list is shorter by one.
+                }
+
                 current.clear();
             }
         };

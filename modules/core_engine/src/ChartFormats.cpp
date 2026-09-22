@@ -4,7 +4,9 @@
 #include <cctype>
 #include <cmath>
 #include <map>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace jazz::core
@@ -12,6 +14,47 @@ namespace jazz::core
 
 namespace
 {
+    /** The busiest metre anybody counts. Nothing is played in 700/4, and a
+        number that large reaching a `Chart` is a number every later reader has
+        to be defensive about. */
+    constexpr int busiestMetre = 32;
+
+    /** One half of a metre, or nothing at all.
+
+        This file reads the only genuinely untrusted input in the project - a
+        link somebody sent you, or a PDF somebody gave you - and it used to hand
+        both straight to `std::stoi`. That throws on text that is not a number
+        *and* on a number too big for an int, and neither shell catches: twenty
+        digits where a metre goes aborted the engine in the browser and took the
+        desktop app down with it.
+
+        So this refuses instead. It is the rule `numberIn` states one layer up,
+        in `EngineApi.cpp`, applied where it was missing: clamping belongs where
+        a value is computed, and this is where one is *received*. A metre that
+        cannot be read leaves the chart in the one it opens in, which is what
+        the rest of this reader already does with anything it cannot make sense
+        of - the bars still arrive.
+    */
+    std::optional<int> metreNumber (std::string_view text)
+    {
+        // Two digits is every metre there is. Longer is not a big metre, it is
+        // a different message wearing one.
+        if (text.empty() || text.size() > 2)
+            return {};
+
+        auto value = 0;
+
+        for (auto c : text)
+        {
+            if (std::isdigit (static_cast<unsigned char> (c)) == 0)
+                return {};
+
+            value = value * 10 + (c - '0');
+        }
+
+        return value >= 1 && value <= busiestMetre ? std::optional<int> (value) : std::nullopt;
+    }
+
     bool has (const ChordSymbol& chord, Extension extension)
     {
         const auto& extensions = chord.extensions();
@@ -423,10 +466,19 @@ ChartParseResult importIRealPro (std::string_view text)
                 // one, so it holds the one the tune opens in.
                 if (! sawTimeSignature)
                 {
-                    chart.timeSignature.numerator
-                        = std::stoi (body.substr (i + 1, digits - 1));
-                    chart.timeSignature.denominator = body[i + digits] - '0';
-                    sawTimeSignature = true;
+                    const auto numerator = metreNumber (body.substr (i + 1, digits - 1));
+                    const auto denominator = metreNumber (body.substr (i + digits, 1));
+
+                    // Refused rather than guessed at, and the digits are still
+                    // consumed below either way - they were written as a metre,
+                    // so reading them back as music would be worse than
+                    // ignoring them.
+                    if (numerator.has_value() && denominator.has_value())
+                    {
+                        chart.timeSignature.numerator = *numerator;
+                        chart.timeSignature.denominator = *denominator;
+                        sawTimeSignature = true;
+                    }
                 }
 
                 i += digits;
@@ -780,6 +832,12 @@ namespace
 
         while (i < text.size() && std::isdigit (static_cast<unsigned char> (text[i])) != 0)
         {
+            // Signed overflow is undefined behaviour, and this runs over text
+            // out of a PDF somebody else made. Six digits is a hundred thousand
+            // bars, which is not a tune - past that this is not a bar label.
+            if (digits >= 6)
+                return false;
+
             number = number * 10 + (text[i] - '0');
             ++i;
             ++digits;
@@ -858,9 +916,15 @@ namespace
 
                 if (numbers.size() >= 2)
                 {
-                    chart.timeSignature.numerator = std::stoi (numbers[0]);
-                    chart.timeSignature.denominator = std::stoi (numbers[1]);
-                    sawTimeSignature = true;
+                    const auto numerator = metreNumber (numbers[0]);
+                    const auto denominator = metreNumber (numbers[1]);
+
+                    if (numerator.has_value() && denominator.has_value())
+                    {
+                        chart.timeSignature.numerator = *numerator;
+                        chart.timeSignature.denominator = *denominator;
+                        sawTimeSignature = true;
+                    }
                 }
             }
         }

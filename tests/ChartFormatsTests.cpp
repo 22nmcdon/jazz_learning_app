@@ -594,3 +594,105 @@ TEST ("a chart written with sharps goes back out written with sharps")
     CHECK (link.find ("F#^9/B") != std::string::npos);
     CHECK (link.find ("Gb") == std::string::npos);
 }
+
+//  --- what a reader does with input somebody else wrote --------------------
+
+/*  This file reads the only genuinely untrusted input in the project: a link
+    somebody sent you, and a PDF somebody gave you. Both used to reach
+    `std::stoi` unguarded, which throws on text that is not a number and on one
+    too big for an int - and neither shell caught it, so the browser aborted the
+    engine and the desktop app terminated.
+
+    Each of these is the message that did it.
+*/
+
+TEST ("a link whose metre is twenty digits is read, not thrown over")
+{
+    const auto result = importIRealPro (
+        "irealbook://T=C=S=C=n=[T99999999999999999999C^7 |D-7 ]Z");
+
+    // The bars still arrive. A metre that cannot be read leaves the chart in
+    // the one it opens in, which is what this reader does with everything else
+    // it cannot make sense of.
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->measureCount(), 2);
+    CHECK_EQ (result.chart->timeSignature.numerator, 4);
+    CHECK_EQ (result.chart->timeSignature.denominator, 4);
+}
+
+TEST ("a metre nobody counts in is refused rather than carried")
+{
+    // Ten digits parses as an int perfectly well. It is still not a metre, and
+    // a numerator of 123456789 reaching a Chart is a number every later reader
+    // would have to be defensive about.
+    const auto result = importIRealPro ("irealbook://T=C=S=C=n=[T1234567890C^7 ]Z");
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->timeSignature.numerator, 4);
+}
+
+TEST ("the metres that are real still read")
+{
+    const auto common = importIRealPro ("irealbook://T=C=S=C=n=[T44C^7 ]Z");
+    CHECK (common.ok());
+    CHECK_EQ (common.chart->timeSignature.numerator, 4);
+    CHECK_EQ (common.chart->timeSignature.denominator, 4);
+
+    const auto waltz = importIRealPro ("irealbook://T=C=S=C=n=[T34C^7 ]Z");
+    CHECK (waltz.ok());
+    CHECK_EQ (waltz.chart->timeSignature.numerator, 3);
+
+    // The one that needs three digits, and the reason the reader takes every
+    // digit rather than exactly two.
+    const auto twelveEight = importIRealPro ("irealbook://T=C=S=C=n=[T128C^7 ]Z");
+    CHECK (twelveEight.ok());
+    CHECK_EQ (twelveEight.chart->timeSignature.numerator, 12);
+    CHECK_EQ (twelveEight.chart->timeSignature.denominator, 8);
+}
+
+TEST ("a page whose time signature is not a number is read, not thrown over")
+{
+    std::vector<PlacedText> items {
+        { 10, 10, "Time Signature: x, y", 0 },
+        { 10, 60, "Bar 1, c Minor 7", 0 }
+    };
+
+    const auto result = chartFromPlacedText (std::move (items));
+
+    // What matters is that it answered at all. Before this it threw
+    // std::invalid_argument straight out of the engine.
+    CHECK_EQ (result.chart.has_value() ? result.chart->timeSignature.numerator : 4, 4);
+}
+
+TEST ("a page whose time signature is too big for an int is read too")
+{
+    std::vector<PlacedText> items {
+        { 10, 10, "Time Signature: 99999999999999999999, 4", 0 },
+        { 10, 60, "Bar 1, c Minor 7", 0 }
+    };
+
+    const auto result = chartFromPlacedText (std::move (items));
+
+    CHECK_EQ (result.chart.has_value() ? result.chart->timeSignature.numerator : 4, 4);
+}
+
+TEST ("a bar number longer than any tune is not a bar label")
+{
+    /*  `number = number * 10 + digit` with no bound is signed overflow, which
+        is undefined behaviour - on text out of a PDF somebody else made.
+
+        Asserted on the *bars*, not on whether the read succeeded: without the
+        cap the page still failed to read, so a check on `ok()` alone passed
+        either way and proved nothing. What the overflow actually did was
+        accept a bar it should have ignored, at whatever number the wrap
+        landed on. */
+    std::vector<PlacedText> items {
+        { 10, 60, "Bar 1, c Minor 7", 0 },
+        { 10, 90, "Bar 99999999999999999999, g 7", 0 }
+    };
+
+    const auto result = chartFromPlacedText (std::move (items));
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->measureCount(), 1);
+}
