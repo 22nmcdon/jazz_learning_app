@@ -978,6 +978,13 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   chords are two different exercises over the same tune. There were five vocabularies until
   they were counted: one was tagged on a single rule and one on none at all, so both were
   deleted rather than put in front of a player as a menu entry that does nothing.
+- **Your own voicings** — a shape you played can be saved and comes back on every chord
+  of the same kind, in every key. It is kept as semitone offsets from the root plus the
+  register it sat in, not as the notes: saved against the literal chord, a voicing found
+  over Dm7 would be invisible on Gm7, and saved against a bar of a tune it would be a
+  fingering note rather than a vocabulary. *Show me one* plays yours before the engine's,
+  so your catalogue and the app's sit in the same control - and yours are not filtered by
+  the shape you are practising, because a shape you chose to keep is not a suggestion.
 - **Voicing analysis** — classifies what was played (shell, root position, rootless
   left-hand, two-handed rootless, solo, spread), checks it against the symbol, and explains
   what is missing, outside, clashing or muddy in the low register. A rootless voicing is not
@@ -1173,10 +1180,10 @@ The reasoning, including why the engine gained no memory to do any of this, is i
 
 ## Not in this POC
 
-- **Voicing library.** The analyser reports a per-voicing score and the feedback panel
-  keeps a session average — between them, the hook a library would build on. Where it
-  lives and what a shape is saved *against* are both answered in
-  [`docs/HANDOFF.md`](docs/HANDOFF.md); it is unbuilt rather than undecided.
+- **A shelf of your own comping styles.** The editor keeps exactly one style you wrote.
+  The storage that a shelf needs now exists - it is what the voicing library sits on - but
+  a list of styles wants a picker and somewhere to name them, in a panel already seven
+  controls deep, and that is a design question rather than a refactor.
 - **Licks.** Solo mode tells you the scale; suggesting a *line* to play over a bar needs
   generated patterns, rhythm and register, and is a feature of its own. The generator it
   would be shaped like — `walkingBass` — already exists, and `LineAnalyzer` already reads

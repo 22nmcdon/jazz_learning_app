@@ -432,9 +432,28 @@ something finished or assume something unfinished is done:
   shell sends a PDF's bytes over the bridge and the page's own `readPdf` does
   the rest, so there is one reader and not two. **Printing is still the
   browser's alone**, and the button is hidden in the app.
-- **Not built, deliberately open**: personal voicing library, licks / line
-  suggestions. Each one's design question — and, for both, how far it is
-  already answered — is in `docs/HANDOFF.md`.
+- **Personal voicing library** — done, and the question that kept it unbuilt was
+  *what a voicing is saved against*. **A chord quality, as semitone offsets from
+  the root**, plus the register the shape sat in. Saved against the literal
+  symbol a shape found over Dm7 is invisible on Gm7; saved against a bar of a
+  tune it is a fingering note rather than a vocabulary. Offsets transpose, which
+  is already how `idiomaticVoicings` thinks. **The register is part of the
+  shape** for the reason `voiceGuideTones` gives about voicing a guide tone
+  rather than naming one — the octave is the half a chart cannot give you — so
+  `voicingFromShape` picks the root octave by the anchor and walks the octaves
+  rather than dividing, which is where the off-by-an-octave lives.
+  What earns it its place is that **`Show me one` cycles yours before the
+  engine's**, in the same control. Yours are *not* filtered by the shape being
+  practised, which the engine's are: a shape you chose to keep is not a
+  suggestion to be overruled.
+  **`savedCollection` is the shelf, written once.** It holds what a tune
+  library, a voicing library and a shelf of comping styles share — an array and
+  a counter, ids that only go up, a cap, and dropping a record rather than
+  migrating it — and takes *what makes a record readable* as a function, since
+  those fields are genuinely not shared. Its array property name is a parameter
+  only because renaming the tune envelope would drop every tune anybody saved.
+- **Not built, deliberately open**: licks / line suggestions. Its design
+  question — and how far it is already answered — is in `docs/HANDOFF.md`.
 - **Closed, so nobody re-plans them**: ear training and MusicXML/MuseScore
   import are **not wanted** (decided, not deferred); audio input is out for the
   reason under *Input Scope*; the dense multi-column layout is answered under
@@ -514,7 +533,8 @@ that's easy to miss in review:
   only thing on the page that touches `localStorage`, under flat `jazz*` keys.
   What survives a reload is how the room is set up — tempo, metre, In time, the
   sound bank, the band, the comping style, the reharmonisation vocabulary,
-  guide tones, the loop. What must
+  guide tones, the loop — plus the two shelves you filled on purpose: your
+  saved tunes and your saved voicings. What must
   never survive **on its own** is the chart, a take, or anything mid-exercise.
   Three rules the
   recall keeps: it **makes no sound** (turning the piano on by hand sounds the

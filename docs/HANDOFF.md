@@ -67,6 +67,13 @@ the same commit, because `common` was doing double duty as both a rule tag and
 the "do not filter" value. `b4a5d8a` put the two surviving vocabularies on the
 wire and gave the bar dialog a picker.
 
+Since then, the voicing library. `71ac183` answered the question that kept it
+unbuilt — **what a saved voicing is saved against** — as a chord *quality*,
+stored as offsets from the root plus the register it sat in, so a shape found
+over Dm7 comes back on every minor chord in every key. *Show me one* cycles
+yours before the engine's. The saved-collection pattern was extracted in the
+same commit, which is the "answer it once for both" this file asked for.
+
 Verify anything you change:
 
 ```
@@ -141,31 +148,6 @@ someone takes it back.
 Each of these needs its design question answered before any code. They are not
 ordered.
 
-- **Personal voicing library.** **Both halves have answers now; what is left
-  is the writing.**
-
-  *Where it lives*: exactly where a saved tune lives. The tune library keeps
-  `{ tunes: [...], next: n }` under one key through `rememberObject`, ids
-  monotonic and never reused, every field checked against a list on the way
-  back in, and any record it cannot read **dropped rather than migrated**. That
-  shape is not specific to tunes. Note that the *Loose ends* entry below — "one
-  saved style, not a library" — is asking for the same thing, so **extract the
-  collection once and instantiate it three times** (tunes, comping styles,
-  voicings) rather than writing a second near-copy.
-
-  *Against what*: **a chord quality, stored as semitone offsets from the root.**
-  Against a literal symbol, a shape you saved over Dm7 is invisible on Gm7,
-  which makes the library useless in eleven keys out of twelve. Against a bar
-  of a tune it is a fingering annotation, not a vocabulary you carry between
-  tunes. Offsets transpose, and that is already how the engine thinks:
-  `idiomaticVoicings` builds from `{0, third, seventh}` at an anchor rather
-  than from absolute notes. What earns the feature its place is that *Show me
-  one* then cycles **your** catalogue beside the engine's, in the same control.
-
-  The one piece of new engine work is realising offsets at an anchor —
-  `naturalAnchorFor` knows where a shape belongs and the page must not learn
-  it. One small call, and therefore an entry in `ENGINE_CALLS` **and** in
-  `web/build.sh`'s `EXPORTED_FUNCTIONS`.
 - **Licks / line suggestions.** No longer "named, never designed" — the shape
   is clear, it is simply unbuilt.
 
@@ -234,8 +216,12 @@ Small, verified, and none of them urgent.
 - **One saved style, not a library.** The editor keeps exactly one style you
   wrote, under one key. A list of them is a *library*, and the library question
   - what a saved thing is saved against, and where it lives - is the one the
-  *Personal voicing library* bullet above asks. It should be answered once, for
-  both, rather than twice differently.
+  *Personal voicing library* bullet asked. **Half of that is now done**:
+  `savedCollection` in `web/index.html` is the shelf the tune library and the
+  voicing library both sit on, and converting this one to it is mechanical.
+  What is not mechanical is the UI - a shelf of styles wants a picker and
+  somewhere to type a name, in a panel that is already seven controls deep and
+  wanting two columns. That is the part to design before writing anything.
 
 - **Nothing shares or exports a style.** A style in a link is a second wire
   format and a second "is this trustworthy" question, and the existing share
