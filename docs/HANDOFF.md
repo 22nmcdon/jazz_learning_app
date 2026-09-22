@@ -59,6 +59,14 @@ page's own reader, which is why `WebUi` writes a temp *folder* now rather than a
 temp file. And five open questions were closed rather than left to be
 re-derived — see *Decided, not deferred* below.
 
+Since then, the last open question closed. `5b3b3f0` deleted the `brazilian`
+and `quartal` reharmonisation vocabularies — counted, they were tagged on **no
+rule** and **one rule** respectively, so the style menu that was about to be
+wired up had an entry that was a lie. `Options::style` became an optional in
+the same commit, because `common` was doing double duty as both a rule tag and
+the "do not filter" value. `b4a5d8a` put the two surviving vocabularies on the
+wire and gave the bar dialog a picker.
+
 Verify anything you change:
 
 ```
@@ -183,13 +191,14 @@ ordered.
 - **Metronome jitter.** Not investigated. Every beat time is an origin plus a
   beat count at one spacing (see `CLAUDE.md`), so start by checking whether the
   jitter is in the scheduling or in the reporting.
-- **Rule-based vs data-informed reharmonisation.** Still open in `CLAUDE.md`,
-  but with a cheaper first move recorded there: `ReharmStyle` already tags all
-  36 rules and `Options::style` already filters on them, and **no shell can
-  reach it** — `EngineApi::reharmonise` takes only the two booleans. Collect
-  that before considering a corpus.
-
 **Decided, not deferred — do not re-open without being asked:**
+
+- **Rule-based vs data-informed reharmonisation.** Rule-based. The dead style
+  filter was collected (see the entry in *Where this is*), and what the counting
+  turned up is the part worth keeping: two of the five vocabularies had one rule
+  and none. The way back into this question is **more rules or better tags**,
+  not a corpus — 36 rules that each explain themselves are worth more here than
+  a ranking that cannot.
 
 - **Ear training.** Not wanted. This was the one item that argued for a third
   mode, so `state.mode` stays two-valued with nothing pulling at it.

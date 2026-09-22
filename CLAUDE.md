@@ -279,6 +279,19 @@ Full behavior is in `README.md`. Status only, so a session doesn't re-plan
 something finished or assume something unfinished is done:
 
 - **Reharmonization Assistant, Real-Time Chord/Voicing Analyzer** — done.
+  **A substitution carries three classifications and they are not the same
+  axis**, which is worth knowing before adding a fourth. `SubstitutionFamily`
+  is what the bar dialog groups by, nearest the original harmony outwards.
+  `ReharmPlanKind` is the six whole-tune plans. `ReharmStyle` is the vocabulary
+  filter behind the bar dialog's picker — and note that `ReharmPlanKind::modalColour`
+  gets its effect by filtering on *family*, so the two "modal"s in that file are
+  unrelated mechanisms sharing a word. A style lives in the enum only while at
+  least one rule is tagged with it; a test says so, because `brazilian` once
+  shipped tagged on nothing at all.
+  **The style filter reaches two of the three reharm calls on purpose.** Not
+  `recogniseSubstitution` — narrowing the pool there stops the app noticing
+  substitutions the player actually found, and noticing is its whole job. Not
+  the plans, for the family-vs-style reason above.
 - **Solo practice** (line analysis, take scoring, walking-bass reading) —
   done. See `docs/SOLO_PRACTICE.md` before touching `LineAnalyzer`.
   **A chord in a line is read as a chord, and nothing new reads it.** The line
@@ -500,7 +513,8 @@ that's easy to miss in review:
   (`remember`/`recall`, plus `rememberFlag`/`recallFlag`/`recallNumber`) is the
   only thing on the page that touches `localStorage`, under flat `jazz*` keys.
   What survives a reload is how the room is set up — tempo, metre, In time, the
-  sound bank, the band, the comping style, guide tones, the loop. What must
+  sound bank, the band, the comping style, the reharmonisation vocabulary,
+  guide tones, the loop. What must
   never survive **on its own** is the chart, a take, or anything mid-exercise.
   Three rules the
   recall keeps: it **makes no sound** (turning the piano on by hand sounds the
@@ -601,30 +615,36 @@ that's easy to miss in review:
 
 ## Open Questions (Don't Assume — Ask)
 
-- How much of the reharm suggestion engine should be rule-based vs. data/ML-informed?
-  **Collect the dead feature before reaching for a model.** `ReharmStyle`
-  (`Reharmonizer.h`) tags all 36 rules bebop / modal / quartal / brazilian and
-  `Options::style` filters on it — but `EngineApi::reharmonise` takes only the
-  two booleans and never sets it, so **the style filter is unreachable from
-  every shell**. Wiring it through is the honest version of "data-informed":
-  the player informs the ranking, off a picker, using classification that
-  already exists and explains itself. A corpus-ranked reharmoniser would
-  replace 36 rules that each carry their own explanation with a number that
-  carries none, which is a bad trade in a teaching app.
+**There are none open right now**, which is a statement with a short shelf life
+rather than a boast — the section stays because the rule does: **if work runs
+into an ambiguity this file does not answer, flag it rather than silently
+picking a direction.** That is how every answer below got made.
+
+What was here, and what it turned out to be:
+
+- ~~How much of the reharm suggestion engine should be rule-based vs.
+  data/ML-informed?~~ **Answered: rule-based, and the thing that looked like the
+  question was a bug.** `ReharmStyle` tagged all 36 rules and `Options::style`
+  filtered on them, and no shell could reach it — so the first move was to
+  collect that rather than reach for a corpus. Counting the tags is what
+  mattered: `brazilian` was on **no rule at all** and `quartal` on **one**, so
+  the menu that filter would have shipped had an entry that was a lie. Both were
+  deleted, the m11 rule retagged `modal`, and what is on the wire now is two
+  vocabularies that exist. A corpus-ranked reharmoniser would replace 36 rules
+  that each carry their own explanation with a number that carries none, which
+  is a bad trade in a teaching app — and the way back in, if anyone wants one,
+  is **more rules or better tags**, not a model.
 - ~~Is MusicXML/MuseScore import needed, given iReal Pro and PDF both ship?~~
   **Answered: no.** Not wanted.
 - ~~Is a future dense, DAW-style desktop layout worth designing for now, or
-  deferred?~~ **Answered: no, and the evidence moved against it.** The page is laid
-  out as an instrument rather than an article — a fixed three-zone frame with
-  the chart taking every pixel the other two do not — but it stays *one
-  responsive column*. No side panel, no wide-screen layout of its own. If that
-  is revisited, the thing to weigh is no longer what it was: settings did *not*
-  converge into one panel to be pinned open. They spread into five, each hung
-  beside the thing it acts on (see UI Conventions), so a side panel now means
-  moving a control **away** from what it changes — which is the move the chart's
-  row was chosen over. So this is a no with a reason, not a "not yet".
-
-If work touches one of these, flag the ambiguity rather than silently picking a direction.
+  deferred?~~ **Answered: no, and the evidence moved against it.** The page is
+  laid out as an instrument rather than an article — a fixed three-zone frame
+  with the chart taking every pixel the other two do not — but it stays *one
+  responsive column*. No side panel, no wide-screen layout of its own. The thing
+  to weigh is no longer what it was: settings did *not* converge into one panel
+  to be pinned open. They spread into five, each hung beside the thing it acts
+  on (see UI Conventions), so a side panel now means moving a control **away**
+  from what it changes — which is the move the chart's row was chosen over.
 
 ## Working Conventions
 

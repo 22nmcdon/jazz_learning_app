@@ -971,9 +971,13 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   (bVImaj7, bIIImaj7, the bVII approach, minor plagal IVm6, Dorian 6ths, minor-major 7ths,
   borrowed m7b5), *chromatic mediant* (IIImaj7), *passing chords* (diminished passing
   chords, chromatic approach dominants, chromatic ii-Vs) and *bass motion* (inversions,
-  a triad over a tonic pedal). Each carries a difficulty tag, a style tag, a ranking by
-  guide-tone voice leading into the next chord, and an explanation that names the notes the
-  substitution keeps from the original chord.
+  a triad over a tonic pedal). Each carries a difficulty tag, a ranking by guide-tone voice
+  leading into the next chord, and an explanation that names the notes the substitution
+  keeps from the original chord. Each also belongs to a **vocabulary** - Bebop or Modal -
+  and the bar offers a picker for it, so practising tritone subs and practising borrowed
+  chords are two different exercises over the same tune. There were five vocabularies until
+  they were counted: one was tagged on a single rule and one on none at all, so both were
+  deleted rather than put in front of a player as a menu entry that does nothing.
 - **Voicing analysis** — classifies what was played (shell, root position, rootless
   left-hand, two-handed rootless, solo, spread), checks it against the symbol, and explains
   what is missing, outside, clashing or muddy in the low register. A rootless voicing is not
@@ -1193,12 +1197,13 @@ These were left open rather than silently decided:
 
 1. **Import scope** — **answered.** iReal Pro and PDF both import, in both shells.
    MusicXML/MuseScore is not wanted.
-2. **Rule-based vs. data-informed reharmonisation** — the one still genuinely open. The
-   POC is entirely rule-based, with every rule in one file (`Reharmonizer.cpp`) carrying
-   its own difficulty and style tag, so a data-informed ranking could replace the ordering
-   without touching the rules. Before that is worth doing, note that the **style** tag is
-   currently unreachable: `EngineApi::reharmonise` never sets it, so the bebop / modal /
-   quartal / brazilian classification those 36 rules already carry does nothing.
+2. **Rule-based vs. data-informed reharmonisation** — **answered: rule-based.** The thing
+   that looked like the question was a bug: the style tag on all 36 rules was unreachable
+   from either shell, so the first move was to collect that rather than reach for a corpus.
+   Counting the tags is what mattered - two of the five vocabularies had one rule and none
+   respectively - so they were deleted and the remaining two put on the wire. A
+   corpus-ranked reharmoniser would replace rules that each explain themselves with a
+   number that cannot, and the way back in is more rules or better tags, not a model.
 3. **Solo/improv feedback layer** — in, both static and in time: you arm a take and either
    walk the chart yourself or let the clock walk it. Rhythm is answered above: words.
 4. **A dense, DAW-style desktop layout** — **answered: denser yes, multi-column no.**
