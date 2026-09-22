@@ -452,8 +452,25 @@ something finished or assume something unfinished is done:
   migrating it — and takes *what makes a record readable* as a function, since
   those fields are genuinely not shared. Its array property name is a parameter
   only because renaming the tune envelope would drop every tune anybody saved.
-- **Not built, deliberately open**: licks / line suggestions. Its design
-  question — and how far it is already answered — is in `docs/HANDOFF.md`.
+- **Line suggestions** — done. `LineWriter` writes a line where `LineAnalyzer`
+  reads one, and solo practice's dock button says **Show me a line** where it
+  used to say *Which scale?* and hand back a set.
+  **The writer carries the analyser's vocabulary**, which is the design rather
+  than a convenience: `LineWriterTests` asserts over twenty-four seeds that
+  every note reads back from a real take as the colour it was written as. Same
+  shape as `VoicingAnalyzerTests`' rule about `idiomaticVoicings`, same reason
+  — otherwise the app hands you a line and then marks it wrong.
+  **It commits to the colour, never to the gesture.** `WrittenNote` had an
+  `ApproachKind` and the round trip refused it: the analyser reads the gesture
+  from the line *around* a note, so an approach stepped into and out of the
+  same way is a passing tone. The writer cannot know which, because that
+  depends on the note after it. And an approach note must be **outside the
+  scale the take reads against**, or the reading quite correctly calls it a
+  scale tone — when neither neighbour is, the line plays a scale tone instead.
+  `readingScaleFor` is public so the writer and the reader cannot disagree
+  about which scale that is. See `docs/SOLO_PRACTICE.md`.
+- **Nothing is left under "not built".** `docs/HANDOFF.md` carries loose ends
+  only.
 - **Closed, so nobody re-plans them**: ear training and MusicXML/MuseScore
   import are **not wanted** (decided, not deferred); audio input is out for the
   reason under *Input Scope*; the dense multi-column layout is answered under

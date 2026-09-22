@@ -344,7 +344,7 @@ one is not just something to look at, it is what the bar is read against from th
 it survives the bar being opened again. Between the style and that choice is where the
 forgiveness in solo mode lives, and it is deliberate: reading against *every* scale that fits
 a chord sounds more generous and in fact leaves nothing outside anything - over Cmaj7, G7 or
-Bbmaj7 not one of the twelve notes comes back outside. **Which scale?** says which one you
+Bbmaj7 not one of the twelve notes comes back outside. The dock's **Expecting** line says which one you
 are being held to, and puts it on the keyboard.
 
 **Static** or **In time** is the switch at the left of the **transport strip**, the row
@@ -985,6 +985,16 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   fingering note rather than a vocabulary. *Show me one* plays yours before the engine's,
   so your catalogue and the app's sit in the same control - and yours are not filtered by
   the shape you are practising, because a shape you chose to keep is not a suggestion.
+- **Show me a line** — solo practice writes a line as well as reading one. It follows the
+  harmony rather than the bar: the one you are on, and into the next when the chord moves,
+  because that is where a lick lives. Chord tones on the strong beats, eighths with rests,
+  a chromatic approach into the change, scale tones stepping in between, inside a
+  soloist's two octaves. The keys light in the same colours a played line is read in - and
+  that is not decoration, it is the invariant the feature is built on: **every note it
+  writes has to read back from a take as the colour it was written as**, over two dozen
+  seeds, or the tests fail. Play it back and the reading tells you how it went; there is
+  no score for how closely you copied it, because that would be a grade against a standard
+  the app invented.
 - **Voicing analysis** — classifies what was played (shell, root position, rootless
   left-hand, two-handed rootless, solo, spread), checks it against the symbol, and explains
   what is missing, outside, clashing or muddy in the low register. A rootless voicing is not
@@ -1184,10 +1194,9 @@ The reasoning, including why the engine gained no memory to do any of this, is i
   The storage that a shelf needs now exists - it is what the voicing library sits on - but
   a list of styles wants a picker and somewhere to name them, in a panel already seven
   controls deep, and that is a design question rather than a refactor.
-- **Licks.** Solo mode tells you the scale; suggesting a *line* to play over a bar needs
-  generated patterns, rhythm and register, and is a feature of its own. The generator it
-  would be shaped like — `walkingBass` — already exists, and `LineAnalyzer` already reads
-  the categories it would produce.
+- **A whole chorus of line, generated in one pass.** *Show me a line* writes over the bar
+  in front of you and into the next when the chord moves; a whole tune at once would need
+  its own playback rather than riding the dock button.
 - **Printing, in the desktop app.** `window.print()` opens no dialog inside JUCE's
   webview, so the button is hidden there. Reading a PDF *does* ship in both shells now.
 - **Decided against, not pending**: MusicXML / MuseScore import and ear training are not

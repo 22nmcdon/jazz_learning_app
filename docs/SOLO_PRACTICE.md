@@ -135,6 +135,45 @@ is that with a memory and a window.
 - **Nothing calls a note wrong.** A reading of a bar isn't a mark for a
   player, and the wording on the page has to keep saying so.
 
+### Writing a line, not only reading one
+
+`LineWriter` is the counterpart to this whole file: `improvisedLine` writes a
+line where `LineAnalyzer` reads one. Its own header because they are two jobs,
+and this file's opening line — a voicing is a thing, a line is a stream — is
+the same boundary a generator living inside the analyser would blur.
+
+- **The notes carry the analyser's own vocabulary**, and that is the design
+  rather than a convenience. What makes the feature worth having is the loop:
+  the page plays you a line, you play it back, and the reading you already get
+  tells you how it went. A writer with its own idea of "approach note" hands
+  you a line the app then marks as something else. `LineWriterTests` holds it
+  as an invariant over twenty-four seeds — every note must read back from a
+  real take as the colour it was written as. Same shape as
+  `VoicingAnalyzerTests`' rule about `idiomaticVoicings`, and the same reason.
+- **The writer commits to the colour and not to the gesture**, which the tests
+  taught rather than confirmed. `WrittenNote` had an `ApproachKind` and claimed
+  `chromatic` for every approach; the round trip refused it. The analyser reads
+  the gesture from the line *around* a note and tries the most specific rule
+  first, so an approach stepped into and out of the same way is a passing tone
+  and is read as one. The writer cannot know which it will be — that depends on
+  the note after it, chosen later. The colour is a fact about the note; the
+  gesture is a fact about the line.
+- **An approach note has to be outside the scale the take reads against.** If
+  neither semitone neighbour of the target is outside, there is no chromatic
+  approach to be had and the line plays a scale tone instead — the honest
+  answer rather than a note tagged as something it is not.
+- **`readingScaleFor` is public so the two ends cannot disagree.** A line built
+  from the engine's first answer and read against the scale the player chose
+  colours half its own notes wrong: the scale tone read as outside, the
+  approach read as an ordinary step.
+- **It writes straight and the shell swings it**, like everything else on the
+  grid. Nothing in the engine bends a note.
+- **No score for copying it.** The line is a model, and playing it back is read
+  by the ordinary take reading. A number for how closely you reproduced it
+  would be a grade against a standard the engine invented, which is the thing
+  this file's main rule refuses — and it is a transcription exercise rather
+  than solo practice.
+
 ### Scale styles
 - **Scale styles** (`ScaleStyle` in `Scale.h`) are the soloing vocabularies
   the Practice menu offers — the modes, melodic minor, harmonic minor, bebop,

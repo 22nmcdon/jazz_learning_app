@@ -74,6 +74,14 @@ over Dm7 comes back on every minor chord in every key. *Show me one* cycles
 yours before the engine's. The saved-collection pattern was extracted in the
 same commit, which is the "answer it once for both" this file asked for.
 
+Since then, the last unbuilt feature. `fdd19e0` added `LineWriter` - a
+generator whose notes carry `LineAnalyzer`'s own colours, held to it by a
+round-trip test over twenty-four seeds - and `95fc0b3` put it on the dock
+button. Two things the tests taught rather than confirmed are written up in
+`docs/SOLO_PRACTICE.md`: the writer commits to a note's colour and not to the
+gesture, and an approach note has to be outside the scale the take reads
+against or the reading calls it a scale tone.
+
 Verify anything you change:
 
 ```
@@ -143,33 +151,16 @@ someone takes it back.
 
 ---
 
-## Not built, deliberately open
+## Not built
 
-Each of these needs its design question answered before any code. They are not
-ordered.
+**There are no unbuilt features left** - what follows is one unexamined
+symptom, and then the decisions. Everything else in this file is a loose end.
 
-- **Licks / line suggestions.** No longer "named, never designed" — the shape
-  is clear, it is simply unbuilt.
+The last feature to go was **line suggestions** (`fdd19e0`, `95fc0b3`): solo
+practice writes a line now as well as reading one, and the dock button says
+*Show me a line* where it used to say *Which scale?*. What the design question
+turned out to need is in `docs/SOLO_PRACTICE.md`.
 
-  **The machinery exists at both ends.** `walkingBass` is already an ordered,
-  seeded, register-bounded melodic generator whose notes carry roles
-  (`BassRole { root, chordTone, scaleTone, approach }`); a lick generator is
-  that with a different rule set and the same seed contract — hashed, not
-  `std::mt19937`, so the browser and the app play the same line. And
-  `LineAnalyzer` already *reads* those very categories, `ApproachKind` included.
-  So it closes a loop nothing else here does: the page plays you a line, you
-  play it back, and the reading tells you whether you got it.
-
-  **It also fixes a real asymmetry.** *Show me one* hands you a playable
-  voicing in chord practice; in solo practice the same button says *"Which
-  scale?"* and hands you a **set**. One mode gets something to play, the other
-  gets homework.
-
-  **Generated, not curated.** Curated patterns are data the engine would have
-  to remember, and "the engine gains no memory" is the answer this repo has now
-  reached three times over — the chart's progression text, a described comping
-  style, the practice history. A lick that had to be transposed and fitted to
-  the bar is engine work anyway.
 - **Metronome jitter.** Not investigated. Every beat time is an origin plus a
   beat count at one spacing (see `CLAUDE.md`), so start by checking whether the
   jitter is in the scheduling or in the reporting.
