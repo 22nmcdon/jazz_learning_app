@@ -9,6 +9,7 @@ add_executable(jazz_core_tests
     ScaleSuggesterTests.cpp
     VoicingAnalyzerTests.cpp
     LineAnalyzerTests.cpp
+    LinePlacementTests.cpp
     LineStyleTests.cpp
     LineWriterTests.cpp
     PracticeLogTests.cpp

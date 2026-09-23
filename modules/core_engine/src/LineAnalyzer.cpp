@@ -1071,17 +1071,62 @@ namespace
             case NoteColour::outside:    ++stats.outside;       break;
         }
     }
+
+    /** Everything one note adds to the bar it landed in.
+
+        One function rather than two copies, because `barFor` and `summary`
+        both build the same `LineBar` and a bar that counted its strong beats
+        differently depending on which of them was asked would be the kind of
+        drift `CompStyleDefinition`'s own header warns about.
+    */
+    void addToBar (LineBar& bar, const LineNote& note)
+    {
+        count (bar.stats, note.colour);
+
+        // Where it sat in the bar, for the shells that gave a position. Both
+        // counts stay zero without one, which reads the same as "nothing
+        // landed on a strong beat" and is the honest answer.
+        if (note.onStrongBeat)
+        {
+            ++bar.notesOnStrongBeats;
+
+            if (note.colour == NoteColour::chordTone)
+                ++bar.chordTonesOnStrongBeats;
+        }
+    }
+
+    void settleNeverLeftTheChord (LineBar& bar)
+    {
+        // Approach notes do not clear the flag - a note on its way somewhere
+        // else has not said anything about this chord.
+        bar.neverLeftTheChord = bar.stats.scaleTones == 0
+                             && bar.stats.chordTones >= notesBeforeABarIsWorthNaming;
+    }
 }
 
 LineStats LineAnalyzer::statsForBar (int measureIndex) const
 {
-    LineStats stats;
+    return barFor (measureIndex).stats;
+}
+
+LineBar LineAnalyzer::barFor (int measureIndex) const
+{
+    LineBar bar;
+    bar.measureIndex = measureIndex;
 
     for (const auto& note : played)
         if (note.measureIndex == measureIndex)
-            count (stats, note.colour);
+        {
+            // The symbol the bar was last played against, which is the one the
+            // player is looking at. A bar reharmonised mid-take keeps every
+            // note's own reading and reports the chord now on the stand.
+            bar.chordSymbol = note.chordSymbol;
+            addToBar (bar, note);
+        }
 
-    return stats;
+    settleNeverLeftTheChord (bar);
+
+    return bar;
 }
 
 LineStats LineAnalyzer::stats() const
@@ -1111,18 +1156,7 @@ TakeSummary LineAnalyzer::summary() const
             existing = std::prev (take.bars.end());
         }
 
-        count (existing->stats, note.colour);
-
-        // Where it sat in the bar, for the shells that gave a position. Both
-        // counts stay zero without one, which reads the same as "nothing
-        // landed on a strong beat" and is the honest answer.
-        if (note.onStrongBeat)
-        {
-            ++existing->notesOnStrongBeats;
-
-            if (note.colour == NoteColour::chordTone)
-                ++existing->chordTonesOnStrongBeats;
-        }
+        addToBar (*existing, note);
 
         /*  Only the notes that have no other verdict. An approach note stepped
             home, which is the reading that matters about it - saying it was
@@ -1156,12 +1190,9 @@ TakeSummary LineAnalyzer::summary() const
             ++take.chordVoicesResolved;
     }
 
-    // Which bars the line went over without ever colouring. Approach notes do
-    // not clear the flag - a note on its way somewhere else has not said
-    // anything about this chord.
+    // Which bars the line went over without ever colouring.
     for (auto& bar : take.bars)
-        bar.neverLeftTheChord = bar.stats.scaleTones == 0
-                             && bar.stats.chordTones >= notesBeforeABarIsWorthNaming;
+        settleNeverLeftTheChord (bar);
 
     // How the line moved, as opposed to where it sat. Measured across the whole
     // take rather than bar by bar, because a leap over a barline is still a

@@ -662,6 +662,19 @@ public:
         has not been played over, which is a real answer rather than an error. */
     LineStats statsForBar (int measureIndex) const;
 
+    /** The same bar, whole: the stats plus the two readings a `LineStats`
+        has nowhere to put.
+
+        `neverLeftTheChord` and the strong-beat counts are facts about a *bar*
+        rather than about a run of notes, so they live on `LineBar` - and until
+        this they were reachable only once the take was over, through
+        `summary()`. A shell asking what the player has just done on this bar
+        was getting the half of the answer that fits in a `LineStats`, and
+        filling the other half with zeros would have said "nothing landed on an
+        accented beat" about a bar where plenty had.
+    */
+    LineBar barFor (int measureIndex) const;
+
     /** What the take has done overall so far. */
     LineStats stats() const;
 
