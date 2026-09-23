@@ -899,11 +899,20 @@ wasm and the same page runs against it.
 
 ```bash
 sudo apt install emscripten   # or install the emsdk
-./web/build.sh                # -> web/dist/jazz-engine.js, wasm included, 415 KB
-python3 -m http.server -d web 8000
+./web/build.sh out            # engine + assets into out/, wasm embedded in the one file
+cp web/index.html web/sw.js out
+python3 -m http.server -d out 8000
 ```
 
-Then open <http://localhost:8000>. The published copy lives on GitHub Pages:
+Then open <http://localhost:8000>.
+
+Serve the directory `web/build.sh` built, not `web/` itself. The page asks for
+`jazz-engine.js` and `assets/...` **beside itself**, and neither is in `web/` - the engine
+is built output and the samples live in the repo root's `assets/`, because the app
+compiles those same files into its binary. `out/` is the same scratch directory the smoke
+test uses, and it is gitignored.
+
+The published copy lives on GitHub Pages:
 
 **<https://22nmcdon.github.io/jazz_learning_app/>**
 

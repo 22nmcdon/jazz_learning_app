@@ -19,7 +19,7 @@ namespace jazz::app
 class JazzLearningApplication : public juce::JUCEApplication
 {
 public:
-    const juce::String getApplicationName() override    { return "Jazz Learning App"; }
+    const juce::String getApplicationName() override    { return JUCE_APPLICATION_NAME_STRING; }
     const juce::String getApplicationVersion() override { return JUCE_APPLICATION_VERSION_STRING; }
     bool moreThanOneInstanceAllowed() override          { return false; }
 

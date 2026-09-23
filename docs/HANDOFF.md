@@ -275,16 +275,6 @@ Small, verified, and none of them urgent.
   to `.chart-bar` instead - a row that already exists and costs the chart zero
   at every width. That row is where the next one should go too.
 
-- **`#readingPanel` and `#bandPanel` carry a `.menu-head` that never shows.**
-  `.menu-head { display: none }` is overridden for `#menuPanel` alone, below
-  760px, so `#readingClose` and `#bandClose` are wired to handlers nothing can
-  click and `#readingTitle` is set by script and never seen. Harmless and
-  untidy. The fix is a decision rather than a line: those two hang *below* their
-  buttons rather than over them, so they need no way out at any width — in which
-  case delete the two heads — unless a title inside a narrow sheet is worth
-  having, in which case the rule wants widening to `.menu-panel .menu-head` and
-  re-measuring.
-
 - **Nothing exports a practice record.** The same shape of gap as a comping
   style: it would be a second wire format and a second "is this trustworthy"
   question. The history text the engine already reads is a plausible basis, but
@@ -336,24 +326,33 @@ Small, verified, and none of them urgent.
   a v5 out. Neither is in the Node 20 deprecation warning, so neither was bumped
   with `checkout` and `setup-emsdk` — but they will want doing eventually.
 
-- **`app/src/ElectricPiano.cpp:205`** — `const auto frequency = frequencyOf
-  (midiNote);` is declared and never used in that function. A
-  `-Wunused-variable` warning. Pre-existing.
+- **The Bluetooth pairing sheet is built and unreachable.**
+  `MidiDeviceInput::showBluetoothPairingDialog()` has no caller - nothing in the
+  page or the bridge opens it - but it is the only iOS/Android pairing entry
+  point, and `app/CMakeLists.txt` still requests the Bluetooth permission for
+  it. **Kept deliberately**: mobile is a real target and this is what it needs,
+  so the gap is a missing bridge message rather than dead code. Whoever wires it
+  up adds a `sound`-style message to `WebUi` and a control that only shows on a
+  platform that has the sheet.
 
-- **`web/smoke-test.mjs:775`** — the check *"the clock moves the chart on its
-  own"* asserts `#systems .bar:nth-child(2)` is rolling. A `.system`'s first
-  child is `.system-number`, so `.bar:nth-child(2)` is the **first** bar of each
-  system — the check asserts bar one is rolling, which is where the take starts.
-  It is vacuous. Assert a later bar instead.
+- **`VoicingCollector` and `NoteInputSource::inputName()` are exercised only by
+  tests.** Grepped across `modules`, `app`, `web/src` and `tools`: no production
+  caller for either. **Kept deliberately** - `README.md` sells the note-input
+  abstraction as part of the engine's remit and the architecture anticipates an
+  AUv3/VST3 target, so their shape is the point. `NoteInputSource` and
+  `NoteInputListener` themselves are live (`MidiDeviceInput` is a source,
+  `WebUi::DeviceRelay` a listener); it is these two that nothing outside the
+  tests touches. Noted so the next audit does not re-derive it.
 
-- **`web/smoke-test.mjs:748`** — `selectOption("#loopTo", "1")` (and again at
-  845). The options
-  carry value `0..11` and label `1..12`, so a bare string is ambiguous. A
-  previous session verified it resolves to bar index 0, which makes a **one**-bar
-  loop while the comment at L779 says the loop is two bars long. **Re-confirm
-  before changing anything** — the two readings differ only in which of value or
-  label Playwright tries first. Then use the unambiguous `{ index: n }` form that
-  L1804 already uses.
+- **`assets/pdf.js-LICENSE` is not compiled into the app binary.**
+  `app/CMakeLists.txt` lists five of the six files in `assets/`; the licence is
+  the omission, while `web/build.sh` does ship it beside the page. So the
+  desktop app carries 1.4MB of pdf.js with its licence left behind. A licensing
+  judgement rather than a cleanup, which is why it was flagged and not fixed.
+
+- **`pages.yml` pins a literal branch name** (`claude/gifted-wozniak-7z4jt6`) as
+  its deploy trigger. Correct today - that is the default branch - but renaming
+  the default would stop deploys with no error anywhere.
 
 - **The printed chart keeps a faint ring on the selected bar.** The print rules
   clear `.bar`'s background but not the `box-shadow` on `[aria-pressed="true"]`.

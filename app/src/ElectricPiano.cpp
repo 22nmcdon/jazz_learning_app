@@ -88,11 +88,6 @@ void ElectricPiano::addSample (const std::string& bank, Sample sample)
     samples.emplace_back (bank, std::make_unique<Sample> (std::move (sample)));
 }
 
-bool ElectricPiano::hasSample (const std::string& bank) const
-{
-    return sampleFor (bank) != nullptr;
-}
-
 const ElectricPiano::Sample* ElectricPiano::sampleFor (const std::string& bank) const
 {
     if (bank.empty())
@@ -202,7 +197,6 @@ void ElectricPiano::noteOn (int midiNote, float velocity)
     if (voice == nullptr)
         return;
 
-    const auto frequency = frequencyOf (midiNote);
     const auto level = juce::jlimit (0.08f, 1.0f, velocity);
 
     startVoice (*voice, midiNote, level * 0.5f, sampleFor (playerBank));

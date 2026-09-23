@@ -62,8 +62,6 @@ public:
     */
     void addSample (const std::string& bank, Sample sample);
 
-    bool hasSample (const std::string& bank) const;
-
     void noteOn (int midiNote, float velocity);
 
     /** Which sampled instrument the player's own keys use, by name. Empty is
