@@ -325,7 +325,11 @@ saying they were.
 *Before widening a rule in the name of being generous, count what it leaves* —
 the lesson solo practice paid for, where reading a note against every scale that
 fit left nothing outside anything. So, counted. `positionFromBeats` snaps a
-played moment to ticks `{0, 6, 8, 12, 16, 18}`, folding 16 onto 12 when swinging.
+played moment to ticks `{0, 6, 8, 12, 18}`, plus the swung eighth as a candidate of its
+own that folds onto 12. (It used to be the fixed tick 16 in that list; where the
+swung eighth falls is now the groove's and the tempo's, so it cannot be a row
+in a table — see `docs/RHYTHM.md`. The counts below are unchanged: what is
+reachable is still five positions, and the swung one is still one of them.)
 
 | feel | accepted | reachable | still outside |
 |---|---|---|---|

@@ -519,10 +519,18 @@ straight eighths, triplets and sixteenths exactly, where the obvious straight-ei
 could not have written a ballad's triplet at all. The page turns that into a moment.
 
 **Swing lives in the page, not the grid.** A swung eighth is a ratio you play an eighth at,
-not a different place to write it: the engine writes the eighth and the page sounds it two
-thirds of the way through the beat. Only the eighth moves — a triplet is already written
-where it is played, so swinging every subdivision would bend the ballad style into something
-nobody plays.
+not a different place to write it: the engine writes the eighth and the page decides how late
+it falls. Only the eighth moves — a triplet is already written where it is played, so
+swinging every subdivision would bend the ballad style into something nobody plays.
+
+**How late is the tune's, not a constant.** A *groove* says where the upbeat sits as a
+fraction of the beat — even is 0.5, the fourth of five 0.6, the triplet 0.667, a dotted
+eighth 0.75 — and slides that with the tempo, because swung eighths measure at about 1.3:1
+at speed and near 2:1 only at slow tempos. The chart's own style marking picks one, so
+"Medium Swing" and "Bossa Nova" play differently without anyone choosing a setting, and
+anything unrecognised is played even. The grid is untouched by all of it: a beat in five has
+no tick and needs none, because this is a ratio a shell plays at rather than a place a note
+is written. See `docs/RHYTHM.md`.
 
 The searching is bounded to a register window — voice leading on its own always takes the
 nearest voicing, so a progression that keeps rising would walk the hands off the top of the

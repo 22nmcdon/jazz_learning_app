@@ -354,6 +354,39 @@ Small, verified, and none of them urgent.
   its deploy trigger. Correct today - that is the default branch - but renaming
   the default would stop deploys with no error anywhere.
 
+- **The groove's fractions are starting points, not findings.** 0.6 for the
+  fourth of five is arithmetic and 0.75 for a shuffle is notation, but 0.72 for
+  a ballad and the 0.667->0.57 swing curve are a reading of one corpus plus a
+  guess at the shape between its ends. The corpus is also **monophonic horn
+  solos** (Weimar), not pianists. These are numbers to tune by ear against the
+  band, and the smoke test is deliberately written so they can be: it asserts
+  the *shape* - later than even, later still at half the tempo - and names no
+  fraction of its own.
+
+- **Nothing maps to funk, and laid-back sixteenths are not modelled.** A funk
+  groove lays back on the sixteenth; `beatsIntoBar` bends only the eighth
+  (tick 12), by design and since long before grooves existed. So "Funk" reads
+  as even, which is what an even-eighth funk is and is not what a laid-back one
+  is. Widening this means bending ticks 6 and 18 as well, which is a real
+  change to a function four voices share - not a new catalogue entry.
+
+- **A groove cannot be overridden, only implied.** It comes from the chart's
+  style marking via `grooveForStyleWord`, so playing a tune with a feel its
+  marking does not name means editing the marking. A picker would want a home,
+  and `CLAUDE.md` is clear the top bar has none spare and the transport strip's
+  row count must not depend on what is showing - `#bandPanel`, on the chart's
+  row, is where it would go.
+
+- **The downbeat lag is unbuilt, and waits on something else.** The research
+  (Datseris et al.) finds soloists delaying downbeats slightly *relative to the
+  rhythm section*, offbeats staying locked. It is not implemented because
+  `showMeALine` schedules with `setTimeout` from the moment the button is
+  pressed - it shares no origin with the click, so there is nothing for it to
+  sit behind. Anchoring the generated line to `transport.origin` is the
+  prerequisite, and it is a feature in its own right: it would let the model
+  line play *with* the band, which reopens the rule that it will not sound
+  during a take.
+
 - **The printed chart keeps a faint ring on the selected bar.** The print rules
   clear `.bar`'s background but not the `box-shadow` on `[aria-pressed="true"]`.
   Pre-existing and cosmetic.

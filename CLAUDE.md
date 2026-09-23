@@ -509,6 +509,21 @@ that's easy to miss in review:
   that the shell computed from its own clock — never as something the engine
   infers about when a call arrived. This is what keeps `LineAnalyzer` and
   comping's `compPlan()` testable.
+  **A groove does not breach this, and the distinction is worth keeping.**
+  `Groove.h` states how far a swung eighth is bent, as a fraction of a beat at
+  each end of a tempo band — a *relationship*, which the shell evaluates with
+  the tempo it holds. `upbeatAt (groove, bpm)` is a pure function of two
+  numbers the caller already has; the engine is told the tempo and never asks.
+  Nothing there moves a tick, and the engine still writes every eighth at 12.
+- **Swing is per-tune and tempo-dependent, and lives in one function.**
+  `beatsIntoBar` on the page, which takes the spacing the bar was *booked* at
+  rather than reading the live tempo — the ramp books every beat at the tempo
+  it will be played at, and a ratio that read the clock would slide under a bar
+  already in the diary. Its inverse `positionFromBeats` has to move with it, or
+  notes come back onto the grid at a position nobody played. The click, the
+  beat dots, the count-in and the ramp are all straight and must stay so: the
+  whole page's timing rests on the click being `origin + index × spacing`, and
+  the tempo-ramp check measures exactly that to 0.01s.
 - **Rhythm and voice-leading produce words, never points — in solo practice.**
   `score()` is untouched by timing or line-shape; see its own doc comment before
   changing that. **The chord reading is the same rule one step further out**: a

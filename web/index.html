@@ -7182,6 +7182,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     state.composer = result.composer || "";
     state.chartStyle = result.style || "";
 
+    // Before anything is booked: the feel arrives with the chart, and a bar
+    // booked against the old groove would be played with the wrong one.
+    await loadGrooves();
+
     showChartHead(result.title || el.sheetTitle.textContent, state.chartStyle, state.composer);
 
     // A waltz imported as a waltz should be counted in three. The readers have
@@ -10125,7 +10129,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var beats = transport.beats || 4;
 
     result.notes.forEach(function (note) {
-      var where = (note.bar - from) * beats + beatsIntoBar(note.beat, note.tick);
+      var where = (note.bar - from) * beats + beatsIntoBar(note.beat, note.tick, beat);
 
       line.timers.push(window.setTimeout(function () {
         playNote(note.midi, 0.75);
@@ -10205,7 +10209,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       plan.notes.forEach(function (note) {
         if (note.bar !== measureIndex) return;
 
-        var when = barStart + beatsIntoBar(note.beat, note.tick) * secondsPerBeatNow;
+        var when = barStart + beatsIntoBar(note.beat, note.tick, secondsPerBeatNow) * secondsPerBeatNow;
 
         // The root landing on the beat the chord arrives is the one note the
         // line is not free about - the engine's own first rule - so it is also
@@ -10421,7 +10425,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     }
 
     strikes.forEach(function (strike) {
-      var when = barStart + beatsIntoBar(strike.beat, strike.tick) * secondsPerBeatNow;
+      var when = barStart + beatsIntoBar(strike.beat, strike.tick, secondsPerBeatNow) * secondsPerBeatNow;
 
       var where = { bar: measureIndex, beat: strike.beat, tick: strike.tick };
 
@@ -10441,20 +10445,90 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
       The engine writes eighths as eighths - tick 12 of 24 - because swing is a
       way of playing them, not a different place to write them. This is where
-      that becomes true: the upbeat eighth of a swung feel is sounded two
-      thirds of the way through the beat, which is the second of three
-      triplets, which is exactly what swinging an eighth means.
+      that becomes true.
 
       Only the eighth moves. A triplet is already written where it is played
       and a sixteenth in a swung bar is not swung either, so remapping every
       subdivision - the obvious thing to do - would have bent a ballad's
-      triplets into something nobody plays. */
-  var SWUNG_EIGHTH_TICK = 16;
+      triplets into something nobody plays.
+
+      **How far it moves is the groove's, and the groove is the tune's.** This
+      was one constant - tick 16, two thirds of the beat, a 2:1 at every tempo
+      and for every tune - and two things said it should not be. Corcoran &
+      Frieler's 456 solos put swung eighths at about 1.3:1, with 2:1 used
+      "mostly at slow or moderate tempos", so the fixed value was most wrong at
+      speed. And a feel belongs to the tune: a ballad sits nearer a dotted
+      eighth, and a beat divided into five with the upbeat on the fourth of
+      them is a feel of its own. `grooves()` in the engine holds the catalogue
+      and the arithmetic is below.
+
+      The grid never learned about any of this. A beat in five has no tick -
+      24/5 is 4.8 - and needs none, because what changes here is the ratio a
+      note is *played* at, never the position it was written at. */
+  var groove = { catalogue: [], key: "straight" };
+
+  /** The groove this chart is played with, or an even one if we cannot say.
+
+      Falling back to even rather than to swing is the same choice the engine
+      makes for an unrecognised style marking: play what is written. It also
+      covers an engine older than this page, which has no `jazzGrooves` at all -
+      the boot check names that out loud, and meanwhile nothing gets bent. */
+  function currentGroove() {
+    for (var i = 0; i < groove.catalogue.length; i++)
+      if (groove.catalogue[i].key === groove.key) return groove.catalogue[i];
+
+    return { key: "straight", even: true, upbeatWhenSlow: 0.5,
+             upbeatWhenFast: 0.5, slowBpm: 100, fastBpm: 240 };
+  }
+
+  /** Where this groove puts the upbeat at this tempo, as a fraction of a beat.
+
+      The engine states the relationship - two endpoints and the tempo band
+      between them - and the shell supplies the tempo, which is the division
+      `docs/RHYTHM.md` has always drawn. Every number in here came off the
+      wire; the only thing the page adds is the straight line between them. */
+  function upbeatFraction(bpm) {
+    var g = currentGroove();
+
+    if (g.fastBpm <= g.slowBpm || bpm <= g.slowBpm) return g.upbeatWhenSlow;
+    if (bpm >= g.fastBpm) return g.upbeatWhenFast;
+
+    var through = (bpm - g.slowBpm) / (g.fastBpm - g.slowBpm);
+    return g.upbeatWhenSlow + (g.upbeatWhenFast - g.upbeatWhenSlow) * through;
+  }
 
   function swinging() {
-    // The chart says. iReal Pro charts carry a feel - "Medium Swing", "Bossa
-    // Nova", "Even 8ths" - and this is the one word that decides it.
-    return /swing/i.test(state.chartStyle || el.sheetStyle.textContent || "");
+    // The groove says. What used to be a /swing/i test on the chart's style
+    // marking is now `grooveForStyleWord` in the engine, which reads the same
+    // text and knows the difference between a shuffle and a ballad.
+    return !currentGroove().even;
+  }
+
+  /** Where the swung upbeat is actually sounded, in ticks, or null if straight.
+
+      Not a whole tick in general, and that is the point - it is a position in
+      time, not a position on the grid.
+  */
+  function swungUpbeatTick(bpm) {
+    if (!swinging() || !compFeelIsEighths()) return null;
+    return upbeatFraction(bpm) * ENGINE_TICKS_PER_BEAT;
+  }
+
+  /** Asks the engine which grooves there are and which this chart wants.
+
+      Re-asked when the chart changes, because the answer depends on its style
+      marking. The catalogue itself never changes, but one call carries both
+      and a second call to save re-sending five short records would be the more
+      complicated thing.
+  */
+  async function loadGrooves() {
+    var result = await call("jazzGrooves", ["string"],
+                            [state.chartStyle || el.sheetStyle.textContent || ""]);
+
+    if (!result || !result.ok || !Array.isArray(result.grooves)) return;
+
+    groove.catalogue = result.grooves;
+    groove.key = result.forThisChart || "straight";
   }
 
   /** Whether the chosen comping style is counted in eighths.
@@ -10478,12 +10552,20 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     return !chosen || chosen.feel === "eighths";
   }
 
-  /** A position on the engine's grid, as an offset in beats from the downbeat. */
-  function beatsIntoBar(beat, tick) {
-    var played = swinging() && compFeelIsEighths() && tick === ENGINE_TICKS_PER_BEAT / 2
-                   ? SWUNG_EIGHTH_TICK : tick;
+  /** A position on the engine's grid, as an offset in beats from the downbeat.
 
-    return beat + played / ENGINE_TICKS_PER_BEAT;
+      @p secondsPerBeatNow is the spacing this bar was *booked* at, and is a
+      parameter rather than a call to `secondsPerBeat()` for the reason the
+      tempo ramp exists: every beat is booked at the tempo it will be played
+      at, and a swing ratio that read the live tempo would slide under a bar
+      already in the diary. `compBar`, `bassBar` and `drumsBar` were already
+      being handed this for exactly that reason.
+  */
+  function beatsIntoBar(beat, tick, secondsPerBeatNow) {
+    var swung = tick === ENGINE_TICKS_PER_BEAT / 2
+                  ? swungUpbeatTick(60 / secondsPerBeatNow) : null;
+
+    return beat + (swung === null ? tick : swung) / ENGINE_TICKS_PER_BEAT;
   }
 
   /** The other direction: a moment, as beats into the bar, written back onto
@@ -10495,24 +10577,36 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       because in a swung bar they are not two positions - they are the same
       moment, and the engine should see the one a player would write.
   */
-  function positionFromBeats(beats) {
+  function positionFromBeats(beats, secondsPerBeatNow) {
     var beat = Math.floor(beats);
     var fraction = beats - beat;
     var wanted = fraction * ENGINE_TICKS_PER_BEAT;
 
-    // 0, a sixteenth, a triplet, an eighth, two triplets, three sixteenths.
-    var slots = [0, 6, 8, 12, 16, 18, ENGINE_TICKS_PER_BEAT];
+    // 0, a sixteenth, a triplet, an eighth, three sixteenths, the next
+    // downbeat. The positions music is written in - note that the swung
+    // eighth is no longer among them.
+    var slots = [0, 6, 8, 12, 18, ENGINE_TICKS_PER_BEAT];
     var tick = slots[0];
 
     slots.forEach(function (slot) {
       if (Math.abs(slot - wanted) < Math.abs(tick - wanted)) tick = slot;
     });
 
-    if (tick === ENGINE_TICKS_PER_BEAT) { beat += 1; tick = 0; }
+    /*  The swung eighth is a candidate of its own rather than a row in that
+        table, because where it falls is the groove's and the tempo's and is
+        usually not a whole tick at all. It folds back onto tick 12: in a swung
+        bar the two are not two positions, they are the same moment, and the
+        engine should see the one a player would write.
 
-    // Only where the eighth is what is being swung - see `compFeelIsEighths`.
-    if (swinging() && compFeelIsEighths() && tick === SWUNG_EIGHTH_TICK)
-      tick = ENGINE_TICKS_PER_BEAT / 2;
+        It wins ties, which decides the one case where the two collide - a
+        shuffle puts the upbeat at three sixteenths exactly, and in a shuffle
+        bar that is the swung eighth rather than a sixteenth figure. */
+    var swung = swungUpbeatTick(60 / secondsPerBeatNow);
+
+    if (swung !== null && Math.abs(swung - wanted) <= Math.abs(tick - wanted))
+      return { beat: beat, tick: ENGINE_TICKS_PER_BEAT / 2 };
+
+    if (tick === ENGINE_TICKS_PER_BEAT) { beat += 1; tick = 0; }
 
     return { beat: beat, tick: tick };
   }
@@ -10642,7 +10736,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     var within = beatsIn - Math.floor(beatsIn / transport.beats) * transport.beats;
 
-    return positionFromBeats(within);
+    return positionFromBeats(within, beat);
   }
 
   /** Books everything the plan has for one bar, at the moment each hit is due.
@@ -10676,7 +10770,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       plan.hits.forEach(function (hit) {
         if (hit.bar !== measureIndex) return;
 
-        var when = barStart + beatsIntoBar(hit.beat, hit.tick) * secondsPerBeatNow;
+        var when = barStart + beatsIntoBar(hit.beat, hit.tick, secondsPerBeatNow) * secondsPerBeatNow;
 
         /*  How long the style holds it. A duration is not a position, so it is
             read at the straight rate rather than through `beatsIntoBar`:
@@ -11275,7 +11369,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
                      because "which tune is this" is a fact about where the
                      record came from and nothing in the record itself says it.
   */
-  function loadChartRecord(record, tuneId) {
+  async function loadChartRecord(record, tuneId) {
     state.progression = record.progression;
     el.progression.value = record.progression;
     state.composer = record.composer;
@@ -11284,6 +11378,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     state.tune = tuneId || 0;
     showChartHead(record.title, record.style, record.composer);
     setMetre(record.beats, record.beatUnit);
+    await loadGrooves();
     return refreshChart();
   }
 
@@ -11603,6 +11698,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     await loadScaleStyles();
     await loadReharmStyles();
     await loadCompStyles();
+
+    // The groove depends on the chart's style marking, so this is re-asked
+    // every time a chart arrives - see `adoptChart` and `loadChartRecord`.
+    await loadGrooves();
     fillMetres();
     fillBeatRow();
     fillCompSounds();

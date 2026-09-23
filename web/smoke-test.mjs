@@ -1530,13 +1530,23 @@ try {
 
   /** Rolls a take in one comping style and returns when each chord was struck,
       in beats from the first click. */
-  const compRhythmOf = async (style) => {
+  const compRhythmOf = async (style, bpm) => {
     await page.locator("#menuButton").click();
     await openBand();
     await page.selectOption("#compStyle", style);
     await openBand();
     await page.locator("#compPiano").check();
     await page.locator("#menuButton").click();
+
+    /*  Only when a caller asks for one. Setting the tempo re-anchors the
+        clock, and two rolls meant to be compared note for note have to start
+        from the same anchor - leaving this unconditional made the copied-style
+        check fail on float noise while printing two identical-looking rows. */
+    if (bpm !== undefined) {
+      await page.fill("#tempo", String(bpm));
+      await page.dispatchEvent("#tempo", "change");
+      await page.evaluate(() => document.activeElement.blur());
+    }
 
     await forgetSounds();
     await page.keyboard.press("Space");
@@ -1551,8 +1561,11 @@ try {
     const beats = sounded.filter((s) => s.type === "square").map((s) => s.when).sort((a, b) => a - b);
     const struck = [...new Set(sounded.filter((s) => s.type === "sine").map((s) => s.when))];
 
-    // 240bpm, so a beat is a quarter of a second.
-    return struck.map((w) => (w - beats[0]) / 0.25).sort((a, b) => a - b);
+    // Read rather than assumed, so this says nothing about what the tempo is.
+    const bpmNow = await page.evaluate(() =>
+      Number(document.querySelector("#tempo").value));
+
+    return struck.map((w) => (w - beats[0]) / (60 / bpmNow)).sort((a, b) => a - b);
   };
 
   /** How long each chord of the roll just taken rang for, in beats.
@@ -1589,13 +1602,51 @@ try {
   check("four to the bar plays on the beat and nowhere else",
         offTheBeat(fourToTheBar) === 0);
 
-  // Basie's is the pushed one, and a push in a swung bar is two thirds of the
-  // way through the beat - not half, which is what swing means and what the
-  // engine deliberately does not know about.
-  const swung = sparse.filter((t) => Math.abs((t - Math.floor(t)) - 2 / 3) < 0.08);
+  /*  Basie's is the pushed one, and a push in a swung bar falls where the
+      *groove* says, not half way - which is what swing means and what the
+      engine deliberately does not know about.
 
-  check(`a swung push lands two thirds through the beat (${sparse.map((t) => t.toFixed(2)).join(" ")})`,
-        swung.length > 0);
+      Asked of the page rather than written down here. This used to assert two
+      thirds, which was true of a fixed 2:1 and is true of no groove at every
+      tempo: the swing groove eases towards even as the tempo climbs, and this
+      take runs at 240. A hard-coded fraction here would be a second copy of
+      the curve, going stale the first time a groove is retuned by ear. */
+  const intoTheBeat = (times) =>
+    times.map((t) => t - Math.floor(t)).filter((o) => o > 0.05 && o < 0.95);
+
+  const pushAt = (times) => {
+    const off = intoTheBeat(times);
+    return off.length === 0 ? null : off.reduce((a, b) => a + b, 0) / off.length;
+  };
+
+  const pushFast = pushAt(sparse);
+
+  check(`a swung push falls late in the beat rather than halfway `
+        + `(${sparse.map((t) => t.toFixed(2)).join(" ")})`,
+        pushFast !== null && pushFast > 0.53 && pushFast < 0.95);
+
+  /*  ...and the same style, same figure, played slower pushes *later*.
+
+      This is the check that the groove is doing anything at all. The fraction
+      itself is deliberately not written down here - it is the engine's, a
+      groove can be retuned by ear, and a number copied into this file would go
+      stale the first time one is. What cannot go stale is the shape: the swing
+      groove runs from the triplet at a ballad tempo to nearly even at speed,
+      so halving the tempo has to move the push later. A page that had gone
+      back to a fixed ratio passes every other check on this page and fails
+      this one. */
+  const sparseSlow = await compRhythmOf("basie", 120);
+  const pushSlow = pushAt(sparseSlow);
+
+  check(`and the same push at half the tempo falls later still `
+        + `(${pushFast === null ? "-" : pushFast.toFixed(3)} at 240, `
+        + `${pushSlow === null ? "-" : pushSlow.toFixed(3)} at 120)`,
+        pushSlow !== null && pushFast !== null && pushSlow > pushFast + 0.02);
+
+  // Put the tempo back where the rest of this section expects it.
+  await page.fill("#tempo", "240");
+  await page.dispatchEvent("#tempo", "change");
+  await page.evaluate(() => document.activeElement.blur());
 
   /*  A style says how long its chords ring, not only where they fall - the
       difference between a Basie punch and a ballad's sustain, which used to be
@@ -1712,9 +1763,10 @@ try {
       and is the one no style in the catalogue uses. So: take the Charleston,
       count it in sixteenths, and its chords on the and of two and the and of
       four stop being swung eighths and become straight sixteenths - half way
-      through the beat rather than two thirds. Read as eighths they would go
-      back to two thirds, which is what the page did for any style it could not
-      find before `currentCompStyle()` existed.
+      through the beat rather than wherever this tune's groove would have put
+      them. Read as eighths they would be bent out to the groove's fraction,
+      which is what the page did for any style it could not find before
+      `currentCompStyle()` existed.
   */
   await page.locator("#menuButton").click();
   await openBand();
@@ -1740,10 +1792,22 @@ try {
   const sixteenths = await compRhythmOf("yours");
   const intoBeat = sixteenths.map((t) => t - Math.floor(t));
 
+  /*  The negative half no longer names two thirds. It used to, because the
+      swung eighth was always at tick 16; now where it falls is the groove's
+      and the tempo's, and a number copied here would go stale the first time a
+      groove is retuned.
+
+      What it asserts instead is the thing "not swung" actually means for this
+      style: every chord sits on the sixteenth grid - 0, a quarter, a half,
+      three quarters of a beat - rather than having been bent off it. Note that
+      0.75 is a *sixteenth* here and not a hard swing, which is why the obvious
+      rewrite ("nothing late in the beat") is wrong and failed. */
+  const offTheSixteenth = intoBeat.filter((o) =>
+    Math.abs(o * 4 - Math.round(o * 4)) > 0.06);
+
   check(`a style counted in sixteenths is not swung `
         + `(${sixteenths.map((t) => t.toFixed(2)).join(" ")})`,
-        intoBeat.some((o) => Math.abs(o - 0.5) < 0.06)
-        && !intoBeat.some((o) => Math.abs(o - 2 / 3) < 0.06));
+        intoBeat.some((o) => Math.abs(o - 0.5) < 0.06) && offTheSixteenth.length === 0);
 
   /*  The band does not play the same two chords all night.
 

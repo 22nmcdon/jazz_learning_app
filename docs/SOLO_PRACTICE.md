@@ -167,7 +167,9 @@ the same boundary a generator living inside the analyser would blur.
   colours half its own notes wrong: the scale tone read as outside, the
   approach read as an ordinary step.
 - **It writes straight and the shell swings it**, like everything else on the
-  grid. Nothing in the engine bends a note.
+  grid. Nothing in the engine bends a note — and note that *how far* it is bent
+  is the tune's groove and the tempo, not a constant, which is `docs/RHYTHM.md`'s
+  business rather than this file's.
 - **No score for copying it.** The line is a model, and playing it back is read
   by the ordinary take reading. A number for how closely you reproduced it
   would be a grade against a standard the engine invented, which is the thing
