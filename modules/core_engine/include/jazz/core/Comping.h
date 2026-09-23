@@ -284,22 +284,30 @@ bool fitsStyle (const CompHit& hit, const CompStyleDefinition& style, int beatsP
     all of it - `lowestNote`/`highestNote` and `fewestPerBar`/`mostPerBar` were
     written down when the styles were and had no reader at all until this.
 
-    **Where a note falls does not score a solo, and here it scores a comp.**
-    That is not a change of mind; it is a different question with a different
-    standard behind it. A solo line has no stated standard for placement - the
-    chart says which chord and never says where a note belongs in the bar, so a
-    number for placement would be the engine inventing a standard and then
-    marking a player against it, which is why `LineAnalyzer`'s score reads
-    nothing rhythmic and why a line's shape produces words.
+    **Where a note falls scores wherever the player chose a standard.** This
+    used to read "does not score a solo, and here it scores a comp", and the
+    half of it that was doing the work has survived while the half that named
+    modes has not. The rule was never about comping; it was that a number needs
+    a standard the player picked, and comping was simply the only half of the
+    app that had one.
 
-    A comp has one, and the player picked it off a menu. A style is a written
-    statement of where the hits go, how many of them there are and what
-    register they sit in, and the generator is already held to it in both
-    directions. Scoring a player against the same slots the band is held to is
-    the same act as `VoicingAnalyzer` scoring a voicing against the symbol the
-    chart wrote, or `LineAnalyzer::Options::chosenScale` holding a player to the
-    scale they chose out of the panel. Take the style away and there is nothing
-    here to score, which is why a verdict always names one.
+    A `CompStyleDefinition` is a written statement of where the hits go, how
+    many of them there are and what register they sit in, chosen off a menu,
+    and the generator is already held to it in both directions. Scoring a
+    player against the same slots the band is held to is the same act as
+    `VoicingAnalyzer` scoring a voicing against the symbol the chart wrote, or
+    `LineAnalyzer::Options::chosenScale` holding a player to the scale they
+    chose out of the panel. Take the style away and there is nothing here to
+    score, which is why a verdict always names one.
+
+    Solo practice now has one too - a `LineStyleDefinition`, off the dock's own
+    picker - and `readLinePlacement` scores a line's placement against it on
+    exactly these terms. `LineStats::score()` is untouched and still reads
+    nothing rhythmic: the placement is a *second* number in a file of its own,
+    which is the same separation this one keeps from `voicingScore`. What a
+    chart states is which chord, and it has never said where a note belongs in
+    a bar - so the thing that changed is not the argument, it is that the
+    player can now say.
 
     And the line holds on the other side: everything a style does *not* pin
     down still produces words. How long a chord rang, whether the comp left

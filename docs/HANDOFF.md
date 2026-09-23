@@ -184,10 +184,13 @@ turned out to need is in `docs/SOLO_PRACTICE.md`.
 - **A dense multi-column desktop layout.** No — and the evidence moved against
   it, since settings spread into five popovers rather than converging into one
   pinnable panel. See `CLAUDE.md`'s *Open Questions*.
-- **Scoring rhythm in solo practice.** No: words, permanently. The criterion is
-  in `CLAUDE.md`'s invariants and argued in `docs/SOLO_PRACTICE.md` — comping
-  scores placement because the player chose a `CompStyleDefinition` off a menu,
-  and a chart offers no comparable standard.
+- ~~**Scoring rhythm in solo practice.**~~ **Built, because the condition this
+  entry named was met.** It said no *while* a chart offered no standard
+  comparable to a `CompStyleDefinition` — and the line style is one, off solo
+  practice's own picker. `readLinePlacement` reads a take against it as a
+  **second** number; `LineStats::score()` is unchanged and its test is still
+  green. The criterion itself did not move: a number needs a standard the
+  player chose. See `docs/SOLO_PRACTICE.md`.
 
 ---
 

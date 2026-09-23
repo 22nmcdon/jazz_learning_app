@@ -308,6 +308,16 @@ something finished or assume something unfinished is done:
   time, so reharmonising mid-take cannot rewrite it. And `saysTheChord` is not
   a pass mark: the chords between the chart's own are most of what block-chord
   playing is, so one that spells something else is named, never marked.
+  **A take now carries a second number: where its notes fell, read against the
+  line style the player picked.** `readLinePlacement` (`LinePlacement.h`), and
+  it is not reachable from `score()` — different file, style as an argument,
+  never touches a `LineStats`. Three parts weighted 2/1/1 the way comping's
+  are: the grid (per *onset*, so a block chord counts once), the phrasing
+  (one-way — running on costs, stopping early does not) and the register (per
+  note). Only what the style states as a rule is in it; see the invariant
+  below and `docs/SOLO_PRACTICE.md`. **`LineBar`'s strong-beat counts cross
+  the wire now too**, through `LineAnalyzer::barFor` — they had been counted
+  since the grid arrived and nothing outside the engine could see them.
 - **Comping** — done, both halves: the band that plays under a soloist, and the
   exercise. The exercise lives in **chord practice's *In time***, not in a third
   mode; that decision was recorded as a third mode for a long time and was
@@ -546,29 +556,40 @@ that's easy to miss in review:
   beat dots, the count-in and the ramp are all straight and must stay so: the
   whole page's timing rests on the click being `origin + index × spacing`, and
   the tempo-ramp check measures exactly that to 0.01s.
-- **Rhythm and voice-leading produce words, never points — in solo practice.**
-  `score()` is untouched by timing or line-shape; see its own doc comment before
-  changing that. **The chord reading is the same rule one step further out**: a
-  block chord in a line is named, never scored, and a voicing that spells
-  something other than the bar costs the take nothing — there is no number
-  anywhere that `saysTheChord` moves. **Comping scores placement, and that is not a contradiction**: a
-  line has no written standard for where its notes fall, so a number would be one
-  the engine invented and then marked a player against, while a
-  `CompStyleDefinition` *is* that standard, chosen off a menu and already the
-  thing the generator is held to in both directions. The argument is in
-  `docs/COMPING.md`; what matters here is that the two rules answer two different
-  questions and neither may be quoted at the other.
-  **This was an open question and is now closed, so here is the test rather
-  than the taste.** Whether a solo's rhythm should score is not a matter of how
-  strict anyone feels like being; it turns on one thing — *is there a standard
-  the player chose?* Comping has one, and it is a `CompStyleDefinition` off a
-  menu. A chart names the chord and has never said where in the bar a note
-  belongs, so solo practice has none, and a number there would be the engine
-  inventing a standard and then marking somebody against it. Words, therefore,
-  and permanently: the only thing that would reopen it is a player-chosen
-  rhythmic standard actually existing, not a better scoring idea. There is a
-  test holding the line — the same notes score the same with and without
-  positions.
+- **A number needs a standard the player chose. Everything else is words.**
+  This is the general form of a rule that used to be written as "rhythm
+  produces words, never points — in solo practice", and the general form is
+  what it always meant: it turns on one test — *is there a standard the player
+  picked?* — and never on which mode is showing. `LineStats::score()` is
+  untouched by timing or line-shape; see its own doc comment before changing
+  that. **The chord reading is the same rule one step further out**: a block
+  chord in a line is named, never scored, and a voicing that spells something
+  other than the bar costs the take nothing — there is no number anywhere that
+  `saysTheChord` moves.
+  **Both modes now score placement, and it is the same rule applied twice
+  rather than two rules.** A `CompStyleDefinition` was the standard for a
+  comp; a `LineStyleDefinition`, off solo practice's own picker, is the
+  standard for a line, which is exactly the condition
+  `docs/SOLO_PRACTICE.md` named when it closed this question — *"a rhythmic
+  vocabulary a player deliberately picks to be held to"*. So the condition was
+  met, not the rule bent. **`score()` did not change and must not**: the
+  placement is a *second* number, in `LinePlacement.h`, which takes the style
+  as an argument and never touches a `LineStats` — the separation is
+  structural rather than a matter of discipline, and the test that says the
+  same notes score the same with and without positions is still green and
+  still the evidence.
+  **What is still words is everything a chosen standard does not state.** In a
+  line style that is `startTicks` (a bias — `planPhrases` says so), `descending`
+  (a percentage over a corpus) and `usesApproaches` (colour, which `score()`
+  reads already, so a number would mark the same note twice). It is also R1, a
+  chromatic on an accented beat: `lineFaults` refuses one, but that is the
+  engine's rule about its own generator rather than something the style put its
+  name to. A chart still names the chord and still never says where in the bar
+  a note belongs — what changed is that the player can now say. The arguments
+  are in `docs/COMPING.md` and `docs/SOLO_PRACTICE.md`.
+  **A reading with no chosen standard behind it says nothing rather than
+  nought**, in both modes: `CompEvaluation::fit` and `LinePlacementReading::fit`
+  are both `std::optional<int>` and cross the wire as `null`.
 - **Single source of truth for anything on the wire.** `scaleStyles()`,
   `compStyles()` etc. come from the engine via `EngineApi`; never hardcode a
   copy in a shell — it will drift the first time the engine's catalogue

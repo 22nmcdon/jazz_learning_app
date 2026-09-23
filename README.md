@@ -602,11 +602,12 @@ it with. It is the one place the whole bar is laid out rather than summarised.
 because space is what a comper gives a soloist. The one exception is four to the bar, which
 says something when a take goes quiet under it — and still takes nothing off.
 
-Where a note falls does not score a solo and here it scores a comp, which is not a
-contradiction — a line has no written standard for where its notes go, and a comping style
-*is* one, chosen off a menu, and already the thing the band is held to. The long form of
-that argument, and the two bugs that writing the evaluator turned up in the style data, are
-in [`docs/COMPING.md`](docs/COMPING.md).
+Where a note falls is scored wherever you picked the standard it is read against. A
+comping style *is* one, chosen off a menu, and already the thing the band is held to — and
+solo practice has one now as well, in the line style, so the two readings are the same rule
+applied twice rather than two rules. The long form of that argument, and the two bugs that
+writing the evaluator turned up in the style data, are in
+[`docs/COMPING.md`](docs/COMPING.md).
 
 ### The walking bass
 
@@ -774,10 +775,21 @@ that is where chord tones do the most work and the colour goes in between. Which
 strong comes from the metre rather than a table, so a waltz has only its downbeat — three
 does not have a second half to start.
 
-Both are **words, never points**. The score is untouched: where a note sits in a bar does
-not make it a better or worse note, and the moment placement moved the score the score would
-stop being something anyone could explain. Played statically there are no positions to read,
-and a take is read exactly as it always was — every one of these readings is additive.
+Both are **words, never points**, and the tier score is untouched: where a note sits in a
+bar does not make it a better or worse note, and the moment placement moved *that* number
+it would stop being something anyone could explain. Played statically there are no
+positions to read, and a take is read exactly as it always was — every one of these
+readings is additive.
+
+**A take in time gets a second number beside them.** Stop the take and the panel says, for
+instance, *87% Bebop — grid 100%, phrasing 70%, register 90%*: where the line's notes fell,
+read against the line style you picked off the dock. It sits beside the tiers and is never
+averaged with them, because the two answer different questions — the tiers are read against
+the chord the chart wrote, this against the style you chose. Only what the style actually
+states is in it: its subdivision, how long its phrases run and what register they sit in.
+Where it likes phrases to *start* is a leaning rather than a rule, and is told to you
+instead. Play statically and there is no number at all — the reading says so rather than
+drawing a nought.
 
 ### Both modes
 
@@ -1227,12 +1239,15 @@ The reasoning, including why the engine gained no memory to do any of this, is i
 - **Printing, in the desktop app.** `window.print()` opens no dialog inside JUCE's
   webview, so the button is hidden there. Reading a PDF *does* ship in both shells now.
 - **Decided against, not pending**: MusicXML / MuseScore import and ear training are not
-  wanted; audio/pitch-detection input is out because this is a pianist's app end to end
-  and a keyboard already has MIDI; and **rhythm stays out of a solo's score** — the
-  readings produce words, permanently. A line has no written standard for where its notes
-  fall, so a number would be one the app invented and then marked you against. Comping is
-  scored on placement for exactly the reason a solo is not: there the standard is the
-  style you picked off a menu. See [`docs/COMPING.md`](docs/COMPING.md).
+  wanted; and audio/pitch-detection input is out because this is a pianist's app end to
+  end and a keyboard already has MIDI.
+- **Settled, and it moved**: rhythm used to stay out of a solo's reading altogether, on
+  the grounds that a line had no written standard for where its notes fall — so a number
+  would be one the app invented and then marked you against. That was never a rule about
+  solos; it was that **a number needs a standard you picked**, and the line style is now
+  one. So placement is scored, as a *second* number that leaves the tier score exactly as
+  it was. See [`docs/SOLO_PRACTICE.md`](docs/SOLO_PRACTICE.md) and
+  [`docs/COMPING.md`](docs/COMPING.md).
 
 ## Open questions carried over from the design doc
 

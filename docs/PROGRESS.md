@@ -39,11 +39,13 @@ verdict about a person.* "Your line is 10% outside lately, against 60% across
 the earlier half of this record" is two facts. "You are at 74 and you were at
 61" is a report card.
 
-This is the same rule CLAUDE.md states for solo practice — rhythm and
-voice-leading produce words, never points — one step further out. It does not
-contradict comping scoring placement, for the reason `docs/COMPING.md` gives: a
-`CompStyleDefinition` is a written standard the player chose off a menu, and
-there is no such standard for "a month of practice".
+This is the same rule CLAUDE.md states everywhere else — **a number needs a
+standard the player chose** — one step further out. Both modes now score
+placement, for the reason `docs/COMPING.md` gives: a `CompStyleDefinition` and
+a `LineStyleDefinition` are both written standards picked off a menu. There is
+no such standard for "a month of practice", and that is exactly why nothing
+here carries a mark. The rule did not weaken when solo practice gained a
+number; it was applied, and it answers this the same way it always did.
 
 ## The engine gains no memory
 

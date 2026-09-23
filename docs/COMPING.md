@@ -344,27 +344,36 @@ could not express at all. Four-to-the-bar is counted in *beats*, so it still
 accepts only the four downbeats: an "and" in Freddie Green's part is not that
 style played loosely, it is a different style.
 
-### Where a note falls doesn't score a solo, and here it scores a comp
+### Where a note falls scores wherever the player chose a standard
 
-This is the one place the repo argues against a rule it states elsewhere, so the
-argument is written out rather than assumed. CLAUDE.md says, of solo practice,
-**"rhythm produces words, never points"**. That bullet is now marked as solo
-practice's, and this is why.
+This heading used to read *"doesn't score a solo, and here it scores a comp"*,
+and it was the right argument with the wrong subject. The rule was never about
+comping. It is that **a number needs a standard the player picked**, and for a
+long time comping was the only half of the app that had one.
 
-A solo line has no stated standard for placement. The chart says which chord and
-never says where a note belongs in the bar, so a number for placement would be
-the engine inventing a standard and then marking a player against it. That's why
-`LineAnalyzer`'s score reads nothing rhythmic, and why a line's shape produces
-words.
+A `CompStyleDefinition` is a written-down statement of where the hits go, how
+many there are and what register they sit in, chosen off a menu, and the
+generator is already held to it in both directions. Scoring a player against
+the same slots the band is held to isn't a new judgement — it's the same act as
+`VoicingAnalyzer` scoring a voicing against the symbol the chart wrote, or
+`Options::chosenScale` holding a player to the scale they chose. Take the style
+away and there's nothing here to score, which is why a verdict always names one.
 
-A comp has one, and the player picked it off a menu. A `CompStyleDefinition` is
-a written-down statement of where the hits go, how many there are and what
-register they sit in, and the generator is already held to it in both
-directions. Scoring a player against the same slots the band is held to isn't a
-new judgement — it's the same act as `VoicingAnalyzer` scoring a voicing against
-the symbol the chart wrote, or `Options::chosenScale` holding a player to the
-scale they chose. Take the style away and there's nothing here to score, which
-is why a verdict always names one.
+Solo practice has a standard now: a `LineStyleDefinition`, off the dock's own
+picker, which is the condition `docs/SOLO_PRACTICE.md` named when it closed the
+question — *"a rhythmic vocabulary a player deliberately picks to be held to"*.
+So `readLinePlacement` scores a line's placement on exactly these terms, and
+the two readings are the same rule applied twice rather than two rules.
+
+What has not changed is `LineStats::score()`, which still reads colour and
+nothing else. The placement is a **second** number, in a file of its own — the
+same separation this evaluator keeps between its `fit` and its `voicingScore`,
+and for the same reason: one number out of two questions stops being
+explainable the first time somebody asks which half of it moved.
+
+What a chart states is which chord, and it has never said where in the bar a
+note belongs. That is still true. The thing that changed is that the player can
+now say.
 
 And the line holds on the other side. Everything a style does **not** pin down
 still produces words: how long a chord rang, whether the comp left room for the

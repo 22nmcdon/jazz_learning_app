@@ -778,10 +778,17 @@ TEST ("chord tones landing off the beat is something the take can say")
 
 TEST ("where a note sat in the bar never moves the score")
 {
-    /*  The rule the rest of this file is built on, held to for the new reading
-        as well: a line's shape produces words, never points. The same notes
-        read against the same chord score the same whether or not the shell
-        could say where they fell. */
+    /*  The rule the rest of this file is built on, and the one that had to
+        survive solo practice gaining a placement number of its own: **this**
+        number reads colour and nothing else. The same notes read against the
+        same chord score the same whether or not the shell could say where
+        they fell.
+
+        `readLinePlacement` does score where they fell, against a style the
+        player chose - and it is a second number, in its own file, which never
+        touches a `LineStats`. That this test needed no change when it arrived
+        is the evidence the split was made in the right place, which is why it
+        stays exactly as it was. */
     const std::vector<int> pitches { 60, 65, 64, 67, 60, 64, 65, 64 };
 
     LineAnalyzer plain;

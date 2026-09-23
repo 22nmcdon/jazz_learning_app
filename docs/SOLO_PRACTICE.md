@@ -317,22 +317,63 @@ and documented once in `docs/RHYTHM.md`. What's specific to solo practice:
   verdict that matters about it; saying it was also passed through adds
   nothing and would count the line's best notes among the ones being asked
   about.
-- **None of it touches the score**, and that's the rule this whole file is
+- **None of it touches `score()`**, and that's the rule this whole file is
   built on, not an omission. Where a note sits in a bar doesn't make it a
-  better or worse note, and the moment placement moved the number the number
-  would stop being explainable. There's a test that says so: the same notes
-  score the same whether or not positions were sent.
-- **Whether that's final was an open question, and it's closed: it is.** The
-  question was put as "rhythm produces words, is that the answer or a stage",
-  and answered as neither a preference nor a matter of nerve. It turns on one
-  test — **is there a standard the player chose?** Comping has one, a
-  `CompStyleDefinition` picked off a menu, which is exactly why placement
-  scores there and why that isn't a contradiction. A chart names the chord and
-  has never said where in a bar a note belongs, so there is no such standard
-  here and a number would be one the engine made up and then marked somebody
-  against. What would reopen it is that standard coming to exist — a rhythmic
-  vocabulary a player deliberately picks to be held to — not a cleverer way of
-  counting. Until then, words.
+  better or worse note, and the moment placement moved *that* number the
+  number would stop being explainable. There's a test that says so: the same
+  notes score the same whether or not positions were sent, and it is still
+  green.
+
+### The placement number — and how this file's own condition was met
+
+The question here was put as *"rhythm produces words, is that the answer or a
+stage"*, and closed as the answer — on one test, which was neither a
+preference nor a matter of nerve: **is there a standard the player chose?**
+Comping had one, a `CompStyleDefinition` picked off a menu, which is exactly
+why placement scored there. A chart names the chord and has never said where
+in a bar a note belongs, so solo practice had none. And the closing named the
+one thing that would reopen it — *"that standard coming to exist: a rhythmic
+vocabulary a player deliberately picks to be held to"*.
+
+A `LineStyleDefinition` is that, off the dock's own picker. So the condition
+was met rather than the rule bent, and `readLinePlacement` reads a take
+against it.
+
+- **It is a second number, and it is not reachable from the first.**
+  `LineStats::score()` reads colour and nothing else, and it stays that way by
+  construction rather than by discipline: the placement lives in
+  `LinePlacement.h`, takes the style as an argument and never touches a
+  `LineStats`. `score()` could not consult it if somebody wanted it to.
+- **Only what the style states as a rule is in the number** — its
+  subdivision, its phrase lengths, its register. Three of its own fields fall
+  the other side of that line and produce words instead. `startTicks` is a
+  bias, and `planPhrases` says so in as many words; `descending` is a
+  percentage over a corpus; `usesApproaches` is about colour, which `score()`
+  already reads, and counting it here would mark the same note twice out of
+  two numbers a player is looking at side by side.
+- **So does R1** — a chromatic on an accented beat. `lineFaults` refuses one,
+  but that is the engine's rule about its own generator rather than something
+  the style put its name to. The number contains what the player chose to be
+  held to and nothing the engine merely believes, which is the whole of why it
+  can be explained.
+- **Silent without a chosen style, and silent without a clock.** A shell that
+  names no style gets no placement at all — not a nought, and not a reading
+  against whichever style happens to be first, which would be the engine
+  inventing the standard after all. With a style but no positions the fit is
+  `null` and the reading says why.
+- **Phrase length is one-way**, the same asymmetry `CompBarReading::tooBusy`
+  has: a phrase past the style's longest is the pitfall the research names, a
+  phrase shorter is a player leaving space.
+- **A gap is read as a rest, and that is this reading's honest limit.**
+  Nothing in the engine carries a duration, so a long held note and a short
+  one followed by silence arrive identically. The boundary is a step of the
+  grid plus the style's own shortest rest, which is exactly how `planPhrases`
+  lays one out.
+
+What is *not* reopened: `score()` itself, and the practice record, which still
+has no field for a mark of either kind. A count beside an earlier count is a
+fact; a mark beside an earlier mark is a verdict about a person, and that was
+never a question about which number.
 
 ### Chords in a line
 Players comp behind themselves and solo in block chords, and the most
