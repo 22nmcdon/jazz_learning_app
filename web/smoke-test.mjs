@@ -2290,6 +2290,153 @@ try {
   const takeSummary = (await page.locator("#soloSummaryHead").innerText()).trim();
   check(`the take is summarised (${takeSummary})`, takeSummary.includes("over 2 bars"));
 
+  /*  The second number, and the three silences around it.
+
+      Static there was no clock, so nothing knows where a note fell and the
+      placement says so rather than drawing a nought - which is the whole of
+      what `fit` being null rather than zero is for. This is also the negative
+      control on the check below: an assertion that a number appears is
+      satisfied by a page that always draws one. */
+  const placedStatic = (await page.locator("#soloPlacementHead").innerText()).trim();
+
+  check(`a take with no clock behind it places nothing, and says why `
+        + `(${placedStatic.split(".")[0]})`,
+        placedStatic.includes("Nothing was counting") && !/\d+%/.test(placedStatic));
+
+  /** Opens a bar's dialog, whichever bar the page was on.
+
+      Clicking a bar you are not on *moves* you to it and clicking the one you
+      are on opens it, so neither one click nor two is right on its own: two
+      clicks on an already-selected bar aim the second at the open dialog,
+      which intercepts it and hangs. So: click, and click again only if
+      nothing opened.
+  */
+  const openBar = async (nth) => {
+    const bar = page.locator("#systems .bar").nth(nth);
+
+    await bar.click();
+
+    if (!(await page.locator("#chordDialog[open]").count()))
+      await bar.click();
+
+    await page.waitForSelector("#chordDialog[open]", { timeout: 10000 });
+    await page.locator("#tabTake").click();
+  };
+
+  // And the bar dialog says nothing about accented beats either, for the same
+  // reason: nothing landed on one that anything could see.
+  await openBar(0);
+
+  check("nor does the bar it was played over",
+        !(await page.locator("#takeRows").innerText()).includes("accented"));
+
+  await page.locator("#dialogClose").click();
+
+  /*  In time the same take gets read a second way. It is read against the
+      line style off the picker - a standard the player chose, which is the
+      one thing `docs/SOLO_PRACTICE.md` said would reopen this - and it sits
+      beside the tiers rather than being folded into them. */
+  const tempoWas = await page.inputValue("#tempo");
+
+  /*  Slow, and each note struck the instant a bar turns over.
+
+      Not decoration: this is the only way the check below has anything to
+      look at. A note wants to land on an accented beat for the bar to have
+      something to say about where the line sat, and clicking keys freehand
+      lands them wherever the clock happened to be - which is a fine thing to
+      read a placement out of and a useless thing to assert about. At 60 the
+      beat is a second wide, so a click chasing the downbeat is comfortably
+      inside the tick that reads as one.
+
+      Set after the clock is on rather than before: most of the transport strip
+      is what a player reaches for *while* playing, so it is not on show until
+      there is something to play to. The row it sits in is reserved either way,
+      which is the thing that must not move. */
+  await page.locator("#playLive").click();
+
+  await page.fill("#tempo", "60");
+  await page.dispatchEvent("#tempo", "change");
+  await page.evaluate(() => document.activeElement.blur());
+
+  await page.locator("#armTake").click();
+  await page.waitForSelector("#armTake[aria-pressed='true']", { timeout: 10000 });
+
+  const barRollingNow = () => page.evaluate(() =>
+    (document.querySelector("#systems .bar.rolling") || {}).dataset?.index ?? null);
+
+  for (const note of [62, 65, 69, 67])
+  {
+    const was = await barRollingNow();
+
+    await page.waitForFunction((before) => {
+      const bar = document.querySelector("#systems .bar.rolling");
+      return bar !== null && bar.dataset.index !== before;
+    }, was, { timeout: 20000 });
+
+    await soloKey(note).click();
+  }
+
+  await page.locator("#armTake").click();
+  await page.waitForSelector("#soloSummary:not([hidden])", { timeout: 10000 });
+
+  const placed = (await page.locator("#soloPlacementHead").innerText()).trim();
+
+  check(`in time, the take is placed against the style you chose (${placed})`,
+        /^\d{1,3}%\s+Modal/.test(placed)
+        && placed.includes("grid") && placed.includes("phrasing")
+        && placed.includes("register"));
+
+  // Two numbers, two questions, and neither is the other. The tiers are read
+  // against the chord the chart wrote; this is read against the line style.
+  const tierHead = (await page.locator("#soloSummaryHead").innerText()).trim();
+
+  check("and the tiers are still read against the chart, not against the style",
+        /% chord tones/.test(tierHead) && !/grid/.test(tierHead));
+
+  /*  The clock goes off before the bar is opened, and that is not tidiness:
+      the rolling bar brings itself into view every bar, so a click aimed at
+      one is aimed at something that keeps moving. The marks outlive the take,
+      which is when they are worth reading anyway. */
+  await page.locator("#playStatic").click();
+  await page.waitForFunction(
+    () => document.querySelectorAll("#systems .bar.rolling").length === 0,
+    null, { timeout: 10000 });
+
+  /*  The bar now has something to say about where the line sat in it. Words -
+      this moves no number on that panel.
+
+      Which bar that is depends on where the clock had got to, so it is the
+      first one carrying a take mark rather than a bar named in advance. */
+  const placedBar = await page.evaluate(() =>
+    [...document.querySelectorAll("#systems .bar")]
+      .findIndex((bar) => bar.querySelector(".bar-take:not([hidden])") !== null));
+
+  check("a bar was played over in time", placedBar >= 0);
+
+  await openBar(placedBar);
+
+  const beatRow = (await page.locator("#takeRows").innerText());
+
+  check("and a bar says what the line put where it leans",
+        /accented beats/.test(beatRow) && /\d+ of \d+/.test(beatRow));
+
+  // Said, never scored: the bar's own number is the tiers', and nothing about
+  // where the notes fell is allowed to have moved it.
+  check("without that moving the bar's own number",
+        /^\d{1,3}%\s+-\s+\d+ notes?$/.test((await page.locator("#takeHead").innerText()).trim()));
+
+  await page.locator("#dialogClose").click();
+
+  /*  Put back, and put back in time, because that is the only place the
+      control is on show. The tempo is one of the settings the page
+      remembers, so leaving it at 60 would leak out of this block and into
+      every check after it. */
+  await page.locator("#playLive").click();
+  await page.fill("#tempo", tempoWas);
+  await page.dispatchEvent("#tempo", "change");
+  await page.evaluate(() => document.activeElement.blur());
+  await page.locator("#playStatic").click();
+
   await page.locator("#modeChords").click();
   check("switching back restores chord practice", await page.locator("#feedback").isVisible());
   check("and chord practice has no band to comp for it", await bandOffered() === false);

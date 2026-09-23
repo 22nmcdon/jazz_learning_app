@@ -675,6 +675,17 @@ body, .sheet, .dock, .top-bar, .menu-panel, .colophon {
 
 .solo-summary { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
 .solo-summary-head { font-family: var(--serif); font-size: 16px; color: var(--charcoal); }
+/* Quieter than the head above it and on a line of its own: it answers a
+   different question from the tiers, and running the two together as one
+   sentence is what makes a reader average them. */
+.solo-placement {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--text-soft);
+}
+.solo-placement b { color: var(--charcoal); font-weight: 500; }
+
 .solo-observations { list-style: none; margin: 10px 0 0; padding: 0; }
 .solo-observations li {
   font-size: 14px;
@@ -2839,6 +2850,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
       <div class="solo-summary" id="soloSummary" hidden>
         <span class="solo-summary-head" id="soloSummaryHead"></span>
+        <!-- The second number, and it sits beside the first rather than being
+             folded into it. The tiers above are read against the chord the
+             chart wrote; this is read against the line style you picked. One
+             number out of two questions stops being explainable the moment
+             somebody asks which half of it moved - the same reason comping
+             keeps its voicing score off its fit. -->
+        <span class="solo-placement" id="soloPlacementHead" hidden></span>
         <ul class="solo-observations" id="soloObservations"></ul>
       </div>
     </div>
@@ -3936,7 +3954,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "colophonEngine", "colophonFraming", "colophonBuild",
    "modeChords", "modeSolo", "soloPanel", "soloNote", "soloAgainst", "soloScale", "soloOpen",
    "soloTallies",
-   "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
+   "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloPlacementHead",
+   "soloObservations",
    "armTake", "armLabel", "practising",
    "compPlace", "compSummary", "compSummaryHead", "compObservations",
    "readingWrap", "readingButton", "readingPanel",
@@ -4579,6 +4598,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
           el.takeRows.appendChild(takeRow(tier[0], tier[1] + "  -  " + tier[2] + "%", tier[3]));
         });
+
+      /*  Where the bar leans, and what the line put there. No swatch, because
+          it is not a sixth tier - it is the same notes counted a second way,
+          and it moves no number on this panel. Drawn only when something did
+          land on an accented beat: zero of nothing is what a take played
+          Static honestly has to say, and a row saying it is a row nobody
+          finishes. */
+      if (stats.onStrongBeats)
+        el.takeRows.appendChild(takeRow("On the accented beats",
+                                        stats.chordTonesOnStrongBeats + " of "
+                                        + stats.onStrongBeats + "  -  chord tones"));
 
       el.takeNote.textContent = stats.neverLeftTheChord
         ? "Every note here was a chord tone. Nothing is wrong with that, and a bar "
@@ -7175,9 +7205,44 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     el.soloTakeTally.textContent = tallyText("The take", solo.take);
   }
 
+  /** The take's placement, said in the panel and never folded into the tiers.
+
+      Silent three ways, each a different silence and each said differently.
+      No `placement` at all is an engine older than this page. A `fit` of null
+      with a reading behind it is a take played Static - there was no clock, so
+      there is nothing to place, and the engine's own sentence says so. Neither
+      is drawn as a nought: a page drawing one would say exactly the thing the
+      engine was careful not to.
+  */
+  function drawPlacement(placement) {
+    el.soloPlacementHead.textContent = "";
+
+    if (!placement) {
+      el.soloPlacementHead.hidden = true;
+      return;
+    }
+
+    el.soloPlacementHead.hidden = false;
+
+    if (placement.fit === null || typeof placement.fit !== "number") {
+      el.soloPlacementHead.textContent = placement.summary;
+      return;
+    }
+
+    var number = document.createElement("b");
+    number.textContent = placement.fit + "% " + placement.styleName;
+
+    el.soloPlacementHead.appendChild(number);
+    el.soloPlacementHead.appendChild(document.createTextNode(
+      "  -  grid " + placement.grid + "%, phrasing " + placement.phrasing
+      + "%, register " + placement.register + "%."));
+  }
+
   function drawSummary(result) {
     el.soloSummary.hidden = false;
     el.soloSummaryHead.textContent = result.summary;
+
+    drawPlacement(result.placement);
 
     el.soloObservations.textContent = "";
     (result.observations || []).forEach(function (line) {
@@ -7185,6 +7250,17 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       item.textContent = line;
       el.soloObservations.appendChild(item);
     });
+
+    /*  The placement's words go in the same list as the take's, because a
+        player reading back a take is not asking two questions - they are
+        asking how it went. What must not merge is the two *numbers*; the
+        observations were never the thing being kept apart. */
+    if (result.placement)
+      (result.placement.observations || []).forEach(function (line) {
+        var item = document.createElement("li");
+        item.textContent = line;
+        el.soloObservations.appendChild(item);
+      });
 
     sayWhatChanged(el.soloObservations);
 
