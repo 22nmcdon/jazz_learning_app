@@ -185,7 +185,7 @@ TEST ("which beats are strong is derived from the metre, not tabulated")
 
 TEST ("a slot naming no beat lands on every beat of whatever metre it is in")
 {
-    const CompSlot everyBeat { std::nullopt, 0, 100, false };
+    const CompSlot everyBeat { std::nullopt, 0, 100, false, {} };
 
     CHECK_EQ (slotPositions (everyBeat, 4).size(), std::size_t (4));
     CHECK_EQ (slotPositions (everyBeat, 3).size(), std::size_t (3));
@@ -194,7 +194,7 @@ TEST ("a slot naming no beat lands on every beat of whatever metre it is in")
 
 TEST ("a slot counting back from the end means the same thing in any metre")
 {
-    const CompSlot andOfLast { -1, ticksPerBeat / 2, 100, true };
+    const CompSlot andOfLast { -1, ticksPerBeat / 2, 100, true, {} };
 
     CHECK_EQ (slotPositions (andOfLast, 4).front().beat, 3);
     CHECK_EQ (slotPositions (andOfLast, 3).front().beat, 2);
@@ -205,7 +205,7 @@ TEST ("a slot naming a beat the metre has not got says nothing")
 {
     // A style built around the fourth beat has less to say in three. Silence
     // is more honest than folding it onto a beat that does exist.
-    const CompSlot fourthBeat { 3, 0, 100, false };
+    const CompSlot fourthBeat { 3, 0, 100, false, {} };
 
     CHECK (slotPositions (fourthBeat, 4).size() == 1);
     CHECK (slotPositions (fourthBeat, 3).empty());
@@ -224,8 +224,8 @@ TEST ("a style's own numbers cannot make the planner throw")
         in - which is why this is floored here rather than only at the wire,
         where it is *also* refused. */
     CompStyleDefinition broken;
-    broken.slots = { CompSlot { 0, 0, 100, false }, CompSlot { 1, 0, 100, false },
-                     CompSlot { 2, 0, 100, false }, CompSlot { 3, 0, 100, false } };
+    broken.slots = { CompSlot { 0, 0, 100, false, {} }, CompSlot { 1, 0, 100, false, {} },
+                     CompSlot { 2, 0, 100, false, {} }, CompSlot { 3, 0, 100, false, {} } };
     broken.mostPerBar = -1;
 
     const auto plan = compPlan (chartOf ("| Dm7 | G7 |"), broken, 0, 1, 7);
@@ -1072,7 +1072,7 @@ TEST ("a push from a slot that does not push is not in style")
 TEST ("a slot the metre has not got offers nothing to fit")
 {
     CompStyleDefinition onFour;
-    onFour.slots = { CompSlot { 3, 0, 100, false } };
+    onFour.slots = { CompSlot { 3, 0, 100, false, {} } };
 
     CHECK (fitsStyle (CompHit { 0, { 3, 0 }, { 60 }, "C", false }, onFour, 4));
 

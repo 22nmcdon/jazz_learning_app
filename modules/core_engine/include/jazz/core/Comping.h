@@ -128,8 +128,15 @@ std::vector<CompStyleDefinition> compStyles();
 
     Never empty: a shell asking for a style that has been renamed should get
     comping in some style rather than silence.
+
+    The returned reference is into a function-local `static`, so it outlives
+    every caller. `std::string_view` rather than `const std::string&` because
+    the argument is almost always a literal and a temporary `std::string` at
+    each call site set off -Wdangling-reference on every one of them - GCC
+    cannot see that the reference is not into the argument, and 26 false
+    positives is how a true one gets missed.
 */
-const CompStyleDefinition& compStyleFor (const std::string& key);
+const CompStyleDefinition& compStyleFor (std::string_view key);
 
 /** The positions a slot resolves to in a bar of @p beatsPerBar beats.
 

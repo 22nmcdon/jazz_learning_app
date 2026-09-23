@@ -263,7 +263,7 @@ int heldForSlot (const CompSlot& slot, const CompStyleDefinition& style)
     return std::max (1, slot.heldFor.value_or (style.heldFor));
 }
 
-const CompStyleDefinition& compStyleFor (const std::string& key)
+const CompStyleDefinition& compStyleFor (std::string_view key)
 {
     static const auto styles = compStyles();
 

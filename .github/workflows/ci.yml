@@ -59,8 +59,13 @@ jobs:
             libglu1-mesa-dev mesa-common-dev \
             libgtk-3-dev libwebkit2gtk-4.1-dev
 
+      # -DJAZZ_BUILD_TESTS=OFF: this job's question is whether the app links.
+      # The option defaults to ON, so without it this compiled all fourteen
+      # test files a second time - on the same runner image where the `engine`
+      # job has already built *and run* them - and threw the binary away
+      # without executing it.
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJAZZ_BUILD_TESTS=OFF
 
       - name: Build
         run: cmake --build build

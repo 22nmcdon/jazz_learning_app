@@ -14,3 +14,14 @@ target_include_directories(jazz_engine_api
 target_link_libraries(jazz_engine_api PUBLIC jazz::core_engine)
 
 target_compile_features(jazz_engine_api PUBLIC cxx_std_17)
+
+# The same warnings the Core Engine builds with, for the same reason. This was
+# the one target in the repo with none: 1,900 lines of the widest surface
+# anything crosses, compiled in silence, while the engine beside it ran
+# -Wall -Wextra -Wpedantic and the app linked JUCE's recommended set. An unused
+# local here should be found by the build, not by an audit.
+if(MSVC)
+    target_compile_options(jazz_engine_api PRIVATE /W4)
+else()
+    target_compile_options(jazz_engine_api PRIVATE -Wall -Wextra -Wpedantic)
+endif()
