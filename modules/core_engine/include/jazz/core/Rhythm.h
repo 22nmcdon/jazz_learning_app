@@ -80,13 +80,6 @@ struct BarPosition
 
     static BarPosition fromTicks (int ticks);
 
-    /** Where a beat count that may be fractional lands, for a shell turning a
-        moment on its own clock into a position. Out-of-range beats are the
-        caller's to clamp: a note played a hair before the downbeat is the next
-        bar's problem, and only the shell knows which bar it meant.
-    */
-    static BarPosition fromBeats (double beats);
-
     bool onTheBeat() const noexcept { return tick == 0; }
 
     /** "1", "2 and", "3 (e)", "4 trip" - how a player would count it aloud. */
@@ -129,8 +122,6 @@ enum class BeatStrength
 };
 
 BeatStrength strengthAt (BarPosition position, int beatsPerBar);
-
-std::string beatStrengthName (BeatStrength strength);
 
 /** True for the downbeat and the bar's other accented beat. */
 bool isStrong (BarPosition position, int beatsPerBar);

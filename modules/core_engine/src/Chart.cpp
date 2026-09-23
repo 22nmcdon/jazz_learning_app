@@ -26,17 +26,6 @@ const ChordSymbol* Chart::chordAt (int measureIndex, int beat) const
     return measure.slots.empty() ? nullptr : &measure.slots.back().chord;
 }
 
-std::vector<ChordSymbol> Chart::flattenedChords() const
-{
-    std::vector<ChordSymbol> chords;
-
-    for (const auto& measure : measures)
-        for (const auto& slot : measure.slots)
-            chords.push_back (slot.chord);
-
-    return chords;
-}
-
 Chart Chart::transposed (int semitones) const
 {
     auto copy = *this;
@@ -197,16 +186,6 @@ ChartParseResult parseProgressionText (std::string_view text, std::string title)
         return { std::nullopt, "No measures found - write the progression as | Dm7 | G7 | Cmaj7 |" };
 
     return { std::move (chart), {} };
-}
-
-bool TextProgressionImporter::canImport (std::string_view content) const
-{
-    return content.find ('|') != std::string_view::npos;
-}
-
-ChartParseResult TextProgressionImporter::import (std::string_view content) const
-{
-    return parseProgressionText (content);
 }
 
 } // namespace jazz::core

@@ -29,9 +29,6 @@ struct ScaleDefinition
     std::string name;            ///< "Lydian Dominant"
     ScaleFamily family {};
     std::vector<int> intervals;  ///< semitones above the tonic, starting at 0
-
-    /** Bitmask of scale degrees relative to the tonic, bit 0 = tonic. */
-    std::uint16_t intervalMask() const;
 };
 
 /** A scale definition rooted on a specific pitch: "Bb Lydian Dominant". */

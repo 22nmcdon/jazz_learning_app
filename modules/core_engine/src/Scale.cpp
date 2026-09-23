@@ -8,16 +8,6 @@
 namespace jazz::core
 {
 
-std::uint16_t ScaleDefinition::intervalMask() const
-{
-    std::uint16_t mask = 0;
-
-    for (auto interval : intervals)
-        mask |= static_cast<std::uint16_t> (1u << toPitchClass (interval));
-
-    return mask;
-}
-
 std::string Scale::name (Accidental accidental) const
 {
     if (definition == nullptr)

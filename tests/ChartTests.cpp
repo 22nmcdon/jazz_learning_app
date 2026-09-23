@@ -75,12 +75,3 @@ TEST ("transposes every chord in the chart")
 
     CHECK_EQ (transposed.toProgressionText(), std::string ("| Em7 | A7 | Dmaj7 |"));
 }
-
-TEST ("the text importer accepts what it can parse")
-{
-    const TextProgressionImporter importer;
-
-    CHECK (importer.canImport ("| Dm7 | G7 |"));
-    CHECK (! importer.canImport ("irealbook://Blue Bossa"));
-    CHECK (importer.import ("| Dm7 | G7 |").ok());
-}

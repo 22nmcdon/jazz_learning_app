@@ -66,11 +66,6 @@ BarPosition BarPosition::fromTicks (int ticks)
     return { beat, tick };
 }
 
-BarPosition BarPosition::fromBeats (double beats)
-{
-    return fromTicks (static_cast<int> (std::lround (beats * ticksPerBeat)));
-}
-
 std::string BarPosition::describe() const
 {
     const auto number = std::to_string (beat + 1);
@@ -136,19 +131,6 @@ BeatStrength strengthAt (BarPosition position, int beatsPerBar)
         return BeatStrength::strong;
 
     return BeatStrength::weak;
-}
-
-std::string beatStrengthName (BeatStrength strength)
-{
-    switch (strength)
-    {
-        case BeatStrength::downbeat: return "the downbeat";
-        case BeatStrength::strong:   return "a strong beat";
-        case BeatStrength::weak:     return "a weak beat";
-        case BeatStrength::offbeat:  return "an offbeat";
-    }
-
-    return "a beat";
 }
 
 bool isStrong (BarPosition position, int beatsPerBar)
