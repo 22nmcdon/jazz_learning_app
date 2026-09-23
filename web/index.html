@@ -2675,9 +2675,9 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           </div>
 
           <div class="menu-group" data-mode="solo">
-            <label class="sr-only" for="scaleStyle">Scale style</label>
-            <select class="menu-select" id="scaleStyle"></select>
-            <p class="menu-note" id="scaleStyleNote"></p>
+            <label class="sr-only" for="lineStyle">Line style</label>
+            <select class="menu-select" id="lineStyle"></select>
+            <p class="menu-note" id="lineStyleNote"></p>
           </div>
         </div>
       </div>
@@ -3463,7 +3463,15 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     avoidPitchClasses: [],
     scales: [],
     scalesFor: "",      // the chord state.scales was fetched for
-    scaleStyle: "modes",  // the soloing vocabulary; the engine names them
+    /*  The line style: how a line is built, *and* which scales it draws on.
+
+        One key rather than two, because choosing "bebop" is choosing the bebop
+        scales and the way bebop lines are shaped, and two pickers for one
+        choice is what "a panel is one question" exists to prevent. The scale
+        vocabulary is still the engine's - `lineStyles()` sends the key and
+        `soloStyle()` hands it on, so the Scales panel reads exactly as before. */
+    lineStyle: "bebop",
+    lineStyles: [],       // the catalogue, so a style's scaleStyle can be found
     reharmStyle: "all",   // the reharmonising vocabulary; the engine names these too
     chosenScale: 0,
     mode: "chords",     // "chords" or "solo" - a state, never a route
@@ -3933,7 +3941,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "compPlace", "compSummary", "compSummaryHead", "compObservations",
    "readingWrap", "readingButton", "readingPanel",
    "voicingStyle", "soundBank",
-   "scaleStyle", "scaleStyleNote", "chordTabs",
+   "lineStyle", "lineStyleNote", "chordTabs",
    "saveVoicing", "voicingLibraryNote", "voicingList",
    "tabTake", "panelTake", "takeHead", "takeRows", "takeNote"].forEach(function (id) {
     el[id] = document.getElementById(id);
@@ -5469,15 +5477,40 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       engine is asked for everything there, which is what it did before styles
       existed. */
   function soloStyle() {
-    return state.mode === "solo" ? state.scaleStyle : "everything";
+    return state.mode === "solo" ? scaleStyleOfLine() : "everything";
+  }
+
+  /** The scale vocabulary the chosen line style draws on.
+
+      The line style is the one thing a player picks; this is what the *engine*
+      needs for every reading, and it is the engine's own answer rather than a
+      mapping the page keeps - `lineStyles()` sends each style's `scaleStyle`
+      beside it for exactly this. Falls back to everything, which is what the
+      page asked for before styles existed and is the widest rather than the
+      narrowest answer: a reading that silently narrowed would call good notes
+      outside. */
+  function scaleStyleOfLine() {
+    for (var i = 0; i < state.lineStyles.length; i++)
+      if (state.lineStyles[i].key === state.lineStyle)
+        return state.lineStyles[i].scaleStyle || "everything";
+
+    return "everything";
   }
 
   function rememberStyleChoice(key) {
-    remember("ScaleStyle", key);
+    remember("LineStyle", key);
   }
 
   function recallStyleChoice() {
-    return recall("ScaleStyle");
+    /*  A new key, and the old `jazzScaleStyle` is deliberately not read.
+
+        Dropped rather than migrated, the same call the comping style's own
+        recall makes: the two are not the same thing - "modes" was a scale
+        vocabulary and "modal" is a way of building a line - so a mapping
+        between them would be a guess at what somebody meant. A preference that
+        cannot be read back is one you remake in a second from a menu you can
+        see. */
+    return recall("LineStyle");
   }
 
   /** Fills the style menu from the engine's own list.
@@ -5485,54 +5518,57 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       Not written into the markup, because which scales belong together is
       theory and the page holds none - a second copy of that list here is a
       second copy to go stale when a scale is added. */
-  async function loadScaleStyles() {
-    var result = await call("jazzScaleStyles", [], []);
+  async function loadLineStyles() {
+    var result = await call("jazzLineStyles", [], []);
 
     // An engine that cannot answer this is older than this page - which should
     // now be impossible, since the two are fetched at the same version, but an
     // empty menu with no explanation is how that looked last time and is not
     // worth risking twice.
-    if (result === null || !result.ok) {
-      el.scaleStyle.disabled = true;
-      el.scaleStyleNote.textContent = "The engine this page loaded is older than the page. "
-                                    + "Reload to pick the styles up.";
-      el.scaleStyleNote.className = "menu-note warn";
+    if (result === null || !result.ok || !Array.isArray(result.styles)) {
+      el.lineStyle.disabled = true;
+      el.lineStyleNote.textContent = "The engine this page loaded is older than the page. "
+                                   + "Reload to pick the styles up.";
+      el.lineStyleNote.className = "menu-note warn";
       return;
     }
 
-    el.scaleStyle.disabled = false;
-    el.scaleStyleNote.className = "menu-note";
+    el.lineStyle.disabled = false;
+    el.lineStyleNote.className = "menu-note";
+
+    state.lineStyles = result.styles;
 
     var remembered = recallStyleChoice();
     var known = result.styles.some(function (style) { return style.key === remembered; });
 
-    if (known) state.scaleStyle = remembered;
+    if (known) state.lineStyle = remembered;
+    else if (result.styles.length) state.lineStyle = result.styles[0].key;
 
-    el.scaleStyle.textContent = "";
+    el.lineStyle.textContent = "";
     result.styles.forEach(function (style) {
       var option = document.createElement("option");
       option.value = style.key;
       option.textContent = style.name;
       option.dataset.summary = style.summary;
-      el.scaleStyle.appendChild(option);
+      el.lineStyle.appendChild(option);
     });
 
-    el.scaleStyle.value = state.scaleStyle;
+    el.lineStyle.value = state.lineStyle;
     showStyleSummary();
   }
 
   function showStyleSummary() {
-    var option = el.scaleStyle.selectedOptions[0];
-    el.scaleStyleNote.textContent = option ? option.dataset.summary : "";
+    var option = el.lineStyle.selectedOptions[0];
+    el.lineStyleNote.textContent = option ? option.dataset.summary : "";
   }
 
-  el.scaleStyle.addEventListener("change", async function () {
-    state.scaleStyle = el.scaleStyle.value;
-    rememberStyleChoice(state.scaleStyle);
+  el.lineStyle.addEventListener("change", async function () {
+    state.lineStyle = el.lineStyle.value;
+    rememberStyleChoice(state.lineStyle);
     showStyleSummary();
 
-    // A scale picked out of the old style is not in the new one, and keeping it
-    // would mean choosing a style and watching nothing happen.
+    // A scale picked out of the old style's vocabulary is not in the new one,
+    // and keeping it would mean choosing a style and watching nothing happen.
     state.chosenScale = 0;
     state.scalesFor = "";
 
@@ -6842,6 +6878,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       compBar(barIndex, when, secondsPerBeat());
       bassBar(barIndex, when, secondsPerBeat());
       drumsBar(barIndex, when, secondsPerBeat());
+      lineBar(barIndex, when, secondsPerBeat());
     }
 
     bookVisual(when, function () {
@@ -6971,6 +7008,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // The band stops with the clock. Comp voicings are booked a bar ahead, so
     // without this the accompaniment plays on into the silence after a take.
     stopComping();
+
+    // And so does the model line, which is a voice of the band now rather
+    // than a demo on a timer - a plan left armed would start playing again
+    // the next time anything rolled.
+    stopTheLine();
 
     // And the tune goes back to the one the take started from. An exercise,
     // not an edit.
@@ -10065,14 +10107,60 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       moves every press, so pressing again is another line rather than the same
       one.
   */
-  var line = { seed: 1, timers: [] };
+  var line = { seed: 1, timers: [], plan: null };
 
   function stopTheLine() {
     line.timers.forEach(function (timer) { window.clearTimeout(timer); });
     line.timers = [];
+    line.plan = null;
+  }
+
+  /** Books the written line's notes for one bar, the way the band is booked.
+
+      **The line is a voice the transport plays, not a demo on a timer of its
+      own.** It used to schedule with `setTimeout` measured from the moment the
+      button was pressed, which meant it shared no origin with the click - so
+      it could not sit with the band, and the research's downbeat lag had
+      nothing to be late against. Going through the same `barStart +
+      beatsIntoBar(...) * spacing` the comp, the bass and the ride go through
+      is what puts all four on one clock, swung the groove's way, agreeing
+      about where the "and" is.
+
+      It plays every time the loop comes round to its bars, which is what
+      makes it something to play *along with* rather than something to listen
+      to once.
+  */
+  function lineBar(barIndex, barStart, secondsPerBeatNow) {
+    if (line.plan === null || state.mode !== "solo") return;
+
+    line.plan.notes.forEach(function (note) {
+      if (note.bar !== barIndex) return;
+
+      var when = barStart + beatsIntoBar(note.beat, note.tick, secondsPerBeatNow) * secondsPerBeatNow;
+
+      /*  Sounded through `bookVisual` rather than scheduled into Web Audio,
+          because the model plays the *player's* own piano voice and that one
+          has no "play this at" form - nor does the app's bridge, which is the
+          same honest inequality the click already has. What matters is that
+          the *position* comes from the transport's own `barStart`: re-anchored
+          every bar, rather than one timer measured from a button press. */
+      bookVisual(when, function () {
+        if (!transport.running || line.plan === null) return;
+
+        playNote(note.midi, 0.7);
+        flashKey(note.midi, note.colour, Math.round(secondsPerBeatNow * 460));
+        window.setTimeout(function () { stopNote(note.midi, 0.08); },
+                          secondsPerBeatNow * 440);
+      });
+    });
   }
 
   async function showMeALine(chord) {
+    /*  Still not over a take being read. Two lines at once is neither legible
+        to listen to nor separable in the reading - but "not while a take is
+        running" is narrower than it looks now: In time, this *starts* the
+        band and plays the line with it, and that roll grades nothing. The
+        refusal is about the take, not about the clock. */
     if (solo.armed) {
       el.soloNote.removeAttribute("data-colour");
       el.soloNote.textContent = "Not while a take is running - two lines at once is neither.";
@@ -10096,7 +10184,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     var result = await call("jazzImprovisedLine",
                             ["string", "number", "number", "string", "string", "number"],
-                            [state.progression, from, to, soloChosenScale(), state.scaleStyle,
+                            [state.progression, from, to, soloChosenScale(), state.lineStyle,
                              line.seed]);
 
     if (result === null || !result.ok || !result.notes.length) return;
@@ -10125,6 +10213,25 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         `setTimeout` rather than scheduled into Web Audio, because the app's
         bridge has no "play this at" argument - the same honest inequality the
         click already has, and at a model's tempo it is not audible. */
+    /*  In time, the line joins the band: the plan is handed to the transport,
+        which books it bar by bar like the comp and the ride, and it comes
+        round again every time the loop does. That is what makes it something
+        to play *along with*. The roll is started if it is not already, and it
+        arms no take - nothing is being read while a model is sounding. */
+    if (transport.inTime) {
+      line.plan = result;
+
+      if (! transport.running) startTransport();
+
+      el.soloAgainst.appendChild(document.createTextNode(
+        " It comes round with the band until you stop the clock."));
+      return;
+    }
+
+    /*  Static, so there is no clock to sit on and the line plays from now.
+        One timer per note against the moment the button was pressed, which is
+        what this always did and is honest when there is nothing to be late
+        against. */
     var beat = secondsPerBeat();
     var beats = transport.beats || 4;
 
@@ -11695,7 +11802,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // The style menu is the engine's list, so it cannot be filled until there
     // is an engine; and the mode groups have to be put into the state they
     // describe rather than the state the markup happened to ship in.
-    await loadScaleStyles();
+    await loadLineStyles();
     await loadReharmStyles();
     await loadCompStyles();
 

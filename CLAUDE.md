@@ -452,9 +452,31 @@ something finished or assume something unfinished is done:
   migrating it — and takes *what makes a record readable* as a function, since
   those fields are genuinely not shared. Its array property name is a parameter
   only because renaming the tune envelope would drop every tune anybody saved.
-- **Line suggestions** — done. `LineWriter` writes a line where `LineAnalyzer`
-  reads one, and solo practice's dock button says **Show me a line** where it
-  used to say *Which scale?* and hand back a set.
+- **Line suggestions** — done, and rebuilt around phrases. `LineWriter` writes a
+  line where `LineAnalyzer` reads one, and solo practice's dock button says
+  **Show me a line** where it used to say *Which scale?* and hand back a set.
+  **`planPhrases` runs before any note is chosen** — a length from the style's
+  range, a start on a tick the style starts phrases on, a rest after it — and
+  the note chooser walks what it produced. Two passes, because pitch cannot see
+  phrase shape and phrase shape does not need pitch. What it replaced laid a
+  full eighth grid over each bar and thinned it per slot, which is a texture
+  rather than phrasing.
+  **A `LineStyleDefinition` absorbed the scale style**, so solo practice has one
+  picker and not two: choosing "bebop" chooses the bebop scales *and* how a
+  bebop line is shaped. `scaleStyles()` is unchanged and still what the bar
+  dialog reads against — a line style carries the key into it. The remembered
+  `jazzScaleStyle` was dropped rather than mapped onto a line style, because
+  "modes" and "modal" are not the same kind of thing.
+  **An approach and the note it lands on are one gesture**, and the writer owes
+  the landing. Choosing them separately let an approach arrive nowhere on a
+  pentatonic — no half steps to land by — and let an approach follow an
+  approach on the same pitch. Only *blues* failed, which is why the round trip
+  sweeps every style rather than one.
+  **In time, the line is a voice the transport books**, beside the comp, the
+  bass and the ride, through the same `beatsIntoBar`. It comes round with the
+  loop, so it is something to play along with. It still refuses to sound over a
+  take — two lines at once is neither — but that refusal is about the take and
+  not about the clock: the roll it starts grades nothing.
   **The writer carries the analyser's vocabulary**, which is the design rather
   than a convenience: `LineWriterTests` asserts over twenty-four seeds that
   every note reads back from a real take as the colour it was written as. Same

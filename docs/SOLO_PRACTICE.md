@@ -175,10 +175,67 @@ the same boundary a generator living inside the analyser would blur.
   would be a grade against a standard the engine invented, which is the thing
   this file's main rule refuses — and it is a transcription exercise rather
   than solo practice.
+- **Phrases are planned before any note is chosen.** `planPhrases` picks a
+  length out of the style's range, a start on a tick the style starts phrases
+  on, and a rest after it; the note chooser then walks what it produced. Two
+  passes, because pitch cannot see phrase shape and phrase shape does not need
+  to see pitch. The version before this laid a full eighth grid over every bar
+  and thinned it with an independent coin flip per slot, which gives a texture
+  rather than phrasing — and is the pitfall the research names outright:
+  *"every phrase exactly 1, 2 or 4 bars long and starting on beat 1"*.
+- **An approach and the note it lands on are one gesture.** The writer owes the
+  landing and pays it on the next note. Choosing them independently is how the
+  first version got it wrong: on a pentatonic — which has no half steps — the
+  "nearest scale tone" can be three semitones away, so the approach arrived
+  nowhere and the analyser read it as `outside`. Worse, an approach could
+  follow an approach, both aimed and neither arriving, on the same pitch. Only
+  the blues style failed, which is why the round trip now sweeps **every**
+  style: a test of one style proves one style.
+- **`lineFaults` is the hard constraints as a validator** — register, the
+  style's own subdivision, no chromatic on a strong beat, and every approach
+  followed by a step. A step is one or two semitones; zero is not a step, it is
+  the same note again, and allowing it is how the second bug above got past the
+  first version of the check.
+- **In time, the line joins the band.** The plan is handed to the transport and
+  booked bar by bar beside the comp, the bass and the ride, through the same
+  `beatsIntoBar` — so all four agree about where the "and" is, swung the
+  groove's way. It comes round every time the loop does, which is what makes it
+  something to play *along* with. It used to schedule with `setTimeout` from the
+  moment the button was pressed, sharing no origin with the click at all.
+  - **It still will not sound over a take.** Two lines at once is neither
+    legible to listen to nor separable in the reading. But the refusal is about
+    the take, not the clock: the roll this starts grades nothing.
+
+### Line styles, and the scale styles underneath them
+- **A line style is the one thing a player picks**, and it answers two
+  questions at once: which scales are in play, and how a line out of them is
+  shaped. `LineStyleDefinition` carries phrase lengths, where phrases start,
+  the rest after one, a descending bias, a register, and whether the style
+  writes chromatics at all. Four of them: bebop, blues, modal, pentatonic.
+  - **Two pickers for one choice was the thing to avoid.** Choosing "bebop" is
+    choosing the bebop scales *and* the way bebop lines are built; asking twice
+    is what `CLAUDE.md`'s "a panel is one question" rule exists to prevent. So
+    `#scaleStyle` became `#lineStyle` and there is still exactly one control.
+  - **The scale vocabulary is still `scaleStyles()`'**, and the bar dialog still
+    reads against it. A line style carries the *key* and `soloStyle()` hands it
+    on, so the Scales panel behaves exactly as before. A test checks every line
+    style names a vocabulary `findScaleStyle` knows, because a typo there fails
+    silently: the reading widens to every scale, which is the "nothing is
+    outside anything" collapse `LineAnalyzer`'s own header describes.
+  - **The remembered key was dropped rather than migrated**, the same call the
+    comping style's recall makes. "modes" was a scale vocabulary and "modal" is
+    a way of building a line; mapping one to the other would be guessing what
+    somebody meant, and this is a preference you remake in a second from a menu
+    you can see.
+  - **`usesApproaches` is a musical claim, not a simplification.** In a modal
+    line a note from outside the mode is a wrong note rather than colour on the
+    way somewhere, so modal and pentatonic write none at all. A test holds it
+    over 24 seeds, with bebop as its control - a comparison where both sides
+    were zero would prove nothing.
 
 ### Scale styles
 - **Scale styles** (`ScaleStyle` in `Scale.h`) are the soloing vocabularies
-  the Practice menu offers — the modes, melodic minor, harmonic minor, bebop,
+  the engine offers — the modes, melodic minor, harmonic minor, bebop,
   pentatonics and blues, whole tone and diminished, everything. Built out of
   `ScaleFamily` rather than lists of scale names, so a shape added to the
   catalogue joins its style by itself. A style with nothing for a chord

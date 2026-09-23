@@ -1004,9 +1004,19 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   the shape you are practising, because a shape you chose to keep is not a suggestion.
 - **Show me a line** — solo practice writes a line as well as reading one. It follows the
   harmony rather than the bar: the one you are on, and into the next when the chord moves,
-  because that is where a lick lives. Chord tones on the strong beats, eighths with rests,
-  a chromatic approach into the change, scale tones stepping in between, inside a
-  soloist's two octaves. The keys light in the same colours a played line is read in - and
+  because that is where a lick lives. Phrases are planned before any note is chosen — a
+  length out of the style's range, a start off the beat where the style starts off the
+  beat, a rest after it — and then chord tones on the strong beats, a chromatic approach
+  into the change, scale tones stepping in between, inside a soloist's two octaves.
+  **In time, it plays with the band** rather than on a timer of its own, and comes round
+  every time the loop does, so it is something to play along with rather than to listen
+  to once.
+- **Line styles** — bebop, blues, modal, pentatonic. One picker, because choosing a style
+  is choosing the scales it draws on *and* how a line out of them is shaped: how long a
+  phrase runs, how much room it leaves, whether it steps in chromatically at all. Modal
+  and pentatonic write nothing chromatic, which is a musical claim rather than a
+  simplification — in a modal line a note from outside the mode is a wrong note, not
+  colour on the way somewhere. The keys light in the same colours a played line is read in - and
   that is not decoration, it is the invariant the feature is built on: **every note it
   writes has to read back from a take as the colour it was written as**, over two dozen
   seeds, or the tests fail. Play it back and the reading tells you how it went; there is

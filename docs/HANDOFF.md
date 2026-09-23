@@ -377,15 +377,27 @@ Small, verified, and none of them urgent.
   row count must not depend on what is showing - `#bandPanel`, on the chart's
   row, is where it would go.
 
-- **The downbeat lag is unbuilt, and waits on something else.** The research
-  (Datseris et al.) finds soloists delaying downbeats slightly *relative to the
-  rhythm section*, offbeats staying locked. It is not implemented because
-  `showMeALine` schedules with `setTimeout` from the moment the button is
-  pressed - it shares no origin with the click, so there is nothing for it to
-  sit behind. Anchoring the generated line to `transport.origin` is the
-  prerequisite, and it is a feature in its own right: it would let the model
-  line play *with* the band, which reopens the rule that it will not sound
-  during a take.
+- **The downbeat lag is unbuilt, but its prerequisite now exists.** The
+  research (Datseris et al.) finds soloists delaying downbeats slightly
+  *relative to the rhythm section*, offbeats staying locked. It had nothing to
+  be late against while `showMeALine` scheduled from a button press; In time,
+  the line is now a voice the transport books beside the comp and the ride, so
+  there is a section to sit behind. What is left is the lag itself - a small
+  randomised delay applied to the line's on-beat notes at booking time, in
+  `lineBar`, and to nothing else. The click and the band must stay where they
+  are or there is no reference.
+
+- **Part B's lick catalogue is not built.** The research's 17 licks (L01-L17)
+  are data-ready - degrees from a root, tick positions, a role per note - and
+  the plan for them is an engine catalogue with per-lick provenance, drawn on
+  for 50-70% of the material with generated atoms filling the gaps. The layer
+  that landed first is the one the research says matters more: *"rhythmic
+  aspects are at least as important as pitch aspects"*. Whoever builds the
+  catalogue should key a lick on a **chord-sequence shape** - qualities plus
+  the root offsets between them - which is `VoicingShape` one dimension up, and
+  should carry the source, because L01, L06 and L17 are composites from
+  teaching sites rather than transcriptions and ought to weigh less than a
+  documented device.
 
 - **The printed chart keeps a faint ring on the selected bar.** The print rules
   clear `.bar`'s background but not the `box-shadow` on `[aria-pressed="true"]`.

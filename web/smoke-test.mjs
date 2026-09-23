@@ -808,6 +808,92 @@ try {
   check("the voicing shape has no say over a single note",
         await page.locator("[data-mode='chords']").first().isHidden());
 
+  /*  In time, the line stops being a demo and joins the band.
+
+      What is asserted is that pressing it starts the clock and says the line
+      keeps coming round - the two things that make it something to play along
+      with rather than to listen to once. The old behaviour scheduled from the
+      button press and shared no origin with the click at all, which is why
+      there was nothing to be late against. */
+  await page.locator("#playLive").click();
+  await page.locator("#showVoicing").click();
+
+  await page.waitForFunction(
+    () => document.querySelector("#armTake") !== null
+       && document.querySelector("#systems .bar.rolling") !== null,
+    null, { timeout: 15000 });
+
+  const rollingWithoutATake =
+    (await page.locator("#armTake").getAttribute("aria-pressed")) === "false"
+    && (await page.locator("#systems .bar.rolling").count()) > 0;
+
+  check("In time, a line rolls the band without arming a take",
+        rollingWithoutATake);
+
+  check("and it says it will come round again",
+        (await lineShown()).includes("comes round"));
+
+  // Stopping the clock stops the model with it - a plan left armed would
+  // start playing again the next time anything rolled.
+  await page.locator("#playStatic").click();
+  await page.waitForFunction(
+    () => document.querySelectorAll("#systems .bar.rolling").length === 0,
+    null, { timeout: 10000 });
+
+  check("and stopping the clock stops the line with it",
+        (await page.locator("#systems .bar.rolling").count()) === 0);
+
+  /*  Put the board back before the reading checks below.
+
+      A roll moves the selected bar, and the model's notes flash keys the same
+      way a played note does - so leaving either in flight means the next check
+      reads a keyboard this one was still using. Back to bar one, and long
+      enough for the last flash to expire. */
+  await page.waitForTimeout(700);
+
+  /*  Selected directly rather than through `goToBar`, which is declared further
+      down this file and is a `const` - not hoisted, so it cannot be called from
+      up here. Only clicked when the roll left the selection somewhere else,
+      because clicking the bar that is already selected opens its dialog - and
+      that dialog covers the keyboard every check below this one needs. */
+  const selectedNow = await page.evaluate(() => {
+    const bar = document.querySelector('#systems .bar[aria-pressed="true"]');
+    return bar ? Number(bar.dataset.index) : -1;
+  });
+
+  if (selectedNow !== 0) {
+    await page.evaluate(() => {
+      const bar = document.querySelector('#systems .bar[data-index="0"]');
+      if (bar) bar.click();
+    });
+  }
+
+  // And whatever may have opened, shut - belt as well as braces, since the
+  // whole point of this block is to hand the keyboard back uncovered.
+  await page.evaluate(() => {
+    const dialog = document.querySelector("#chordDialog");
+    if (dialog && dialog.open) dialog.close();
+  });
+
+  /*  And the vocabulary these reading checks are written against, said out
+      loud rather than inherited from whatever the default happens to be.
+
+      It used to be inherited, and that broke here: the line style now carries
+      the scale vocabulary, so the default went from "modes" to "bebop" - and
+      **D Bebop Dorian contains F#**, which is the note the enclosure check
+      below plays as a chromatic approach to G. Read against the bebop scale it
+      is an ordinary scale tone and never gets promoted, so the check waits for
+      a colour that is never coming. A test that depends on a vocabulary should
+      name it.
+
+      Opened and shut by hand because `openReading` is declared much further
+      down this file and is a `const` - not hoisted. */
+  await page.locator("#readingButton").click();
+  await page.selectOption("#lineStyle", "modal");
+  await page.locator("#readingButton").click();
+
+  await page.waitForTimeout(200);
+
   // Bar one is Dm7: D is its root, and Db is in neither the chord nor D Dorian.
   await soloKey(62).click();
   await page.waitForFunction(
@@ -1008,8 +1094,8 @@ try {
 
   // The style picker narrows the vocabulary, and its list comes from the engine.
   // A `count()` reads a hidden element perfectly well, so this needs no panel.
-  const styles = await page.locator("#scaleStyle option").count();
-  check(`the engine's styles fill the menu (${styles})`, styles >= 5);
+  const styles = await page.locator("#lineStyle option").count();
+  check(`the engine's line styles fill the menu (${styles})`, styles >= 4);
 
   /*  In time puts a clock behind the chart. Driven fast and looped over two
       bars, so the test watches a real roll rather than a stubbed one.
@@ -2063,18 +2149,22 @@ try {
   // Back to static for the checks that follow, which click bars themselves.
   await page.locator("#playStatic").click();
   await openReading();
-  await page.selectOption("#scaleStyle", "pentatonic");
+  /*  One picker, two effects. Choosing a *line* style also chooses the scale
+      vocabulary the bar dialog reads against, because a line style carries the
+      scale style it draws on - which is the whole reason there is one picker
+      here and not two. "blues" draws on the pentatonics. */
+  await page.selectOption("#lineStyle", "blues");
   await page.locator("#readingButton").click();
   await bars.first().click();
   await page.waitForSelector("#chordDialog[open]", { timeout: 10000 });
 
   const narrowed = await page.locator("#scaleRows li").allInnerTexts();
-  check(`a style narrows the scales offered (${narrowed.length})`,
+  check(`a line style narrows the scales offered too (${narrowed.length})`,
         narrowed.length > 0 && narrowed.every((row) => /Pentatonic|Blues/.test(row)));
 
   await page.locator("#dialogClose").click();
   await openReading();
-  await page.selectOption("#scaleStyle", "modes");
+  await page.selectOption("#lineStyle", "modal");
   await page.locator("#readingButton").click();
 
   await page.locator("#armTake").click();
