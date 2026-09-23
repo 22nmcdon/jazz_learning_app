@@ -1793,10 +1793,27 @@ try {
 
   const copied = await compRhythmOf("yours");
 
+  /*  Within a tick, rather than to the last bit of a double.
+
+      This compared `join(",")` on two arrays of floats, and failed about half
+      the time while printing two identical-looking rows - which is the second
+      time that exact symptom has been chased here, and the note on
+      `compRhythmOf` records the first. Re-anchoring the clock was only half
+      of it: the two rolls are measured from their own first click, and the
+      subtraction alone is enough to leave the two rows differing somewhere
+      past the fifteenth decimal place.
+
+      A tenth of a tick is far tighter than any rhythm this can tell apart -
+      the nearest thing a style could put beside a beat is half a beat away,
+      which is 120 times this - so nothing the check exists to catch survives
+      the tolerance. */
+  const sameRhythm = (a, b) =>
+    a.length === b.length && a.every((at, i) => Math.abs(at - b[i]) < 0.005);
+
   check(`a copy of a style plays what the style plays `
         + `(${charleston.map((t) => t.toFixed(2)).join(" ")} vs `
         + `${copied.map((t) => t.toFixed(2)).join(" ")})`,
-        copied.length > 0 && copied.join(",") === charleston.join(","));
+        copied.length > 0 && sameRhythm(copied, charleston));
 
   // And the page put the whole style on the wire, not a key the engine would
   // have quietly failed to find and fallen back to four-to-the-bar for.
