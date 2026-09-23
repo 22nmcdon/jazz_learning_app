@@ -1,4 +1,6 @@
 #include "TestFramework.h"
+
+#include <cctype>
 #include "jazz/api/EngineApi.h"
 
 #include <string>
@@ -485,6 +487,59 @@ TEST ("the styles come across with a key, a name and a line to read")
     CHECK (contains (json, "\"key\":\"everything\""));
     CHECK (contains (json, "\"name\":\"The modes\""));
     CHECK (contains (json, "\"summary\":"));
+}
+
+TEST ("the grooves come across, with the one this chart asks for named")
+{
+    const auto json = grooves ("Medium Swing");
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"forThisChart\":\"swing\""));
+    CHECK (contains (json, "\"key\":\"straight\""));
+    CHECK (contains (json, "\"key\":\"shuffle\""));
+    CHECK (contains (json, "\"name\":\"Medium swing\""));
+    CHECK (contains (json, "\"summary\":"));
+
+    // The feel crosses as the word, never the enumerator.
+    CHECK (contains (json, "\"feel\":\"eighths\""));
+}
+
+TEST ("a chart that never said it swung is told to play it even")
+{
+    /*  The half that matters. Before grooves the page decided this with a bare
+        /swing/i test, and the same tunes have to come out the same way - a
+        wire that guessed at swing would start bending the eighths of every
+        bossa in the library. */
+    CHECK (contains (grooves (""), "\"forThisChart\":\"straight\""));
+    CHECK (contains (grooves ("Bossa Nova"), "\"forThisChart\":\"straight\""));
+    CHECK (contains (grooves (nullptr), "\"forThisChart\":\"straight\""));
+
+    // ...and its control, or a wire that always said "straight" would pass.
+    CHECK (contains (grooves ("Slow Blues Shuffle"), "\"forThisChart\":\"shuffle\""));
+    CHECK (contains (grooves ("Ballad"), "\"forThisChart\":\"ballad\""));
+}
+
+TEST ("an upbeat crosses as a number JSON can read, in every locale")
+{
+    /*  The only non-integers on this wire. `std::to_string` would have written
+        them through the C locale, so a machine set to one that uses a comma
+        would have emitted 0,667 - which is not one number in JSON, it is two
+        with a comma between them. */
+    const auto json = grooves ("Medium Swing");
+
+    CHECK (contains (json, "\"upbeatWhenSlow\":0.66667"));
+    CHECK (contains (json, "\"upbeatWhenFast\":0.57"));
+    CHECK (contains (json, "\"upbeatWhenSlow\":0.75"));
+
+    // The failure this guards is a decimal comma, which would split one number
+    // into two. Nothing on this wire writes a digit, a comma and then a digit.
+    for (std::size_t i = 1; i + 1 < json.size(); ++i)
+        if (json[i] == ',')
+            CHECK (! (std::isdigit (static_cast<unsigned char> (json[i - 1])) != 0
+                   && std::isdigit (static_cast<unsigned char> (json[i + 1])) != 0));
+
+    CHECK (contains (json, "\"even\":true"));    // the straight one
+    CHECK (contains (json, "\"even\":false"));   // and everything else
 }
 
 TEST ("a style narrows the scales offered for a chord")

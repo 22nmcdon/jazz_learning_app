@@ -13,6 +13,7 @@
 #include "jazz/core/ChartFormats.h"
 #include "jazz/core/ChordIdentifier.h"
 #include "jazz/core/Comping.h"
+#include "jazz/core/Groove.h"
 #include "jazz/core/LineAnalyzer.h"
 #include "jazz/core/LineWriter.h"
 #include "jazz/core/PracticeLog.h"
@@ -21,6 +22,8 @@
 #include "jazz/core/VoicingAnalyzer.h"
 
 #include <algorithm>
+#include <locale>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -346,6 +349,45 @@ namespace
 
         return "good";
     }
+
+    /*  A fraction, written so JSON can read it back.
+
+        The one non-integer on this wire, and it needs saying why it is not
+        `std::to_string`: that goes through the C locale, so on a machine set to a
+        locale that writes 0,667 it would emit exactly that - which is not a number
+        in JSON, it is two of them with a comma between. `classic()` is the whole
+        point of this function.
+    */
+    std::string fraction (double value)
+    {
+        std::ostringstream out;
+        out.imbue (std::locale::classic());
+
+        // `precision` on the stream rather than `std::setprecision`, which
+        // would mean including <iomanip> - and that drags in `std::quoted`,
+        // which ADL then finds ahead of this file's own `quoted` for every
+        // std::string argument in it. An include with a blast radius.
+        out.precision (5);
+        out << value;
+        return out.str();
+    }
+
+    /** One groove, as the shell that plays it and the menu that offers it need it. */
+    std::string grooveJson (const GrooveDefinition& groove)
+    {
+        return "{\"key\":" + quoted (groove.key)
+             + ",\"name\":" + quoted (groove.name)
+             + ",\"summary\":" + quoted (groove.summary)
+             + ",\"upbeatWhenSlow\":" + fraction (groove.upbeatWhenSlow)
+             + ",\"upbeatWhenFast\":" + fraction (groove.upbeatWhenFast)
+             + ",\"slowBpm\":" + std::to_string (groove.slowBpm)
+             + ",\"fastBpm\":" + std::to_string (groove.fastBpm)
+             + ",\"even\":" + (groove.isEven() ? "true" : "false")
+
+             // The word, never the enumerator - a wire carrying the enumerator
+             // breaks the day one is inserted in the middle of the enum.
+             + ",\"feel\":" + quoted (subdivisionName (groove.feel)) + "}";
+    }
 }
 
 //==============================================================================
@@ -413,6 +455,26 @@ std::string scalesForChord (const char* symbol, const char* style)
                  + ",\"tones\":" + jsonArray (tones, [&chord] (const ChordTone& tone)
                    { return chordToneJson (tone, chord->root()); })
                  + ",\"scales\":" + jsonArray (suggestions, scaleSuggestionJson) + "}");
+}
+
+std::string grooves (const char* chartStyle)
+{
+    /*  The catalogue, plus the one this chart's style marking asks for.
+
+        Both in one answer because a shell needs both and the mapping from
+        "Medium Swing" to a feel is theory - which marking means which groove
+        is the same kind of question as which scales belong together, and it
+        lives here for the same reason `scaleStyles()` does. A page matching
+        the words itself would be a second copy of that theory, going stale the
+        first time a marking is added.
+    */
+    const auto& forThisChart = core::grooveForStyleWord (chartStyle != nullptr ? chartStyle : "");
+
+    return hold ("{\"ok\":true,\"forThisChart\":" + quoted (forThisChart.key)
+                 + ",\"grooves\":"
+                 + jsonArray (core::grooves(), [] (const GrooveDefinition& groove)
+                   { return grooveJson (groove); })
+                 + "}");
 }
 
 std::string scaleStyles()

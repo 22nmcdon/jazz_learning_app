@@ -70,6 +70,7 @@ namespace
         if (name == "jazzParseChart")        return api::parseChart (text (0).c_str());
         if (name == "jazzScalesForChord")    return api::scalesForChord (text (0).c_str(), text (1).c_str());
         if (name == "jazzScaleStyles")       return api::scaleStyles();
+        if (name == "jazzGrooves")           return api::grooves (text (0).c_str());
         if (name == "jazzImportIRealPro")    return api::importIRealPro (text (0).c_str());
         if (name == "jazzChartFromPage")     return api::chartFromPage (text (0).c_str());
         if (name == "jazzReharmPlans")       return api::reharmPlans (text (0).c_str());

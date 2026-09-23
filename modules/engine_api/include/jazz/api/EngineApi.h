@@ -229,6 +229,19 @@ std::string compTake (const char* progressionText, const char* styleRef,
     own: which scales belong together is theory, and a second copy of it in a
     page is a second copy that goes stale.
 */
+/** The grooves a tune can be played with, and the one this chart asks for.
+
+    `forThisChart` is the key `grooveForStyleWord` reads out of the chart's
+    style marking - "Medium Swing" gives swing, anything unrecognised gives
+    even. A shell re-asks when the chart changes; the catalogue itself does not.
+
+    A groove's `upbeatWhenSlow`/`upbeatWhenFast` are fractions of a beat, and
+    the only non-integers on this wire. They say where a shell should *play* an
+    upbeat eighth, never where the engine wrote one - the engine writes tick 12
+    and always will.
+*/
+std::string grooves (const char* chartStyle);
+
 std::string scaleStyles();
 
 std::string soloStartTake();

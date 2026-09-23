@@ -74,6 +74,11 @@ JAZZ_EXPORT const char* jazzScaleStyles()
     return hold (jazz::api::scaleStyles());
 }
 
+JAZZ_EXPORT const char* jazzGrooves (const char* chartStyle)
+{
+    return hold (jazz::api::grooves (orEmpty (chartStyle)));
+}
+
 JAZZ_EXPORT const char* jazzReharmonise (const char* progressionText, int measureIndex,
                                          int includeAdvanced, int includeRisky,
                                          const char* styleKey)
