@@ -2,6 +2,7 @@
 
 #include "jazz/core/Chart.h"
 #include "jazz/core/LineAnalyzer.h"
+#include "jazz/core/LineStyle.h"
 #include "jazz/core/Rhythm.h"
 
 #include <cstdint>
@@ -29,11 +30,16 @@ namespace jazz::core
     every voicing `idiomaticVoicings` offers must classify as the type it was
     offered for, and it exists for the same reason.
 
-    It is **generated, not curated**. Stored patterns are memory the engine
-    would have to keep, and "the engine gains no memory" is the answer this repo
-    has reached for a chart's progression text, a described comping style and a
-    practice history. A lick that has to be transposed and fitted to the bar is
-    engine work anyway.
+    It is **generated rather than quoted**, and that is a narrower claim than
+    the one that used to be here. This said "generated, not curated", on the
+    grounds that stored patterns are memory the engine would have to keep - but
+    "the engine gains no memory" is about not retaining what a *user* did, and a
+    static table is what `compStyles()`, `scaleStyles()` and the 36 reharm rules
+    already are. The research is blunt that lines are made of patterns: Owens
+    catalogued 64 Parker formulas across 250 transcriptions, and Norgaard found
+    82.6% of Parker's notes begin a four-interval pattern that recurs elsewhere
+    in the corpus. A cell catalogue is a later pass; what is here now is the
+    layer the research says matters more, which is phrase shape and rhythm.
 */
 struct WrittenNote
 {
@@ -61,23 +67,90 @@ struct WrittenNote
     a fact about the line.
 */
 
-/** A line over a range of bars, in eighths, to play back or play along with.
+/** Where one phrase sits: a run of notes and the silence after it.
+
+    The planner's output, and the thing the old version of this file did not
+    have. It used to lay a full eighth grid over each bar and thin it with an
+    independent coin flip per slot - which gives a texture rather than a
+    phrase, and produced exactly the pitfall the research names: every phrase
+    a bar long and starting on beat one.
+*/
+struct PlannedNote
+{
+    int measureIndex {};
+    BarPosition at {};
+
+    /** The last note before a rest. Where a line is allowed to be chromatic on
+        the way out, and where it must not be left hanging. */
+    bool endsPhrase {};
+};
+
+/** Lays out phrases across a range of bars, before any note is chosen.
+
+    Pitch decisions cannot see phrase shape and phrase decisions do not need to
+    see pitch, so they are two passes. The research puts it first in its own
+    implementation order for the same reason - "before choosing any notes, pick
+    a phrase type, a length, a start position and a following rest".
+*/
+std::vector<PlannedNote> planPhrases (const LineStyleDefinition& style,
+                                      int fromBar,
+                                      int toBar,
+                                      int beatsPerBar,
+                                      std::uint32_t seed);
+
+/** Something a written line does that its own style says it should not.
+
+    The hard constraints, run as a validator. The research recommends exactly
+    this - "your existing classifier can score candidates and reject
+    violations" - and it is also how the generator is stopped from drifting
+    away from the catalogue it claims to be playing from.
+*/
+enum class LineFault
+{
+    outsideTheRegister,    ///< R12
+    offTheStyleGrid,       ///< R15: a note where this style has no subdivision
+    chromaticOnTheBeat,    ///< R1: an approach note on a strong beat
+    approachThatNeverLands ///< R2: an approach not followed by a step
+};
+
+struct LineFinding
+{
+    LineFault fault {};
+    std::size_t noteIndex {};
+    std::string message;
+};
+
+/** Reads a written line against the style it claims to be in.
+
+    Empty means it obeys. Used by the tests rather than by `improvisedLine`
+    itself, which is built so as not to break these in the first place - a
+    generator that produced faults and then filtered them would be two
+    descriptions of one style, which is the drift `CompStyleDefinition`'s own
+    header warns about.
+*/
+std::vector<LineFinding> lineFaults (const std::vector<WrittenNote>& line,
+                                     const LineStyleDefinition& style,
+                                     int beatsPerBar);
+
+/** A line over a range of bars, to play back or play along with.
 
     The rules, in the order a player would say them:
 
+      - **Phrases first**, then notes. A phrase is a run of notes of the
+        style's length and then a rest, and it starts where the style says
+        phrases start - off the beat, for the styles that do.
       - **A chord tone on the strong beats.** `strengthAt` says which those are
         and it is metre-aware, so a waltz gets the one it has rather than a
-        four's two. This is also what `LineAnalyzer` reads a line for, which is
-        the point.
-      - **Eighths, with rests**, so it breathes rather than running. Written
-        straight, at tick 0 and tick 12: swing is the shell's, per
-        `docs/RHYTHM.md`, and nothing here may bend a note.
-      - **A chromatic approach into the next bar's first note** when the chord
-        changes - the move that makes a line sound like bebop rather than an
-        arpeggio, and the same rule `walkingBass` has one register down.
-      - **Scale tones in between**, stepping where a step is available, from
-        the scale a take would read against rather than a scale of its own.
-      - **Inside a soloist's register throughout**, for the reason the bass
+        four's two. This is also what `LineAnalyzer` reads a line for.
+      - **Written straight** on the style's own subdivision. Swing is the
+        shell's, per `docs/RHYTHM.md`, and nothing here may bend a note.
+      - **A chromatic approach into the next chord**, for the styles that use
+        them, never on a strong beat - the move that makes a line sound like
+        bebop rather than an arpeggio, and the same rule `walkingBass` has one
+        register down.
+      - **Scale tones in between**, from the scale a take would read against
+        rather than a scale of its own, with the style's descending bias.
+      - **Inside the style's register throughout**, for the reason the bass
         line is bounded: a line free to follow the harmony upward climbs off
         the keyboard inside a chorus.
 
@@ -85,6 +158,9 @@ struct WrittenNote
                         takes it. Empty means the engine's own first answer.
                         Passing what the take will read against is what keeps
                         the written colours and the read ones the same.
+    @param lineStyle    a `LineStyleDefinition::key`. Its `scaleStyle` is what
+                        reaches `LineAnalyzer::Options`, so writer and reader
+                        still agree about which scales are in play.
     @param seed         the same seed gives the same line, note for note, in
                         both shells - `compPlan`'s contract and its hash.
 */
@@ -92,12 +168,15 @@ std::vector<WrittenNote> improvisedLine (const Chart& chart,
                                          int fromBar,
                                          int toBar,
                                          const std::string& chosenScale,
-                                         const std::string& scaleStyle,
+                                         const std::string& lineStyle,
                                          std::uint32_t seed);
 
-/** The register a written line stays inside. A soloist's two octaves, not a
-    keyboard's seven: a line that wandered outside these is one a player cannot
-    copy without moving their hands somewhere the exercise never asked for.
+/** The register a written line stays inside when its style does not say.
+
+    A soloist's two octaves, not a keyboard's seven: a line that wandered
+    outside these is one a player cannot copy without moving their hands
+    somewhere the exercise never asked for. `LineStyleDefinition` carries its
+    own pair and defaults them to these.
 */
 constexpr int lowestLineNote = 55;    ///< G3
 constexpr int highestLineNote = 84;   ///< C6
