@@ -1065,8 +1065,17 @@ try {
 
   await page.locator("#transportButton").click();
   await page.uncheck("#countIn");
-  await page.selectOption("#loopFrom", "0");
-  await page.selectOption("#loopTo", "1");
+
+  /*  `{ index: n }`, never a bare string. These options carry value `0..11`
+      and label `1..12`, and Playwright treats a bare string as matching
+      either - so it takes the first option matching by value *or* label in
+      document order, and "1" resolved to the option labelled 1, which is bar
+      **one**. Measured, not reasoned about. This asked for a one-bar loop
+      while the two checks below assumed two bars, and a one-bar loop is why
+      the second of them could never have been anything but vacuous: a loop
+      that never leaves bar one cannot be seen coming back to it. */
+  await page.selectOption("#loopFrom", { index: 0 });   // bar 1
+  await page.selectOption("#loopTo", { index: 1 });     // bar 2 - a two-bar loop
   await page.locator("#transportButton").click();
 
   await page.fill("#tempo", "300");
@@ -1090,16 +1099,32 @@ try {
     null, { timeout: 10000 });
   check("the space bar starts a take", true);
 
-  // A bar at 300bpm is 800ms, so the chart has to have moved off bar one
-  // without anything being clicked.
+  /*  A bar at 300bpm is 800ms, so the chart has to have moved to bar two
+      without anything being clicked.
+
+      Bar two is addressed by document order - `querySelectorAll(...)[1]` -
+      and not by `:nth-child`. A `.system`'s first child is its
+      `.system-number`, so `.bar:nth-child(2)` is the *first* bar of a system
+      rather than the second bar of the tune. This check used to wait for
+      that, which is the bar the take starts on, so it passed at the downbeat
+      without the clock having done anything. */
   await page.waitForFunction(
-    () => document.querySelector("#systems .bar:nth-child(2)").classList.contains("rolling"),
+    () => document.querySelectorAll("#systems .bar")[1].classList.contains("rolling"),
     null, { timeout: 10000 });
   check("the clock moves the chart on its own", true);
 
-  // ...and come back round, because the loop is two bars long.
+  /*  ...and back round to bar one, because the loop is two bars long.
+
+      This waits on the same expression the old version did, and the fix is
+      not here - it is above. Exactly one bar carries the mark at a time
+      (`markRollingBar` matches on `state.selected`), so "bar one is rolling"
+      is a *transition* only if the wait begins once bar one has already let
+      go of it. The check above is what guarantees that now; while it resolved
+      at the downbeat, this one resolved at the downbeat too, against a bar
+      that had never stopped rolling. One vacuous check was quietly making a
+      second one vacuous. */
   await page.waitForFunction(
-    () => document.querySelector("#systems .bar").classList.contains("rolling"),
+    () => document.querySelectorAll("#systems .bar")[0].classList.contains("rolling"),
     null, { timeout: 10000 });
   check("and loops the range it was given", true);
 
@@ -1121,7 +1146,7 @@ try {
   await page.dispatchEvent("#rampBy", "change");
   await page.fill("#rampTo", "300");
   await page.dispatchEvent("#rampTo", "change");
-  await page.selectOption("#loopTo", "0");      // one bar, so a chorus is four beats
+  await page.selectOption("#loopTo", { index: 0 });   // one bar, so a chorus is four beats
   await page.locator("#transportButton").click();
 
   await page.fill("#tempo", "200");
@@ -1163,7 +1188,10 @@ try {
 
   await page.locator("#transportButton").click();
   await page.uncheck("#ramp");
-  await page.selectOption("#loopTo", "1");
+  // Index 0 is what the bare "1" here already resolved to - bar one, so this
+  // is a one-bar loop and a chorus comes round every bar, which is what makes
+  // the reharmonise-as-you-play exercise below observable in a short take.
+  await page.selectOption("#loopTo", { index: 0 });
   await page.locator("#transportButton").click();
   await page.fill("#tempo", "300");
   await page.dispatchEvent("#tempo", "change");
@@ -2372,7 +2400,7 @@ try {
     await framed.evaluate(() => document.querySelector(".chart-zone").scrollTop = 0);
     await framed.locator("#playLive").click();
     await framed.locator("#transportButton").click();
-    await framed.selectOption("#loopFrom", "0");
+    await framed.selectOption("#loopFrom", { index: 0 });
     await framed.selectOption("#loopTo", { index: 11 });   // the whole twelve bars
     await framed.locator("#transportButton").click();
     await framed.fill("#tempo", "300");
