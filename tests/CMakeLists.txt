@@ -11,6 +11,7 @@ add_executable(jazz_core_tests
     LineAnalyzerTests.cpp
     LineWriterTests.cpp
     PracticeLogTests.cpp
+    GrooveTests.cpp
     CompingTests.cpp
     ReharmonizerTests.cpp
     ChartTests.cpp
