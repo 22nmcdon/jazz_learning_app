@@ -69,6 +69,11 @@ JAZZ_EXPORT const char* jazzScalesForChord (const char* symbol, const char* styl
     return hold (jazz::api::scalesForChord (orEmpty (symbol), orEmpty (style)));
 }
 
+JAZZ_EXPORT const char* jazzLineStyles()
+{
+    return hold (jazz::api::lineStyles());
+}
+
 JAZZ_EXPORT const char* jazzScaleStyles()
 {
     return hold (jazz::api::scaleStyles());

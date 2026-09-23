@@ -160,7 +160,7 @@ std::string walkingBass (const char* progressionText, int fromBar, int toBar, in
     written line in the same ink as a played one.
 */
 std::string improvisedLine (const char* progressionText, int fromBar, int toBar,
-                            const char* chosenScale, const char* scaleStyle, int seed);
+                            const char* chosenScale, const char* lineStyle, int seed);
 
 /** One chord the player comped, read against the style they chose.
 
@@ -241,6 +241,16 @@ std::string compTake (const char* progressionText, const char* styleRef,
     and always will.
 */
 std::string grooves (const char* chartStyle);
+
+/** The line styles a solo can be written and read in.
+
+    The menu a shell builds its picker from, and - because a line style
+    carries the scale vocabulary it draws on - the thing that replaced asking
+    for a scale style separately. `scaleStyles()` stays exactly as it was: the
+    bar dialog still reads against it, and this sends a key into it rather
+    than a copy of it.
+*/
+std::string lineStyles();
 
 std::string scaleStyles();
 

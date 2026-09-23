@@ -15,6 +15,7 @@
 #include "jazz/core/Comping.h"
 #include "jazz/core/Groove.h"
 #include "jazz/core/LineAnalyzer.h"
+#include "jazz/core/LineStyle.h"
 #include "jazz/core/LineWriter.h"
 #include "jazz/core/PracticeLog.h"
 #include "jazz/core/Reharmonizer.h"
@@ -474,6 +475,28 @@ std::string grooves (const char* chartStyle)
                  + ",\"grooves\":"
                  + jsonArray (core::grooves(), [] (const GrooveDefinition& groove)
                    { return grooveJson (groove); })
+                 + "}");
+}
+
+std::string lineStyles()
+{
+    return hold ("{\"ok\":true,\"styles\":"
+                 + jsonArray (core::lineStyles(), [] (const LineStyleDefinition& style)
+                   {
+                       return "{\"key\":" + quoted (style.key)
+                            + ",\"name\":" + quoted (style.name)
+                            + ",\"summary\":" + quoted (style.summary)
+                            + ",\"scaleStyle\":" + quoted (style.scaleStyle)
+                            + ",\"shortestPhrase\":" + std::to_string (style.shortestPhrase)
+                            + ",\"longestPhrase\":" + std::to_string (style.longestPhrase)
+                            + ",\"usesApproaches\":" + (style.usesApproaches ? "true" : "false")
+                            + ",\"lowestNote\":" + std::to_string (style.lowestNote)
+                            + ",\"highestNote\":" + std::to_string (style.highestNote)
+
+                            // The word, never the enumerator.
+                            + ",\"feel\":" + quoted (subdivisionName (style.feel))
+                            + ",\"ticksPerBeat\":" + std::to_string (ticksPerBeat) + "}";
+                   })
                  + "}");
 }
 
@@ -1584,19 +1607,29 @@ std::string walkingBass (const char* progressionText, int fromBar, int toBar, in
 }
 
 std::string improvisedLine (const char* progressionText, int fromBar, int toBar,
-                            const char* chosenScale, const char* scaleStyle, int seed)
+                            const char* chosenScale, const char* lineStyle, int seed)
 {
     const auto parsed = parseProgressionText (progressionText != nullptr ? progressionText : "");
 
     if (! parsed.ok())
         return hold (jsonError (parsed.error));
 
+    const auto& style = core::lineStyleFor (lineStyle != nullptr ? lineStyle : "");
+
     const auto line = core::improvisedLine (*parsed.chart, fromBar, toBar,
                                             chosenScale != nullptr ? chosenScale : "",
-                                            scaleStyle != nullptr ? scaleStyle : "",
+                                            style.key,
                                             static_cast<std::uint32_t> (seed));
 
+    /*  `style` and `scaleStyle` both come back. The first is which style was
+        resolved - an unknown key falls back rather than failing, so a shell
+        that asked for something this version renamed should be able to see
+        what it got. The second is the vocabulary a take must read this line
+        against, and sending it is what stops a shell guessing: hand the reader
+        a different one and half the line colours wrong. */
     return hold ("{\"ok\":true,\"ticksPerBeat\":" + std::to_string (ticksPerBeat)
+                 + ",\"style\":" + quoted (style.key)
+                 + ",\"scaleStyle\":" + quoted (style.scaleStyle)
                  + ",\"notes\":"
                  + jsonArray (line, [] (const WrittenNote& note)
                    {

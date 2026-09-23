@@ -489,6 +489,49 @@ TEST ("the styles come across with a key, a name and a line to read")
     CHECK (contains (json, "\"summary\":"));
 }
 
+TEST ("the line styles come across, each naming a vocabulary and a shape")
+{
+    const auto json = lineStyles();
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"key\":\"bebop\""));
+    CHECK (contains (json, "\"key\":\"modal\""));
+    CHECK (contains (json, "\"name\":\"Bebop\""));
+    CHECK (contains (json, "\"summary\":"));
+
+    // The scale vocabulary crosses, because a shell reading a take back has to
+    // use the same one the writer used or half the line colours wrong.
+    CHECK (contains (json, "\"scaleStyle\":\"bebop\""));
+    CHECK (contains (json, "\"scaleStyle\":\"modes\""));
+
+    CHECK (contains (json, "\"usesApproaches\":true"));
+    CHECK (contains (json, "\"usesApproaches\":false"));
+    CHECK (contains (json, "\"feel\":\"eighths\""));
+    CHECK (contains (json, "\"ticksPerBeat\":24"));
+}
+
+TEST ("a line says which style wrote it, and what to read it against")
+{
+    const auto json = improvisedLine ("| Dm7 | G7 | Cmaj7 |", 0, 2, "", "modal", 7);
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"style\":\"modal\""));
+    CHECK (contains (json, "\"scaleStyle\":\"modes\""));
+    CHECK (contains (json, "\"notes\":["));
+
+    /*  An unknown style still writes a line rather than failing - the promise
+        every catalogue here makes - and says which one it fell back to, so a
+        shell can tell it did not get what it asked for. */
+    const auto unknown = improvisedLine ("| Dm7 | G7 |", 0, 1, "", "no-such-style", 7);
+
+    CHECK (contains (unknown, "\"ok\":true"));
+    CHECK (contains (unknown, "\"style\":\"bebop\""));
+
+    // ...and its control: a style that *is* known is not reported as bebop.
+    CHECK (! contains (improvisedLine ("| Dm7 | G7 |", 0, 1, "", "blues", 7),
+                       "\"style\":\"bebop\""));
+}
+
 TEST ("the grooves come across, with the one this chart asks for named")
 {
     const auto json = grooves ("Medium Swing");
