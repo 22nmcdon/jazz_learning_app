@@ -2384,7 +2384,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
               <span id="colophonEngine"></span>
               <span id="colophonFraming"></span>
               <span id="colophonBuild"></span>
-              <span><a href="https://github.com/22nmcdon/jazz_learning_app" id="repoLink">Source on GitHub</a></span>
+              <span><a href="https://github.com/22nmcdon/jazz_learning_app">Source on GitHub</a></span>
             </div>
           </div>
         </div>
@@ -2634,12 +2634,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         <button class="link-btn" type="button" id="readingButton"
                 aria-expanded="false" aria-controls="readingPanel">Voicings</button>
 
+        <!-- No `.menu-head` here, unlike #menuPanel. That head is a close row
+             for the width at which a panel becomes a bottom sheet and covers
+             its own button; this one hangs *below* its button on .chart-bar at
+             every width, so the button is always there to shut it again. A head
+             here would be markup no media query can reveal - which is exactly
+             what it was until it was deleted. -->
         <div class="menu-panel" id="readingPanel" hidden>
-          <div class="menu-head">
-            <span class="menu-head-title" id="readingTitle">Voicings</span>
-            <button class="close-btn" type="button" id="readingClose" aria-label="Close">&times;</button>
-          </div>
-
           <!-- A list of one-of-these choices is a dropdown, not a stack of
                radios. Six voicing shapes were six rows of a menu for one
                answer, and the pickers that were already selects - the scale
@@ -2685,12 +2686,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         <button class="link-btn" type="button" id="bandButton"
                 aria-expanded="false" aria-controls="bandPanel">The band</button>
 
+        <!-- Likewise no `.menu-head`: this one hangs below its button too. -->
         <div class="menu-panel" id="bandPanel" hidden>
-          <div class="menu-head">
-            <span class="menu-head-title">The band</span>
-            <button class="close-btn" type="button" id="bandClose" aria-label="Close">&times;</button>
-          </div>
-
           <div id="bandBody">
 
 
@@ -2832,7 +2829,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
              scale is the answer to the same question here - it is what every
              note is read against - so it is written in the same place, in the
              same hand. -->
-        <span class="expecting" id="soloExpecting">Expecting <b id="soloScale">-</b></span>
+        <span class="expecting">Expecting <b id="soloScale">-</b></span>
       </div>
 
       <div class="solo-tallies" id="soloTallies" hidden>
@@ -3919,7 +3916,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "helpButton", "helpDialog", "helpClose", "helpTabs",
    "helpTabChart", "helpTabPlaying", "helpTabReading", "helpTabTime", "helpTabBand",
    "helpPanelChart", "helpPanelPlaying", "helpPanelReading", "helpPanelTime", "helpPanelBand",
-   "bandWrap", "bandButton", "bandPanel", "bandClose", "bandBody",
+   "bandWrap", "bandButton", "bandPanel", "bandBody",
    "compPiano", "compSound", "compingNote",
    "compStyle", "compStyleNote", "compBass", "bassSound", "compDrums",
    "transportButton", "transportPanel",
@@ -3934,7 +3931,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "soloBarTally", "soloTakeTally", "soloSummary", "soloSummaryHead", "soloObservations",
    "armTake", "armLabel", "practising",
    "compPlace", "compSummary", "compSummaryHead", "compObservations",
-   "readingWrap", "readingButton", "readingPanel", "readingTitle", "readingClose",
+   "readingWrap", "readingButton", "readingPanel",
    "voicingStyle", "soundBank",
    "scaleStyle", "scaleStyleNote", "chordTabs",
    "saveVoicing", "voicingLibraryNote", "voicingList",
@@ -5700,7 +5697,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
         practice's - so this is a label for what is behind it rather than a
         button that changes what it does. */
     el.readingButton.textContent = soloing ? "Scales" : "Voicings";
-    el.readingTitle.textContent = el.readingButton.textContent;
 
     // ...and it cannot be left open over a mode that has no band in it.
     if (el.bandWrap.hidden) setBandOpen(false);
@@ -8895,8 +8891,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     if (!el.readingPanel.hidden && state.mode === "chords") await drawVoicingList();
   });
 
-  el.readingClose.addEventListener("click", function () { setReadingOpen(false); });
-
   function setBandOpen(open) {
     el.bandPanel.hidden = !open;
     el.bandButton.setAttribute("aria-expanded", open ? "true" : "false");
@@ -8911,8 +8905,6 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     setReadingOpen(false);
     setBandOpen(el.bandPanel.hidden);
   });
-
-  el.bandClose.addEventListener("click", function () { setBandOpen(false); });
 
   function setChartOpen(open) {
     el.chartPanel.hidden = !open;
