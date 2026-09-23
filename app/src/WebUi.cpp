@@ -129,7 +129,7 @@ namespace
         // Solo practice. The take these drive lives in jazz::api, so the app and
         // the browser behave the same way without this shell remembering a thing.
         if (name == "jazzSoloStartTake")     return api::soloStartTake();
-        if (name == "jazzSoloEndTake")       return api::soloEndTake();
+        if (name == "jazzSoloEndTake")       return api::soloEndTake (text (0).c_str());
         if (name == "jazzSoloPlayNote")
             return api::soloPlayNote (number (0), number (1), number (2), number (3));
 

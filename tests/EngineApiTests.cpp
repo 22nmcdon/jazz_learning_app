@@ -467,6 +467,97 @@ TEST ("ending a take hands back the whole thing, bar by bar")
     CHECK (contains (json, "\"observations\":"));
 }
 
+TEST ("a take's placement comes back against the style the shell named")
+{
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "bebop", 4);
+
+    // Four eighths from the downbeat - tick 12 of 24 is the and of the
+    // beat, written out the way this file writes every other wire number.
+    soloPlayNote (62, 0, 0);
+    soloPlayNote (65, 0, 12);
+    soloPlayNote (69, 1, 0);
+    soloPlayNote (72, 1, 12);
+
+    const auto json = soloEndTake ("bebop");
+
+    CHECK (contains (json, "\"placement\":{"));
+    CHECK (contains (json, "\"style\":\"bebop\""));
+    CHECK (contains (json, "\"styleName\":\"Bebop\""));
+    CHECK (contains (json, "\"fit\":100"));
+    CHECK (contains (json, "\"grid\":100"));
+    CHECK (contains (json, "\"phrases\":[{"));
+
+    // The counts a bar has always kept and nothing could see.
+    CHECK (contains (json, "\"onStrongBeats\":"));
+    CHECK (contains (json, "\"chordTonesOnStrongBeats\":"));
+}
+
+TEST ("a take with no style named gets no placement at all")
+{
+    /*  Not a nought and not a reading against whichever style happens to be
+        first. A number needs a standard the player chose, and a shell that
+        named none has not given one. */
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "", 4);
+    soloPlayNote (62, 0, 0);
+    soloPlayNote (65, 0, 12);
+
+    CHECK (contains (soloEndTake (""), "\"placement\":null"));
+}
+
+TEST ("a take with no clock behind it names a style and still has no number")
+{
+    /*  The other silence, and a different one: the style is there, so the
+        reading comes back and says what it would read - it is the fit that
+        has nothing to stand on. A page drawing a nought here would say
+        exactly the thing the engine was careful not to. */
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "bebop", 4);
+    soloPlayNote (62);
+    soloPlayNote (65);
+
+    const auto json = soloEndTake ("bebop");
+
+    CHECK (contains (json, "\"placement\":{"));
+    CHECK (contains (json, "\"fit\":null"));
+    CHECK (contains (json, "\"placed\":0"));
+    CHECK (contains (json, "Nothing was counting"));
+}
+
+TEST ("the placement reads against the metre the take was set up with")
+{
+    /*  The metre comes off the analyser's own options rather than out of a
+        second argument, so a waltz cannot be read as four. In three only the
+        downbeat is strong, which is the whole character of the metre - and
+        `strengthAt` is the one place that knows it. */
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "bebop", 3);
+
+    soloPlayNote (62, 0, 0);   // one - strong in any metre
+    soloPlayNote (65, 1, 0);   // two
+    soloPlayNote (69, 2, 0);   // three - strong in four, not in three
+
+    CHECK (contains (soloEndTake ("bebop"), "\"onStrongBeats\":1"));
+}
+
+TEST ("a placement number is never a mark in the practice record")
+{
+    /*  The rule the record has kept since it was written, and the one that
+        matters most now there are two numbers rather than one: a count beside
+        an earlier count is a fact, a mark beside an earlier mark is a verdict
+        about a person. Nothing on the wire out of the log carries either. */
+    soloStartTake();
+    soloSetBar (0, "Dm7", "", "bebop", 4);
+    soloPlayNote (62, 0, 0);
+    soloEndTake ("bebop");
+
+    const auto reading = practiceReading ("", 0);
+
+    CHECK (! contains (reading, "fit"));
+    CHECK (! contains (reading, "score"));
+}
+
 TEST ("a take with nothing in it says so rather than reporting zero per cent")
 {
     soloStartTake();

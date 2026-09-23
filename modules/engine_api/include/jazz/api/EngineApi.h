@@ -218,7 +218,9 @@ std::string compTake (const char* progressionText, const char* styleRef,
                       per note and no waiting for the rest of it. Read back
                       whether a take is running or not; counted only when one
                       is.
-      soloEndTake     disarm, and hand back the take to read.
+      soloEndTake     disarm, and hand back the take to read - including,
+                      when the shell names a line style, where the take put
+                      its notes against that style's own grid.
 
     A bar's own numbers come back from `soloSetBar`, because clicking a bar is
     how you ask for them.
@@ -260,7 +262,13 @@ std::string soloSetBar (int measureIndex, const char* symbol, const char* chosen
 /** @param beat  negative when the shell has no clock and cannot say where
                   the note fell - which is not the same as the downbeat. */
 std::string soloPlayNote (int midiNote, int beat = -1, int tick = 0, int withPrevious = 0);
-std::string soloEndTake();
+/** @param lineStyle  the `LineStyleDefinition::key` the player chose, which
+                      is what the take's placement is read against. Empty, and
+                      no placement comes back at all - not a nought, and not a
+                      reading against whichever style happens to be first. A
+                      number needs a standard the player picked; see
+                      `LinePlacement.h`. */
+std::string soloEndTake (const char* lineStyle = "");
 
 /*  A practice record, read back.
 

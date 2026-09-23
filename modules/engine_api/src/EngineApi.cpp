@@ -15,6 +15,7 @@
 #include "jazz/core/Comping.h"
 #include "jazz/core/Groove.h"
 #include "jazz/core/LineAnalyzer.h"
+#include "jazz/core/LinePlacement.h"
 #include "jazz/core/LineStyle.h"
 #include "jazz/core/LineWriter.h"
 #include "jazz/core/PracticeLog.h"
@@ -24,6 +25,7 @@
 
 #include <algorithm>
 #include <locale>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -225,6 +227,14 @@ namespace
 
     /** Counts and percentages together: the page shows both, and working the
         percentages out twice on two sides of a bridge is how they disagree. */
+    /** A number the engine may not have. Null rather than zero: nothing played
+        is not nought out of a hundred, and a page drawing a nought would say
+        exactly the thing the engine was careful not to. */
+    std::string orNull (const std::optional<int>& value)
+    {
+        return value.has_value() ? std::to_string (*value) : std::string ("null");
+    }
+
     std::string lineStatsJson (const LineStats& stats)
     {
         return "\"total\":" + std::to_string (stats.total())
@@ -256,13 +266,69 @@ namespace
              + ",\"roots\":" + std::to_string (roots);
     }
 
-    std::string lineBarJson (int measureIndex, const std::string& symbol, const LineStats& stats,
-                             bool neverLeftTheChord = false)
+    /** One bar of a take, whole.
+
+        It takes a `LineBar` rather than a `LineStats` and three loose
+        arguments because the strong-beat counts are on the bar and nothing
+        else can hold them - and because a default of zero for a count would
+        have said "nothing landed on an accented beat" about a bar where
+        plenty had. `LineAnalyzer::barFor` is what answers this mid-take.
+
+        Still words and never points, here as in the engine: where a note sat
+        is not a better or worse note, and none of this reaches `score`.
+    */
+    std::string lineBarJson (const LineBar& bar, const std::string& symbol)
+    /*  The symbol is passed rather than read off the bar because a bar the
+        player has clicked but not played over has one and the bar does not -
+        `barFor` can only report the chord a note was read against. */
     {
-        return "{\"index\":" + std::to_string (measureIndex)
+        return "{\"index\":" + std::to_string (bar.measureIndex)
              + ",\"chord\":" + quoted (symbol)
-             + ",\"neverLeftTheChord\":" + (neverLeftTheChord ? "true" : "false")
-             + "," + lineStatsJson (stats) + "}";
+             + ",\"neverLeftTheChord\":" + (bar.neverLeftTheChord ? "true" : "false")
+             + ",\"onStrongBeats\":" + std::to_string (bar.notesOnStrongBeats)
+             + ",\"chordTonesOnStrongBeats\":" + std::to_string (bar.chordTonesOnStrongBeats)
+             + "," + lineStatsJson (bar.stats) + "}";
+    }
+
+    /** Where a take put its notes, against the line style the player chose.
+
+        Sent whole or not at all. A shell that named no style gets `null`
+        rather than a reading of nothing - the standard is the player's
+        choice, and without one there is nothing here to say.
+    */
+    std::string linePlacementJson (const LinePlacementReading& placement)
+    {
+        return "{\"style\":" + quoted (placement.styleKey)
+             + ",\"styleName\":" + quoted (placement.styleName)
+             + ",\"fit\":" + orNull (placement.fit)
+             + ",\"grid\":" + std::to_string (placement.gridFit)
+             + ",\"phrasing\":" + std::to_string (placement.phraseFit)
+             + ",\"register\":" + std::to_string (placement.registerFit)
+             + ",\"onsets\":" + std::to_string (placement.onsets)
+             + ",\"placed\":" + std::to_string (placement.onsetsPlaced)
+             + ",\"onTheGrid\":" + std::to_string (placement.onsetsOnTheGrid)
+             + ",\"notes\":" + std::to_string (placement.notes)
+             + ",\"inRegister\":" + std::to_string (placement.notesInRegister)
+             + ",\"onStrongBeats\":" + std::to_string (placement.notesOnStrongBeats)
+             + ",\"chordTonesOnStrongBeats\":" + std::to_string (placement.chordTonesOnStrongBeats)
+             + ",\"chromaticsOnTheBeat\":" + std::to_string (placement.chromaticsOnTheBeat)
+             + ",\"summary\":" + quoted (placement.summary)
+             + ",\"phrases\":" + jsonArray (placement.phrases, [] (const LinePhrase& phrase)
+               {
+                   return "{\"bar\":" + std::to_string (phrase.measureIndex)
+                        + ",\"beat\":" + std::to_string (phrase.startsAt.beat)
+                        + ",\"tick\":" + std::to_string (phrase.startsAt.tick)
+                        // How a player counts it aloud, so a panel does not
+                        // have to work "2 and" back out of a tick.
+                        + ",\"at\":" + quoted (phrase.startsAt.describe())
+                        + ",\"notes\":" + std::to_string (phrase.onsets)
+                        + ",\"overBy\":" + std::to_string (phrase.overBy)
+                        + ",\"onAStyleTick\":" + (phrase.startedOnAStyleTick ? "true" : "false")
+                        + "}";
+               })
+             + ",\"observations\":" + jsonArray (placement.observations,
+                                                  [] (const std::string& line) { return quoted (line); })
+             + "}";
     }
 
     /** A chord in the line, read as a chord.
@@ -1757,13 +1823,6 @@ namespace
                     + "}}";
     }
 
-    /** A number the engine may not have. Null rather than zero: nothing played
-        is not nought out of a hundred, and a page drawing a nought would say
-        exactly the thing the engine was careful not to. */
-    std::string orNull (const std::optional<int>& value)
-    {
-        return value.has_value() ? std::to_string (*value) : std::string ("null");
-    }
 }
 
 std::string compHit (const char* progressionText, const char* styleRef,
@@ -1877,8 +1936,7 @@ std::string soloSetBar (int measureIndex, const char* symbol, const char* chosen
     // Clicking a bar is how the player asks what they have done on it, so the
     // answer comes back with the move rather than needing a call of its own.
     return hold ("{\"ok\":true,\"taking\":" + std::string (analyzer.isTaking() ? "true" : "false")
-                 + ",\"bar\":" + lineBarJson (measureIndex, chord->toString(),
-                                              analyzer.statsForBar (measureIndex))
+                 + ",\"bar\":" + lineBarJson (analyzer.barFor (measureIndex), chord->toString())
                  + ",\"take\":{" + lineStatsJson (analyzer.stats()) + "}}");
 }
 
@@ -1949,20 +2007,38 @@ std::string soloPlayNote (int midiNote, int beat, int tick, int withPrevious)
                  + ",\"voicing\":" + (chordNow.has_value() ? lineChordJson (*chordNow) : "null")
                  + ",\"resolved\":" + names (resolved)
                  + ",\"stranded\":" + names (stranded)
-                 + ",\"bar\":" + lineBarJson (note.measureIndex, note.chordSymbol,
-                                              analyzer.statsForBar (note.measureIndex))
+                 + ",\"bar\":" + lineBarJson (analyzer.barFor (note.measureIndex), note.chordSymbol)
                  + ",\"bars\":" + jsonArray (changed, [&analyzer] (const LineNote& touched)
-                   { return lineBarJson (touched.measureIndex, touched.chordSymbol,
-                                         analyzer.statsForBar (touched.measureIndex)); })
+                   { return lineBarJson (analyzer.barFor (touched.measureIndex),
+                                         touched.chordSymbol); })
                  + ",\"take\":{" + lineStatsJson (analyzer.stats()) + "}}");
 }
 
-std::string soloEndTake()
+std::string soloEndTake (const char* lineStyle)
 {
     auto& analyzer = soloTake();
     analyzer.endTake();
 
     const auto take = analyzer.summary();
+
+    /*  Where the take put its notes, against the style the player chose off
+        the dock. Empty means they chose none, and a take with no chosen
+        standard behind it gets no placement at all rather than a reading of
+        the first style in the catalogue - which would be the engine inventing
+        the standard and then marking somebody against it, the exact thing
+        `docs/SOLO_PRACTICE.md` closed this question over.
+
+        The metre comes off the analyser's own options rather than out of a
+        new argument: the shell told it once, in `soloSetBar`, and two copies
+        of the metre is two chances to disagree about which beats are strong.
+    */
+    const std::string styleKey = lineStyle != nullptr ? lineStyle : "";
+
+    const auto placement = styleKey.empty()
+                             ? std::string ("null")
+                             : linePlacementJson (readLinePlacement (analyzer.notes(),
+                                                                     lineStyleFor (styleKey),
+                                                                     analyzer.currentOptions().beatsPerBar));
 
     std::vector<std::string> symbols;
 
@@ -1974,6 +2050,7 @@ std::string soloEndTake()
     coverageOf (symbols, qualities, roots);
 
     return hold ("{\"ok\":true,\"taking\":false" + coverageJson (qualities, roots)
+                 + ",\"placement\":" + placement
                  + std::string (",\"summary\":") + quoted (take.summary)
                  + ",\"observations\":" + jsonArray (take.observations,
                                                      [] (const std::string& line) { return quoted (line); })
@@ -1987,8 +2064,7 @@ std::string soloEndTake()
                  + ",\"chords\":" + jsonArray (take.chords, [] (const LineChord& chord)
                                                 { return lineChordJson (chord); })
                  + ",\"bars\":" + jsonArray (take.bars, [] (const LineBar& bar)
-                   { return lineBarJson (bar.measureIndex, bar.chordSymbol, bar.stats,
-                                         bar.neverLeftTheChord); })
+                   { return lineBarJson (bar, bar.chordSymbol); })
                  + "}");
 }
 

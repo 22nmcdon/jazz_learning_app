@@ -573,6 +573,16 @@ public:
     */
     void setOptions (Options newOptions);
 
+    /** What notes are being read against now.
+
+        So that a caller who set the options does not have to keep a second
+        copy of them to answer a later question - the metre in particular,
+        which a placement reading needs and which the shell already told this
+        object once. Two copies of the metre is two chances to disagree about
+        which beats are strong.
+    */
+    const Options& currentOptions() const noexcept { return options; }
+
     //==============================================================================
     void startTake();
     void endTake();

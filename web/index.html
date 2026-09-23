@@ -2380,7 +2380,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           <div class="menu-group">
             <span class="menu-title">About</span>
             <div class="colophon">
-              <span>Engine: <code>modules/core_engine</code> - 571 unit tests, no JUCE.</span>
+              <span>Engine: <code>modules/core_engine</code> - 576 unit tests, no JUCE.</span>
               <span id="colophonEngine"></span>
               <span id="colophonFraming"></span>
               <span id="colophonBuild"></span>
@@ -5927,7 +5927,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   }
 
   async function stopTake() {
-    var result = await call("jazzSoloEndTake", [], []);
+    /*  The line style goes over with the disarm, because it is what the
+        take's placement is read against. Static it is still sent: the engine
+        answers with a placement that has no number in it and says why, which
+        is a truer thing for the panel to draw than nothing at all. */
+    var result = await call("jazzSoloEndTake", ["string"], [state.lineStyle || ""]);
 
     solo.armed = false;
     el.armTake.setAttribute("aria-pressed", "false");

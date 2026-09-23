@@ -239,9 +239,9 @@ JAZZ_EXPORT const char* jazzSoloPlayNote (int midiNote, int beat, int tick, int 
     return hold (jazz::api::soloPlayNote (midiNote, beat, tick, withPrevious));
 }
 
-JAZZ_EXPORT const char* jazzSoloEndTake()
+JAZZ_EXPORT const char* jazzSoloEndTake (const char* lineStyle)
 {
-    return hold (jazz::api::soloEndTake());
+    return hold (jazz::api::soloEndTake (orEmpty (lineStyle)));
 }
 
 JAZZ_EXPORT const char* jazzPracticeReading (const char* history, int today)
