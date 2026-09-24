@@ -808,6 +808,86 @@ try {
   check("the voicing shape has no say over a single note",
         await page.locator("[data-mode='chords']").first().isHidden());
 
+  /*  The line says what it drew on.
+
+      Part of what it plays is quoted from a catalogue of documented devices
+      rather than generated, and this app explains every substitution it offers
+      rather than just making one - a line it could not explain would be the
+      one thing here arriving from nowhere. Pressed a few times because which
+      phrases quote is a weighted draw: over one bar of Dm7 some lines are
+      written from atoms and credit nobody, which is correct. */
+  let credited = "";
+
+  for (let go = 0; go < 6 && !credited; go++) {
+    await page.waitForTimeout(250);
+    await page.locator("#showVoicing").click();
+    await page.waitForTimeout(250);
+
+    const said = await lineShown();
+
+    if (said.includes("Quoting ")) credited = said;
+  }
+
+  check(`a line names what it quoted (${credited.split("Quoting ")[1] || "never quoted"})`,
+        credited.includes("Quoting "));
+
+  /*  And the negative control, which is the half that matters: a chart of
+      chords no lick is written over still writes a line, and credits nobody.
+      A page that always found something to credit would pass the check above
+      and be inventing provenance, which is the one thing a catalogue carrying
+      attributions must never do. */
+  /*  And the negative control, which is the half that matters: a chart of
+      chords no lick is written over still writes a line, and credits nobody.
+      A page that always found something to credit would pass the check above
+      while inventing provenance, which is the one thing a catalogue carrying
+      attributions must never do.
+
+      On a page of its own, because the alternative is editing this one's chart
+      and putting it back - and `#progression` holds what was last *typed*
+      rather than what is on the stand, so "putting it back" quietly left the
+      main page on a four-bar tune and a loop check three hundred lines later
+      failed instead. A control that has to mutate shared state is a control
+      that will break something else. */
+  {
+    const plain = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+
+    await plain.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await plain.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await plain.locator("#helpDialog[open]").count()) await plain.locator("#helpClose").click();
+
+    await plain.locator("#modeSolo").click();
+    if (await plain.locator("#helpDialog[open]").count()) await plain.locator("#helpClose").click();
+
+    await plain.locator("#chartButton").click();
+    await plain.locator("#editToggle").click();
+    await plain.fill("#progression", "| Cdim7 | Csus4 | C+ | CmMaj7 |");
+    await plain.dispatchEvent("#progression", "input");
+
+    await plain.waitForFunction(
+      () => /dim/.test((document.querySelector("#systems .chord") || {}).textContent || ""),
+      null, { timeout: 10000 });
+
+    let uncredited = true;
+    let wrote = false;
+
+    for (let go = 0; go < 4; go++) {
+      await plain.waitForTimeout(250);
+      await plain.locator("#showVoicing").click();
+      await plain.waitForTimeout(400);
+
+      const said = await plain.evaluate(() =>
+        document.querySelector("#soloAgainst").textContent);
+
+      if (/^[A-G]/.test(said)) wrote = true;
+      if (said.includes("Quoting ")) uncredited = false;
+    }
+
+    check("and still writes a line where the catalogue has nothing", wrote);
+    check("crediting nobody, rather than the nearest thing it had", uncredited);
+
+    await plain.close();
+  }
+
   /*  In time, the line stops being a demo and joins the band.
 
       What is asserted is that pressing it starts the clock and says the line

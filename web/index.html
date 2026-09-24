@@ -10191,7 +10191,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       moves every press, so pressing again is another line rather than the same
       one.
   */
-  var line = { seed: 1, timers: [], plan: null };
+  var line = { seed: 1, timers: [], plan: null, lastPlayed: "" };
 
   function stopTheLine() {
     line.timers.forEach(function (timer) { window.clearTimeout(timer); });
@@ -10228,15 +10228,60 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           same honest inequality the click already has. What matters is that
           the *position* comes from the transport's own `barStart`: re-anchored
           every bar, rather than one timer measured from a button press. */
+      /*  How long it rings. A quoted note carries the source's own length -
+          a held quarter, a triplet, a crush - and a lick played in flat
+          eighths is not that lick, which is the half the research says
+          matters most. An engine older than this page sends no length, and
+          then it is an eighth as it always was. */
+      var ticks = typeof note.length === "number" && note.length > 0
+                    ? note.length : (line.plan.ticksPerBeat || 24) / 2;
+      var rings = (ticks / (line.plan.ticksPerBeat || 24)) * secondsPerBeatNow;
+
       bookVisual(when, function () {
         if (!transport.running || line.plan === null) return;
 
         playNote(note.midi, 0.7);
-        flashKey(note.midi, note.colour, Math.round(secondsPerBeatNow * 460));
-        window.setTimeout(function () { stopNote(note.midi, 0.08); },
-                          secondsPerBeatNow * 440);
+        flashKey(note.midi, note.colour, Math.round(rings * 1000 * 1.05));
+        window.setTimeout(function () { stopNote(note.midi, 0.08); }, rings * 900);
       });
     });
+  }
+
+  /** Says what the line quoted, when it quoted anything.
+
+      **Feature-detected on the data, never on a call name.** Nothing new was
+      added to `ENGINE_CALLS` for this - the line already had a call - and the
+      boot check tests that a call exists, never what shape its answer has. So
+      an engine older than this page answers without `licks` and says nothing,
+      rather than drawing an empty credit. Same move the comping-style editor
+      makes against `compStyles()`' `slots`.
+
+      Why say it at all: this is a teaching app, and it explains every
+      substitution it offers rather than just making one. A line it cannot
+      explain would be the one thing here that arrives from nowhere. And the
+      research is candid that three of its entries are assembled from
+      documented devices rather than quoted, so the page is candid too - a
+      credit that overstates itself is worse than none.
+  */
+  function creditTheLine(result) {
+    var credits = Array.isArray(result.licks) ? result.licks : [];
+
+    if (!credits.length) return;
+
+    var names = credits.map(function (one) { return one.attribution; })
+                       .filter(function (name) { return name; });
+
+    if (!names.length) return;
+
+    var said = names.length === 1 ? names[0]
+             : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+
+    var assembled = credits.some(function (one) { return one.source === "composite"; });
+
+    el.soloAgainst.appendChild(document.createTextNode(
+      " Quoting " + said
+      + (assembled ? ", assembled from documented devices rather than quoted note for note."
+                   : ".")));
   }
 
   async function showMeALine(chord) {
@@ -10264,14 +10309,35 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     var next = chordAt(from + 1);
     var to = next && next !== chordAt(from) ? from + 1 : from;
 
-    line.seed = (line.seed + 1) % 1000;
+    /*  Ask again when the answer is the one you just heard.
 
-    var result = await call("jazzImprovisedLine",
-                            ["string", "number", "number", "string", "string", "number"],
-                            [state.progression, from, to, soloChosenScale(), state.lineStyle,
-                             line.seed]);
+        Pressing this twice should give you something else, and over one or two
+        bars it stopped reliably doing so once part of the line came from a
+        catalogue: two seeds draw the same lick over the same chord and the
+        same figure comes back, note for note. Bumping the seed a few times is
+        the cheap fix and the honest one - the engine is reproducible on
+        purpose, so "not that one again" is the shell's question to ask rather
+        than a thing to build into the draw. Four goes, then take what comes:
+        a bar that only has one line in it should still give you the line. */
+    var result = null;
+    var played = "";
 
-    if (result === null || !result.ok || !result.notes.length) return;
+    for (var attempt = 0; attempt < 4; attempt++) {
+      line.seed = (line.seed + 1) % 1000;
+
+      result = await call("jazzImprovisedLine",
+                          ["string", "number", "number", "string", "string", "number"],
+                          [state.progression, from, to, soloChosenScale(), state.lineStyle,
+                           line.seed]);
+
+      if (result === null || !result.ok || !result.notes.length) return;
+
+      played = result.notes.map(function (note) { return note.name; }).join(" ");
+
+      if (played !== line.lastPlayed) break;
+    }
+
+    line.lastPlayed = played;
 
     el.soloNote.removeAttribute("data-colour");
     el.soloNote.textContent = "";
@@ -10285,6 +10351,8 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     el.soloAgainst.textContent = result.notes.map(function (note) { return note.name; }).join(" ")
                                + ". Play it back and the take will read it.";
+
+    creditTheLine(result);
 
     ensureNotesVisible(result.notes.map(function (note) { return note.midi; }));
 
