@@ -1,6 +1,8 @@
 #pragma once
 
+#include "jazz/core/Chart.h"
 #include "jazz/core/ChordSymbol.h"
+#include "jazz/core/LineStyle.h"
 #include "jazz/core/Rhythm.h"
 
 #include <string>
@@ -230,6 +232,59 @@ struct LickDefinition
 
 /** Every lick there is, in catalogue order. */
 const std::vector<LickDefinition>& licks();
+
+//==============================================================================
+/** A lick, and the place in a chart it fits.
+
+    The lick itself is borrowed rather than copied - the catalogue is a
+    function-local `static` that outlives every caller, the same lifetime
+    `compStyleFor` hands out.
+*/
+struct LickMatch
+{
+    const LickDefinition* lick {};
+
+    /** Where it starts, in ticks from the downbeat of the range's first bar.
+        A lick with a pickup still starts here; its own notes reach back. */
+    int startTick {};
+
+    /** The pitch class its first chord's root lands on, which is the chart's
+        rather than the lick's. The octave is the caller's to choose, for the
+        reason `voicingFromShape` gives: a shape has a register and a degree
+        does not. */
+    int rootPitchClass {};
+};
+
+/** Every place in a range of bars where a lick of this style fits.
+
+    **What a lick is keyed on is a chord-sequence shape** - the qualities in
+    order and the root offsets between them - which is `VoicingShape` one
+    dimension up and transposes for the same reason. D E F A over Dm7 is the
+    same lick as E F# G B over Em7, and neither is "the lick in D".
+
+    Three rules, and the third is the one worth stating:
+
+      - the qualities line up, one chart chord to one lick chord;
+      - the offsets between the roots line up, which is what makes it a
+        progression rather than a key;
+      - the **boundaries** line up. A lick's chord has to last exactly as long
+        as the chart's, so a figure written two beats to a chord does not get
+        stretched over a bar apiece - except the **last**, which may be held
+        longer, because a chart sitting on the tonic after the lick has landed
+        is still the tonic it landed on.
+
+    Consecutive slots of the same chord are merged before any of that, so two
+    bars of Dm7 are one span of Dm7 rather than two that a two-bar lick would
+    fail to match.
+
+    Returns them all, in the order they occur, rather than choosing: which one
+    to play is a question about the line being written and belongs to the
+    writer.
+*/
+std::vector<LickMatch> licksFitting (const Chart& chart,
+                                     const LineStyleDefinition& style,
+                                     int fromBar,
+                                     int toBar);
 
 /** The lick with this key, or the first one when the key is unknown.
 

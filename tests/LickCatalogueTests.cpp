@@ -1,4 +1,5 @@
 #include "TestFramework.h"
+#include "jazz/core/Chart.h"
 #include "jazz/core/LickCatalogue.h"
 #include "jazz/core/LineStyle.h"
 
@@ -286,4 +287,204 @@ TEST ("the catalogue's composites weigh less than its documented devices")
     }
 
     CHECK (weightOf ("L08") < weightOf ("L01"));
+}
+
+//==============================================================================
+//  The matcher.
+
+namespace
+{
+    Chart chartOf (const std::string& progression)
+    {
+        const auto parsed = parseProgressionText (progression);
+        CHECK (parsed.ok());
+        return *parsed.chart;
+    }
+
+    bool found (const std::vector<LickMatch>& matches, const char* key)
+    {
+        return std::any_of (matches.begin(), matches.end(),
+                            [&key] (const LickMatch& match)
+                            { return match.lick->key == key; });
+    }
+
+    std::vector<LickMatch> matchesOn (const std::string& progression, const char* styleKey = "bebop")
+    {
+        const auto chart = chartOf (progression);
+        return licksFitting (chart, lineStyleFor (styleKey), 0, chart.measureCount() - 1);
+    }
+}
+
+TEST ("a ii-V-I offers the ii-V-I licks")
+{
+    const auto matches = matchesOn ("| Dm7 | G7 | Cmaj7 | Cmaj7 |");
+
+    CHECK (! matches.empty());
+    CHECK (found (matches, "L01"));
+    CHECK (found (matches, "L02"));
+    CHECK (found (matches, "L03"));
+
+    // And not the ones written over other progressions.
+    CHECK (! found (matches, "L05"));   // the minor ii-V-i
+    CHECK (! found (matches, "L17"));   // the turnaround
+}
+
+TEST ("a chord's quality is not enough - the offsets between them have to line up")
+{
+    /*  The negative control, and the one that matters most here: a matcher
+        that always finds something is satisfied by a function that always says
+        yes. The qualities below are exactly a ii-V-I's - minor, dominant,
+        major - and the roots are wrong, so nothing written for a ii-V-I may
+        match. This is the whole of what "keyed on a chord-sequence shape"
+        means: a progression, not a bag of qualities. */
+    const auto matches = matchesOn ("| Dm7 | Ab7 | Emaj7 | Emaj7 |");
+
+    CHECK (! found (matches, "L01"));
+    CHECK (! found (matches, "L02"));
+    CHECK (! found (matches, "L03"));
+}
+
+TEST ("the same lick is found in every key, and says which")
+{
+    /*  Twelve keys, because a lick that only works in C is a line. The match
+        reports the chart's root rather than the lick's, which is what lets the
+        writer sound it where the chart actually is. */
+    for (auto step = 0; step < 12; ++step)
+    {
+        const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 |").transposed (step);
+        const auto matches = licksFitting (chart, lineStyleFor ("bebop"), 0, 3);
+
+        CHECK (found (matches, "L01"));
+
+        for (const auto& match : matches)
+            if (match.lick->key == "L01")
+            {
+                CHECK_EQ (match.startTick, 0);
+                CHECK_EQ (match.rootPitchClass, chart.chordAt (0)->root());
+            }
+    }
+}
+
+TEST ("a lick written two beats to a chord needs two beats to a chord")
+{
+    /*  The boundary rule. L17's turnaround is written over | C6 A7b9 | Dm7 G7 |
+        and L01's ii-V-I over a bar apiece, and neither may be stretched or
+        squeezed into the other's shape - a figure whose second half arrives a
+        bar late is not that figure. */
+    const auto turnaround = matchesOn ("| C6 A7 | Dm7 G7 | Cmaj7 | Cmaj7 |");
+
+    CHECK (found (turnaround, "L17"));
+    CHECK (! found (turnaround, "L01"));
+
+    const auto barApiece = matchesOn ("| Dm7 | G7 | Cmaj7 | Cmaj7 |");
+
+    CHECK (found (barApiece, "L01"));
+    CHECK (! found (barApiece, "L17"));
+}
+
+TEST ("a chord held on past the lick still counts, and one held on inside it does not")
+{
+    /*  The one asymmetry, and the reason for it: a chart sitting on the tonic
+        after the lick has landed is still the tonic it landed on, so the last
+        chord may be longer. A chord in the *middle* that outlasts what the
+        lick expects would put every note after it in the wrong place. */
+    CHECK (found (matchesOn ("| Dm7 | G7 | Cmaj7 | Cmaj7 |"), "L01"));
+    CHECK (found (matchesOn ("| Dm7 | G7 | Cmaj7 |"), "L01"));
+
+    // The V held for two bars: the I now arrives a bar after L01 expects it.
+    CHECK (! found (matchesOn ("| Dm7 | G7 | G7 | Cmaj7 |"), "L01"));
+}
+
+TEST ("two bars of one chord are one chord, not two")
+{
+    /*  L15 and L16 are written across two bars of a single chord, and a chart
+        writes that as two measures. Without merging the runs they would match
+        nothing at all - which is a bug that looks exactly like a lick nobody
+        ever draws. */
+    CHECK (found (matchesOn ("| Dm7 | Dm7 |", "modal"), "L15"));
+    CHECK (found (matchesOn ("| Cmaj7 | Cmaj7 |"), "L16"));
+
+    CHECK (! found (matchesOn ("| Dm7 |", "modal"), "L15"));
+}
+
+TEST ("a lick is only offered to a style that plays it")
+{
+    // L12's blues figure is tagged blues, and bebop must not be handed it.
+    CHECK (found (matchesOn ("| C7 | C7 | C7 | C7 |", "blues"), "L12"));
+    CHECK (! found (matchesOn ("| C7 | C7 | C7 | C7 |", "bebop"), "L12"));
+}
+
+TEST ("a lick with a pickup is not offered the first bar of a line")
+{
+    /*  There is nothing in front of it to lead in from. L12 leads in on the
+        and of four, so it may start on the second chord of a blues and not on
+        the first. */
+    const auto matches = matchesOn ("| C7 | C7 | F7 | C7 |", "blues");
+
+    CHECK (! matches.empty());
+
+    for (const auto& match : matches)
+        if (match.lick->startsOnAPickup)
+            CHECK (match.startTick >= ticksPerBeat);
+}
+
+TEST ("a lick is not laid across a bar with nothing in it")
+{
+    /*  An empty bar breaks the runs up and is then dropped, so the runs either
+        side sit next to each other in the list while being a bar apart in the
+        music. Without asking they were contiguous, L01's V would land on the
+        chart's I. */
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 | Cmaj7 |");
+
+    auto withAHole = chart;
+    withAHole.measures[1].slots.clear();
+
+    const auto matches = licksFitting (withAHole, lineStyleFor ("bebop"), 0, 3);
+
+    CHECK (! found (matches, "L01"));
+}
+
+TEST ("a chart nothing fits offers nothing rather than the nearest thing")
+{
+    /*  The other half of the negative control. A catalogue that falls back to
+        something when it has nothing is worse than one that stays quiet: the
+        generator has a perfectly good answer of its own for a bar no lick was
+        written for.
+
+        Reaching a chart nothing fits takes four unusual chords, and that is
+        worth knowing rather than hiding: almost any dominant, major, minor or
+        half-diminished bar will find *something*, because the single-chord
+        licks are written over a quality rather than a progression. The four
+        below are the qualities the catalogue does not reach at all - see the
+        coverage test beneath this one. */
+    CHECK (matchesOn ("| Cdim7 | Csus4 | C+ | CmMaj7 |").empty());
+}
+
+TEST ("the catalogue reaches four of the eight chord qualities, and says which")
+{
+    /*  Written down rather than assumed, because the gap is real and a later
+        pass filling it should have to change a test that states the old shape.
+        The research's Part B is a ii-V catalogue: it has nothing over a
+        diminished, suspended, augmented or minor-major chord, so a tune built
+        on those gets a generated line and no quotes. */
+    std::set<ChordQuality> covered;
+
+    for (const auto& lick : licks())
+        for (const auto& chord : lick.chords)
+            covered.insert (chord.quality);
+
+    CHECK_EQ (covered.size(), std::size_t { 4 });
+    CHECK (covered.count (ChordQuality::major) == 1);
+    CHECK (covered.count (ChordQuality::minor) == 1);
+    CHECK (covered.count (ChordQuality::dominant) == 1);
+    CHECK (covered.count (ChordQuality::halfDiminished) == 1);
+}
+
+TEST ("a range outside the chart is empty rather than a crash")
+{
+    const auto chart = chartOf ("| Dm7 | G7 | Cmaj7 |");
+
+    CHECK (licksFitting (chart, lineStyleFor ("bebop"), -1, 2).empty());
+    CHECK (licksFitting (chart, lineStyleFor ("bebop"), 2, 1).empty());
+    CHECK (! licksFitting (chart, lineStyleFor ("bebop"), 0, 99).empty());
 }

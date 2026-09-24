@@ -786,6 +786,190 @@ const std::vector<LickDefinition>& licks()
     return catalogue;
 }
 
+//==============================================================================
+namespace
+{
+    /** One chord of the chart, with where it starts and how long it holds.
+
+        Consecutive slots of the same chord are merged on the way in, which is
+        what lets a lick written across two bars of one chord find two bars of
+        one chord. Without it the chart offers a Dm7 and then another Dm7, and
+        a two-bar lick matches neither.
+    */
+    struct ChartChord
+    {
+        ChordSymbol chord;
+        int startTick {};
+        int lengthTicks {};
+
+        /** Where each slot this run swallowed began.
+
+            A run is the *chord*, and these are the places a lick may start
+            inside it. Four bars of C7 are one chord - which is what lets a
+            two-bar lick match them - and also four places a blues figure could
+            begin, which merging alone would have thrown away: with one start
+            per run a lick with a pickup could never be played at all over a
+            blues that opens on the tonic.
+        */
+        std::vector<int> slotStarts;
+    };
+
+    std::vector<ChartChord> chordRunsIn (const Chart& chart, int fromBar, int toBar)
+    {
+        std::vector<ChartChord> runs;
+
+        const auto beatsPerBar = std::max (1, chart.timeSignature.numerator);
+        auto at = 0;
+
+        for (auto bar = fromBar; bar <= toBar; ++bar)
+        {
+            const auto& measure = chart.measures[static_cast<std::size_t> (bar)];
+
+            if (measure.isEmpty())
+            {
+                /*  A bar with nothing in it is a hole rather than a chord, and
+                    a lick may not be laid across one - so the run before it
+                    ends here and the next one starts after. */
+                at += beatsPerBar * ticksPerBeat;
+                runs.push_back ({});   // a marker, dropped below
+                continue;
+            }
+
+            for (const auto& slot : measure.slots)
+            {
+                const auto length = std::max (1, slot.beats) * ticksPerBeat;
+
+                if (! runs.empty()
+                    && runs.back().lengthTicks > 0
+                    && runs.back().chord.toString() == slot.chord.toString())
+                {
+                    runs.back().lengthTicks += length;
+                    runs.back().slotStarts.push_back (at);
+                }
+                else
+                {
+                    runs.push_back ({ slot.chord, at, length, { at } });
+                }
+
+                at += length;
+            }
+        }
+
+        // The hole markers have done their job of breaking the runs up.
+        runs.erase (std::remove_if (runs.begin(), runs.end(),
+                                    [] (const ChartChord& run) { return run.lengthTicks == 0; }),
+                    runs.end());
+
+        return runs;
+    }
+
+    bool playsThisStyle (const LickDefinition& lick, const std::string& styleKey)
+    {
+        return std::find (lick.styles.begin(), lick.styles.end(), styleKey) != lick.styles.end();
+    }
+
+    /** Semitones from @p from up to @p to, 0-11. */
+    int offsetBetween (PitchClass from, PitchClass to)
+    {
+        return ((to - from) % 12 + 12) % 12;
+    }
+
+    /** Whether the lick's chords line up with the chart's from @p at.
+
+        @param firstLength  how much of `runs[at]` is left from where the lick
+                            starts. A lick beginning part-way through a long
+                            run gets the remainder rather than the whole thing,
+                            which is what stops a figure written over one bar
+                            of C7 claiming to fit the four bars of it.
+    */
+    bool fitsFrom (const LickDefinition& lick, const std::vector<ChartChord>& runs,
+                   std::size_t at, int firstLength)
+    {
+        if (at + lick.chords.size() > runs.size())
+            return false;
+
+        const auto firstRoot = runs[at].chord.root();
+
+        for (std::size_t i = 0; i < lick.chords.size(); ++i)
+        {
+            const auto& wanted = lick.chords[i];
+            const auto& found = runs[at + i];
+
+            /*  Contiguous, which has to be asked rather than assumed: a bar
+                with nothing in it breaks the runs up and is then dropped, so
+                two runs either side of a hole sit next to each other in this
+                vector while being a bar apart in the music. A lick laid across
+                that would have its second half a bar late. */
+            if (i > 0 && found.startTick != runs[at + i - 1].startTick
+                                          + runs[at + i - 1].lengthTicks)
+                return false;
+
+            if (found.chord.quality() != wanted.quality)
+                return false;
+
+            if (offsetBetween (firstRoot, found.chord.root()) != ((wanted.rootOffset % 12) + 12) % 12)
+                return false;
+
+            /*  The boundaries, and the one place the last chord is treated
+                differently: a chart that holds the tonic on after the lick has
+                landed is still the tonic it landed on, but a chord in the
+                middle that outlasts what the lick expects would put every note
+                after it in the wrong place. */
+            const auto isLast = i + 1 == lick.chords.size();
+            const auto holdsFor = i == 0 ? firstLength : found.lengthTicks;
+
+            if (isLast ? holdsFor < wanted.lengthTicks
+                       : holdsFor != wanted.lengthTicks)
+                return false;
+        }
+
+        return true;
+    }
+}
+
+std::vector<LickMatch> licksFitting (const Chart& chart, const LineStyleDefinition& style,
+                                     int fromBar, int toBar)
+{
+    std::vector<LickMatch> found;
+
+    if (fromBar < 0 || toBar < fromBar || chart.measureCount() == 0)
+        return found;
+
+    toBar = std::min (toBar, chart.measureCount() - 1);
+
+    const auto runs = chordRunsIn (chart, fromBar, toBar);
+
+    for (std::size_t at = 0; at < runs.size(); ++at)
+        for (const auto startTick : runs[at].slotStarts)
+            for (const auto& lick : licks())
+            {
+                if (! playsThisStyle (lick, style.key))
+                    continue;
+
+                /*  A pickup reaches back before the first chord, so a lick
+                    that has one cannot start at the very top of the range -
+                    there is no bar in front of it to lead in from. */
+                if (lick.startsOnAPickup && startTick < ticksPerBeat)
+                    continue;
+
+                const auto leftOfThisChord = runs[at].startTick + runs[at].lengthTicks - startTick;
+
+                if (! fitsFrom (lick, runs, at, leftOfThisChord))
+                    continue;
+
+                found.push_back ({ &lick, startTick, runs[at].chord.root() });
+            }
+
+    /*  In the order they occur, which the loops above do not give: they walk
+        run by run and then inside each run, so a lick starting late in one run
+        can be listed before one starting early in the next. */
+    std::stable_sort (found.begin(), found.end(),
+                      [] (const LickMatch& a, const LickMatch& b)
+                      { return a.startTick < b.startTick; });
+
+    return found;
+}
+
 const LickDefinition& lickFor (std::string_view key)
 {
     const auto& catalogue = licks();
