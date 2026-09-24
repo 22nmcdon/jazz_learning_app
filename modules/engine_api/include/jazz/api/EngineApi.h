@@ -158,6 +158,26 @@ std::string walkingBass (const char* progressionText, int fromBar, int toBar, in
     the line's own colours and the reading's the same. A note comes back with
     the colour `LineAnalyzer` will give it, which is what lets a shell draw a
     written line in the same ink as a played one.
+
+    **A line says what it drew on.** Part of it is quoted from a catalogue of
+    documented devices rather than generated note by note, so each note carries
+    the `lick` it came from (empty when generated) and the reply carries a
+    `licks` array naming each one once - its name, who to credit, how solid the
+    credit is, and how many notes it contributed. A shell can then say "that
+    was the Barry Harris line" without holding a copy of the catalogue to look
+    it up in, which is the drift `scaleStyles()` is on this wire to prevent.
+
+    **This call gained no new name, so the boot check cannot see the change** -
+    it tests that a call exists, never what shape its answer has. A shell that
+    wants the attribution must therefore **feature-detect on the data**: offer
+    it when the reply carries `licks`, exactly as the comping-style editor is
+    offered only when `compStyles()`' answer carries a style's `slots`. An
+    older cached engine simply sends no such key, and a page that checked for a
+    name instead would show an empty credit line.
+
+    A note also carries its `length` in ticks. A generated note is one step of
+    the style's grid; a quoted one is the source's own rhythm, which is at
+    least half of what makes a lick that lick.
 */
 std::string improvisedLine (const char* progressionText, int fromBar, int toBar,
                             const char* chosenScale, const char* lineStyle, int seed);

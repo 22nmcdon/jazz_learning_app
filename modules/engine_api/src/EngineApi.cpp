@@ -14,6 +14,7 @@
 #include "jazz/core/ChordIdentifier.h"
 #include "jazz/core/Comping.h"
 #include "jazz/core/Groove.h"
+#include "jazz/core/LickCatalogue.h"
 #include "jazz/core/LineAnalyzer.h"
 #include "jazz/core/LinePlacement.h"
 #include "jazz/core/LineStyle.h"
@@ -1672,6 +1673,64 @@ std::string walkingBass (const char* progressionText, int fromBar, int toBar, in
                  + "}");
 }
 
+namespace
+{
+    /** What a line drew on, each named once, in the order they were played.
+
+        Sent alongside the notes rather than worked out from them, because
+        naming a lick means having its name, its attribution and how much
+        weight to put on it - and a shell holding a catalogue of nineteen licks
+        to look those up in is a second copy of the catalogue, which is the
+        drift `scaleStyles()` and `compStyles()` are on the wire to prevent.
+
+        Empty when the whole line was generated, which is a real answer and the
+        one a shell feature-detects on: a line that quoted nothing must not be
+        made to claim it quoted something.
+    */
+    std::string licksUsedJson (const std::vector<WrittenNote>& line)
+    {
+        struct Used
+        {
+            const LickDefinition* lick {};
+            int notes {};
+        };
+
+        std::vector<Used> used;
+
+        for (const auto& note : line)
+        {
+            if (note.lickKey.empty())
+                continue;
+
+            const auto already = std::find_if (used.begin(), used.end(),
+                                               [&note] (const Used& seen)
+                                               { return seen.lick->key == note.lickKey; });
+
+            if (already != used.end())
+            {
+                ++already->notes;
+                continue;
+            }
+
+            used.push_back ({ &lickFor (note.lickKey), 1 });
+        }
+
+        return jsonArray (used, [] (const Used& one)
+        {
+            return "{\"key\":" + quoted (one.lick->key)
+                 + ",\"name\":" + quoted (one.lick->name)
+                 + ",\"summary\":" + quoted (one.lick->summary)
+                 // Who to credit, which is the whole reason the catalogue was
+                 // built rather than more atoms added to the generator.
+                 + ",\"attribution\":" + quoted (one.lick->attribution)
+                 // And how solid the credit is: the research is candid that
+                 // three of its entries are composites rather than quotes.
+                 + ",\"source\":" + quoted (lickSourceName (one.lick->source))
+                 + ",\"notes\":" + std::to_string (one.notes) + "}";
+        });
+    }
+}
+
 std::string improvisedLine (const char* progressionText, int fromBar, int toBar,
                             const char* chosenScale, const char* lineStyle, int seed)
 {
@@ -1705,8 +1764,15 @@ std::string improvisedLine (const char* progressionText, int fromBar, int toBar,
                             + ",\"midi\":" + std::to_string (note.midiNote)
                             + ",\"name\":" + quoted (midiNoteName (note.midiNote))
                             + ",\"chord\":" + quoted (note.chordSymbol)
-                            + ",\"colour\":" + quoted (noteColourName (note.colour)) + "}";
+                            + ",\"colour\":" + quoted (noteColourName (note.colour))
+                            // How long it sounds, which for a quoted note is
+                            // the source's own rhythm rather than one step of
+                            // the grid - and rhythm is half of what makes a
+                            // lick that lick.
+                            + ",\"length\":" + std::to_string (note.lengthTicks)
+                            + ",\"lick\":" + quoted (note.lickKey) + "}";
                    })
+                 + ",\"licks\":" + licksUsedJson (line)
                  + "}");
 }
 

@@ -467,6 +467,59 @@ TEST ("ending a take hands back the whole thing, bar by bar")
     CHECK (contains (json, "\"observations\":"));
 }
 
+TEST ("a line says what it drew on")
+{
+    /*  A sixteen-bar standard, because four bars give a lick almost nowhere to
+        fit - which is the mistake the round trip in `LineWriterTests` made for
+        a while, reporting that quoting worked without ever having quoted. */
+    const auto json = improvisedLine ("| Dm7 | G7 | Cmaj7 | Cmaj7 | Em7 | A7 | Dm7 | Dm7 "
+                                      "| Gm7 | C7 | Fmaj7 | Fmaj7 | Bm7b5 | E7 | Am7 | Am7 |",
+                                      0, 15, "", "bebop", 1);
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"licks\":[{"));
+    CHECK (contains (json, "\"attribution\":"));
+    CHECK (contains (json, "\"source\":"));
+
+    // Per note as well as per line, so a shell can say which notes were the
+    // quote rather than only that there was one.
+    CHECK (contains (json, "\"lick\":\"L"));
+
+    // And a generated note says so by saying nothing.
+    CHECK (contains (json, "\"lick\":\"\""));
+
+    // The rhythm crosses too: a quoted note is the source's own length.
+    CHECK (contains (json, "\"length\":"));
+}
+
+TEST ("a line that quoted nothing claims nothing")
+{
+    /*  The negative control, and the one a shell feature-detects against: a
+        chart of chords no lick is written over is written entirely by the
+        generator, and must come back with an empty list rather than the
+        nearest thing the catalogue had. */
+    const auto json = improvisedLine ("| Cdim7 | Csus4 | C+ | CmMaj7 |",
+                                      0, 3, "", "bebop", 1);
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "\"licks\":[]"));
+    CHECK (! contains (json, "\"lick\":\"L"));
+}
+
+TEST ("the same seed draws the same licks")
+{
+    /*  `compPlan`'s contract, and the line writer has always been held to it:
+        the same seed is the same line note for note in both shells. Quoting is
+        a weighted draw, so it is one more thing that had to stay reproducible. */
+    const std::string tune = "| Dm7 | G7 | Cmaj7 | Cmaj7 | Em7 | A7 | Dm7 | Dm7 |";
+
+    CHECK_EQ (improvisedLine (tune.c_str(), 0, 7, "", "bebop", 9),
+              improvisedLine (tune.c_str(), 0, 7, "", "bebop", 9));
+
+    CHECK (improvisedLine (tune.c_str(), 0, 7, "", "bebop", 9)
+           != improvisedLine (tune.c_str(), 0, 7, "", "bebop", 10));
+}
+
 TEST ("a take's placement comes back against the style the shell named")
 {
     soloStartTake();
