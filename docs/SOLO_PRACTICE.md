@@ -150,6 +150,14 @@ the same boundary a generator living inside the analyser would blur.
   as an invariant over twenty-four seeds — every note must read back from a
   real take as the colour it was written as. Same shape as
   `VoicingAnalyzerTests`' rule about `idiomaticVoicings`, and the same reason.
+  - **A quoted note promises less, and only what is true.** See *Vocabulary*
+    below: what the writer guarantees there is the *pitch* classification —
+    inside stays inside, outside stays outside — because a documented device
+    may be deliberately outside the scale the take reads against.
+  - **The sweep runs over sixteen bars as well as four**, and that is not
+    thoroughness for its own sake. Four bars give a lick almost nowhere to
+    fit, so for a while this test swept twenty-four seeds over a line that was
+    never once quoted and reported that quoting round-tripped perfectly.
 - **The writer commits to the colour and not to the gesture**, which the tests
   taught rather than confirmed. `WrittenNote` had an `ApproachKind` and claimed
   `chromatic` for every approach; the round trip refused it. The analyser reads
@@ -196,6 +204,18 @@ the same boundary a generator living inside the analyser would blur.
   followed by a step. A step is one or two semitones; zero is not a step, it is
   the same note again, and allowing it is how the second bug above got past the
   first version of the check.
+  - **It validates *generated* material, and that is a scope rather than an
+    exemption.** These are the rules that stop the atom writer drifting away
+    from the style it claims to play. A quoted note answers to its provenance
+    instead: L03 side-slips a whole cell over the V and lands a b13 on beat
+    one, and calling that a fault would be calling Coltrane a fault. The
+    **register** is still checked for every note, because a line off the
+    keyboard is unplayable whoever wrote it.
+- **An approach has to land inside its own phrase.** The landing is owed to the
+  next note the loop writes — and once a phrase can be quoted rather than
+  written, that may be the first note of a lick which knows nothing about it.
+  It was always the weaker place for one: an approach resolving across a rest
+  is an approach the ear has lost.
 - **In time, the line joins the band.** The plan is handed to the transport and
   booked bar by bar beside the comp, the bass and the ride, through the same
   `beatsIntoBar` — so all four agree about where the "and" is, swung the
@@ -205,6 +225,76 @@ the same boundary a generator living inside the analyser would blur.
   - **It still will not sound over a take.** Two lines at once is neither
     legible to listen to nor separable in the reading. But the refusal is about
     the take, not the clock: the roll this starts grades nothing.
+
+### Vocabulary: the line quotes before it invents
+
+`improvisedLine` used to build every note from atoms — a chord tone on the
+strong beats, scale tones between, a chromatic approach when the chord changes.
+That keeps a line correct and cannot make it sound like anybody. Real lines are
+made of patterns: Owens catalogued 64 Parker formulas across 250 transcriptions,
+and Norgaard found 82.6% of Parker's notes begin a four-interval pattern that
+recurs elsewhere in the corpus. So `LickCatalogue.h` holds nineteen documented
+figures and `improvisedLine` draws on them.
+
+- **A catalogue, not a corpus** — the same distinction the reharmoniser draws.
+  Thirty-six rules that each explain themselves were chosen there over a
+  ranking that cannot, and a lick here carries its `attribution` and its
+  `source` for exactly that reason: the app can say *"that was the Barry Harris
+  Bb7 line"* the way the bar dialog says what a substitution is.
+- **It is deliberately not the whole generator.** The research that produced
+  these licks is candid about why: Impro-Visor built a probabilistic grammar
+  *because* a hand-built database *"would need to be extremely large"*. Its own
+  suggestion is 50–70% authored material with generated atoms filling the gaps,
+  and it says in as many words that the ratio is to tune by ear.
+- **A lick is keyed on a chord-sequence shape** — the qualities in order and
+  the root offsets between them, which is `VoicingShape` one dimension up and
+  transposes for the same reason. The boundaries must line up too, so a figure
+  written two beats to a chord is not stretched over a bar apiece; the **last**
+  chord may be held longer, because a chart sitting on the tonic after the lick
+  has landed is still the tonic it landed on.
+- **A phrase is quoted whole or written note by note, never half of each** —
+  half a documented figure is not that figure. `lickShare` is how often a
+  phrase *reaches* for a quote, not the share of the line quoted: a phrase that
+  reaches and finds nothing generates as it always did, which is the whole of
+  what the research means by "atom fallback".
+- **A style only quotes a figure it could have phrased.** The long end only,
+  which is the same asymmetry `phraseFit` reads — a quote shorter than the
+  style's shortest phrase is a player leaving space, and L09 is a two-note
+  ending on purpose. A style asking to quote what it cannot reach is the shape
+  `brazilian` was in `ReharmStyle`, tagged on no rule at all, so a test holds
+  it honest.
+- **A quoted phrase needs room to breathe, measured the way the reader measures
+  it.** `readLinePlacement` calls a gap a phrase boundary at one grid step plus
+  the style's shortest rest, onset to onset. Leaving less joins the quote to its
+  neighbour — two landing eight ticks apart read as one phrase of twenty-four
+  notes. The gap is measured from where the previous phrase *actually* ended,
+  which for a quote is the lick's length rather than the slot's.
+- **Colours are computed, never authored.** A take reads a line by its ordinary
+  rules and has no idea a lick was involved. `LickRole` is what the person who
+  transcribed the figure said; `NoteColour` is what the analyser will read. They
+  part on the interesting ones — a side-slipped cell's notes are colour tones to
+  the source and read `outside` in a take, which is true twice over. Measured
+  over two hundred seeds: every quoted note agreed on the pitch classification,
+  about one in forty differed on the colour, and every one of those was
+  approach against outside in one direction or the other.
+- **A lick carries its own subdivision, and both readers widen for it.**
+  `subdivisionsFor` is a style's own feel plus the feels of the licks it can
+  draw on, and `lineFaults` and `readLinePlacement` both read it — one source,
+  so the two cannot disagree about the same note. This does make the placement
+  grid more forgiving than when that number shipped, and that is the honest
+  cost: a style whose vocabulary is all eighths is unchanged, and a bebop line
+  is now allowed its triplets. The alternative was the app teaching a figure
+  and then marking a player for playing it.
+- **An ornament is a rendering hint and never a position.** A crush is written
+  at its target's tick and struck early by whoever plays it — the same split
+  `docs/RHYTHM.md` draws for swing, where the "and" is written at tick 12 and
+  played late. Written two ticks early instead it is off every grid there is,
+  and `readLinePlacement`, which reads a player's take and knows nothing about
+  ornaments, marked the line down for a grid it was never off.
+- **What the catalogue does not reach**: diminished, suspended, augmented and
+  minor-major chords have nothing written over them, so a tune built on those
+  gets a generated line and no quotes. A test states the coverage, so a later
+  pass filling the gap has to change a test that states the old shape.
 
 ### Line styles, and the scale styles underneath them
 - **A line style is the one thing a player picks**, and it answers two

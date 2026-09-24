@@ -315,7 +315,12 @@ something finished or assume something unfinished is done:
   are: the grid (per *onset*, so a block chord counts once), the phrasing
   (one-way — running on costs, stopping early does not) and the register (per
   note). Only what the style states as a rule is in it; see the invariant
-  below and `docs/SOLO_PRACTICE.md`. **`LineBar`'s strong-beat counts cross
+  below and `docs/SOLO_PRACTICE.md`.
+  **The grid it reads against is `subdivisionsFor`** - the style's own feel
+  plus the feels of the licks it can draw on - so a bebop line is allowed its
+  triplets. One source for that answer, read by `readLinePlacement` and
+  `lineFaults` alike, because the app teaching a figure and then marking a
+  player for playing it is the failure the round trip exists to prevent. **`LineBar`'s strong-beat counts cross
   the wire now too**, through `LineAnalyzer::barFor` — they had been counted
   since the grid arrived and nothing outside the engine could see them.
 - **Comping** — done, both halves: the band that plays under a soloist, and the
@@ -487,6 +492,27 @@ something finished or assume something unfinished is done:
   loop, so it is something to play along with. It still refuses to sound over a
   take — two lines at once is neither — but that refusal is about the take and
   not about the clock: the roll it starts grades nothing.
+  **It quotes before it invents.** `LickCatalogue.h` holds nineteen documented
+  figures from the research's Part B - Barry Harris, Wynton Kelly, Red Garland,
+  a Parker cliche - each keyed on a **chord-sequence shape** (qualities plus
+  the root offsets between them, which is `VoicingShape` one dimension up) and
+  each carrying its `attribution` and `source`. A phrase is quoted whole or
+  written note by note, never half of each; `lickShare` is how often a phrase
+  *reaches* for a quote, and one that finds nothing generates as before. The
+  page says what it drew on, which is why the catalogue was built rather than
+  more atoms added - this app explains every substitution it offers, and a line
+  it could not explain would be the one thing arriving from nowhere.
+  **`lineFaults` validates *generated* material only**, and that is a scope
+  rather than an exemption: a documented device may be deliberately outside the
+  scale a take reads against and may land a chromatic on beat one, and the
+  reading saying so is correct. The register is still checked for every note.
+  **Colours are computed, never authored** - `LickRole` is what the transcriber
+  said and `NoteColour` is what the analyser will read, and over two hundred
+  seeds they agreed on the pitch classification every time and differed on the
+  colour about one note in forty, always approach against outside.
+  **An ornament is a rendering hint and never a position**: a crush is written
+  at its target's tick and struck early by whoever plays it, the same split
+  `docs/RHYTHM.md` draws for swing. See `docs/SOLO_PRACTICE.md`.
   **The writer carries the analyser's vocabulary**, which is the design rather
   than a convenience: `LineWriterTests` asserts over twenty-four seeds that
   every note reads back from a real take as the colour it was written as. Same

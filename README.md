@@ -1023,6 +1023,13 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   **In time, it plays with the band** rather than on a timer of its own, and comes round
   every time the loop does, so it is something to play along with rather than to listen
   to once.
+  **And it tells you what it quoted.** Part of what it plays comes from a catalogue of
+  documented figures rather than being invented note by note — *"Quoting Barry Harris"*,
+  *"Quoting a Parker cliché"* — because an app that explains every substitution it offers
+  should not hand you a line it cannot explain. Where a figure was assembled from
+  documented devices rather than quoted from a recording, it says that too: a credit that
+  overstates itself is worse than none. On a tune the catalogue was not written for it
+  writes the line itself and credits nobody.
 - **Line styles** — bebop, blues, modal, pentatonic. One picker, because choosing a style
   is choosing the scales it draws on *and* how a line out of them is shaped: how long a
   phrase runs, how much room it leaves, whether it steps in chromatically at all. Modal

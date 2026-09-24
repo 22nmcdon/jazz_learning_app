@@ -390,17 +390,41 @@ Small, verified, and none of them urgent.
   `lineBar`, and to nothing else. The click and the band must stay where they
   are or there is no reference.
 
-- **Part B's lick catalogue is not built.** The research's 17 licks (L01-L17)
-  are data-ready - degrees from a root, tick positions, a role per note - and
-  the plan for them is an engine catalogue with per-lick provenance, drawn on
-  for 50-70% of the material with generated atoms filling the gaps. The layer
-  that landed first is the one the research says matters more: *"rhythmic
-  aspects are at least as important as pitch aspects"*. Whoever builds the
-  catalogue should key a lick on a **chord-sequence shape** - qualities plus
-  the root offsets between them - which is `VoicingShape` one dimension up, and
-  should carry the source, because L01, L06 and L17 are composites from
-  teaching sites rather than transcriptions and ought to weigh less than a
-  documented device.
+- **The quoting ratio is untuned by ear.** `lickShare` is how often a phrase
+  reaches for a quote, and the research says in as many words that its 50-70%
+  is a design suggestion to tune by ear. What the current numbers produce,
+  measured over two hundred seeds on tunes each style is for: blues asking 70
+  gets 64% of its notes from the catalogue, bebop asking 60 gets 39%, modal
+  asking 25 gets 12%. Whether that *sounds* like the right amount of quoting is
+  the one thing no assertion here settles - the same standing the groove's
+  fractions and the placement weights have above.
+
+- **The catalogue reaches four of the eight chord qualities.** Nothing is
+  written over a diminished, suspended, augmented or minor-major chord, so a
+  tune built on those gets a generated line and no quotes. The research's Part
+  B is a ii-V catalogue and this is its shape rather than an omission in the
+  transcription of it. A test states the coverage, so filling the gap means
+  changing a test that states the old shape.
+
+- **`modal` and `pentatonic` have almost nothing to quote.** One lick between
+  them, and `pentatonic` has none it can reach at all - the one pentatonic cell
+  is thirteen notes against that style's longest phrase of twelve - so its
+  `lickShare` is zero and a test keeps that honest. Either a pentatonic figure
+  short enough for the style, or a longer phrase range argued on its own terms;
+  not the latter to admit one lick.
+
+- **L14 is missing, and needs B9 first.** Peterson's harmonised minor-blues run
+  is two voices, and a `WrittenNote` has nowhere to put "struck with the one
+  before". Reduced to its lower voice it is a descending scale fragment, and
+  putting Oscar Peterson's name beside that is the false provenance the source
+  weights exist to prevent. It is the smallest concrete reason to build B9.
+
+- **B9's block-chord renderings are not built.** Locked hands (Shearing) and
+  the Garland spread turn a written line into two hands, and `LineAnalyzer`
+  already *reads* block chords in a line - `chordSoFar`, `LineChord`, the
+  melody-note-leads rule - with nothing generating any. Closing that asymmetry
+  needs `WrittenNote` to carry an attack, which is the same one-line change L14
+  is waiting on.
 
 - **The printed chart keeps a faint ring on the selected bar.** The print rules
   clear `.bar`'s background but not the `box-shadow` on `[aria-pressed="true"]`.
