@@ -17,6 +17,7 @@ add_library(jazz_core_engine STATIC
     src/Comping.cpp
     src/VoicingAnalyzer.cpp
     src/LineAnalyzer.cpp
+    src/LickCatalogue.cpp
     src/LinePlacement.cpp
     src/LineStyle.cpp
     src/LineWriter.cpp
