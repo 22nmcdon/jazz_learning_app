@@ -125,24 +125,22 @@ TEST ("a lick's notes are in the order they are played")
             CHECK (lick.notes[i].tick >= lick.notes[i - 1].tick);
 }
 
-TEST ("a lick's notes sit on its own subdivision, ornaments excepted")
+TEST ("every note of a lick sits on that lick's own subdivision")
 {
-    /*  The exception is the point rather than a let-off: a grace note or a
-        crush is played *off* the grid by definition - it takes its time from
-        the note before it and lands with its target. Everything a player would
-        count is on the lick's own feel. */
+    /*  Ornaments included, and that is the rule rather than an oversight: an
+        ornament is a rendering hint and never a position, so a crush is
+        written at its target's tick and struck early by whoever plays it -
+        the same split `docs/RHYTHM.md` draws for swing. Written early instead
+        it is off every grid there is, and `readLinePlacement`, which reads a
+        player's take and knows nothing about ornaments, marked a line down for
+        a grid it was never off. */
     for (const auto& lick : licks())
     {
         const auto step = ticksFor (lick.feel);
         CHECK (step > 0);
 
         for (const auto& note : lick.notes)
-        {
-            if (note.ornament != LickOrnament::none)
-                continue;
-
             CHECK_EQ (note.tick % step, 0);
-        }
     }
 }
 
@@ -487,4 +485,34 @@ TEST ("a range outside the chart is empty rather than a crash")
     CHECK (licksFitting (chart, lineStyleFor ("bebop"), -1, 2).empty());
     CHECK (licksFitting (chart, lineStyleFor ("bebop"), 2, 1).empty());
     CHECK (! licksFitting (chart, lineStyleFor ("bebop"), 0, 99).empty());
+}
+
+TEST ("a style that asks to quote has something it can actually quote")
+{
+    /*  The `brazilian` lesson, generalised. That style sat in `ReharmStyle`
+        tagged on no rule at all, so the menu it would have shipped had an
+        entry that was a lie - and this is the same shape: a style with a
+        `lickShare` above nothing and no lick it can reach is a setting that
+        does nothing, which looks exactly like a setting that works.
+
+        "Can reach" is the whole test rather than "is tagged for": the
+        pentatonic style was tagged on a thirteen-note cell it could never
+        phrase, because its own longest phrase is twelve. Tagged and
+        unreachable is worse than untagged, because it reads as covered. */
+    for (const auto& style : lineStyles())
+    {
+        if (style.lickShare <= 0)
+            continue;
+
+        const auto reachable = std::count_if (licks().begin(), licks().end(),
+                                              [&style] (const LickDefinition& lick)
+                                              {
+                                                  return std::find (lick.styles.begin(), lick.styles.end(),
+                                                                    style.key) != lick.styles.end()
+                                                      && static_cast<int> (lick.notes.size())
+                                                             <= style.longestPhrase;
+                                              });
+
+        CHECK (reachable > 0);
+    }
 }

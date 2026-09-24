@@ -633,11 +633,11 @@ const std::vector<LickDefinition>& licks()
 
                 Written on C7: (Eb)E G A G (Gb)G C.
 
-                Its first crush sits two ticks before the downbeat, which makes
-                this a pickup lick as far as the placer is concerned. Two ticks
-                is not a bar's worth of anything, and costing it the first bar
-                of a line is cheaper than teaching the placer about fractions
-                of a beat that cross a barline. */
+                Both crushes are written **on** their targets' ticks, not
+                before them - see the note on `LickOrnament`. How far ahead of
+                the beat a crush is actually struck is a rendering question,
+                the same kind of question as how late a swung eighth falls, and
+                the grid answers neither. */
             LickDefinition lick;
             lick.key = "L13";
             lick.name = "Grace-note blues crush";
@@ -647,15 +647,14 @@ const std::vector<LickDefinition>& licks()
             lick.source = LickSource::teachingSite;
             lick.weight = fromALesson;
             lick.styles = { "blues" };
-            lick.startsOnAPickup = true;
             lick.chords = { over (ChordQuality::dominant, 0, 0, aBar) };
             lick.notes = {
-                note (-2, 0,  3, 0, LickRole::colourTone, graceLength, LickOrnament::crush),  // Eb
+                note ( 0, 0,  3, 0, LickRole::colourTone, graceLength, LickOrnament::crush),  // Eb
                 note ( 0, 0,  4, 0, LickRole::chordTone),   // E
                 note (12, 0,  7, 0, LickRole::chordTone),   // G
                 note (24, 0,  9, 0, LickRole::colourTone),  // A - the 6
                 note (36, 0,  7, 0, LickRole::chordTone),   // G
-                note (46, 0,  6, 0, LickRole::colourTone, graceLength, LickOrnament::crush),  // Gb
+                note (48, 0,  6, 0, LickRole::colourTone, graceLength, LickOrnament::crush),  // Gb
                 note (48, 0,  7, 0, LickRole::chordTone),   // G
                 note (72, 0,  0, 1, LickRole::chordTone, quarter) };  // C
             built.push_back (lick);
@@ -679,7 +678,11 @@ const std::vector<LickDefinition>& licks()
             lick.attribution = "McCoy Tyner";
             lick.source = LickSource::documentedDevice;
             lick.weight = documented;
-            lick.styles = { "modal", "pentatonic" };
+            /*  Modal alone, though it is a pentatonic device: thirteen notes
+                is one more than the pentatonic style's longest phrase, so that
+                style could not phrase it and tagging it there would be a tag
+                nothing could ever draw. */
+            lick.styles = { "modal" };
             lick.chords = { over (ChordQuality::minor, 0, 0, 2 * aBar) };
             lick.notes = {
                 note (  0, 0, 2, 0, LickRole::colourTone),  // E - the 9
@@ -968,6 +971,18 @@ std::vector<LickMatch> licksFitting (const Chart& chart, const LineStyleDefiniti
                       { return a.startTick < b.startTick; });
 
     return found;
+}
+
+std::vector<Subdivision> subdivisionsFor (const LineStyleDefinition& style)
+{
+    std::vector<Subdivision> accepted { style.feel };
+
+    for (const auto& lick : licks())
+        if (playsThisStyle (lick, style.key)
+            && std::find (accepted.begin(), accepted.end(), lick.feel) == accepted.end())
+            accepted.push_back (lick.feel);
+
+    return accepted;
 }
 
 const LickDefinition& lickFor (std::string_view key)

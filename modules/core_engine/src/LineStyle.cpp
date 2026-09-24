@@ -33,6 +33,11 @@ const std::vector<LineStyleDefinition>& lineStyles()
             bebop.startTicks = { ticksPerBeat / 2, 0 };
             bebop.feel = Subdivision::eighth;
             bebop.descending = 54;
+            /*  The middle of the research's range. Bebop is the most quotable
+                of the four - most of the catalogue is written for it - and it
+                is also the style where a line made entirely of quotes would
+                stop being a line. */
+            bebop.lickShare = 60;
             bebop.usesApproaches = true;
             built.push_back (bebop);
         }
@@ -60,6 +65,10 @@ const std::vector<LineStyleDefinition>& lineStyles()
             blues.startTicks = { ticksPerBeat / 2, 0 };
             blues.feel = Subdivision::eighth;
             blues.descending = 55;
+            /*  The top of the range. Blues phrasing *is* its figures: the b3
+                leaning into the 3 and the crush into the 5 are not decoration
+                on a line, they are what a player is there to learn. */
+            blues.lickShare = 70;
             blues.usesApproaches = true;
             built.push_back (blues);
         }
@@ -86,6 +95,11 @@ const std::vector<LineStyleDefinition>& lineStyles()
             modal.startTicks = { 0, ticksPerBeat / 2 };
             modal.feel = Subdivision::eighth;
             modal.descending = 50;
+            /*  Low, and not because modal playing quotes less - because the
+                catalogue has one lick for it. Asking for more than there is
+                costs nothing (the phrase is generated instead), but saying 60
+                here would be claiming a vocabulary that does not exist. */
+            modal.lickShare = 25;
             modal.usesApproaches = false;
             built.push_back (modal);
         }
@@ -111,6 +125,16 @@ const std::vector<LineStyleDefinition>& lineStyles()
             pentatonic.startTicks = { ticksPerBeat / 2, 0 };
             pentatonic.feel = Subdivision::eighth;
             pentatonic.descending = 46;
+            /*  Nothing, and that is honesty rather than a gap left open.
+
+                The catalogue's one pentatonic cell is thirteen notes and this
+                style's longest phrase is twelve, so it could never be quoted
+                here however high this number was - and a style asking to quote
+                what it cannot reach is the shape of bug `brazilian` was, sat
+                in `ReharmStyle` tagged on no rule at all. A test holds this
+                honest: a style that asks for quotes has to have some. Raise it
+                when a pentatonic lick this style could phrase is written. */
+            pentatonic.lickShare = 0;
             pentatonic.usesApproaches = false;
             built.push_back (pentatonic);
         }

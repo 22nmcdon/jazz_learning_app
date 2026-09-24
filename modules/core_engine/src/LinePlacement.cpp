@@ -1,5 +1,7 @@
 #include "jazz/core/LinePlacement.h"
 
+#include "jazz/core/LickCatalogue.h"
+
 #include <algorithm>
 #include <optional>
 
@@ -82,6 +84,25 @@ LinePlacementReading readLinePlacement (const std::vector<LineNote>& line,
 
     const auto beats = std::max (1, beatsPerBar);
     const auto step = std::max (1, ticksFor (style.feel));
+
+    /*  Every subdivision this style's vocabulary uses, not only its own feel.
+
+        A style that can draw on a triplet lick has players who play triplets,
+        and the app teaching a figure and then marking somebody for playing it
+        is the exact failure the round trip exists to prevent. One source for
+        the answer, in `subdivisionsFor`, so this and `lineFaults` cannot come
+        to different conclusions about the same note.
+
+        It does make the grid more forgiving than it was when this number
+        shipped, and that is the honest cost: a style whose vocabulary is all
+        eighths is unchanged, and a bebop line is now allowed its triplets. */
+    const auto accepted = subdivisionsFor (style);
+
+    const auto onAStyleGrid = [&accepted] (const BarPosition& at)
+    {
+        return std::any_of (accepted.begin(), accepted.end(),
+                            [&at] (Subdivision feel) { return onTheGrid (at, feel); });
+    };
     const auto barTicks = beats * ticksPerBeat;
 
     /*  The gap that reads as a rest - see `LinePhrase`. One step of the grid,
@@ -129,7 +150,7 @@ LinePlacementReading readLinePlacement (const std::vector<LineNote>& line,
 
         ++out.onsetsPlaced;
 
-        const auto placed = onTheGrid (*onset.at, style.feel);
+        const auto placed = onAStyleGrid (*onset.at);
 
         if (placed)
             ++out.onsetsOnTheGrid;
@@ -225,8 +246,8 @@ LinePlacementReading readLinePlacement (const std::vector<LineNote>& line,
     if (offTheGrid > 0)
         out.observations.push_back (countOf (offTheGrid, "note", "notes") + " fell between "
                                     + style.name + "'s " + subdivisionName (style.feel)
-                                    + "s. That is a different subdivision, not a wrong note - "
-                                      "but it is not this style's.");
+                                    + "s and its triplets. That is a different subdivision, "
+                                      "not a wrong note - but it is not this style's.");
 
     auto ranOn = 0;
     auto offBeatStarts = 0;

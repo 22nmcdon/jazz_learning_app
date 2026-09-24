@@ -120,9 +120,22 @@ std::string lickRoleName (LickRole role);
 enum class LickOrnament
 {
     none,
-    grace,   ///< struck just before its target, taking time from the note before
+    grace,   ///< struck a shade before its target, taking time from the note before
     crush    ///< struck with its target and released early - the blues crush
 };
+
+/*  An ornament is a **rendering hint, and never a position**, which is the same
+    split `docs/RHYTHM.md` draws for swing: where a note is written and how a
+    shell plays it are two different questions, and the grid answers only the
+    first. So an ornamented note is written on the grid, at its target's own
+    tick, and how far ahead of the beat it is actually struck is the shell's to
+    decide - exactly as the "and" is written at tick 12 and played late.
+
+    Written two ticks early instead, which is what a first version of this did,
+    it is off every grid there is: `readLinePlacement` reads a player's take and
+    has no idea an ornament was involved, so a line containing a crush scored
+    below a hundred on a grid it was never off. A crush is one musical impulse,
+    the research says so, and one impulse has one position. */
 
 std::string lickOrnamentName (LickOrnament ornament);
 
@@ -145,7 +158,10 @@ struct LickNote
 {
     /** Ticks from the lick's start. **Negative for a pickup** - a lick that
         leads in from the bar before starts at -24 or -12, which is what
-        `startsOnAPickup` warns a caller about. */
+        `startsOnAPickup` warns a caller about.
+
+        An ornamented note carries its *target's* tick rather than its own -
+        see the note on `LickOrnament`. */
     int tick {};
 
     /** How long it sounds. 12 an eighth, 24 a quarter, 8 a triplet eighth,
@@ -285,6 +301,22 @@ std::vector<LickMatch> licksFitting (const Chart& chart,
                                      const LineStyleDefinition& style,
                                      int fromBar,
                                      int toBar);
+
+/** Every subdivision a line in this style may legitimately land on.
+
+    Its own `feel`, plus the feel of every lick it can draw on. **One place, so
+    two readers cannot disagree**: `lineFaults` uses it to decide whether a
+    written note is off the style's grid, and `readLinePlacement` uses it to
+    decide whether a *played* note is - and the second of those is the one that
+    matters, because the app teaching a player a figure and then marking them
+    for playing it is the exact failure the round trip exists to prevent.
+
+    Derived rather than listed, for the reason `onTheGrid` is derived from
+    `ticksFor` rather than tabulated: a table is a second place for the answer
+    to live. Add a triplet lick to a style and that style's players may play
+    triplets, without anybody remembering to say so.
+*/
+std::vector<Subdivision> subdivisionsFor (const LineStyleDefinition& style);
 
 /** The lick with this key, or the first one when the key is unknown.
 

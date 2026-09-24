@@ -215,6 +215,20 @@ TEST ("every phrase the writer writes is a length its style writes")
                 const auto& phrase = reading.phrases[i];
                 counted += phrase.onsets;
 
+                /*  A quoted phrase is the length the source made it, not the
+                    length this style's planner draws. L09 is a two-note bebop
+                    ending and bebop's shortest planned phrase is six; the
+                    ending is right and the range is about what the *planner*
+                    invents. Skipped rather than loosened, so the rule still
+                    binds on every phrase the writer wrote itself. */
+                const auto isQuoted = std::any_of (written.begin() + static_cast<long> (phrase.firstNote),
+                                                   written.begin() + static_cast<long> (phrase.lastNote) + 1,
+                                                   [] (const WrittenNote& note)
+                                                   { return ! note.lickKey.empty(); });
+
+                if (isQuoted)
+                    continue;
+
                 /*  Only the long end holds for every phrase. The last one is
                     cut off by the end of the chart rather than by a rest -
                     `planPhrases` stops laying notes down when it runs out of
@@ -274,8 +288,13 @@ TEST ("a line outside the style's register costs the register and nothing else")
 
     auto written = improvisedLine (chart, 0, 15, "", bebop.key, 11);
 
+    /*  Three octaves, not two. Two was enough while every line was generated
+        into the middle of the register; a quoted phrase is placed as a whole,
+        so a wide lick is forced to the bottom of the register to fit and two
+        octaves up is still inside it. Three is above the top of any style's
+        register from anywhere inside it. */
     for (auto& note : written)
-        note.midiNote += 24;
+        note.midiNote += 36;
 
     const auto reading = readLinePlacement (readBack (chart, written, bebop.scaleStyle), bebop, 4);
 

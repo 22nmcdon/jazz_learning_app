@@ -1,5 +1,7 @@
 #include "jazz/core/LineWriter.h"
 
+#include "jazz/core/LickCatalogue.h"
+
 #include <algorithm>
 #include <cstdlib>
 #include <string>
@@ -92,6 +94,119 @@ namespace
     }
 }
 
+namespace
+{
+    /** A phrase of the plan, as a half-open range of slots. */
+    struct PlannedPhrase
+    {
+        std::size_t first {};
+        std::size_t last {};   ///< inclusive - the slot carrying `endsPhrase`
+    };
+
+    std::vector<PlannedPhrase> phrasesIn (const std::vector<PlannedNote>& planned)
+    {
+        std::vector<PlannedPhrase> phrases;
+        auto first = std::size_t { 0 };
+
+        for (std::size_t i = 0; i < planned.size(); ++i)
+            if (planned[i].endsPhrase || i + 1 == planned.size())
+            {
+                phrases.push_back ({ first, i });
+                first = i + 1;
+            }
+
+        return phrases;
+    }
+
+    /** Where a lick's notes reach, relative to the tick it starts on.
+
+        `first` is negative for a lick that leads in from the bar before, which
+        is why this is a pair rather than `spanInTicks`: what a caller placing
+        one needs to know is how far back it reaches as well as how far on.
+    */
+    struct LickReach
+    {
+        int first {};       ///< the earliest onset, negative for a pickup
+        int last {};        ///< where the last note stops sounding
+        int lastOnset {};   ///< where the last note is struck
+    };
+
+    LickReach reachOf (const LickDefinition& lick)
+    {
+        LickReach reach { 0, 0, 0 };
+
+        for (std::size_t i = 0; i < lick.notes.size(); ++i)
+        {
+            const auto& note = lick.notes[i];
+
+            reach.first = i == 0 ? note.tick : std::min (reach.first, note.tick);
+            reach.lastOnset = i == 0 ? note.tick : std::max (reach.lastOnset, note.tick);
+            reach.last = i == 0 ? note.tick + note.lengthTicks
+                                : std::max (reach.last, note.tick + note.lengthTicks);
+        }
+
+        return reach;
+    }
+
+    /** Where to put the lick's first chord's root, in a real octave.
+
+        A degree gives a pitch class and a pitch class cannot be played - the
+        point `voicingFromShape` makes one dimension down. So the octave is
+        chosen here: the highest one that keeps every note of the lick inside
+        the style's register, and among those the one starting nearest the note
+        the line is already on, so a quote does not arrive from nowhere.
+
+        Zero when no octave fits, which is a real answer - a lick spanning more
+        than the style's register cannot be played in it, and the caller writes
+        the phrase itself instead.
+    */
+    int placeLick (const LickDefinition& lick, const LickMatch& match,
+                   const LineStyleDefinition& style, int previous)
+    {
+        auto best = 0;
+        auto bestDistance = 0;
+
+        for (auto octave = 0; octave < 11; ++octave)
+        {
+            const auto root = match.rootPitchClass + 12 * octave;
+
+            auto low = 0;
+            auto high = 0;
+
+            for (std::size_t i = 0; i < lick.notes.size(); ++i)
+            {
+                const auto sounded = lick.midiFor (lick.notes[i], root);
+
+                low = i == 0 ? sounded : std::min (low, sounded);
+                high = i == 0 ? sounded : std::max (high, sounded);
+            }
+
+            if (low < style.lowestNote || high > style.highestNote)
+                continue;
+
+            /*  Nearest the note the line is already on, so a quote does not
+                arrive from nowhere - and, when there is no such note, nearest
+                the middle of the register rather than wherever the octave
+                loop happens to reach first. Without the second half every
+                lick opening a line sat at the bottom of the register, because
+                every octave tied at a distance of nothing and the lowest one
+                won. */
+            const auto from = lick.midiFor (lick.notes.front(), root);
+            const auto towards = previous > 0 ? previous
+                                              : (style.lowestNote + style.highestNote) / 2;
+            const auto distance = std::abs (from - towards);
+
+            if (best == 0 || distance < bestDistance)
+            {
+                best = root;
+                bestDistance = distance;
+            }
+        }
+
+        return best;
+    }
+}
+
 std::vector<PlannedNote> planPhrases (const LineStyleDefinition& style,
                                       int fromBar,
                                       int toBar,
@@ -175,8 +290,18 @@ std::vector<LineFinding> lineFaults (const std::vector<WrittenNote>& line,
 {
     std::vector<LineFinding> found;
 
-    const auto step = std::max (1, ticksFor (style.feel));
+    /*  Every subdivision the style's vocabulary uses, not only its own feel.
+        A style that can draw on a triplet lick has players who play triplets,
+        and marking one off the grid would be this file disagreeing with the
+        catalogue it quotes from. One source for it, in `subdivisionsFor`. */
+    const auto accepted = subdivisionsFor (style);
     const auto beats = std::max (1, beatsPerBar);
+
+    const auto onAStyleGrid = [&accepted] (const BarPosition& at)
+    {
+        return std::any_of (accepted.begin(), accepted.end(),
+                            [&at] (Subdivision feel) { return onTheGrid (at, feel); });
+    };
 
     const auto note = [] (const WrittenNote& n)
     {
@@ -188,11 +313,28 @@ std::vector<LineFinding> lineFaults (const std::vector<WrittenNote>& line,
     {
         const auto& written = line[i];
 
+        /*  The register is checked for every note, quoted or not, because it
+            is the one rule nothing downstream can recover from: a line that
+            walks off the keyboard is not playable whoever wrote it, and
+            `placeLick` is supposed to guarantee this. */
         if (written.midiNote < style.lowestNote || written.midiNote > style.highestNote)
             found.push_back ({ LineFault::outsideTheRegister, i,
                                "outside the style's register" + note (written) });
 
-        if (written.at.tick % step != 0)
+        /*  Everything below is about *generated* material, and that is the
+            point rather than an exemption. These are the constraints that stop
+            the atom writer drifting away from the style it claims to play: an
+            approach it invented has to land, a chromatic it invented belongs
+            off the beat, and a note it invented belongs on the grid. A
+            documented device may do none of the three - L03 side-slips a whole
+            cell over the V and puts the first note of it on beat one, and L13
+            crushes a grace note two ticks before its target - and calling
+            those faults would be calling Coltrane and Red Garland faults.
+            A lick answers to its provenance; see `LickCatalogue.h`. */
+        if (! written.lickKey.empty())
+            continue;
+
+        if (! onAStyleGrid (written.at))
             found.push_back ({ LineFault::offTheStyleGrid, i,
                                "not on this style's subdivision" + note (written) });
 
@@ -253,6 +395,141 @@ std::vector<WrittenNote> improvisedLine (const Chart& chart,
     const auto planned = planPhrases (style, fromBar, toBar, options.beatsPerBar,
                                       mix (seed, 0x9101u));
 
+    /*  The quoting pass, between the phrase planner and the note chooser.
+
+        A phrase is either quoted whole or written note by note - never half of
+        each, because half a documented figure is not that figure. Which one
+        is a weighted draw against `lickShare`, and a phrase with nothing
+        fitting it simply generates, which is the whole of what the research
+        means by "atom fallback".
+
+        A lick is placed where the *harmony* says it goes, not where the phrase
+        happened to begin: `licksFitting` returns chord boundaries. So what the
+        phrase contributes is its **territory** - from the end of the phrase
+        before it to the start of the phrase after - and the lick has to fit
+        inside that, pickup and all, or the next phrase would be played over
+        the top of it. */
+    const auto barTicks = options.beatsPerBar * ticksPerBeat;
+    const auto phrases = phrasesIn (planned);
+    const auto matches = licksFitting (chart, style, fromBar, toBar);
+
+    const auto tickOf = [&] (const PlannedNote& slot)
+    {
+        return (slot.measureIndex - fromBar) * barTicks + slot.at.inTicks();
+    };
+
+    const auto total = (toBar - fromBar + 1) * barTicks;
+
+    //  One entry per phrase; `lick` is null for the phrases that generate.
+    std::vector<LickMatch> quoted (phrases.size());
+
+    /*  Where the phrase before this one actually ended, which is not always
+        where the planner put it: a quoted phrase is the lick's length, not the
+        slot's. Carried through the loop because the check below is about the
+        gap between two *real* phrases - two quotes landing back to back with
+        eight ticks between them read as one phrase of twenty-four notes, which
+        is what a first version of this shipped. */
+    auto previousLastOnset = 0;
+    auto havePrevious = false;
+
+    for (std::size_t p = 0; p < phrases.size(); ++p)
+    {
+        const auto plannedLastOnset = tickOf (planned[phrases[p].last]);
+
+        const auto remember = [&] (int lastOnset)
+        {
+            previousLastOnset = lastOnset;
+            havePrevious = true;
+        };
+
+        const auto salt = static_cast<std::uint32_t> (p) + 0x11c7u;
+
+        if (matches.empty() || roll (seed, salt) >= style.lickShare)
+        {
+            remember (plannedLastOnset);
+            continue;
+        }
+
+        /*  The room this phrase has: after the previous phrase's last note
+            has sounded, and before the next one's first note arrives. */
+        /*  A rest either side, measured **exactly** the way the reader
+            measures one: `readLinePlacement` calls a gap a phrase boundary
+            when it is at least one step of the grid plus the style's shortest
+            rest, counted onset to onset. Anything less and the quote reads
+            back joined to its neighbour, and the line stops breathing where
+            the quote lands.
+
+            Onset to onset is the part that took two goes. Measuring the end of
+            the lick by where its last note stops *sounding* quietly subtracts
+            that note's own length from the gap - which for a triplet is eight
+            ticks, and turned a 24-tick rule into a 20-tick one. Both sides use
+            `lastOnset` now, and both use this one number. */
+        const auto phraseGap = std::max (1, ticksFor (style.feel))
+                             + std::max (1, style.shortestRest);
+
+        const auto from = havePrevious ? previousLastOnset + phraseGap : 0;
+
+        const auto to = phrases[p].last + 1 < planned.size()
+                            ? tickOf (planned[phrases[p].last + 1])
+                            : total;
+
+        std::vector<const LickMatch*> fitting;
+        auto weights = 0;
+
+        /*  Room to breathe either side, which is not tidiness. A lick landing
+            a few ticks before the next phrase starts reads back as one phrase
+            joined to the next - a gap is read as a rest, and a gap shorter
+            than the style's shortest rest is not one - so the line stops
+            breathing exactly where the quote lands. The style already says how
+            much silence a phrase is worth; a quoted phrase gets the same. */
+        for (const auto& match : matches)
+        {
+            /*  A style only quotes a figure it could have phrased. If it says
+                its phrases run to twelve notes, a thirteen-note quote is out
+                of character for it whatever else fits - which is how the
+                pentatonic style came to be offered a cell one note longer than
+                anything its own planner writes.
+
+                The long end only, and that is the same asymmetry `phraseFit`
+                reads and `CompBarReading::tooBusy` has: a quote *shorter* than
+                the style's shortest phrase is a player leaving space, and L09
+                is a two-note ending on purpose. */
+            if (static_cast<int> (match.lick->notes.size()) > style.longestPhrase)
+                continue;
+
+            const auto reach = reachOf (*match.lick);
+
+            if (match.startTick + reach.first < from
+                || match.startTick + reach.lastOnset + phraseGap > to)
+                continue;
+
+            fitting.push_back (&match);
+            weights += match.lick->weight;
+        }
+
+        if (fitting.empty() || weights <= 0)
+        {
+            remember (plannedLastOnset);
+            continue;
+        }
+
+        //  The weighted draw. Same shape as `compingVoicing`'s: weight decides
+        //  how often a lick is reached for, never whether it fits.
+        auto drawn = static_cast<int> (mix (seed, salt + 0x5b1u) % static_cast<std::uint32_t> (weights));
+
+        for (const auto* match : fitting)
+        {
+            drawn -= match->lick->weight;
+
+            if (drawn < 0)
+            {
+                quoted[p] = *match;
+                remember (match->startTick + reachOf (*match->lick).lastOnset);
+                break;
+            }
+        }
+    }
+
     auto previous = -1;
     auto direction = -1;
 
@@ -269,6 +546,16 @@ std::vector<WrittenNote> improvisedLine (const Chart& chart,
         sweep over every style catches and a test of one style does not. */
     auto landingOn = -1;
 
+    //  Which phrase each slot belongs to, so the loop below can tell when it
+    //  has reached one that is quoted rather than written.
+    std::vector<std::size_t> phraseOf (planned.size(), 0);
+
+    for (std::size_t p = 0; p < phrases.size(); ++p)
+        for (auto i = phrases[p].first; i <= phrases[p].last && i < planned.size(); ++i)
+            phraseOf[i] = p;
+
+    auto skipUntil = std::size_t { 0 };
+
     for (std::size_t i = 0; i < planned.size(); ++i)
     {
         const auto& slot = planned[i];
@@ -276,6 +563,88 @@ std::vector<WrittenNote> improvisedLine (const Chart& chart,
 
         if (chord == nullptr)
             continue;
+
+        if (i < skipUntil)
+            continue;
+
+        /*  A quoted phrase: the lick's own notes, at the lick's own ticks, in
+            the lick's own rhythm. The slots the planner laid out for this
+            phrase are dropped - the lick is the phrase now. */
+        const auto& match = quoted[phraseOf[i]];
+
+        if (match.lick != nullptr && i == phrases[phraseOf[i]].first)
+        {
+            const auto& lick = *match.lick;
+            const auto root = placeLick (lick, match, style, previous);
+
+            if (root > 0)
+            {
+                for (const auto& quotedNote : lick.notes)
+                {
+                    const auto at = match.startTick + quotedNote.tick;
+
+                    if (at < 0 || at >= total)
+                        continue;
+
+                    const auto bar = fromBar + at / barTicks;
+                    const auto* over = chart.chordAt (bar);
+
+                    if (over == nullptr)
+                        continue;
+
+                    WrittenNote note;
+                    note.measureIndex = bar;
+                    note.at = BarPosition::fromTicks (at % barTicks);
+                    note.midiNote = lick.midiFor (quotedNote, root);
+                    note.chordSymbol = over->toString();
+                    note.lengthTicks = quotedNote.lengthTicks;
+                    note.lickKey = lick.key;
+
+                    /*  Coloured by the same tables the reader uses, never by
+                        the role the source wrote down. A `LickRole` is what the
+                        person who transcribed it said; a `NoteColour` is what
+                        the analyser will read off a take, and a take has no
+                        idea a lick was involved. Where the note is outside by
+                        pitch, the writer says which of the outside colours by
+                        looking at the note after it in the lick - a step away
+                        is an approach, anything else is outside - which is the
+                        one part of the reader's answer that can be known from
+                        the figure alone. */
+                    const auto tones = toneClasses (*over);
+                    const auto reading = readingScaleFor (*over, options);
+                    const auto scaleNotes = reading.has_value() ? reading->scale.pitchClasses()
+                                                                : tones;
+
+                    if (holds (tones, note.midiNote))
+                        note.colour = NoteColour::chordTone;
+                    else if (holds (scaleNotes, note.midiNote))
+                        note.colour = NoteColour::scaleTone;
+                    else
+                    {
+                        const auto next = &quotedNote != &lick.notes.back()
+                                              ? lick.midiFor (*(&quotedNote + 1), root) : 0;
+                        const auto moved = next > 0 ? std::abs (next - note.midiNote) : 0;
+
+                        note.colour = moved >= 1 && moved <= 2 ? NoteColour::approach
+                                                               : NoteColour::outside;
+                    }
+
+                    if (note.midiNote != previous)
+                        direction = note.midiNote > previous ? 1 : -1;
+
+                    previous = note.midiNote;
+                    line.push_back (note);
+                }
+
+                landingOn = -1;
+                skipUntil = phrases[phraseOf[i]].last + 1;
+                continue;
+            }
+
+            /*  No octave fits it in this style's register, so the phrase is
+                written rather than quoted. A real answer rather than a
+                failure: a lick wider than the register cannot be played in it.  */
+        }
 
         const auto chordTones = toneClasses (*chord);
         const auto scale = readingScaleFor (*chord, options);
@@ -321,7 +690,15 @@ std::vector<WrittenNote> improvisedLine (const Chart& chart,
                                                         : NoteColour::scaleTone;
         }
 
-        if (note.midiNote == 0 && style.usesApproaches && changes && ! strong && previous > 0)
+        /*  ...and never on the last note of a phrase. An approach and its
+            landing are one gesture, and the landing is owed to the next note
+            this loop writes - which, once a phrase can be quoted rather than
+            written, may be the first note of a lick that knows nothing about
+            it. The gesture completes inside its own phrase or it is not
+            written at all. It was always the weaker place for one: an approach
+            that resolves across a rest is an approach the ear has lost. */
+        if (note.midiNote == 0 && style.usesApproaches && changes && ! strong
+            && previous > 0 && ! slot.endsPhrase)
         {
             const auto nextTones = toneClasses (*comingNext);
             const auto target = nearestOf (nextTones, previous, direction,
@@ -376,6 +753,8 @@ std::vector<WrittenNote> improvisedLine (const Chart& chart,
         // coming back down, which is not a phrase.
         if (note.midiNote >= style.highestNote - 2) direction = -1;
         if (note.midiNote <= style.lowestNote + 2)  direction = 1;
+
+        note.lengthTicks = std::max (1, ticksFor (style.feel));
 
         previous = note.midiNote;
         line.push_back (note);

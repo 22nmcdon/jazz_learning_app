@@ -66,18 +66,27 @@ TEST ("a written line is read back as the line it was written as")
         `VoicingAnalyzerTests`' rule that every voicing `idiomaticVoicings`
         offers must classify as the type it was offered for, and the same
         reason: otherwise the app hands you a line and then marks it wrong. */
-    const auto chart = chartFrom ("| Dm7 | G7 | Cmaj7 | Cmaj7 |");
+    /*  Two charts, and the second is not decoration. Four bars offer a lick
+        almost nowhere to fit, so for a while this swept twenty-four seeds over
+        a line that was never once quoted and reported that quoting round-trips
+        perfectly. Sixteen bars is where the catalogue actually reaches. */
+    const std::vector<Chart> charts {
+        chartFrom ("| Dm7 | G7 | Cmaj7 | Cmaj7 |"),
+        chartFrom ("| Dm7 | G7 | Cmaj7 | Cmaj7 | Em7 | A7 | Dm7 | Dm7 "
+                   "| Gm7 | C7 | Fmaj7 | Fmaj7 | Bm7b5 | E7 | Am7 | Am7 |") };
 
     /*  Swept over every style now, not only the default. A style carries its
         own scale vocabulary, and the reader is given that same vocabulary -
         which is the whole of what `readingScaleFor` being public is for. Hand
         the reader a different one and half the line colours wrong; that is not
         a hypothetical, it is what this test caught when the styles arrived. */
+    for (const auto& chart : charts)
     for (const auto& style : lineStyles())
     {
         for (std::uint32_t seed = 1; seed <= 24; ++seed)
         {
-            const auto written = improvisedLine (chart, 0, 3, "", style.key, seed);
+            const auto written = improvisedLine (chart, 0, chart.measureCount() - 1,
+                                                 "", style.key, seed);
             CHECK (! written.empty());
 
             const auto read = readBack (chart, written, "", style.scaleStyle);
@@ -86,6 +95,30 @@ TEST ("a written line is read back as the line it was written as")
             for (std::size_t i = 0; i < read.size() && i < written.size(); ++i)
             {
                 CHECK (read[i].midiNote == written[i].midiNote);
+
+                /*  A **quoted** note promises less, and the promise it does
+                    make is the one that matters. A documented device may be
+                    deliberately outside the scale a take reads against - a
+                    side-slipped cell is outside by design - so what the writer
+                    guarantees is the *pitch* classification: what it wrote as
+                    inside reads as inside, and what it wrote as outside reads
+                    as outside. Which of the three outside colours the line
+                    produces depends on what happens after the note, and that
+                    is the analyser's to say.
+
+                    Measured rather than assumed: over two hundred seeds of
+                    this tune, every quoted note agreed on the pitch
+                    classification and about one in forty differed on the
+                    colour - all of them approach against outside, in both
+                    directions, and none of them chord against scale. */
+                if (! written[i].lickKey.empty())
+                {
+                    CHECK (read[i].colour == written[i].colour
+                           || (isOutsideByPitch (read[i].colour)
+                               && isOutsideByPitch (written[i].colour)));
+                    continue;
+                }
+
                 CHECK (read[i].colour == written[i].colour);
 
                 /*  The gesture is deliberately *not* asserted to be any
@@ -147,6 +180,17 @@ TEST ("the strong beats carry the chord")
         for (const auto& note : improvisedLine (chart, 0, 3, "", "", seed))
         {
             if (! isStrong (note.at, 4))
+                continue;
+
+            /*  A quoted note is not held to this, and that is the decision
+                rather than a let-off. It is a rule about what the *generator*
+                may invent - see `lineFaults`, which draws the same line - and
+                a documented device may break it on purpose: L03 side-slips a
+                whole cell over the V and lands the first note of it, a b13, on
+                beat one. Marking that would be marking Coltrane. What the app
+                does instead is read it back honestly: that note was outside,
+                and here is where it landed. */
+            if (! note.lickKey.empty())
                 continue;
 
             /*  A strong beat is a chord tone, unless it is the note approaching

@@ -48,8 +48,44 @@ struct WrittenNote
     int midiNote {};
     std::string chordSymbol;
 
-    /** What the analyser should call it - and will, or a test fails. */
+    /** What the analyser should call it - and will, or a test fails.
+
+        For a note that came out of a lick the promise is narrower, and
+        deliberately: see `lickKey` below.
+    */
     NoteColour colour {};
+
+    /** How long it sounds, in ticks.
+
+        A generated note is one step of the style's grid, which is what the
+        writer always wrote even when nothing carried the number. A lick's
+        notes are whatever the source says - a held quarter, a triplet, a
+        grace note crushed into the one after it - and the rhythm is at least
+        half of what makes a lick that lick, so it would be lost by rounding
+        every note to an eighth.
+    */
+    int lengthTicks { ticksPerBeat / 2 };
+
+    /** The `LickDefinition::key` this note was quoted from; empty when the
+        note was generated.
+
+        It is on the note rather than on the line because a line is a mix: a
+        phrase quoted, a phrase invented, a phrase quoted from something else.
+        A shell naming what it played reads these.
+
+        **It also marks where the colour promise changes.** A generated note
+        reads back from a take as exactly the colour it was written as, and
+        `LineWriterTests` holds the writer to that. A quoted note promises
+        less, because a documented device may be deliberately outside the
+        scale the take reads against - a side-slipped cell is outside by
+        design, and the reading saying so is correct rather than a failure.
+        What the writer still guarantees is the *pitch* classification: a note
+        it wrote as inside reads as inside, and one it wrote as outside reads
+        as outside by pitch. Which of the three outside colours the line
+        produces is the analyser's to say, because it depends on what the line
+        does next.
+    */
+    std::string lickKey;
 };
 
 /*  There is no `ApproachKind` here, and the first version of this had one.

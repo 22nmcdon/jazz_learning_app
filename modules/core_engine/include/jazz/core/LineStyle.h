@@ -90,6 +90,32 @@ struct LineStyleDefinition
     */
     bool usesApproaches { true };
 
+    /** How often a phrase of this style **reaches for** a quote, 0-100.
+
+        Not the share of the line that ends up quoted, and the difference is
+        worth stating because it is large: a phrase that reaches finds nothing
+        to quote whenever no lick fits the harmony under it, and then generates
+        as it always did. Measured over two hundred seeds, bebop asking 60 gets
+        39% of its notes from the catalogue on a standard, blues asking 70 gets
+        64% on a twelve-bar, and modal asking 25 gets 12% on So What. A tune
+        the catalogue was not written for gets less again, which is correct.
+
+
+        The research's own suggestion is 50-70% drawn from authored cells with
+        generated atoms filling the gaps, and it says in as many words that the
+        ratio is a design suggestion to tune by ear - so this is a number
+        somebody is expected to argue with rather than a finding.
+
+        Per style because the styles are not equally quotable. Blues phrasing
+        is made of figures a player has heard a thousand times; a modal line is
+        a sound rather than a vocabulary, and the catalogue has one lick for it
+        against a dozen for bebop. A style that asked for more quoting than the
+        catalogue can supply simply generates the rest - `licksFitting` returns
+        nothing and the phrase is written note by note, which is the whole of
+        what "atom fallback" means.
+    */
+    int lickShare { 60 };
+
     /** The register a line of this style stays inside (R12).
 
         A soloist's two octaves, not a keyboard's seven: a line that wandered
