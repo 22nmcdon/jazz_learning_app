@@ -262,6 +262,40 @@ TEST ("a lick stays inside a range a soloist could play it in")
     }
 }
 
+TEST ("every value in these enums is carried by some lick")
+{
+    /*  The `brazilian` check, one file over. That style sat in `ReharmStyle`
+        tagged on no rule at all, so the menu it would have shipped had an
+        entry that was a lie, and nothing said so because nothing counted. Two
+        values here were the same shape and were deleted rather than wired up:
+        `LickSource::transcription`, because nothing in the catalogue is taken
+        note for note off a recording, and `LickOrnament::grace`, because both
+        ornamented notes are crushes.
+
+        This is what stops the next one. A value earns its place by being on
+        some lick - not on many, since one documented device is a real
+        category, but on at least one. Author a transcription and the value
+        comes back with it. */
+    std::set<LickSource> sources;
+    std::set<LickOrnament> ornaments;
+
+    for (const auto& lick : licks())
+    {
+        sources.insert (lick.source);
+
+        for (const auto& note : lick.notes)
+            ornaments.insert (note.ornament);
+    }
+
+    for (const auto source : { LickSource::documentedDevice,
+                               LickSource::teachingSite,
+                               LickSource::composite })
+        CHECK (sources.count (source) == 1);
+
+    for (const auto ornament : { LickOrnament::none, LickOrnament::crush })
+        CHECK (ornaments.count (ornament) == 1);
+}
+
 TEST ("a lick nobody has heard of falls back rather than failing")
 {
     // The same forgiveness `lineStyleFor` and `compStyleFor` give, for the

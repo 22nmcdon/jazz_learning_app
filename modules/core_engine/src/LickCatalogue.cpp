@@ -68,7 +68,6 @@ std::string lickSourceName (LickSource source)
     switch (source)
     {
         case LickSource::documentedDevice: return "documented device";
-        case LickSource::transcription:    return "transcription";
         case LickSource::teachingSite:     return "teaching site";
         case LickSource::composite:        break;
     }

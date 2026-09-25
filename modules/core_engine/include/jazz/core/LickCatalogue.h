@@ -119,7 +119,6 @@ enum class LickRole
 enum class LickOrnament
 {
     none,
-    grace,   ///< struck a shade before its target, taking time from the note before
     crush    ///< struck with its target and released early - the blues crush
 };
 
@@ -187,10 +186,21 @@ struct LickNote
 enum class LickSource
 {
     documentedDevice,  ///< a named practice: Barry Harris' scale, a bebop enclosure
-    transcription,     ///< taken off a specific recorded solo
     teachingSite,      ///< a lesson's worked example
     composite          ///< assembled from documented devices, not quoted
 };
+
+/*  There is no `transcription` here, and there was: a lick taken note for note
+    off a named recording. Nothing in the catalogue is one - the research is
+    candid that its entries are documented devices, lessons' worked examples and
+    composites - so the value went, along with `LickOrnament`'s `grace`, which
+    no note carried either.
+
+    That is `CLAUDE.md`'s rule rather than a new policy. `brazilian` sat in
+    `ReharmStyle` tagged on no rule at all, and the menu it would have shipped
+    had an entry that was a lie; a value lives in an enum here while at least
+    one record carries it, and a test says so. Author a real transcription and
+    the value comes back with it. */
 
 std::string lickSourceName (LickSource source);
 
