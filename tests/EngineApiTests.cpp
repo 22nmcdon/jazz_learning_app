@@ -495,10 +495,16 @@ TEST ("a line says what it drew on")
 TEST ("a line that quoted nothing claims nothing")
 {
     /*  The negative control, and the one a shell feature-detects against: a
-        chart of chords no lick is written over is written entirely by the
-        generator, and must come back with an empty list rather than the
-        nearest thing the catalogue had. */
-    const auto json = improvisedLine ("| Cdim7 | Csus4 | C+ | CmMaj7 |",
+        chart no lick can be played over is written entirely by the generator,
+        and must come back with an empty list rather than the nearest thing the
+        catalogue had.
+
+        It was four chords of qualities the catalogue did not reach; the licks
+        that closed that gap want two bars of a sus or a minor-major, so the
+        chart below gives each of them one. The reason it quotes nothing is now
+        the boundary rule rather than the harmony - see the matching test in
+        `LickCatalogueTests`. */
+    const auto json = improvisedLine ("| Csus4 | CmMaj7 | Ebsus4 | AbmMaj7 |",
                                       0, 3, "", "bebop", 1);
 
     CHECK (contains (json, "\"ok\":true"));

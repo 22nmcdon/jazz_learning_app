@@ -539,33 +539,59 @@ TEST ("a chart nothing fits offers nothing rather than the nearest thing")
         generator has a perfectly good answer of its own for a bar no lick was
         written for.
 
-        Reaching a chart nothing fits takes four unusual chords, and that is
-        worth knowing rather than hiding: almost any dominant, major, minor or
-        half-diminished bar will find *something*, because the single-chord
-        licks are written over a quality rather than a progression. The four
-        below are the qualities the catalogue does not reach at all - see the
-        coverage test beneath this one. */
-    CHECK (matchesOn ("| Cdim7 | Csus4 | C+ | CmMaj7 |").empty());
+        **This used to fail on the quality and now fails on the boundary**,
+        which is the change the four new licks made. It was
+        `| Cdim7 | Csus4 | C+ | CmMaj7 |` while those four qualities were
+        unreached; L18 and L21 now fit two of those bars, so a chart that fits
+        nothing has to be built out of the other rule instead - the one that
+        says a lick's chord must last as long as the chart's.
+
+        Both licks written over these two qualities want **two bars** of the
+        chord, because that is how long a sus vamp or a tonic minor-major sits.
+        Every chord below changes after one, so each is a quality the catalogue
+        reaches and a place it cannot be played. Verified in both directions:
+        the same chords held for two bars each do fit. */
+    CHECK (matchesOn ("| Csus4 | CmMaj7 | Ebsus4 | AbmMaj7 |").empty());
+    CHECK (matchesOn ("| Csus4 | CmMaj7 | Ebsus4 | AbmMaj7 |", "modal").empty());
+
+    // The positive half, so this is about the boundaries and not the chords.
+    CHECK (found (matchesOn ("| Csus4 | Csus4 | CmMaj7 | CmMaj7 |", "modal"), "L19"));
+    CHECK (found (matchesOn ("| Csus4 | Csus4 | CmMaj7 | CmMaj7 |", "modal"), "L22"));
 }
 
-TEST ("the catalogue reaches four of the eight chord qualities, and says which")
+TEST ("the catalogue reaches every chord quality, and says which lick does it")
 {
-    /*  Written down rather than assumed, because the gap is real and a later
-        pass filling it should have to change a test that states the old shape.
-        The research's Part B is a ii-V catalogue: it has nothing over a
-        diminished, suspended, augmented or minor-major chord, so a tune built
-        on those gets a generated line and no quotes. */
+    /*  This asserted **four** of the eight for as long as the catalogue was
+        the research's Part B and nothing else, and said so: Part B is a ii-V
+        catalogue, so it is written over majors, minors, dominants and
+        half-diminished chords and over nothing at all else. A tune with a
+        passing diminished, a sus vamp or a tonic minor-major got a generated
+        line and no quotes.
+
+        Four licks closed it, one quality each, and they are named here rather
+        than counted so that removing one fails this test with the name of what
+        went missing. */
     std::set<ChordQuality> covered;
 
     for (const auto& lick : licks())
         for (const auto& chord : lick.chords)
             covered.insert (chord.quality);
 
-    CHECK_EQ (covered.size(), std::size_t { 4 });
+    CHECK_EQ (covered.size(), std::size_t { 8 });
+
+    // The four the research's own catalogue reaches.
     CHECK (covered.count (ChordQuality::major) == 1);
     CHECK (covered.count (ChordQuality::minor) == 1);
     CHECK (covered.count (ChordQuality::dominant) == 1);
     CHECK (covered.count (ChordQuality::halfDiminished) == 1);
+
+    // And the four that were added, each by the lick named beside it.
+    const auto onlyChordOf = [] (const char* key) { return lickFor (key).chords.front().quality; };
+
+    CHECK (onlyChordOf ("L18") == ChordQuality::diminished);
+    CHECK (onlyChordOf ("L19") == ChordQuality::suspended);
+    CHECK (onlyChordOf ("L21") == ChordQuality::augmented);
+    CHECK (onlyChordOf ("L22") == ChordQuality::minorMajor);
 }
 
 TEST ("a range outside the chart is empty rather than a crash")

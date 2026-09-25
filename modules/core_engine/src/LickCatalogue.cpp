@@ -738,6 +738,226 @@ const std::vector<LickDefinition>& licks()
             built.push_back (lick);
         }
 
+        //======================================================================
+        /*  Beyond Part B: the four qualities a ii-V catalogue never reaches.
+
+            Everything above comes out of the research's Part B, which is a
+            ii-V catalogue - so it is written over majors, minors, dominants
+            and half-diminished chords, and over nothing else. A tune with a
+            passing diminished, a sus vamp, an augmented chord or a tonic
+            minor-major got a generated line and no quotes at all.
+
+            These five fill that in, and the provenance is the part to be
+            careful about: the research does not contain them, and saying
+            otherwise is exactly what `LickSource` exists to prevent. **One is
+            a documented device** - Barry Harris teaches the dim7 / dominant
+            relationship L18 is built on, and it is a thing a player learns
+            rather than a pattern. **The other four are composites**, assembled
+            out of devices and attributed the way L01 is, and they are drawn
+            less often for it. Weight decides the draw, never the cost.
+
+            The fifth is not a new quality at all: L20 is a **short** minor
+            pentatonic cell, and it is what lets the pentatonic style quote
+            anything. See the note on its entry. */
+
+        //  A diminished chord.
+        {
+            /*  A dim7 is a dominant 7b9 without its root - Cdim7 is Ab7b9 -
+                which is Barry Harris' relationship and the most useful thing
+                anybody can tell a player looking at a diminished bar: you
+                already know what to play over it.
+
+                So the figure is an Ab7 line, written over a Cdim7. It descends
+                Ab Mixolydian from the dominant's 5th to its root, and then
+                comes back up through the #9 and b9 to the b7.
+
+                Written on Cdim7: Eb Db C Bb | Ab B A Gb.
+
+                Two things in it are deliberately not the dim7's own notes. The
+                **Db and the Bb** are the dominant's 4th and 9th and are
+                outside the whole-half diminished scale a take reads a dim7
+                against - which is true, and is the reading a player should
+                get. And **beat three is the Ab itself**: the root of the
+                dominant this chord really is, landing where it can be heard.
+                A figure made only of the chord's own notes would be the
+                arpeggio, and the arpeggio teaches nothing. */
+            LickDefinition lick;
+            lick.key = "L18";
+            lick.name = "Diminished read as the dominant it is";
+            lick.summary = "A dim7 is a 7b9 without its root, so this plays the dominant's "
+                           "own line over it.";
+            lick.attribution = "Barry Harris";
+            lick.source = LickSource::documentedDevice;
+            lick.weight = documented;
+            lick.styles = { "bebop" };
+            lick.chords = { over (ChordQuality::diminished, 0, 0, aBar) };
+            lick.notes = {
+                note ( 0, 0,  3,  0, LickRole::chordTone),   // Eb - the dominant's 5th
+                note (12, 0,  1,  0, LickRole::outside),     // Db - its 4th
+                note (24, 0,  0,  0, LickRole::chordTone),   // C  - its 3rd
+                note (36, 0, 10, -1, LickRole::outside),     // Bb - its 9th
+                note (48, 0,  8, -1, LickRole::scaleTone),   // Ab - the root it really has
+                note (60, 0, 11, -1, LickRole::scaleTone),   // B  - the #9
+                note (72, 0,  9, -1, LickRole::chordTone),   // A  - the b9
+                note (84, 0,  6, -1, LickRole::chordTone) }; // Gb - the b7
+            built.push_back (lick);
+        }
+
+        //  A suspended chord.
+        {
+            /*  The sus sound is the pentatonic on the root - C D F G Bb over
+                Csus4 - and the way it is played is in fourths, which is what
+                separates it from a scale run: the chord has no third to lean
+                on, so the line stops implying one.
+
+                Stacked fourths climb to the top of the register and then the
+                line walks back down through the same five notes, which is the
+                registral return the research lists among the things that
+                separate a line from an exercise. It is the same device L15
+                uses over a Dorian minor, over the chord that is actually built
+                that way.
+
+                Written on Csus4: C F Bb D G | C Bb G F.
+
+                Two bars, because that is how long a sus chord sits: the vamps
+                these are played over - Maiden Voyage, So What's B section -
+                change every two bars rather than every one. */
+            LickDefinition lick;
+            lick.key = "L19";
+            lick.name = "Sus pentatonic in fourths";
+            lick.summary = "The root pentatonic climbing in fourths and walking back down - "
+                           "the sus sound, with no third to imply.";
+            lick.attribution = "the modal sus vamp";
+            lick.source = LickSource::composite;
+            lick.weight = assembled;
+            lick.styles = { "modal", "pentatonic" };
+            lick.chords = { over (ChordQuality::suspended, 0, 0, 2 * aBar) };
+            lick.notes = {
+                note (  0, 0,  0, 0, LickRole::chordTone),   // C
+                note ( 12, 0,  5, 0, LickRole::chordTone),   // F - the 4, a chord tone here
+                note ( 24, 0, 10, 0, LickRole::scaleTone),   // Bb
+                note ( 36, 0,  2, 1, LickRole::scaleTone),   // D - the 9
+                note ( 48, 0,  7, 1, LickRole::chordTone, quarter),  // G - the top, held
+                note ( 96, 0,  0, 1, LickRole::chordTone),   // C - the second bar, walking down
+                note (108, 0, 10, 0, LickRole::scaleTone),   // Bb
+                note (120, 0,  7, 0, LickRole::chordTone),   // G
+                note (144, 0,  5, 0, LickRole::chordTone, quarter) };  // F
+            built.push_back (lick);
+        }
+
+        //  A minor chord, in five notes - the cell the pentatonic style can reach.
+        {
+            /*  L15 is the pentatonic device in this catalogue and the
+                pentatonic *style* could never draw it: thirteen notes against
+                that style's longest phrase of twelve, so its `lickShare` was
+                nothing and a test held that honest. This is the entry that
+                fixes it - eight notes, over one ordinary minor bar rather than
+                a two-bar vamp, so it fits the tunes that style is actually
+                played on.
+
+                Fourths and minor thirds, no half steps anywhere: the summary
+                of the pentatonic style says "five notes and the leaps between
+                them", and a cell that stepped chromatically would be a bebop
+                line in pentatonic clothing.
+
+                Written on Cm7: G C Bb G | F Bb G Eb. */
+            LickDefinition lick;
+            lick.key = "L20";
+            lick.name = "Minor pentatonic cell";
+            lick.summary = "Eight notes of the minor pentatonic, in fourths and thirds with "
+                           "no half steps to lean on.";
+            lick.attribution = "the minor pentatonic cell";
+            lick.source = LickSource::composite;
+            lick.weight = assembled;
+            lick.styles = { "pentatonic", "blues" };
+            lick.chords = { over (ChordQuality::minor, 0, 0, aBar) };
+            lick.notes = {
+                note ( 0, 0,  7, 0, LickRole::chordTone),   // G  - the 5
+                note (12, 0,  0, 1, LickRole::chordTone),   // C  - up a fourth
+                note (24, 0, 10, 0, LickRole::chordTone),   // Bb - the b7
+                note (36, 0,  7, 0, LickRole::chordTone),   // G
+                note (48, 0,  5, 0, LickRole::scaleTone),   // F  - the 11
+                note (60, 0, 10, 0, LickRole::chordTone),   // Bb - up a fourth again
+                note (72, 0,  7, 0, LickRole::chordTone),   // G
+                note (84, 0,  3, 0, LickRole::chordTone) }; // Eb - the b3
+            built.push_back (lick);
+        }
+
+        //  An augmented chord.
+        {
+            /*  An augmented triad has no tonic pull in it at all - every
+                interval is the same - and the scale that holds it is the whole
+                tone, which the engine already reads an augmented chord
+                against. So the figure is the symmetry itself: whole steps up
+                with the triad landing on every beat, and then a turn back down
+                rather than running off the top of the register.
+
+                Written on C+: C D E F# | G# Bb G# E.
+
+                A composite. Nobody's solo, and the device - "play the whole
+                tone scale over the augmented chord" - is as old as the chord. */
+            LickDefinition lick;
+            lick.key = "L21";
+            lick.name = "Whole-tone climb over an augmented chord";
+            lick.summary = "Whole steps up with the augmented triad on every beat, then a "
+                           "turn back down.";
+            lick.attribution = "a whole-tone cliche";
+            lick.source = LickSource::composite;
+            lick.weight = assembled;
+            lick.styles = { "bebop" };
+            lick.chords = { over (ChordQuality::augmented, 0, 0, aBar) };
+            lick.notes = {
+                note ( 0, 0,  0, 0, LickRole::chordTone),   // C
+                note (12, 0,  2, 0, LickRole::scaleTone),   // D
+                note (24, 0,  4, 0, LickRole::chordTone),   // E
+                note (36, 0,  6, 0, LickRole::scaleTone),   // F#
+                note (48, 0,  8, 0, LickRole::chordTone),   // G# - the #5
+                note (60, 0, 10, 0, LickRole::scaleTone),   // Bb
+                note (72, 0,  8, 0, LickRole::chordTone),   // G# - the turn
+                note (84, 0,  4, 0, LickRole::chordTone) }; // E
+            built.push_back (lick);
+        }
+
+        //  A minor-major chord.
+        {
+            /*  The note that makes a mMaj7 what it is - the major 7th over a
+                minor triad - so the line starts on it and falls the whole way
+                down the melodic minor, which is the scale a minor triad with a
+                major 7th is by definition. The second bar turns back up
+                through the chord and lands on that 7th again.
+
+                Written on CmMaj7: B A G F | Eb D C B | D Eb G | B.
+
+                The tonic minor of Solar, Beautiful Love and In a Sentimental
+                Mood - a chord that sits for two bars where it appears, which is
+                why this is written over two. A composite: the scale is
+                documented and this descent through it is not anybody's. */
+            LickDefinition lick;
+            lick.key = "L22";
+            lick.name = "Melodic-minor descent from the 7th";
+            lick.summary = "Down the melodic minor from the major 7th that defines the "
+                           "chord, then back up to it.";
+            lick.attribution = "the tonic minor-major sound";
+            lick.source = LickSource::composite;
+            lick.weight = assembled;
+            lick.styles = { "bebop", "modal" };
+            lick.chords = { over (ChordQuality::minorMajor, 0, 0, 2 * aBar) };
+            lick.notes = {
+                note (  0, 0, 11,  0, LickRole::chordTone),  // B  - the major 7th
+                note ( 12, 0,  9,  0, LickRole::scaleTone),  // A  - the natural 6
+                note ( 24, 0,  7,  0, LickRole::chordTone),  // G
+                note ( 36, 0,  5,  0, LickRole::scaleTone),  // F
+                note ( 48, 0,  3,  0, LickRole::chordTone),  // Eb
+                note ( 60, 0,  2,  0, LickRole::scaleTone),  // D
+                note ( 72, 0,  0,  0, LickRole::chordTone),  // C
+                note ( 84, 0, 11, -1, LickRole::chordTone),  // B - an octave below
+                note ( 96, 0,  2,  0, LickRole::scaleTone),  // D - turning back up
+                note (108, 0,  3,  0, LickRole::chordTone),  // Eb
+                note (120, 0,  7,  0, LickRole::chordTone),  // G
+                note (144, 0, 11,  0, LickRole::chordTone, quarter) };  // B
+            built.push_back (lick);
+        }
+
         return built;
     }();
 
