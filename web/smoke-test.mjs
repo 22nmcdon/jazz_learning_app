@@ -831,16 +831,19 @@ try {
   check(`a line names what it quoted (${credited.split("Quoting ")[1] || "never quoted"})`,
         credited.includes("Quoting "));
 
-  /*  And the negative control, which is the half that matters: a chart of
-      chords no lick is written over still writes a line, and credits nobody.
-      A page that always found something to credit would pass the check above
-      and be inventing provenance, which is the one thing a catalogue carrying
-      attributions must never do. */
-  /*  And the negative control, which is the half that matters: a chart of
-      chords no lick is written over still writes a line, and credits nobody.
-      A page that always found something to credit would pass the check above
-      while inventing provenance, which is the one thing a catalogue carrying
+  /*  And the negative control, which is the half that matters: a chart no lick
+      can be played over still writes a line, and credits nobody. A page that
+      always found something to credit would pass the check above while
+      inventing provenance, which is the one thing a catalogue carrying
       attributions must never do.
+
+      The chart used to be four chords of qualities the catalogue reached over
+      nothing at all. It reaches all eight now, so this one fails on the
+      boundary rule instead: both licks written over a sus and a minor-major
+      want two bars of the chord, and each of these gets one. Same chart as the
+      engine's own negative controls, deliberately - three checks agreeing about
+      which chart quotes nothing is one fact, and three different charts would
+      be three.
 
       On a page of its own, because the alternative is editing this one's chart
       and putting it back - and `#progression` holds what was last *typed*
@@ -860,11 +863,11 @@ try {
 
     await plain.locator("#chartButton").click();
     await plain.locator("#editToggle").click();
-    await plain.fill("#progression", "| Cdim7 | Csus4 | C+ | CmMaj7 |");
+    await plain.fill("#progression", "| Csus4 | CmMaj7 | Ebsus4 | AbmMaj7 |");
     await plain.dispatchEvent("#progression", "input");
 
     await plain.waitForFunction(
-      () => /dim/.test((document.querySelector("#systems .chord") || {}).textContent || ""),
+      () => /sus/.test((document.querySelector("#systems .chord") || {}).textContent || ""),
       null, { timeout: 10000 });
 
     let uncredited = true;
