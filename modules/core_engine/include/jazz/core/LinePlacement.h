@@ -78,7 +78,6 @@ enum class OnsetPlacement
     unplaced      ///< no clock behind it, so there is no placement to read
 };
 
-std::string onsetPlacementName (OnsetPlacement placement);
 
 /** A run of notes and the silence after it.
 

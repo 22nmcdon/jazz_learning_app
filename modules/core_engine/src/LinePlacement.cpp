@@ -62,18 +62,6 @@ namespace
     }
 }
 
-std::string onsetPlacementName (OnsetPlacement placement)
-{
-    switch (placement)
-    {
-        case OnsetPlacement::onTheGrid:  return "onTheGrid";
-        case OnsetPlacement::offTheGrid: return "offTheGrid";
-        case OnsetPlacement::unplaced:   break;
-    }
-
-    return "unplaced";
-}
-
 LinePlacementReading readLinePlacement (const std::vector<LineNote>& line,
                                         const LineStyleDefinition& style,
                                         int beatsPerBar)

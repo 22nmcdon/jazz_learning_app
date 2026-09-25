@@ -63,33 +63,6 @@ namespace
 }
 
 //==============================================================================
-std::string lickRoleName (LickRole role)
-{
-    switch (role)
-    {
-        case LickRole::chordTone:  return "chord tone";
-        case LickRole::colourTone: return "colour tone";
-        case LickRole::scaleTone:  return "scale tone";
-        case LickRole::approach:   return "approach";
-        case LickRole::enclosure:  return "enclosure";
-        case LickRole::outside:    break;
-    }
-
-    return "outside";
-}
-
-std::string lickOrnamentName (LickOrnament ornament)
-{
-    switch (ornament)
-    {
-        case LickOrnament::grace: return "grace";
-        case LickOrnament::crush: return "crush";
-        case LickOrnament::none:  break;
-    }
-
-    return "none";
-}
-
 std::string lickSourceName (LickSource source)
 {
     switch (source)
@@ -101,23 +74,6 @@ std::string lickSourceName (LickSource source)
     }
 
     return "composite";
-}
-
-int LickDefinition::spanInTicks() const noexcept
-{
-    if (notes.empty())
-        return 0;
-
-    auto first = notes.front().tick;
-    auto last = notes.front().tick + notes.front().lengthTicks;
-
-    for (const auto& written : notes)
-    {
-        first = std::min (first, written.tick);
-        last = std::max (last, written.tick + written.lengthTicks);
-    }
-
-    return last - first;
 }
 
 int LickDefinition::midiFor (const LickNote& written, int rootOfFirstChord) const noexcept

@@ -108,7 +108,6 @@ enum class LickRole
     outside       ///< X
 };
 
-std::string lickRoleName (LickRole role);
 
 /** A pianistic decoration attached to a note.
 
@@ -137,7 +136,6 @@ enum class LickOrnament
     below a hundred on a grid it was never off. A crush is one musical impulse,
     the research says so, and one impulse has one position. */
 
-std::string lickOrnamentName (LickOrnament ornament);
 
 /** One note of a lick.
 
@@ -237,9 +235,6 @@ struct LickDefinition
     /** It leads in from the bar before its first chord, so some of its notes
         have negative ticks and it needs a bar in front of it to start. */
     bool startsOnAPickup {};
-
-    /** Ticks from the first note to the last, pickup included. */
-    int spanInTicks() const noexcept;
 
     /** The MIDI note this would sound, given where the first chord's root is
         put. See the note on `LickNote` for why the octave is in here. */

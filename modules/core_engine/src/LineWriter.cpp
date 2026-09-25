@@ -118,22 +118,27 @@ namespace
         return phrases;
     }
 
-    /** Where a lick's notes reach, relative to the tick it starts on.
+    /** How far a lick's notes reach either side of the tick it starts on.
 
-        `first` is negative for a lick that leads in from the bar before, which
-        is why this is a pair rather than `spanInTicks`: what a caller placing
-        one needs to know is how far back it reaches as well as how far on.
+        Two numbers rather than a span, because a lick that leads in from the
+        bar before reaches *backwards*: a caller placing one needs to know how
+        far back it goes as well as how far on.
+
+        Both are **onsets**, and that is the whole of why the pair is not a
+        duration. The reader calls a gap a phrase boundary by counting onset to
+        onset, so measuring the end by where the last note stops sounding
+        quietly subtracts that note's own length from every comparison - eight
+        ticks, for a triplet, which turned a 24-tick rule into a 20-tick one.
     */
     struct LickReach
     {
         int first {};       ///< the earliest onset, negative for a pickup
-        int last {};        ///< where the last note stops sounding
         int lastOnset {};   ///< where the last note is struck
     };
 
     LickReach reachOf (const LickDefinition& lick)
     {
-        LickReach reach { 0, 0, 0 };
+        LickReach reach { 0, 0 };
 
         for (std::size_t i = 0; i < lick.notes.size(); ++i)
         {
@@ -141,8 +146,6 @@ namespace
 
             reach.first = i == 0 ? note.tick : std::min (reach.first, note.tick);
             reach.lastOnset = i == 0 ? note.tick : std::max (reach.lastOnset, note.tick);
-            reach.last = i == 0 ? note.tick + note.lengthTicks
-                                : std::max (reach.last, note.tick + note.lengthTicks);
         }
 
         return reach;
