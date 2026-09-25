@@ -303,11 +303,11 @@ TEST ("a bar's stats are that bar's, not the take's")
     analyzer.setTarget (1, chordFrom ("G7"));
     playAll (analyzer, { 61, 63 });             // Db Eb over G7
 
-    const auto first = analyzer.statsForBar (0);
+    const auto first = analyzer.barFor (0).stats;
     CHECK_EQ (first.total(), 4);
     CHECK_EQ (first.chordTones, 4);
 
-    const auto second = analyzer.statsForBar (1);
+    const auto second = analyzer.barFor (1).stats;
     CHECK_EQ (second.total(), 2);
     CHECK_EQ (second.chordTones, 0);
 }
@@ -319,7 +319,7 @@ TEST ("a bar that was never played over has no stats rather than an error")
     analyzer.setTarget (0, chordFrom ("Dm7"));
     analyzer.play (62);
 
-    CHECK_EQ (analyzer.statsForBar (7).total(), 0);
+    CHECK_EQ (analyzer.barFor (7).stats.total(), 0);
 }
 
 TEST ("walking back to a bar adds to it rather than making a second one")
@@ -338,7 +338,7 @@ TEST ("walking back to a bar adds to it rather than making a second one")
 
     const auto take = analyzer.summary();
     CHECK_EQ (static_cast<int> (take.bars.size()), 2);
-    CHECK_EQ (analyzer.statsForBar (0).total(), 2);
+    CHECK_EQ (analyzer.barFor (0).stats.total(), 2);
 }
 
 TEST ("the percentages in a summary add up to a hundred")
@@ -694,8 +694,8 @@ TEST ("a take's bars are scored one by one, not all together")
     // there will be no more of it.
     analyzer.endTake();
 
-    CHECK (analyzer.statsForBar (0).score() > analyzer.statsForBar (1).score());
-    CHECK (analyzer.statsForBar (1).score() == 25);
+    CHECK (analyzer.barFor (0).stats.score() > analyzer.barFor (1).stats.score());
+    CHECK (analyzer.barFor (1).stats.score() == 25);
 }
 
 //==============================================================================
@@ -753,19 +753,19 @@ TEST ("a note outside the harmony is open, not wrong, until the window has passe
     // The moment it is played it is open. Not outside - nothing knows that yet,
     // and guessing is what made a score dip and climb back.
     CHECK (analyzer.play (61).colour == NoteColour::unresolved);
-    CHECK_EQ (analyzer.statsForBar (0).unresolved, 1);
-    CHECK_EQ (analyzer.statsForBar (0).outside, 0);
+    CHECK_EQ (analyzer.barFor (0).stats.unresolved, 1);
+    CHECK_EQ (analyzer.barFor (0).stats.outside, 0);
 
     // And nothing is graded on it while it is open.
-    CHECK_EQ (analyzer.statsForBar (0).settled(), 0);
-    CHECK_EQ (analyzer.statsForBar (0).score(), 0);
+    CHECK_EQ (analyzer.barFor (0).stats.settled(), 0);
+    CHECK_EQ (analyzer.barFor (0).stats.score(), 0);
 
     analyzer.play (62);
 
     CHECK (analyzer.notes().front().colour == NoteColour::approach);
-    CHECK_EQ (analyzer.statsForBar (0).outside, 0);
-    CHECK_EQ (analyzer.statsForBar (0).unresolved, 0);
-    CHECK_EQ (analyzer.statsForBar (0).approachTones, 1);
+    CHECK_EQ (analyzer.barFor (0).stats.outside, 0);
+    CHECK_EQ (analyzer.barFor (0).stats.unresolved, 0);
+    CHECK_EQ (analyzer.barFor (0).stats.approachTones, 1);
 }
 
 TEST ("an outside note that leaps away stays outside")
@@ -887,8 +887,8 @@ TEST ("running chromatically into the next bar is not punished for crossing the 
 
     CHECK (analyzer.notes()[1].colour == NoteColour::approach);
     CHECK_EQ (analyzer.notes()[1].measureIndex, 0);   // it still belongs to the bar it was played in
-    CHECK_EQ (analyzer.statsForBar (0).outside, 0);
-    CHECK_EQ (analyzer.statsForBar (0).approachTones, 1);
+    CHECK_EQ (analyzer.barFor (0).stats.outside, 0);
+    CHECK_EQ (analyzer.barFor (0).stats.approachTones, 1);
 }
 
 TEST ("approach notes count as landing, so a chromatic line scores better than a lost one")

@@ -1104,11 +1104,6 @@ namespace
     }
 }
 
-LineStats LineAnalyzer::statsForBar (int measureIndex) const
-{
-    return barFor (measureIndex).stats;
-}
-
 LineBar LineAnalyzer::barFor (int measureIndex) const
 {
     LineBar bar;

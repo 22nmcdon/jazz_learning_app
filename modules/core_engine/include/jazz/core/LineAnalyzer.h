@@ -668,20 +668,23 @@ public:
 
     const std::vector<LineNote>& notes() const noexcept { return played; }
 
-    /** What the take has done on one bar so far. Zeroed stats for a bar that
-        has not been played over, which is a real answer rather than an error. */
-    LineStats statsForBar (int measureIndex) const;
+    /** What the take has done on one bar so far, whole.
 
-    /** The same bar, whole: the stats plus the two readings a `LineStats`
-        has nowhere to put.
+        An empty bar reads as a bar nothing was played over, which is a real
+        answer rather than an error.
 
         `neverLeftTheChord` and the strong-beat counts are facts about a *bar*
-        rather than about a run of notes, so they live on `LineBar` - and until
-        this they were reachable only once the take was over, through
+        rather than about a run of notes, so they live on `LineBar` - and for a
+        while they were reachable only once the take was over, through
         `summary()`. A shell asking what the player has just done on this bar
         was getting the half of the answer that fits in a `LineStats`, and
         filling the other half with zeros would have said "nothing landed on an
         accented beat" about a bar where plenty had.
+
+        There was a `statsForBar` beside this returning the `stats` member
+        alone. It answered the same question more narrowly, had no caller left
+        once the wire moved to this one, and two accessors for one question is
+        one more than anybody can keep in step.
     */
     LineBar barFor (int measureIndex) const;
 
