@@ -495,11 +495,24 @@ something finished or assume something unfinished is done:
   loop, so it is something to play along with. It still refuses to sound over a
   take — two lines at once is neither — but that refusal is about the take and
   not about the clock: the roll it starts grades nothing.
-  **It quotes before it invents.** `LickCatalogue.h` holds nineteen documented
-  figures from the research's Part B - Barry Harris, Wynton Kelly, Red Garland,
-  a Parker cliche - each keyed on a **chord-sequence shape** (qualities plus
-  the root offsets between them, which is `VoicingShape` one dimension up) and
-  each carrying its `attribution` and `source`. A phrase is quoted whole or
+  **It quotes before it invents.** `LickCatalogue.h` holds twenty-three
+  documented figures - eighteen from the research's Part B (Barry Harris,
+  Wynton Kelly, Red Garland, a Parker cliche) and five written afterwards -
+  each keyed on a **chord-sequence shape** (qualities plus the root offsets
+  between them, which is `VoicingShape` one dimension up) and each carrying its
+  `attribution` and `source`.
+  **It reaches all eight chord qualities, and only four of those came from the
+  research.** Part B is a ii-V catalogue, so a diminished, suspended, augmented
+  or minor-major bar quoted nothing at all until one lick each was written for
+  it (L18, L19, L21, L22), plus L20, a short pentatonic cell that is what lets
+  the pentatonic style quote anything - see `docs/SOLO_PRACTICE.md`. Two things
+  to know before adding more. **A lick the research does not contain is a
+  `composite` unless a real named practice is behind it**, which is the same
+  honesty `LickSource` was split for: exactly one of the five is a
+  `documentedDevice`. And **a sweep only cross-checks what it plays** - the
+  cross-checks swept four ii-V tunes, so the five new licks were held to
+  nothing until the habitats of the new qualities joined that list. A new lick
+  over harmony no sweep chart carries is a lick nothing checks. A phrase is quoted whole or
   written note by note, never half of each; `lickShare` is how often a phrase
   *reaches* for a quote, and one that finds nothing generates as before. The
   page says what it drew on, which is why the catalogue was built rather than

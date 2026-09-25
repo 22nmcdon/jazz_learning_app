@@ -1030,6 +1030,13 @@ a page that does not boot is a failed job rather than a broken site. It needs `p
   documented devices rather than quoted from a recording, it says that too: a credit that
   overstates itself is worse than none. On a tune the catalogue was not written for it
   writes the line itself and credits nobody.
+  **There is a figure for every kind of chord**, which there was not: the catalogue began
+  as a ii-V one, so a passing diminished, a sus vamp, an augmented chord or a tonic
+  minor-major got a line written from scratch and no quote at all. Each has one now — and
+  the pentatonic style, which could not reach a single figure in the catalogue it was
+  offered, quotes too. How much of a line comes from the catalogue still depends on the
+  style and the tune: most on a blues, least on a modal vamp, and nothing on a chart whose
+  chords no figure was written over.
 - **Line styles** — bebop, blues, modal, pentatonic. One picker, because choosing a style
   is choosing the scales it draws on *and* how a line out of them is shaped: how long a
   phrase runs, how much room it leaves, whether it steps in chromatically at all. Modal

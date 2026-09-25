@@ -233,8 +233,11 @@ strong beats, scale tones between, a chromatic approach when the chord changes.
 That keeps a line correct and cannot make it sound like anybody. Real lines are
 made of patterns: Owens catalogued 64 Parker formulas across 250 transcriptions,
 and Norgaard found 82.6% of Parker's notes begin a four-interval pattern that
-recurs elsewhere in the corpus. So `LickCatalogue.h` holds nineteen documented
-figures and `improvisedLine` draws on them.
+recurs elsewhere in the corpus. So `LickCatalogue.h` holds twenty-three
+documented figures and `improvisedLine` draws on them. Eighteen come from the
+research's Part B; five were written afterwards, for the four chord qualities a
+ii-V catalogue never reaches (see below). L14 is still missing and needs two
+voices first, which `docs/HANDOFF.md` carries.
 
 - **A catalogue, not a corpus** — the same distinction the reharmoniser draws.
   Thirty-six rules that each explain themselves were chosen there over a
@@ -313,10 +316,48 @@ figures and `improvisedLine` draws on them.
   played late. Written two ticks early instead it is off every grid there is,
   and `readLinePlacement`, which reads a player's take and knows nothing about
   ornaments, marked the line down for a grid it was never off.
-- **What the catalogue does not reach**: diminished, suspended, augmented and
-  minor-major chords have nothing written over them, so a tune built on those
-  gets a generated line and no quotes. A test states the coverage, so a later
-  pass filling the gap has to change a test that states the old shape.
+- **The catalogue reaches every chord quality now, and four of them by way of
+  licks the research does not contain.** Part B is a ii-V catalogue, so for a
+  while a diminished, suspended, augmented or minor-major bar had nothing
+  written over it at all: the line was generated, correctly, and quoted
+  nothing. What closed it is one lick each — L18 over a dim7, L19 over a sus,
+  L21 over an augmented chord, L22 over a minor-major — and the test that
+  stated the old coverage now names which lick supplies each, so deleting one
+  fails with the name of what went missing.
+  - **Each is written in the scale the engine already reads that chord
+    against**, which is why they read back as scale tones rather than as noise:
+  whole-half diminished, Mixolydian, whole tone and melodic minor are
+  `ScaleSuggester`'s own answers for those four qualities. A lick written
+  against a different reading of its own chord would be a figure the app then
+  marks.
+  - **The provenance is the part that needed care.** The research does not
+    contain these, and `LickSource` exists precisely so that a figure cannot
+    claim a pedigree it has not got. So exactly one is a `documentedDevice` —
+    L18, because Barry Harris' relationship behind it (a dim7 is a 7b9 without
+    its root, so play the dominant's own line over it) is a thing a player
+    learns rather than a pattern — and the other four are composites, drawn
+    less often for it.
+  - **A fifth lick is the one that matters most in practice.** L20 is a short
+    minor pentatonic cell, and it is what lets the *pentatonic* style quote
+    anything at all: L15 is the pentatonic device here and that style could
+    never draw it, being thirteen notes against a longest phrase of twelve. Its
+    `lickShare` went from nothing to 45 with L20, which is the first time that
+    number has had any effect.
+  - **The negative control moved with the coverage.** Three checks — two in the
+    engine, one on the page — used to prove "a chart nothing fits quotes
+    nothing" out of those four unreached qualities, and two of the new licks fit
+    that chart. All three now fail on the *other* matching rule instead: both
+    two-bar licks are given one bar each, so every chord is a quality the
+    catalogue reaches and a place it cannot be played. A waltz was tried first
+    and measured wrong — `parseProgressionText` gives every slot four beats, so
+    changing a chart's metre afterwards changes nothing about what fits.
+  - **A sweep only cross-checks what it plays.** Both cross-checks swept four
+    ii-V tunes, so none of the five new licks was held to anything until the
+    habitats of the new qualities were added to that list: a passing
+    diminished, a sus vamp, a tonic minor-major, an augmented chord. Chord-tone
+    claims checked went 2,211 to 3,338 and outside claims 91 to 161, no
+    violation either way. A lick authored, drawn and credited to somebody by
+    name while held to nothing is worse than one that does not exist.
 - **A bar with two chords is written against the first**, and that is a
   property of solo practice rather than of the catalogue. `improvisedLine` asks
   `chart.chordAt (bar)`, which answers with the chord on beat one, so on

@@ -395,23 +395,33 @@ Small, verified, and none of them urgent.
   is a design suggestion to tune by ear. What the current numbers produce,
   measured over two hundred seeds on tunes each style is for: blues asking 70
   gets 64% of its notes from the catalogue, bebop asking 60 gets 39%, modal
-  asking 25 gets 12%. Whether that *sounds* like the right amount of quoting is
-  the one thing no assertion here settles - the same standing the groove's
-  fractions and the placement weights have above.
+  asking 25 gets 12%, pentatonic asking 45 gets 33%. Whether that *sounds* like
+  the right amount of quoting is the one thing no assertion here settles - the
+  same standing the groove's fractions and the placement weights have above.
+  **Pentatonic's is the newest and the least argued**: it was zero while the
+  style had nothing it could reach, and 45 is below the research's range because
+  two figures is not a vocabulary rather than because anybody listened to it.
 
-- **The catalogue reaches four of the eight chord qualities.** Nothing is
-  written over a diminished, suspended, augmented or minor-major chord, so a
-  tune built on those gets a generated line and no quotes. The research's Part
-  B is a ii-V catalogue and this is its shape rather than an omission in the
-  transcription of it. A test states the coverage, so filling the gap means
-  changing a test that states the old shape.
+- **Two of the four new qualities are reachable on almost nothing.** L21 wants
+  an augmented chord and L22 a minor-major, and a chart carrying either is rare
+  - so the coverage is real (a test names which lick reaches which quality) and
+  a player will meet those two far less often than L18 over a passing
+  diminished. That is the harmony's fault rather than the catalogue's, and the
+  thing not to do about it is tag them onto styles that would not play them.
 
-- **`modal` and `pentatonic` have almost nothing to quote.** One lick between
-  them, and `pentatonic` has none it can reach at all - the one pentatonic cell
-  is thirteen notes against that style's longest phrase of twelve - so its
-  `lickShare` is zero and a test keeps that honest. Either a pentatonic figure
-  short enough for the style, or a longer phrase range argued on its own terms;
-  not the latter to admit one lick.
+- **`modal` and `pentatonic` have two licks each, which is still thin.**
+  `pentatonic` had none it could reach at all until L20; it and L19 are what
+  the style quotes now. A third figure for either would be worth more than a
+  fourth for bebop, which has a dozen. What not to do is widen
+  `pentatonic.longestPhrase` to admit L15 - that number is the style's phrasing
+  and not a gate on the catalogue.
+
+- **No lick is written in three.** Every figure's chords are counted in
+  four-beat bars, so a waltz quotes nothing at all, in any style: a 3/4 chord
+  run is 72 ticks and no lick's chord wants 72. Found while looking for a chart
+  that fits nothing, which is a strange way to find it. Nothing is wrong with
+  the matcher; the catalogue simply has no waltz in it, and the tunes worth
+  having one for (Someday My Prince Will Come, Bluesette) are standards.
 
 - **A bar with two chords is written, and read, against the first.** Found
   while writing the lick cross-check, and silent until then. `improvisedLine`
