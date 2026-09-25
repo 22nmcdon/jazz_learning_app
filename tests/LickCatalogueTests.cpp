@@ -639,6 +639,36 @@ TEST ("a style that asks to quote has something it can actually quote")
 
 namespace
 {
+    /** The tunes both cross-checks sweep.
+
+        One list, because a chart added to one of them and not the other tests
+        half the catalogue against half the claim - and because which charts
+        these are is the whole of what decides which licks get cross-checked at
+        all. The first four are the ii-V world the research's Part B is written
+        for. The last four are the habitats of the licks that are not: a
+        passing diminished, a sus vamp, a tonic minor-major and an augmented
+        chord. Without them L18-L22 would be authored, drawn, credited to a
+        player - and held to nothing.
+
+        Measured when they were added: chord-tone claims checked went 2,211 to
+        3,338 and outside claims 91 to 161, with no violation in either
+        direction. L18 126, L19 48, L20 301, L21 120, L22 200. */
+    const std::vector<std::string>& crossCheckTunes()
+    {
+        static const std::vector<std::string> tunes {
+            "| Dm7 | G7 | Cmaj7 | Cmaj7 | Em7 | A7 | Dm7 | Dm7 "
+            "| Gm7 | C7 | Fmaj7 | Fmaj7 | Bm7b5 | E7 | Am7 | Am7 |",
+            "| C7 | F7 | C7 | C7 | F7 | F7 | C7 | C7 | G7 | F7 | C7 | G7 |",
+            "| Dm7b5 | G7 | Cm7 | Cm7 | Dm7b5 | G7 | Cm7 | Cm7 |",
+            "| E7 | E7 | A7 | A7 | E7 | E7 | A7 | A7 |",
+            "| Cmaj7 | C#dim7 | Dm7 | G7 | Cmaj7 | C#dim7 | Dm7 | G7 |",
+            "| Fsus4 | Fsus4 | Ebsus4 | Ebsus4 | Dsus4 | Dsus4 | Csus4 | Csus4 |",
+            "| CmMaj7 | CmMaj7 | Ab7 | G7 | CmMaj7 | CmMaj7 | Fm7 | G7 |",
+            "| C+ | C+ | Fmaj7 | Fmaj7 | C+ | C+ | Fmaj7 | Fmaj7 |" };
+
+        return tunes;
+    }
+
     /** A written line played back through a real take, as `LineWriterTests`
         does it - the roles are about what the analyser says, so it has to be
         the analyser saying it. */
@@ -692,16 +722,9 @@ TEST ("what the source calls a chord tone is never read as outside")
         Measured before it was written: five tunes, every style, 150 seeds -
         21,232 notes the source calls chord tones, 21,213 read as chord tones
         and 19 as scale tones, none outside. */
-    const std::vector<std::string> tunes {
-        "| Dm7 | G7 | Cmaj7 | Cmaj7 | Em7 | A7 | Dm7 | Dm7 "
-        "| Gm7 | C7 | Fmaj7 | Fmaj7 | Bm7b5 | E7 | Am7 | Am7 |",
-        "| C7 | F7 | C7 | C7 | F7 | F7 | C7 | C7 | G7 | F7 | C7 | G7 |",
-        "| Dm7b5 | G7 | Cm7 | Cm7 | Dm7b5 | G7 | Cm7 | Cm7 |",
-        "| E7 | E7 | A7 | A7 | E7 | E7 | A7 | A7 |" };
-
     auto checked = 0;
 
-    for (const auto& text : tunes)
+    for (const auto& text : crossCheckTunes())
     {
         const auto chart = chartOf (text);
 
@@ -755,8 +778,9 @@ TEST ("what the source calls a chord tone is never read as outside")
             }
     }
 
-    // A cross-check that checked nothing would pass silently.
-    CHECK (checked > 500);
+    // A cross-check that checked nothing would pass silently. 3,338 when this
+    // was last measured, so the floor is a floor rather than the number.
+    CHECK (checked > 2000);
 }
 
 TEST ("what the source calls outside is never read as a chord tone")
@@ -774,17 +798,12 @@ TEST ("what the source calls outside is never read as a chord tone")
         header means by not tidying the disagreements away. */
     /*  The same tunes as above, because the licks that author an `outside`
         note are spread across them - L03's side-slip over a major ii-V, L11's
-        cascade over any dominant, L10's added half step on a static one. */
-    const std::vector<std::string> tunes {
-        "| Dm7 | G7 | Cmaj7 | Cmaj7 | Em7 | A7 | Dm7 | Dm7 "
-        "| Gm7 | C7 | Fmaj7 | Fmaj7 | Bm7b5 | E7 | Am7 | Am7 |",
-        "| C7 | F7 | C7 | C7 | F7 | F7 | C7 | C7 | G7 | F7 | C7 | G7 |",
-        "| Dm7b5 | G7 | Cm7 | Cm7 | Dm7b5 | G7 | Cm7 | Cm7 |",
-        "| E7 | E7 | A7 | A7 | E7 | E7 | A7 | A7 |" };
-
+        cascade over any dominant, L10's added half step on a static one, and
+        L18's Db and Bb, which are the dominant's own 4th and 9th and are
+        outside the scale a dim7 is read against. */
     auto checked = 0;
 
-    for (const auto& text : tunes)
+    for (const auto& text : crossCheckTunes())
     {
         const auto chart = chartOf (text);
 
@@ -824,7 +843,8 @@ TEST ("what the source calls outside is never read as a chord tone")
             }
     }
 
-    CHECK (checked > 50);
+    // 161 when last measured; 91 of them before the new licks arrived.
+    CHECK (checked > 120);
 }
 
 TEST ("a bar with two chords is written against the first, and that is known")

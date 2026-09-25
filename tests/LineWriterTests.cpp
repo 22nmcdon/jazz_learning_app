@@ -66,14 +66,25 @@ TEST ("a written line is read back as the line it was written as")
         `VoicingAnalyzerTests`' rule that every voicing `idiomaticVoicings`
         offers must classify as the type it was offered for, and the same
         reason: otherwise the app hands you a line and then marks it wrong. */
-    /*  Two charts, and the second is not decoration. Four bars offer a lick
-        almost nowhere to fit, so for a while this swept twenty-four seeds over
-        a line that was never once quoted and reported that quoting round-trips
-        perfectly. Sixteen bars is where the catalogue actually reaches. */
+    /*  Three charts, and neither of the last two is decoration. Four bars
+        offer a lick almost nowhere to fit, so for a while this swept
+        twenty-four seeds over a line that was never once quoted and reported
+        that quoting round-trips perfectly. Sixteen bars is where the catalogue
+        actually reaches.
+
+        The third carries a passing diminished, a tonic minor-major, a sus vamp
+        and an augmented chord - the four qualities the catalogue used to reach
+        over nothing at all. Without it the licks written for them round-trip
+        nowhere, and neither does a **generated** note over a symmetric chord,
+        which nothing here had ever asked about either. Measured when it was
+        added: 7,570 notes, 973 of them quoted, no pitch or colour
+        disagreement. */
     const std::vector<Chart> charts {
         chartFrom ("| Dm7 | G7 | Cmaj7 | Cmaj7 |"),
         chartFrom ("| Dm7 | G7 | Cmaj7 | Cmaj7 | Em7 | A7 | Dm7 | Dm7 "
-                   "| Gm7 | C7 | Fmaj7 | Fmaj7 | Bm7b5 | E7 | Am7 | Am7 |") };
+                   "| Gm7 | C7 | Fmaj7 | Fmaj7 | Bm7b5 | E7 | Am7 | Am7 |"),
+        chartFrom ("| Cmaj7 | C#dim7 | Dm7 | G7 | CmMaj7 | CmMaj7 | Fsus4 | Fsus4 "
+                   "| C+ | C+ | Em7b5 | A7 | Dm7 | G7 | Cmaj7 | Cmaj7 |") };
 
     /*  Swept over every style now, not only the default. A style carries its
         own scale vocabulary, and the reader is given that same vocabulary -
@@ -386,13 +397,25 @@ TEST ("every style writes a line its own rules accept")
         "everything the generator plays is in the style it was asked for":
         without it the app writes a line in a style and then marks that line
         out of style. */
-    const auto chart = chartFrom ("| Dm7 | G7 | Cmaj7 | A7 | Dm7 | G7 | Cmaj7 | Cmaj7 |");
+    /*  Two charts: a major ii-V, and one built out of the four qualities the
+        catalogue reaches by way of L18-L22. The second is here because a
+        quoted note is exempt from the grid, approach and chromatic rules and a
+        **generated** one beside it is not - so a chart whose harmony is
+        symmetric is where the atom writer is most likely to drift out of the
+        style it claims to play, and until L18 arrived nothing asked it to
+        write over one. */
+    const std::vector<Chart> charts {
+        chartFrom ("| Dm7 | G7 | Cmaj7 | A7 | Dm7 | G7 | Cmaj7 | Cmaj7 |"),
+        chartFrom ("| Cmaj7 | C#dim7 | Dm7 | G7 | CmMaj7 | CmMaj7 | Fsus4 | Fsus4 "
+                   "| C+ | C+ | Em7b5 | A7 | Dm7 | G7 | Cmaj7 | Cmaj7 |") };
 
+    for (const auto& chart : charts)
     for (const auto& style : lineStyles())
     {
         for (std::uint32_t seed = 1; seed <= 24; ++seed)
         {
-            const auto written = improvisedLine (chart, 0, 7, "", style.key, seed);
+            const auto written = improvisedLine (chart, 0, chart.measureCount() - 1,
+                                                 "", style.key, seed);
             CHECK (! written.empty());
 
             const auto faults = lineFaults (written, style, 4);
