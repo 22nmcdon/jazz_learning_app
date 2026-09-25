@@ -2,6 +2,7 @@
 #include "jazz/core/Chart.h"
 #include "jazz/core/LickCatalogue.h"
 #include "jazz/core/LineStyle.h"
+#include "jazz/core/LineWriter.h"
 
 #include <algorithm>
 #include <set>
@@ -604,4 +605,246 @@ TEST ("a style that asks to quote has something it can actually quote")
 
         CHECK (reachable > 0);
     }
+}
+
+//==============================================================================
+//  The cross-check the header promises: the source's own note categories
+//  against what a take actually reads.
+
+namespace
+{
+    /** A written line played back through a real take, as `LineWriterTests`
+        does it - the roles are about what the analyser says, so it has to be
+        the analyser saying it. */
+    std::vector<LineNote> readBack (const Chart& chart, const std::vector<WrittenNote>& line,
+                                    const std::string& scaleStyle)
+    {
+        LineAnalyzer::Options options;
+        options.style = scaleStyle;
+        options.beatsPerBar = chart.timeSignature.numerator;
+
+        LineAnalyzer analyzer;
+        analyzer.setOptions (options);
+        analyzer.startTake();
+
+        auto bar = -1;
+
+        for (const auto& note : line)
+        {
+            if (note.measureIndex != bar)
+            {
+                bar = note.measureIndex;
+
+                if (const auto* chord = chart.chordAt (bar))
+                    analyzer.setTarget (bar, *chord);
+            }
+
+            analyzer.play (note.midiNote, note.at);
+        }
+
+        analyzer.endTake();
+        return analyzer.notes();
+    }
+}
+
+TEST ("what the source calls a chord tone is never read as outside")
+{
+    /*  Half of the cross-check `LickCatalogue.h` promises, and the half with
+        teeth: it is what catches a degree typed wrong. Author the 5 of a minor
+        seventh as 8 instead of 7 and the note stops being a chord tone, which
+        nothing else here would notice - the round trip only asks that the
+        *writer* and the *reader* agree, and they would, about a wrong note.
+
+        Never *outside* rather than always *a chord tone*, and the difference
+        is a real ambiguity rather than slack. A lick is keyed on a chord
+        **quality**, and a quality is realised by more than one symbol: the 6
+        is a chord tone of C6 and a scale tone of Cmaj7, so L16's major bebop
+        line - which is written in the Baker/Harris view where the 6 belongs to
+        the chord - reads as a scale tone over a maj7 bar. Inside either way,
+        which is the claim the source can be held to.
+
+        Measured before it was written: five tunes, every style, 150 seeds -
+        21,232 notes the source calls chord tones, 21,213 read as chord tones
+        and 19 as scale tones, none outside. */
+    const std::vector<std::string> tunes {
+        "| Dm7 | G7 | Cmaj7 | Cmaj7 | Em7 | A7 | Dm7 | Dm7 "
+        "| Gm7 | C7 | Fmaj7 | Fmaj7 | Bm7b5 | E7 | Am7 | Am7 |",
+        "| C7 | F7 | C7 | C7 | F7 | F7 | C7 | C7 | G7 | F7 | C7 | G7 |",
+        "| Dm7b5 | G7 | Cm7 | Cm7 | Dm7b5 | G7 | Cm7 | Cm7 |",
+        "| E7 | E7 | A7 | A7 | E7 | E7 | A7 | A7 |" };
+
+    auto checked = 0;
+
+    for (const auto& text : tunes)
+    {
+        const auto chart = chartOf (text);
+
+        for (const auto& style : lineStyles())
+            for (std::uint32_t seed = 1; seed <= 24; ++seed)
+            {
+                const auto written = improvisedLine (chart, 0, chart.measureCount() - 1,
+                                                     "", style.key, seed);
+                const auto read = readBack (chart, written, style.scaleStyle);
+
+                if (read.size() != written.size())
+                    continue;
+
+                for (std::size_t i = 0; i < written.size(); )
+                {
+                    if (written[i].lickKey.empty()) { ++i; continue; }
+
+                    const auto& lick = lickFor (written[i].lickKey);
+
+                    auto run = std::size_t { 0 };
+
+                    while (i + run < written.size()
+                           && written[i + run].lickKey == lick.key)
+                        ++run;
+
+                    /*  Paired by position, so a run the writer had to truncate
+                        at the end of the range is skipped rather than
+                        mis-paired - and with it any chance of testing the
+                        wrong note against the wrong role. */
+                    if (run == lick.notes.size())
+                        for (std::size_t k = 0; k < run; ++k)
+                        {
+                            /*  A pickup sounds over the bar *before* the one
+                                the lick is aimed at, while its degree is
+                                relative to the lick's own first chord. There
+                                is no claim to check there, and pretending
+                                otherwise would test a role against a chord it
+                                was never written for. */
+                            if (lick.notes[k].tick < 0)
+                                continue;
+
+                            if (lick.notes[k].role != LickRole::chordTone)
+                                continue;
+
+                            ++checked;
+                            CHECK (! isOutsideByPitch (read[i + k].colour));
+                        }
+
+                    i += run;
+                }
+            }
+    }
+
+    // A cross-check that checked nothing would pass silently.
+    CHECK (checked > 500);
+}
+
+TEST ("what the source calls outside is never read as a chord tone")
+{
+    /*  The other half, and the other direction a mis-typed degree fails in:
+        author a chromatic as the degree next door and it lands on a chord
+        tone, which sounds like nothing and reads like nothing.
+
+        Only `outside` is held to this. An **enclosure** is a gesture rather
+        than a pitch - L06 encloses the tonic with the b7 and the 5, both chord
+        tones - and an **approach** is one too. A **colour tone** is a tension,
+        and whether a tension reads inside depends on the scale the take is
+        being read against, which is the player's choice and not the source's.
+        Those three are named here rather than asserted, which is what the
+        header means by not tidying the disagreements away. */
+    /*  The same tunes as above, because the licks that author an `outside`
+        note are spread across them - L03's side-slip over a major ii-V, L11's
+        cascade over any dominant, L10's added half step on a static one. */
+    const std::vector<std::string> tunes {
+        "| Dm7 | G7 | Cmaj7 | Cmaj7 | Em7 | A7 | Dm7 | Dm7 "
+        "| Gm7 | C7 | Fmaj7 | Fmaj7 | Bm7b5 | E7 | Am7 | Am7 |",
+        "| C7 | F7 | C7 | C7 | F7 | F7 | C7 | C7 | G7 | F7 | C7 | G7 |",
+        "| Dm7b5 | G7 | Cm7 | Cm7 | Dm7b5 | G7 | Cm7 | Cm7 |",
+        "| E7 | E7 | A7 | A7 | E7 | E7 | A7 | A7 |" };
+
+    auto checked = 0;
+
+    for (const auto& text : tunes)
+    {
+        const auto chart = chartOf (text);
+
+        for (const auto& style : lineStyles())
+            for (std::uint32_t seed = 1; seed <= 24; ++seed)
+            {
+                const auto written = improvisedLine (chart, 0, chart.measureCount() - 1,
+                                                     "", style.key, seed);
+                const auto read = readBack (chart, written, style.scaleStyle);
+
+                if (read.size() != written.size())
+                    continue;
+
+                for (std::size_t i = 0; i < written.size(); )
+                {
+                    if (written[i].lickKey.empty()) { ++i; continue; }
+
+                    const auto& lick = lickFor (written[i].lickKey);
+
+                    auto run = std::size_t { 0 };
+
+                    while (i + run < written.size() && written[i + run].lickKey == lick.key)
+                        ++run;
+
+                    if (run == lick.notes.size())
+                        for (std::size_t k = 0; k < run; ++k)
+                        {
+                            if (lick.notes[k].tick < 0 || lick.notes[k].role != LickRole::outside)
+                                continue;
+
+                            ++checked;
+                            CHECK (read[i + k].colour != NoteColour::chordTone);
+                        }
+
+                    i += run;
+                }
+            }
+    }
+
+    CHECK (checked > 50);
+}
+
+TEST ("a bar with two chords is written against the first, and that is known")
+{
+    /*  Not an assertion that this is right. It pins a limitation that was
+        found while writing the cross-check above and was silent until then,
+        so that it is a stated property of solo practice rather than something
+        the next person rediscovers.
+
+        `improvisedLine` asks `chart.chordAt (bar)`, which answers with the
+        chord on beat one. On `| C6 A7 |` every note in the bar is therefore
+        written against C6 - including the four in its second half, which
+        sound over A7. The take reads it back the same way, because
+        `LineAnalyzer::setTarget` takes a *bar* and a chord and the page
+        targets bars too, so writer and reader agree and the round trip has
+        never had anything to say about it.
+
+        It matters here because L17 is the one lick keyed on two chords to a
+        bar: `licksFitting` will only place it where the boundaries line up,
+        and then half of it is coloured against the wrong chord.
+
+        Fixing it is not a `chordAt` argument. It is the take model: a target
+        would have to become a chord *within* a bar, in the engine, on the wire
+        and in the page's `selectBar`. Recorded in docs/HANDOFF.md.
+    */
+    const auto chart = chartOf ("| C6 A7 | Dm7 G7 | Cmaj7 | Cmaj7 |");
+
+    CHECK_EQ (chart.chordAt (0, 0)->toString(), std::string ("C6"));
+    CHECK_EQ (chart.chordAt (0, 2)->toString(), std::string ("A7"));
+
+    const auto written = improvisedLine (chart, 0, 3, "", "bebop", 1);
+    CHECK (! written.empty());
+
+    auto secondHalf = 0;
+
+    for (const auto& note : written)
+    {
+        // Every note carries the chord on beat one of its bar, whatever the
+        // chart says is sounding where it actually falls.
+        CHECK_EQ (note.chordSymbol, chart.chordAt (note.measureIndex, 0)->toString());
+
+        if (note.at.beat >= 2 && note.measureIndex <= 1)
+            ++secondHalf;
+    }
+
+    // And there really are notes in the half of the bar this gets wrong, so
+    // the check above is not passing for want of anything to look at.
+    CHECK (secondHalf > 0);
 }

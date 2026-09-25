@@ -53,8 +53,21 @@ namespace jazz::core
     than chosen. A take is read by `LineAnalyzer`'s ordinary rules and has no
     idea a lick was involved, so `LineWriter` computes every note's colour the
     way the reader will - exactly as it does for a generated note. `LickRole`
-    below is *provenance and a cross-check*, never a promise, and a test names
-    the places the two disagree rather than tidying them away.
+    below is *provenance and a cross-check*, never a promise.
+
+    **Two tests hold the source to what it can honestly be held to**, and they
+    are what makes a mis-typed degree visible: a note the source calls a chord
+    tone is never read as outside, and one it calls outside is never read as a
+    chord tone. Nothing else is asserted, and the exclusions are the
+    interesting part rather than slack. A lick is keyed on a chord *quality*
+    and a quality is realised by more than one symbol, so the 6 is a chord tone
+    of C6 and a scale tone of Cmaj7. An **enclosure** and an **approach** are
+    gestures rather than pitches - L06 encloses its tonic with two chord tones.
+    A **colour tone** is a tension, and whether a tension reads inside depends
+    on the scale the player chose to be read against. And a **pickup** sounds
+    over the bar before the one the lick is aimed at while its degree is
+    relative to the lick's own first chord, so there is no claim there to
+    check at all.
 
     **The corpus caveat that applies to `LineStyleDefinition` does not apply
     here**, and it is worth saying which way round it falls. The phrase-length
