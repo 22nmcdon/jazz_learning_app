@@ -168,13 +168,13 @@ TEST ("every lick names line styles the engine actually has")
 
 TEST ("the styles that quote have something to quote")
 {
-    /*  Coverage, counted rather than assumed. It is deliberately not asserted
-        for every style: the research's catalogue is ii-V heavy, so `modal` and
-        `pentatonic` have one lick between them and `bebop` has most of them.
-        That is a real gap and it is recorded in docs/HANDOFF.md rather than
-        papered over here - what this holds is that the two styles the
-        catalogue was written for can actually reach it. */
-    for (const auto& key : { "bebop", "blues" })
+    /*  Coverage, counted rather than assumed - and it asks about every style
+        now, which it did not. The research's catalogue is ii-V heavy, so
+        `modal` and `pentatonic` had one lick between them and it was a
+        thirteen-note one the pentatonic style could not phrase; L19 and L20
+        are what changed that. The shares are still nothing like equal, and
+        that is `lickShare`'s business rather than this test's. */
+    for (const auto& key : { "bebop", "blues", "modal", "pentatonic" })
     {
         const auto forThisStyle = std::count_if (licks().begin(), licks().end(),
                                                  [&key] (const LickDefinition& lick)

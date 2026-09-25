@@ -125,16 +125,24 @@ const std::vector<LineStyleDefinition>& lineStyles()
             pentatonic.startTicks = { ticksPerBeat / 2, 0 };
             pentatonic.feel = Subdivision::eighth;
             pentatonic.descending = 46;
-            /*  Nothing, and that is honesty rather than a gap left open.
+            /*  This was **nothing** for as long as there was nothing here it
+                could reach, and the entry that changed it is L20 - an
+                eight-note minor pentatonic cell over one ordinary minor bar.
+                Before it, the catalogue's only pentatonic device was L15 at
+                thirteen notes against this style's longest phrase of twelve,
+                so no number here could have had any effect at all: a style
+                asking to quote what it cannot reach is the shape of bug
+                `brazilian` was, sat in `ReharmStyle` tagged on no rule.
 
-                The catalogue's one pentatonic cell is thirteen notes and this
-                style's longest phrase is twelve, so it could never be quoted
-                here however high this number was - and a style asking to quote
-                what it cannot reach is the shape of bug `brazilian` was, sat
-                in `ReharmStyle` tagged on no rule at all. A test holds this
-                honest: a style that asks for quotes has to have some. Raise it
-                when a pentatonic lick this style could phrase is written. */
-            pentatonic.lickShare = 0;
+                Below the research's 50-70 rather than inside it, because two
+                figures is not a vocabulary - L20 over a minor bar and L19 over
+                a sus one. Measured at this number: 12% of a line over a sus vamp, 20% on a
+                standard, 33% on a modal minor vamp. Raise it as the
+                pentatonic side of the catalogue grows; the test that kept the
+                zero honest is the same one that keeps this honest, since it
+                asks what a style can *reach* rather than what it is tagged
+                for. */
+            pentatonic.lickShare = 45;
             pentatonic.usesApproaches = false;
             built.push_back (pentatonic);
         }

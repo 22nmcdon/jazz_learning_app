@@ -97,8 +97,11 @@ struct LineStyleDefinition
         to quote whenever no lick fits the harmony under it, and then generates
         as it always did. Measured over two hundred seeds, bebop asking 60 gets
         39% of its notes from the catalogue on a standard, blues asking 70 gets
-        64% on a twelve-bar, and modal asking 25 gets 12% on So What. A tune
-        the catalogue was not written for gets less again, which is correct.
+        64% on a twelve-bar, modal asking 25 gets 12% on So What and pentatonic
+        asking 45 gets 33% there. A tune the catalogue was not written for gets
+        less again, which is correct - that same twelve-bar gives both
+        pentatonic-scaled styles nothing at all, because neither has a figure
+        written over a dominant.
 
 
         The research's own suggestion is 50-70% drawn from authored cells with
@@ -108,7 +111,7 @@ struct LineStyleDefinition
 
         Per style because the styles are not equally quotable. Blues phrasing
         is made of figures a player has heard a thousand times; a modal line is
-        a sound rather than a vocabulary, and the catalogue has one lick for it
+        a sound rather than a vocabulary, and the catalogue has two licks for it
         against a dozen for bebop. A style that asked for more quoting than the
         catalogue can supply simply generates the rest - `licksFitting` returns
         nothing and the phrase is written note by note, which is the whole of
