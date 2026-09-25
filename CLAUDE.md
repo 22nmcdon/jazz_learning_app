@@ -287,7 +287,10 @@ something finished or assume something unfinished is done:
   gets its effect by filtering on *family*, so the two "modal"s in that file are
   unrelated mechanisms sharing a word. A style lives in the enum only while at
   least one rule is tagged with it; a test says so, because `brazilian` once
-  shipped tagged on nothing at all.
+  shipped tagged on nothing at all. **That rule is the general one**, and it is
+  enforced for the lick catalogue too - `LickSource::transcription` and
+  `LickOrnament::grace` were deleted for the same reason, since an enum value
+  no record carries is a menu entry that is a lie.
   **The style filter reaches two of the three reharm calls on purpose.** Not
   `recogniseSubstitution` — narrowing the pool there stops the app noticing
   substitutions the player actually found, and noticing is its whole job. Not
@@ -509,7 +512,18 @@ something finished or assume something unfinished is done:
   **Colours are computed, never authored** - `LickRole` is what the transcriber
   said and `NoteColour` is what the analyser will read, and over two hundred
   seeds they agreed on the pitch classification every time and differed on the
-  colour about one note in forty, always approach against outside.
+  colour about one note in forty, always approach against outside. **Two tests
+  cross-check the source**: a note it calls a chord tone is never read as
+  outside, and one it calls outside is never read as a chord tone. That is what
+  catches a degree typed wrong, which the round trip cannot - it only asks that
+  writer and reader agree, and they agree about a wrong note. What they do not
+  assert is named in `docs/SOLO_PRACTICE.md`, and each exclusion is a real
+  ambiguity rather than slack.
+  **A bar with two chords is written against the first**, in the writer *and*
+  in the take: `chart.chordAt (bar)` answers with beat one's chord and
+  `setTarget` takes a bar, so the two agree and the round trip never sees it.
+  L17 is the only lick keyed on two chords to a bar. A test pins it; the fix is
+  the take model, not a `chordAt` argument. See `docs/HANDOFF.md`.
   **An ornament is a rendering hint and never a position**: a crush is written
   at its target's tick and struck early by whoever plays it, the same split
   `docs/RHYTHM.md` draws for swing. See `docs/SOLO_PRACTICE.md`.

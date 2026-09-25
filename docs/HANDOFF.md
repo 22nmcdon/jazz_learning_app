@@ -413,6 +413,35 @@ Small, verified, and none of them urgent.
   short enough for the style, or a longer phrase range argued on its own terms;
   not the latter to admit one lick.
 
+- **A bar with two chords is written, and read, against the first.** Found
+  while writing the lick cross-check, and silent until then. `improvisedLine`
+  asks `chart.chordAt (bar)`, which answers with the chord on beat one, so on
+  `| C6 A7 |` the four notes that sound over A7 are written against C6 and
+  labelled C6. The take agrees, because `LineAnalyzer::setTarget` takes a
+  *bar* and a chord and the page's `selectBar` targets bars too - which is why
+  the round trip has never had anything to say about it and why nothing looks
+  wrong on screen.
+
+  It is not a `chordAt` argument. A target would have to become a chord
+  *within* a bar, in the engine's take model, on the wire (`soloSetBar`) and in
+  the page. Until then, turnarounds are read a bar at a time.
+
+  **L17 is the lick this actually costs.** It is the only one keyed on two
+  chords to a bar, so `licksFitting` places it only where the boundaries line
+  up - and then half of it is coloured against the wrong chord. A test in
+  `LickCatalogueTests` pins the behaviour so it stays a known property rather
+  than a surprise.
+
+- **Nothing renders a lick's ornament.** `LickNote::ornament` is authored on
+  L13's two crushes and carried through the catalogue, and no shell reads it:
+  the page honours a quoted note's `length` but not its crush, so a blues
+  crush currently sounds as a short note rather than as one impulse with a
+  blue note leaning into it. Kept deliberately - the header already says the
+  data is carried so it is not lossy and what a shell does with it is the
+  shell's - and it is the smallest real feature left in the catalogue. The
+  research is specific about how it should sound: the grace note and its
+  target played "as a single musical and physical impulse".
+
 - **L14 is missing, and needs B9 first.** Peterson's harmonised minor-blues run
   is two voices, and a `WrittenNote` has nowhere to put "struck with the one
   before". Reduced to its lower voice it is a descending scale fragment, and

@@ -277,6 +277,28 @@ figures and `improvisedLine` draws on them.
   over two hundred seeds: every quoted note agreed on the pitch classification,
   about one in forty differed on the colour, and every one of those was
   approach against outside in one direction or the other.
+- **Two tests hold the source to what it can be held to**, and they are what
+  catches a degree typed wrong — the failure the round trip cannot see, since
+  it only asks that the writer and the reader agree and they agree perfectly
+  about a wrong note. A note the source calls a **chord tone** is never read as
+  outside; one it calls **outside** is never read as a chord tone.
+  - **What they deliberately do not assert is the interesting half.** "Never
+    outside" rather than "always a chord tone", because a lick is keyed on a
+    chord *quality* and a quality is realised by more than one symbol: the 6 is
+    a chord tone of C6 and a scale tone of Cmaj7, which is 19 of 21,232
+    observations and all of them L16's major bebop line. An **enclosure** and an
+    **approach** are gestures rather than pitches — L06 encloses its tonic with
+    two chord tones. A **colour tone** is a tension, and whether a tension reads
+    inside depends on the scale the player chose. A **pickup** sounds over the
+    bar *before* the one the lick is aimed at while its degree is relative to
+    the lick's own first chord, so there is no claim there at all.
+- **An enum value lives while some lick carries it.** `LickSource::
+  transcription` was on no lick and `LickOrnament::grace` on no note; both were
+  deleted and a test now stops the next one. That is the `brazilian` rule from
+  `ReharmStyle` applied here rather than a new policy, and it matters more than
+  tidiness: `lickSourceName` would otherwise have answered "transcription" for a
+  provenance no entry has, on a wire the page reads to decide how much to trust
+  a credit.
 - **A lick carries its own subdivision, and both readers widen for it.**
   `subdivisionsFor` is a style's own feel plus the feels of the licks it can
   draw on, and `lineFaults` and `readLinePlacement` both read it — one source,
@@ -295,6 +317,16 @@ figures and `improvisedLine` draws on them.
   minor-major chords have nothing written over them, so a tune built on those
   gets a generated line and no quotes. A test states the coverage, so a later
   pass filling the gap has to change a test that states the old shape.
+- **A bar with two chords is written against the first**, and that is a
+  property of solo practice rather than of the catalogue. `improvisedLine` asks
+  `chart.chordAt (bar)`, which answers with the chord on beat one, so on
+  `| C6 A7 |` the four notes that sound over A7 are written against C6. The
+  take reads them back the same way — `LineAnalyzer::setTarget` takes a *bar*,
+  and the page targets bars too — so writer and reader agree and the round trip
+  has never had anything to say about it. L17 is the one lick keyed on two
+  chords to a bar, which is how it came to light. A test pins it so it stops
+  being silent; fixing it is the take model rather than a `chordAt` argument,
+  and `docs/HANDOFF.md` carries it.
 
 ### Line styles, and the scale styles underneath them
 - **A line style is the one thing a player picks**, and it answers two
