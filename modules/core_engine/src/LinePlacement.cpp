@@ -85,12 +85,6 @@ LinePlacementReading readLinePlacement (const std::vector<LineNote>& line,
         shipped, and that is the honest cost: a style whose vocabulary is all
         eighths is unchanged, and a bebop line is now allowed its triplets. */
     const auto accepted = subdivisionsFor (style);
-
-    const auto onAStyleGrid = [&accepted] (const BarPosition& at)
-    {
-        return std::any_of (accepted.begin(), accepted.end(),
-                            [&at] (Subdivision feel) { return onTheGrid (at, feel); });
-    };
     const auto barTicks = beats * ticksPerBeat;
 
     /*  The gap that reads as a rest - see `LinePhrase`. One step of the grid,
@@ -138,7 +132,7 @@ LinePlacementReading readLinePlacement (const std::vector<LineNote>& line,
 
         ++out.onsetsPlaced;
 
-        const auto placed = onAStyleGrid (*onset.at);
+        const auto placed = onAnyGrid (*onset.at, accepted);
 
         if (placed)
             ++out.onsetsOnTheGrid;

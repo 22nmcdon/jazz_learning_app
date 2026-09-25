@@ -300,12 +300,6 @@ std::vector<LineFinding> lineFaults (const std::vector<WrittenNote>& line,
     const auto accepted = subdivisionsFor (style);
     const auto beats = std::max (1, beatsPerBar);
 
-    const auto onAStyleGrid = [&accepted] (const BarPosition& at)
-    {
-        return std::any_of (accepted.begin(), accepted.end(),
-                            [&at] (Subdivision feel) { return onTheGrid (at, feel); });
-    };
-
     const auto note = [] (const WrittenNote& n)
     {
         return " (" + n.chordSymbol + ", bar " + std::to_string (n.measureIndex + 1)
@@ -337,7 +331,7 @@ std::vector<LineFinding> lineFaults (const std::vector<WrittenNote>& line,
         if (! written.lickKey.empty())
             continue;
 
-        if (! onAStyleGrid (written.at))
+        if (! onAnyGrid (written.at, accepted))
             found.push_back ({ LineFault::offTheStyleGrid, i,
                                "not on this style's subdivision" + note (written) });
 

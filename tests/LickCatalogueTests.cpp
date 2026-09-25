@@ -262,6 +262,61 @@ TEST ("a lick stays inside a range a soloist could play it in")
     }
 }
 
+TEST ("a style's grid is its own feel plus the feels it can quote")
+{
+    /*  `subdivisionsFor` and `onAnyGrid` are what stop the app teaching a
+        figure and then marking a player for playing it, and until now both
+        were covered only through their callers. They are the single answer two
+        readers share - `lineFaults` about a written note, `readLinePlacement`
+        about a played one - so they are worth asking directly. */
+    const auto& bebop = lineStyleFor ("bebop");
+    const auto accepted = subdivisionsFor (bebop);
+
+    // Its own feel is always in, and the triplet is in because L11 is.
+    CHECK (std::find (accepted.begin(), accepted.end(), bebop.feel) != accepted.end());
+    CHECK (std::find (accepted.begin(), accepted.end(), Subdivision::tripletEighth)
+           != accepted.end());
+
+    // Nothing bebop can quote is written in sixteenths, so a sixteenth is
+    // still off its grid - which is the "you are playing this like a
+    // different feel" reading the widening must not swallow.
+    CHECK (std::find (accepted.begin(), accepted.end(), Subdivision::sixteenth)
+           == accepted.end());
+
+    // Derived, never listed: the answer is only ever as wide as the catalogue.
+    for (const auto& style : lineStyles())
+        for (const auto feel : subdivisionsFor (style))
+        {
+            if (feel == style.feel)
+                continue;
+
+            const auto quoted = std::any_of (licks().begin(), licks().end(),
+                                             [&style, feel] (const LickDefinition& lick)
+                                             {
+                                                 return lick.feel == feel
+                                                     && std::find (lick.styles.begin(), lick.styles.end(),
+                                                                   style.key) != lick.styles.end();
+                                             });
+
+            CHECK (quoted);
+        }
+}
+
+TEST ("on any grid is on one of them, and an empty list is none")
+{
+    const std::vector<Subdivision> eighthsAndTriplets { Subdivision::eighth,
+                                                        Subdivision::tripletEighth };
+
+    CHECK (onAnyGrid (BarPosition { 1, 0 }, eighthsAndTriplets));                  // the beat
+    CHECK (onAnyGrid (BarPosition { 1, ticksPerBeat / 2 }, eighthsAndTriplets));   // the and
+    CHECK (onAnyGrid (BarPosition { 1, ticksPerBeat / 3 }, eighthsAndTriplets));   // a triplet
+
+    // A sixteenth is on neither, which is the whole point of asking.
+    CHECK (! onAnyGrid (BarPosition { 1, ticksPerBeat / 4 }, eighthsAndTriplets));
+
+    CHECK (! onAnyGrid (BarPosition { 0, 0 }, {}));
+}
+
 TEST ("every value in these enums is carried by some lick")
 {
     /*  The `brazilian` check, one file over. That style sat in `ReharmStyle`

@@ -105,6 +105,26 @@ bool operator<  (const BarPosition& a, const BarPosition& b) noexcept;
 */
 bool onTheGrid (BarPosition position, Subdivision subdivision);
 
+/** Whether a position falls on *any* of several subdivisions' grids.
+
+    A player's vocabulary is rarely one subdivision. A bebop line is written in
+    eighths and plays triplets, and holding it to the eighths alone marks a
+    player down for a figure the app itself taught them - which is why
+    `subdivisionsFor` exists and why both of its readers ask this rather than
+    asking `onTheGrid` in a loop of their own.
+
+    One answer in one place, deliberately: `lineFaults` decides whether a
+    *written* note is off the style's grid and `readLinePlacement` decides
+    whether a *played* one is, and the two coming to different conclusions
+    about the same note is the failure the whole arrangement exists to prevent.
+    They held identical five-line lambdas for a while, which is that failure
+    waiting rather than that failure happening.
+
+    False for an empty list, which is the honest answer to "is this on none of
+    these grids" and not a case any caller has.
+*/
+bool onAnyGrid (BarPosition position, const std::vector<Subdivision>& subdivisions);
+
 /** How much weight a position carries in the bar.
 
     Shared by both consumers on purpose: a comping style says which of these it

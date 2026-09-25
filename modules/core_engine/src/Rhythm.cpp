@@ -1,5 +1,6 @@
 #include "jazz/core/Rhythm.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace jazz::core
@@ -112,6 +113,13 @@ bool onTheGrid (BarPosition position, Subdivision subdivision)
     const auto step = ticksFor (subdivision);
 
     return step > 0 && position.tick % step == 0;
+}
+
+bool onAnyGrid (BarPosition position, const std::vector<Subdivision>& subdivisions)
+{
+    return std::any_of (subdivisions.begin(), subdivisions.end(),
+                        [position] (Subdivision subdivision)
+                        { return onTheGrid (position, subdivision); });
 }
 
 BeatStrength strengthAt (BarPosition position, int beatsPerBar)
