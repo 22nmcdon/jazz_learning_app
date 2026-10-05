@@ -891,6 +891,132 @@ try {
     await plain.close();
   }
 
+  /*  Playing from the computer keys.
+
+      On a page of its own, for the reason the control above is: it turns a
+      setting on, holds notes down and types into the chart editor, and a check
+      three hundred lines later should not have to know that.
+
+      What is worth checking here is not that a listener exists. It is the four
+      things that would each be a silent bug: the map, the chord (the thing a
+      mouse cannot do at all), the setting actually gating it, and the editor
+      keeping its letters. */
+  {
+    const typed = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+
+    await typed.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await typed.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await typed.locator("#helpDialog[open]").count()) await typed.locator("#helpClose").click();
+
+    const pressed = () => typed.evaluate(() =>
+      Array.from(document.querySelectorAll('.key[aria-pressed="true"]'))
+           .map((key) => Number(key.dataset.note)));
+
+    /*  The negative control first, before anything is turned on: a letter on a
+        page where the setting is off has to do nothing at all. Checked first
+        because afterwards the page is in the other state for good. */
+    await typed.keyboard.down("KeyZ");
+    await typed.waitForTimeout(150);
+    const beforeOn = await pressed();
+    await typed.keyboard.up("KeyZ");
+
+    check("a letter plays nothing until the setting is on", beforeOn.length === 0);
+
+    await typed.locator("#menuButton").click();
+    await typed.locator("#typeToPlay").check();
+    await typed.locator("#menuButton").click();
+
+    /*  Every key, against the notes they are supposed to be. A twenty-five
+        entry map is exactly where a typo lives, and a typo there is a key that
+        plays the wrong note - which no behavioural check would ever notice,
+        because something did sound. */
+    const CODES = ["KeyZ", "KeyS", "KeyX", "KeyD", "KeyC", "KeyV", "KeyG", "KeyB",
+                   "KeyH", "KeyN", "KeyJ", "KeyM", "KeyQ", "Digit2", "KeyW", "Digit3",
+                   "KeyE", "KeyR", "Digit5", "KeyT", "Digit6", "KeyY", "Digit7",
+                   "KeyU", "KeyI"];
+
+    const wrong = [];
+
+    for (let i = 0; i < CODES.length; i++) {
+      await typed.keyboard.down(CODES[i]);
+      await typed.waitForTimeout(90);
+      const held = await pressed();
+      await typed.keyboard.up(CODES[i]);
+      await typed.waitForTimeout(30);
+
+      if (held.length !== 1 || held[0] !== 48 + i)
+        wrong.push(`${CODES[i]} -> ${held.join("+") || "nothing"}, want ${48 + i}`);
+    }
+
+    check(`two rows of keys are two octaves, C3 to C5`
+          + `${wrong.length ? " (" + wrong.slice(0, 3).join("; ") + ")" : ""}`,
+          wrong.length === 0);
+
+    /*  The chord, which is the whole reason this exists: a pointer plays one
+        key at a time however fast it is clicked, so before this there was no
+        way to strike a voicing as one gesture without hardware. Three keys
+        down together have to read as one voicing rather than as three notes. */
+    await typed.locator("#clearKeys").click();
+
+    for (const code of ["KeyZ", "KeyC", "KeyB"]) await typed.keyboard.down(code);
+    await typed.waitForTimeout(250);
+
+    const chord = await pressed();
+    const played = (await typed.locator("#played").innerText()).trim();
+
+    for (const code of ["KeyZ", "KeyC", "KeyB"]) await typed.keyboard.up(code);
+
+    check(`three keys at once are one voicing (${played || "nothing"})`,
+          chord.length === 3 && chord[0] === 48 && chord[1] === 52 && chord[2] === 55
+            && /C3/.test(played) && /E3/.test(played) && /G3/.test(played));
+
+    /*  The dock follows, which is what `playingByKey()` is for: there is
+        nothing left for Play chord to do once the keys are being played rather
+        than clicked, and the pedal now has releases to hold back. */
+    check("the dock knows the keys are being played rather than clicked",
+          await typed.evaluate(() => document.querySelector("#playChord").hidden
+                                  && !document.querySelector("#sustainPedal").hidden));
+
+    /*  And the guard that would be a daily annoyance rather than an edge case:
+        a chart is typed into a textarea, in letters that are also notes. Both
+        halves are asserted - no note sounds, *and* the characters arrive -
+        because a `preventDefault` in the wrong place would pass the first. */
+    await typed.locator("#clearKeys").click();
+    await typed.locator("#chartButton").click();
+    await typed.locator("#editToggle").click();
+    await typed.locator("#progression").focus();
+    await typed.keyboard.type("zxcv");
+    await typed.waitForTimeout(150);
+
+    const editing = await typed.evaluate(() => ({
+      held: document.querySelectorAll('.key[aria-pressed="true"]').length,
+      typed: document.querySelector("#progression").value.indexOf("zxcv") !== -1
+    }));
+
+    check("typing a chart types rather than plays", editing.held === 0 && editing.typed);
+
+    /*  And nothing was taken from the keys that already meant something. Space
+        is the transport everywhere a musician meets one and is not in the map,
+        but a map that grew a `Space` entry, or a `preventDefault` reaching
+        wider than its guards, would both land here. */
+    await typed.locator("#chartButton").click();
+    await typed.locator("#modeSolo").click();
+    if (await typed.locator("#helpDialog[open]").count()) await typed.locator("#helpClose").click();
+
+    await typed.keyboard.press("Space");
+
+    // Arming asks the engine for a take, so it lands a tick later.
+    const armed = await typed.waitForFunction(
+      () => document.querySelector("#armTake").getAttribute("aria-pressed") === "true",
+      null, { timeout: 10000 }).then(() => true, () => false);
+
+    await typed.keyboard.press("Space");
+
+    check("Space still arms a take with the keys live", armed);
+
+    await typed.close();
+  }
+
   /*  In time, the line stops being a demo and joins the band.
 
       What is asserted is that pressing it starts the clock and says the line
@@ -2962,6 +3088,7 @@ try {
 
     await before.locator("#menuButton").click();
     await before.selectOption("#soundBank", "grand");
+    await before.locator("#typeToPlay").check();
     await openBand(before);
     await before.locator("#compBass").check();
     await openBand(before);
@@ -3012,7 +3139,8 @@ try {
       to: document.querySelector("#loopTo").value,
       bars: document.querySelectorAll("#systems .bar[data-index]").length,
       armed: document.querySelector("#armTake").getAttribute("aria-pressed"),
-      reharmStyle: document.querySelector("#reharmStyle").value
+      reharmStyle: document.querySelector("#reharmStyle").value,
+      typeToPlay: document.querySelector("#typeToPlay").checked
     }));
 
     check(`the practice settings come back (${back.tempo}bpm, ${back.metre}, `
@@ -3023,6 +3151,12 @@ try {
     check(`and so does the band (${back.style}, bass ${back.bassSound})`,
           back.bass === true && back.drums === true && back.style === styleWanted
           && back.bassSound !== "upright" && back.guide === "true");
+
+    /*  Which keyboard you are playing on is as much how the room is set up as
+        which sound is in it - and it is read back here rather than in its own
+        block because "what survives a reload" is one list, not one per
+        setting. */
+    check("and which keyboard you are playing on", back.typeToPlay === true);
 
     /*  Which vocabulary you are reharmonising in is a practice setting, the
         same way the scale style is - practising bebop over a tune and

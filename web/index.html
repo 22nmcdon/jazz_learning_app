@@ -2378,10 +2378,21 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
             <p class="menu-note" id="soundNote">Browsers start audio on the first click, so the first key you press may be quiet.</p>
           </div>
 
+          <!-- One group, not two: both of these answer "what am I playing on",
+               which is a question about the machine. The title is "Keyboard"
+               rather than "MIDI keyboard" because one of the two answers is not
+               a MIDI one. -->
           <div class="menu-group">
-            <span class="menu-title">MIDI keyboard</span>
+            <span class="menu-title">Keyboard</span>
             <button class="link-btn" type="button" id="connectMidi">Connect a keyboard</button>
             <p class="menu-note" id="midiStatus">Not connected. The on-screen keyboard works either way.</p>
+            <label class="menu-option">
+              <input type="checkbox" id="typeToPlay"> Play on the computer keys
+            </label>
+            <p class="menu-note">Two rows, two octaves: <b>z x c v b n m</b> are the white keys
+              from C3 with <b>s d g h j</b> above them, and <b>q w e r t y u i</b> are the
+              octave above with <b>2 3 5 6 7</b>. Several at once, so a voicing is one gesture -
+              which a mouse cannot do.</p>
           </div>
 
           <!-- Was a footer at the bottom of the chart zone, which is a strange
@@ -3926,7 +3937,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
    "spotted", "spottedText", "useSpotted",
    "menuButton", "menuPanel", "menuClose", "chartButton", "chartPanel",
    "tuneName", "saveTune", "tuneNote", "openTuneField", "openTune",
-   "connectMidi", "midiStatus", "styleLabel",
+   "connectMidi", "midiStatus", "typeToPlay", "styleLabel",
    "showVoicing", "playChord", "nameChord", "named", "namedText",
    "planButton", "planDialog", "planClose", "planList", "planTitle", "planIntro",
    "styleEdit", "styleDialog", "styleClose", "styleFrom", "styleGrid", "styleAdvice",
@@ -5779,7 +5790,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     // The dock's chord controls, and the menu groups that drive them. In time
     // they need held notes that no longer exist - the keys stop latching - and
     // "Play chord" would be sounding over the clock.
-    el.playChord.hidden = soloing || compingNow || midi.connected;
+    el.playChord.hidden = soloing || compingNow || playingByKey();
     el.nameChord.hidden = soloing || compingNow;
     el.showVoicing.textContent = soloing ? "Show me a line" : compingNow ? "Show me a comp" : "Show me one";
     el.practising.hidden = soloing || compingNow;
@@ -11101,20 +11112,21 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   function updateVoicingControls() {
     // In time there are no held notes for either of these to work on - the keys
     // do not latch - and "Play chord" would be sounding over the clock.
-    el.playChord.hidden = midi.connected || state.mode === "solo" || transport.inTime;
+    el.playChord.hidden = playingByKey() || state.mode === "solo" || transport.inTime;
 
     /*  The pedal is shown where there is something for it to hold, which is
         wherever a note is let go of by something other than a decision to stop
-        playing it: a MIDI keyboard's key releases - the whole reason it exists,
-        since holding them back is what lets a chord played one note at a time
-        read as one voicing - and the auto-release in solo practice and comping.
+        playing it: a key release from either keyboard that has them - the whole
+        reason it exists, since holding them back is what lets a chord played one
+        note at a time read as one voicing - and the auto-release in solo
+        practice and comping.
 
         In static chord practice on the on-screen keys there is nothing: they
         latch, so a note sounds until it is clicked off, and a pedal over that
         only makes the sound outlast the voicing the app thinks you are playing.
         A control that does nothing you can see is one nobody can learn, and it
         read as dead to the person it was built for. */
-    el.sustainPedal.hidden = ! (midi.connected || state.mode === "solo" || transport.inTime);
+    el.sustainPedal.hidden = ! (playingByKey() || state.mode === "solo" || transport.inTime);
     el.playChord.disabled = state.heldNotes.length === 0 || audio.bank === "silent";
     el.nameChord.disabled = state.heldNotes.length < 3;
     el.named.hidden = true;
@@ -11194,11 +11206,22 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
   // Space plays the chord too, as long as nothing else has the keyboard.
   // Stepping along the chart with the hands still on the keys.
+  /** Whether a dialog that takes typing is in front of the page.
+
+      The cheat sheet is deliberately not in the list: it has no fields in it,
+      so an arrow still steps a bar and - now - a letter still plays a note
+      while you are reading which letter plays which note. Everything here has
+      a box you can type into, where a key is a character rather than a
+      command. */
+  function aDialogIsOpen() {
+    return el.chordDialog.open || el.planDialog.open || el.ioDialog.open
+        || el.styleDialog.open || el.progressDialog.open;
+  }
+
   document.addEventListener("keydown", function (event) {
     // The style dialog has number boxes in it, and Space in one of those is a
     // space, not a take being armed.
-    if (el.chordDialog.open || el.planDialog.open || el.ioDialog.open
-        || el.styleDialog.open || el.progressDialog.open) return;
+    if (aDialogIsOpen()) return;
     if (event.target !== document.body && !event.target.classList.contains("bar")) return;
 
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
@@ -11249,7 +11272,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     }
 
     if (event.target !== document.body) return;
-    if (midi.connected || state.heldNotes.length === 0) return;
+    if (playingByKey() || state.heldNotes.length === 0) return;
 
     event.preventDefault();
     stopAllNotes();
@@ -11276,6 +11299,51 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   // not be allowed to ask at all - so every failure says what happened rather
   // than leaving the button looking broken.
   var midi = { access: null, connected: false, held: [], chord: [], settleTimer: null, velocities: {} };
+
+  /** Playing from the computer keys, when it has been turned on.
+
+      `held` is keyed by `event.code` rather than by note, so a keyup releases
+      what that key took and nothing else - two codes cannot claim one note, but
+      a map with a typo could, and this way the bug is a silent note rather than
+      a stuck one. */
+  var typing = { on: false, held: {} };
+
+  /*  Where the computer keys sit on the piano, by **position** rather than by
+      letter: `event.code` is read, so the shape survives an AZERTY or Dvorak
+      keyboard the way a tracker's does, and `z` means "the key left of the
+      bottom row" rather than the letter z.
+
+      Two rows, two octaves, 48 to 72 - which is exactly the range the keyboard
+      is drawn at (`state.range`), so what you press lines up with what you can
+      see and there is nothing to shift. That is also why there is no
+      octave-shift binding: the drawn keyboard has no octave-shift control, for
+      the reason `CLAUDE.md` gives, and a keyboard map that reached past the
+      drawing would need one.
+
+          2 3   5 6 7          C#4 D#4   F#4 G#4 A#4
+         q w e r t y u i        C4 D4 E4 F4 G4 A4 B4 C5
+          s d   g h j          C#3 D#3   F#3 G#3 A#3
+         z x c v b n m          C3 D3 E3 F3 G3 A3 B3
+
+      No collision with anything the page already binds: its only key handlers
+      are Space (the take, or the chord), the arrows (stepping a bar), Escape
+      (closing) and Enter in the tune-name box. */
+  var TYPING_KEYS = {
+    KeyZ: 48, KeyS: 49, KeyX: 50, KeyD: 51, KeyC: 52, KeyV: 53, KeyG: 54,
+    KeyB: 55, KeyH: 56, KeyN: 57, KeyJ: 58, KeyM: 59,
+    KeyQ: 60, Digit2: 61, KeyW: 62, Digit3: 63, KeyE: 64, KeyR: 65,
+    Digit5: 66, KeyT: 67, Digit6: 68, KeyY: 69, Digit7: 70, KeyU: 71, KeyI: 72
+  };
+
+  /** Whether something is *playing* the keys rather than clicking them.
+
+      The four places that ask this used to ask `midi.connected`, and every one
+      of them was really asking this: a pointer plays one note at a time and
+      latches it, while a keyboard - hardware or the computer's own - holds
+      notes and lets them go. So *Play chord* earns its place in the dock only
+      while a mouse is doing the playing, and the pedal earns its place only
+      when there are releases for it to hold back. */
+  function playingByKey() { return midi.connected || typing.on; }
 
   /** The sustain pedal: down or up, and the notes whose release it is holding
       back. Kept beside the MIDI state because a pedal is a MIDI controller
@@ -11598,6 +11666,95 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     stopNote(note);
     // The voicing stays on screen after the hands lift, so it can be read.
   }
+
+  // --- the computer keyboard ------------------------------------------------
+
+  /*  A computer keyboard is a MIDI keyboard without the hardware, so it is
+      given the same two functions rather than a path of its own: `midiNoteOn`
+      and `midiNoteOff` already hold all three modes (solo's chord window,
+      comping's one-gesture-one-chord, static practice's gathering into a
+      voicing), the pedal's deferred releases and the held-note bookkeeping.
+      Feeding them is what makes a typed take read back exactly like a played
+      one, instead of nearly like one.
+
+      **What it buys is chords.** A pointer plays one key at a time however fast
+      it is clicked - the comping branch says so in as many words - so without
+      hardware a four-note rootless voicing could not be struck as one gesture
+      at all, which is the gesture both modes are about. Typed keys go down
+      together and come up again.
+
+      Off by default, and a setting rather than always on: a page that made a
+      noise when you pressed `z` would be a surprise, and the editor is full of
+      letters. */
+
+  /** The note a key event is aimed at, or 0 for one this is not about. */
+  function typedNote(event) {
+    if (!typing.on || event.repeat) return 0;
+    if (typingInto(event.target) || aDialogIsOpen()) return 0;
+    if (event.ctrlKey || event.metaKey || event.altKey) return 0;
+
+    return TYPING_KEYS[event.code] || 0;
+  }
+
+  document.addEventListener("keydown", function (event) {
+    var note = typedNote(event);
+    if (note === 0 || typing.held[event.code]) return;
+
+    /*  So a letter cannot also reach whatever has the focus - a browser's
+        find-as-you-type, or a `<select>` jumping to an option that starts with
+        it. The guards above have already let every field keep its characters. */
+    event.preventDefault();
+
+    typing.held[event.code] = note;
+
+    // There is no velocity in a key press, so every typed note is struck the
+    // same. Nothing reads a velocity except the sound itself, so this costs no
+    // reading - it is the one thing hardware still does that this cannot.
+    midi.velocities[note] = 0.8;
+    midiNoteOn(note);
+  });
+
+  document.addEventListener("keyup", function (event) {
+    var note = typing.held[event.code];
+    if (!note) return;
+
+    event.preventDefault();
+    delete typing.held[event.code];
+    midiNoteOff(note);
+  });
+
+  /*  The one failure a typed keyboard has and a MIDI one does not: alt-tab
+      away with keys down and the keyup never arrives, so the notes are left
+      sounding with nothing to release them. Releasing on blur goes through
+      `midiNoteOff`, so the pedal still gets its say. */
+  window.addEventListener("blur", releaseTypedNotes);
+
+  function releaseTypedNotes() {
+    Object.keys(typing.held).forEach(function (code) {
+      var note = typing.held[code];
+      delete typing.held[code];
+      midiNoteOff(note);
+    });
+  }
+
+  /** Turns playing-by-typing on or off.
+
+      It redraws the dock because two of its controls follow `playingByKey()` -
+      *Play chord* goes, since you are no longer assembling a voicing by
+      clicking, and the pedal arrives, since now there are releases to hold. */
+  function setTypeToPlay(on) {
+    typing.on = on;
+    el.typeToPlay.checked = on;
+
+    if (!on) releaseTypedNotes();
+
+    updateVoicingControls();
+  }
+
+  el.typeToPlay.addEventListener("change", function () {
+    setTypeToPlay(el.typeToPlay.checked);
+    rememberFlag("TypeToPlay", typing.on);
+  });
 
   // --- chart editing -------------------------------------------------------
   el.editToggle.addEventListener("click", function () {
@@ -11924,6 +12081,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       el.loopTo.value = String(to);
       fillLoopRange();
     }
+
+    /*  A flag, so there is nothing to validate beyond yes or no - and it arms
+        a listener rather than sounding anything, which is what the rule about
+        a recall making no sound asks of it. */
+    if (recallFlag("TypeToPlay")) setTypeToPlay(true);
 
     if (recallFlag("GuideTones")) {
       guide.showing = true;
