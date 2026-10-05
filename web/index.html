@@ -3112,11 +3112,10 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
     <ul class="help-list" id="helpPanelPlaying" hidden>
       <li data-mode="chords"><b>The keys below stay down.</b>
-        <span>Click them one at a time to build a chord - a voicing you are holding, not a
-        piano you are playing. <i>Clear keys</i> lets go.</span></li>
+        <span>Click them one at a time to build a chord, or hold several computer keys at
+        once. <i>Clear keys</i> lets go.</span></li>
       <li data-mode="solo"><b>The keys do not stay down here.</b>
-        <span>A line is played, not held: each note sounds and lets go, which is the
-        opposite of chord practice on the same keyboard.</span></li>
+        <span>A line is played, not held: each note sounds and lets go.</span></li>
 
       <li data-mode="chords"><b>Show me one</b>
         <span>puts a voicing that works under your hands. Press it again for the next one,
@@ -3135,6 +3134,16 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
 
       <li class="help-midi"><b>A MIDI keyboard</b> is better than clicking. Connect one
         under <i>Practice</i>.</li>
+
+      <!-- Beside the MIDI entry, because they answer the same question: what
+           else can I play this on. It points at the layout rather than printing
+           it - the note beside the switch carries that, and two copies of
+           twenty-five letters would drift. It is also deliberately not folded
+           into the entry above, which `setHelpMidi` rewrites from the MIDI
+           status and would eat. -->
+      <li><b>The computer keys play too.</b>
+        <span>Two rows of them are two octaves. Turn it on under <i>Practice</i>, where
+        the layout is.</span></li>
 
       <li><b>Sustain</b>
         <span>holds what you played after the keys lift, as a pedal on a connected keyboard
