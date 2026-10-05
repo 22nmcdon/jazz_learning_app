@@ -99,7 +99,7 @@ sits beside the thing it changes**. There are five, and each one is a question:
 
 | | where | what it asks |
 |---|---|---|
-| **Practice** | top right | the machine: which sound bank, a MIDI keyboard, what is running |
+| **Practice** | top right | the machine: which sound bank, which keyboard you are playing on, what is running |
 | **Take setup** | transport strip | this take: count in, loop, speed up each chorus, reharmonise as you play |
 | **Chart** | left of the chart's row | which tune: import and export, reharmonise, edit, restore, and your saved tunes |
 | **Voicings** / **Scales** | right of the chart's row | what you are being read against: the shape in chord practice, the vocabulary in solo |
@@ -723,8 +723,9 @@ fact about a gesture, the way a measure index is a fact about a bar. Nothing is 
 either — a note says it *joined* a chord, which is knowable the instant it arrives, so every
 note is read as immediately as it ever was.
 
-It needs a MIDI keyboard. A pointer plays one key at a time however fast you click, so the
-on-screen keyboard always plays a line.
+It needs keys that can be held together, which means a MIDI keyboard or the computer's own
+(see below). A pointer plays one key at a time however fast you click, so a mouse always
+plays a line.
 
 A note struck with three others is still one note: counted, coloured and scored like any
 other. The gesture changes which notes can resolve which, and nothing else.
@@ -814,6 +815,17 @@ is built one note at a time and held: they are a voicing you are holding rather 
 you are playing. Clicking a key again, or **Clear keys**, lets go. On touch several fingers
 register as one voicing the same way. Any MIDI keyboard found at startup — or plugged in or
 paired later — is opened automatically.
+
+**You can also play on the computer keyboard**, which is off until you turn it on under
+*Practice*. Two rows of it are the two octaves the keyboard is drawn at: `z x c v b n m` are
+the white keys from C3 with `s d g h j` above them, and `q w e r t y u i` are the octave
+above with `2 3 5 6 7`. They are read by position rather than by letter, so the shape of the
+piano survives a non-QWERTY layout. What they add that a mouse cannot is **several notes at
+once**: a four-note rootless voicing is one gesture rather than four clicks, which is what
+chord practice and the comping exercise are both asking for. They hold and release like any
+keyboard, so the sustain pedal has something to hold, and a line typed in solo practice is
+graded exactly like a played one. There is no octave shift, because there is nothing above or
+below the keys you can see.
 
 A **sustain pedal** works, on both shells and in both senses: the notes keep sounding after
 the keys lift, and they keep counting as part of the chord. A voicing spread out under the

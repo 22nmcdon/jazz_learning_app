@@ -212,7 +212,21 @@ means CSS, not per-platform builds.
 
 ## Input Scope
 
-In scope: MIDI keyboard (USB/Bluetooth), on-screen keyboard (touch/mouse).
+In scope: MIDI keyboard (USB/Bluetooth), on-screen keyboard (touch/mouse), and
+the **computer keyboard**, off by default and turned on under *Practice*.
+
+**The computer keys are given `midiNoteOn`/`midiNoteOff` rather than a path of
+their own**, which is the one-input-interface rule rather than a convenience: a
+computer keyboard is a MIDI keyboard without the hardware, so every mode
+branch, the chord window, the pedal's deferred releases and the take all come
+along. What it adds that no other input here has is a **chord without
+hardware** — a pointer plays one key at a time however fast it is clicked, so
+before this nobody without a MIDI keyboard could strike a four-note voicing as
+one gesture, which is the gesture both modes are about. Two rows, two octaves,
+48–72, matching the range the keyboard is drawn at, read from `event.code` so
+the shape survives a non-QWERTY layout — and therefore **no octave-shift
+binding**, which leaves that rule where it was. `playingByKey()` is what the
+dock asks, never `midi.connected`.
 
 **Audio / pitch-detection input is out, and that is an answer rather than a
 deferral.** It was recorded for a long time as "much larger DSP undertaking,
@@ -222,6 +236,12 @@ low-interval limit, `compingVoicing`'s anchor sweep, `chordSoFar()` reading an
 attack as a voicing. Every reader downstream assumes several notes at once from
 a keyboard, and a keyboard already has MIDI. Pitch detection buys monophonic
 input for a horn player, which is a different app.
+
+**The computer keyboard does not weaken that argument, and it is worth saying
+which way round.** A third input arriving might look like the door opening, but
+a typed keyboard is still polyphonic and still a keyboard: every assumption
+above holds for it unchanged, which is exactly why it needed no new reader. An
+input that *did* reopen the question would be one those assumptions failed for.
 
 So the thing that would reopen it is **a non-keyboard audience**, not the DSP
 getting easier. `app/CMakeLists.txt` already says as much in the line that

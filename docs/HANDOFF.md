@@ -198,6 +198,36 @@ turned out to need is in `docs/SOLO_PRACTICE.md`.
 
 Small, verified, and none of them urgent.
 
+- **A typed chord is at the mercy of the keyboard's rollover.** Many membrane
+  and laptop keyboards cannot register arbitrary three- and four-key
+  combinations - the matrix ghosts, and the hardware simply does not report
+  one of them - so a four-note rootless voicing typed on a cheap keyboard may
+  silently arrive as three notes, and the reading will quite correctly say so.
+  That is hardware rather than code and there is nothing the page can do about
+  it, which is exactly why it is written down: the failure looks like the app
+  misreading a chord. The keys to suspect are ones on the same row or column
+  of the matrix, which is unknowable from here.
+
+- **A typed note has no velocity, and every one is struck at 0.8.** Nothing
+  but `playNote` reads a velocity, so no reading loses anything by it - the
+  comp evaluator has nowhere to put a dynamic and `score()` never asked. It is
+  the one thing hardware still does that the computer keys cannot, and the
+  place it would be felt is the band's humanised velocities, which are the
+  page's own and unaffected.
+
+- **The app's webview takes keyboard focus on a click, and only then.**
+  Measured with a temporary probe under `xvfb-run` and `xdotool`: activating
+  the window was not enough, and the page saw no `keydown` at all until a
+  click landed inside it - after which every key arrived with `target BODY`
+  and played. On a real desktop a player clicks the window to use it, so this
+  is a wrinkle rather than a hole, but a freshly launched app that makes no
+  sound until the first click is the symptom to recognise. Nothing in `app/`
+  touches key focus; if it ever needs to, that is where.
+  **WebKitGTK is the only webview this was measured on.** WKWebView and
+  WebView2 are unverified for key delivery, the same standing they already
+  have for `file://` subresources - and WKWebView is the strictest of the
+  three, so it is the one to check first if the keys do nothing on a Mac.
+
 - **The comping-style editor does not edit a style's register.**
   `lowestNote`/`highestNote` cross the wire and go back unchanged, so a copy
   keeps whatever the style it came from had. The four ship with near-identical
