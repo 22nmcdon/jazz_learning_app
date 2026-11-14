@@ -15,7 +15,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
-import { chromium } from "playwright";
+import { chromium, devices } from "playwright";
 
 const root = process.argv[2];
 
@@ -4089,6 +4089,58 @@ try {
 
     check(`nothing runs off the side at 390px (${mode.replace("mode", "")})`,
           spill.page <= 0 && spill.offscreen.length === 0);
+  }
+
+  /*  A real phone, which every other width check here is not.
+
+      Playwright's `viewport` sets the window in **CSS pixels**, so a 390px
+      context is a desktop browser told to be 390 CSS pixels wide - and that is
+      exactly the case a missing `<meta name="viewport">` does not break. The
+      page shipped without one: on a 393px phone the layout engine assumed
+      980px, scaled the result down, and `max-width: 760px` - this page's only
+      breakpoint - never fired. Every "fits at 390px" measurement in this file
+      was correct about a page nobody was looking at.
+
+      `isMobile` is what makes Chromium read the meta tag, so this is the one
+      check here that can tell the two apart. Measured when it was added:
+      without the tag `innerWidth` was 980 on a 393px screen with the narrow
+      layout off; with it, 393 and on. */
+  {
+    const phone = await browser.newContext({ ...devices["Pixel 5"] });
+    const onAPhone = await phone.newPage();
+
+    await onAPhone.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await onAPhone.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await onAPhone.locator("#helpDialog[open]").count())
+      await onAPhone.locator("#helpClose").click();
+
+    const real = await onAPhone.evaluate(() => ({
+      compatMode: document.compatMode,
+      innerWidth: window.innerWidth,
+      screenWidth: window.screen.width,
+      narrow: window.matchMedia("(max-width: 760px)").matches,
+      spill: document.documentElement.scrollWidth - window.innerWidth
+    }));
+
+    check(`a phone lays the page out at its own width (${real.innerWidth} on a `
+          + `${real.screenWidth}px screen)`,
+          real.innerWidth <= real.screenWidth + 1);
+
+    check("and the narrow layout is the one it gets", real.narrow === true);
+
+    //  Standards mode, which the doctype buys. Quirks mode changes the box
+    //  model under every pixel measured in this file.
+    check(`the page is in standards mode (${real.compatMode})`,
+          real.compatMode === "CSS1Compat");
+
+    /*  This last one passes either way - a page laid out at an assumed 980px
+        and scaled down does not overflow, it is just unreadable - so it is
+        here as a guard against a future control that is too wide, not as
+        evidence about the meta tag. The three above are the discriminating
+        ones: without the tag they read 980, false, and BackCompat. */
+    check(`nothing runs off the side of a real phone (${real.spill}px)`, real.spill <= 0);
+
+    await phone.close();
   }
 
   /*  The practice button's real cost.

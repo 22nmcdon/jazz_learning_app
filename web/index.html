@@ -1,3 +1,22 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Four lines that were missing, and the second pair is the one that mattered.
+
+     Without a doctype the page rendered in **quirks mode** in every browser.
+     Without the viewport meta a phone lays the page out at an assumed 980px and
+     then scales it down, so `max-width: 760px` - the page's only breakpoint -
+     never fired on the hardware it was written for. Every "fits at 390px"
+     measurement in this repo was taken in a desktop browser told to be 390
+     CSS pixels wide, which is exactly the case the missing tag does not break;
+     the checks were right and were measuring the wrong page.
+
+     `charset` goes first because it has to land inside the first 1024 bytes,
+     and `lang` is here because a screen reader otherwise guesses which
+     language to pronounce the chart in. The document has no `<head>` or
+     `<body>` tag: both are optional in HTML5, the parser infers them, and the
+     page has done without them from the start. -->
 <title>Jazz Learning App</title>
 <!-- Replaced with the commit and the time by the Pages workflow, and left
      alone everywhere else. It exists so that "is the site actually serving

@@ -58,6 +58,18 @@ Three layers, as separate modules. Do not blur this boundary.
 One page (`web/index.html`) serves both desktop and mobile — "responsive"
 means CSS, not per-platform builds.
 
+- **Every pixel number below was first measured in quirks mode, and they have
+  been re-measured since.** The page shipped with no doctype and no viewport
+  meta for its whole life: it rendered in `BackCompat` everywhere, and on a
+  393px phone the layout engine assumed 980px and scaled down, so the 760px
+  breakpoint never fired on hardware. The tags are there now; the only numbers
+  that moved were `.chart-bar` (19px → 26px at every width, a line box the
+  quirks parser did not make) and therefore the sheet's top edge, 7px lower.
+  Every check still passes. **A width measured with Playwright's `viewport` is
+  a CSS-pixel width**, which is exactly the case a missing viewport meta does
+  not break — so the suite now carries four checks in an `isMobile` context,
+  and those are the ones that can tell a real phone from a narrow window.
+
 - **The page is a frame, not a document.** Three zones: `.top-bar` at its own
   height, `<main class="chart-zone">` taking everything left and scrolling
   *itself*, and `.dock` at the bottom. `body` is a flex column at `100dvh`.
