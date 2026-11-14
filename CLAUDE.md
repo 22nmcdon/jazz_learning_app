@@ -261,10 +261,33 @@ turns the microphone permission off.
 
 ## Platform Notes
 
-- **iOS**: Bluetooth MIDI works via JUCE out of the box; USB needs a
-  Lightning/USB-C camera adapter.
-- **Android**: Bluetooth MIDI since Android 6; USB via OTG. JUCE's Android MIDI
-  is less mature than iOS — test here first when MIDI issues are reported.
+**What is actually built and run, and what is intent.** This section used to
+read as though four platforms were in service; one is. Keeping the difference
+visible is the point - a claim nobody can check is worse than a gap somebody
+can see.
+
+- **Linux is the only platform anything is built on.** CI builds the engine
+  without JUCE on a GUI-less runner and the full app on `ubuntu-latest`, and
+  the page is driven in headless Chromium. Every measurement in this file was
+  taken here.
+- **macOS and Windows**: the shell is JUCE and nothing in it is Linux-only, so
+  they are expected to build. Neither has been built or run. `WKWebView` in
+  particular has never been loaded - see `docs/HANDOFF.md`, which also has it
+  down as the strictest of the three webviews about `file://` subresources and
+  the first thing to suspect if the app cannot read a PDF on a Mac.
+- **iOS and Android have no build at all.** There is no Xcode project, no
+  `.jucer` and no Gradle file in this repository, so neither target has ever
+  been compiled. What exists for mobile is the shape rather than the shipping:
+  `MidiDeviceInput::showBluetoothPairingDialog()` is written, is the only
+  pairing entry point either would need, and **has no caller** - which is why
+  "Bluetooth MIDI works out of the box" was a claim this repository could not
+  support. `app/CMakeLists.txt` still requests the Bluetooth permission for
+  it, deliberately.
+- What is true about mobile MIDI when somebody does build it: iOS takes
+  Bluetooth through JUCE and USB through a camera adapter; Android has had
+  Bluetooth MIDI since 6 and USB over OTG, and JUCE's Android MIDI is the less
+  mature of the two, so it is the one to test first. **That is received
+  knowledge, not experience with this app.**
 - Target is a JUCE **standalone GUI app** (`juce_add_gui_app`), not a plugin
   client. An AUv3/VST3 target reusing Core Engine is a possible future addition.
 
@@ -302,8 +325,11 @@ touching the page: `./web/build.sh out && cp web/index.html web/sw.js out && nod
 web/smoke-test.mjs out` — a build that compiles has not been the thing that goes
 wrong here.
 
-Android is the exception to CMake-everywhere (JUCE's CMake support doesn't cover
-it): uses the Projucer/Gradle exporter over the same source tree.
+Android would be the exception to CMake-everywhere, since JUCE's CMake support
+does not cover it - the Projucer/Gradle exporter over the same source tree is
+the route. **None of that exists here**: there is no `.jucer` and no Gradle
+file in the repository, so this is the plan rather than a description of the
+build. It read as the latter.
 
 ## Feature Status
 

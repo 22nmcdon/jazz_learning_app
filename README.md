@@ -1,12 +1,19 @@
-# Jazz Learning App — POC
+# Jazz Learning App
 
-A cross-platform jazz education app built on JUCE. Build and reharmonise chord
-progressions, see which scales fit each chord, and get feedback on the voicings you play.
+A cross-platform jazz education app built on JUCE. Two modes over one chart:
+**chord practice** — reharmonise a progression and get real-time feedback on the voicings
+you play — and **solo practice**, which reads a line back note by note. A band comps,
+walks and keeps time under you, and the app can write you a line as well as read one.
 
-This repository is the proof of concept for the two core modules in
-[`docs/jazz_learning_app_design.pdf`](docs/jazz_learning_app_design.pdf): the
-**Reharmonisation Assistant** and the **Real-Time Chord/Voicing Analyzer**, sharing one
-responsive UI and one UI-agnostic theory engine.
+It started as a proof of concept for the two core modules in
+[`docs/jazz_learning_app_design.pdf`](docs/jazz_learning_app_design.pdf) — the
+Reharmonisation Assistant and the Real-Time Chord/Voicing Analyzer — and is well past
+that now, so treat the design doc as history rather than as a specification. What is
+built is below; what is not is under [Not built](#not-built).
+
+**Built and run on Linux only.** The shell is JUCE and nothing in it is Linux-specific,
+but macOS and Windows have not been built here and there is no iOS or Android project at
+all — see *Platform Notes* in [`CLAUDE.md`](CLAUDE.md).
 
 ![Chord practice: a shell voicing read back, with the low-interval limit flagged](docs/screenshot-desktop.png)
 
@@ -1253,7 +1260,7 @@ you rather than about the tune.
 The reasoning, including why the engine gained no memory to do any of this, is in
 [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
-## Not in this POC
+## Not built
 
 - **A shelf of your own comping styles.** The editor keeps exactly one style you wrote.
   The storage that a shelf needs now exists - it is what the voicing library sits on - but

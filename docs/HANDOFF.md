@@ -326,7 +326,29 @@ Small, verified, and none of them urgent.
   four runs since have been clean and CI has been clean. Noted rather than
   chased. If it comes back, the 15s waits are the share-link exports and the
   rolling-bar wait, and the thing to suspect first is `layOutChart()` running
-  during a take.
+  during a take. **It has happened once more**, on a run straight after a
+  negative control had served a deliberately broken page; the failing check
+  was not captured and three runs immediately after were clean. Two
+  occurrences, no diagnosis.
+
+- **Two checks report a value that changes run to run.** The same build, run
+  twice, gives *"a comped chord is placed against the style"* as `idiomatic`
+  or `offStyle`, and *"the take is read back as placement, register and
+  density"* as `Placement 0%` or `50%`. Both **pass** either way, which is the
+  problem: the assertion is loose enough that the thing it prints is not the
+  thing it checks, so a real change in either number would not be noticed. The
+  cause is timing - where a synthetic click lands against the clock - and the
+  fix is to make the take deterministic for that check rather than to tighten
+  the number it happens to produce.
+
+- **`BassRole::scaleTone` is a deletion candidate.** It is assigned now (the
+  fallback step that used to call itself a chord tone), but **248,832 bass
+  notes over 1,728 charts produced none**, so the branch is unreachable in
+  practice and the value is carried by no record - which is the shape the
+  enum-coverage rule exists to catch. It stays because the branch is a guard
+  against repeating a note, and a test pins the three roles that *are*
+  produced, so the day one reaches the fourth the suite says so. Decide it
+  properly by working out whether the two searches above it can both fail.
 
 - **Count-in, the tempo ramp and *Reharmonise as you play* are not
   remembered.** They were left out of commit 6 on purpose — the handoff's
