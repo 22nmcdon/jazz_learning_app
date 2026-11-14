@@ -10793,15 +10793,41 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
              upbeatWhenFast: 0.5, slowBpm: 100, fastBpm: 240 };
   }
 
-  /** Where this groove puts the upbeat at this tempo, as a fraction of a beat.
+  /*  The timing core.
+
+      The four functions the whole page's timing rests on, with every input
+      passed in rather than read from the closure around them - so they can be
+      lifted out of this file and run on their own, which `web/unit-test.mjs`
+      does. The wrappers below them keep the signatures every call site uses
+      and supply the groove and the swing from where the page keeps them.
+
+      This is the page's only unit-tested code, and these are the right four
+      to start with: `CLAUDE.md` puts the whole of the page's timing on
+      `beatsIntoBar` being `origin + index x spacing`, and says its inverse
+      `positionFromBeats` has to move with it or notes come back onto the grid
+      at a position nobody played. That is a property worth asserting directly
+      rather than inferring from a take sounding right.
+
+      **The block is extracted by markers, not imported.** Lifting it into a
+      real file would mean a second script the page has to load before it can
+      run, in both shells, which is a new way for the app to show a blank
+      window - and the one thing `CLAUDE.md` is most insistent about is that
+      the UI must never block on something that might not arrive. The markers
+      are the contract: everything between them is pure, and the only thing it
+      reads from outside is `ENGINE_TICKS_PER_BEAT`, which the test lifts out
+      of this file by name rather than restating - the grid's size having two
+      sources would be the bug this whole block is about.
+  */
+
+  //  ==== JAZZ-TIMING-CORE-BEGIN ====
+
+  /** Where a groove puts the upbeat at this tempo, as a fraction of a beat.
 
       The engine states the relationship - two endpoints and the tempo band
       between them - and the shell supplies the tempo, which is the division
       `docs/RHYTHM.md` has always drawn. Every number in here came off the
       wire; the only thing the page adds is the straight line between them. */
-  function upbeatFraction(bpm) {
-    var g = currentGroove();
-
+  function upbeatFractionOf(bpm, g) {
     if (g.fastBpm <= g.slowBpm || bpm <= g.slowBpm) return g.upbeatWhenSlow;
     if (bpm >= g.fastBpm) return g.upbeatWhenFast;
 
@@ -10809,21 +10835,78 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     return g.upbeatWhenSlow + (g.upbeatWhenFast - g.upbeatWhenSlow) * through;
   }
 
+  /** The tick a swung upbeat lands on, or null where nothing is swung. */
+  function swungUpbeatTickOf(bpm, g, swung) {
+    if (! swung) return null;
+    return upbeatFractionOf(bpm, g) * ENGINE_TICKS_PER_BEAT;
+  }
+
+  /** A position on the engine's grid, as an offset in beats from the downbeat.
+
+      @p secondsPerBeatNow is the spacing this bar was *booked* at, and is a
+      parameter rather than a call to `secondsPerBeat()` for the reason the
+      tempo ramp exists: every beat is booked at the tempo it will be played
+      at, and a swing ratio that read the live tempo would slide under a bar
+      already in the diary. `compBar`, `bassBar` and `drumsBar` were already
+      being handed this for exactly that reason.
+  */
+  function beatsIntoBarOf(beat, tick, secondsPerBeatNow, g, swung) {
+    var bent = tick === ENGINE_TICKS_PER_BEAT / 2
+                 ? swungUpbeatTickOf(60 / secondsPerBeatNow, g, swung) : null;
+
+    return beat + (bent === null ? tick : bent) / ENGINE_TICKS_PER_BEAT;
+  }
+
+  /** The other direction: a moment, as beats into the bar, written back onto
+      the grid the engine reads.
+
+      Quantised to the positions music is actually written in rather than to
+      the nearest of twenty-four, so a note played a little early is the note
+      the player meant. The swung eighth folds back onto the straight one,
+      because in a swung bar they are not two positions - they are the same
+      moment, and the engine should see the one a player would write.
+  */
+  function positionFromBeatsOf(beats, secondsPerBeatNow, g, swung) {
+    var beat = Math.floor(beats);
+    var fraction = beats - beat;
+    var wanted = fraction * ENGINE_TICKS_PER_BEAT;
+
+    // 0, a sixteenth, a triplet, an eighth, three sixteenths, the next
+    // downbeat. The positions music is written in - note that the swung
+    // eighth is no longer among them.
+    var slots = [0, 6, 8, 12, 18, ENGINE_TICKS_PER_BEAT];
+    var tick = slots[0];
+
+    slots.forEach(function (slot) {
+      if (Math.abs(slot - wanted) < Math.abs(tick - wanted)) tick = slot;
+    });
+
+    /*  The swung eighth is a candidate of its own rather than a row in that
+        table, because where it falls is the groove's and the tempo's and is
+        usually not a whole tick at all. It folds back onto tick 12: in a swung
+        bar the two are not two positions, they are the same moment, and the
+        engine should see the one a player would write.
+
+        It wins ties, which decides the one case where the two collide - a
+        shuffle puts the upbeat at three sixteenths exactly, and in a shuffle
+        bar that is the swung eighth rather than a sixteenth figure. */
+    var bent = swungUpbeatTickOf(60 / secondsPerBeatNow, g, swung);
+
+    if (bent !== null && Math.abs(bent - wanted) <= Math.abs(tick - wanted))
+      return { beat: beat, tick: ENGINE_TICKS_PER_BEAT / 2 };
+
+    if (tick === ENGINE_TICKS_PER_BEAT) { beat += 1; tick = 0; }
+
+    return { beat: beat, tick: tick };
+  }
+
+  //  ==== JAZZ-TIMING-CORE-END ====
+
   function swinging() {
     // The groove says. What used to be a /swing/i test on the chart's style
     // marking is now `grooveForStyleWord` in the engine, which reads the same
     // text and knows the difference between a shuffle and a ballad.
     return !currentGroove().even;
-  }
-
-  /** Where the swung upbeat is actually sounded, in ticks, or null if straight.
-
-      Not a whole tick in general, and that is the point - it is a position in
-      time, not a position on the grid.
-  */
-  function swungUpbeatTick(bpm) {
-    if (!swinging() || !compFeelIsEighths()) return null;
-    return upbeatFraction(bpm) * ENGINE_TICKS_PER_BEAT;
   }
 
   /** Asks the engine which grooves there are and which this chart wants.
@@ -10864,63 +10947,24 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     return !chosen || chosen.feel === "eighths";
   }
 
-  /** A position on the engine's grid, as an offset in beats from the downbeat.
+  /*  The page's side of those four: the same signatures every call site
+      already uses, each one supplying the groove the chart is in and whether
+      anything is being swung at all. Two questions, asked in one place rather
+      than inside the arithmetic, which is what let the arithmetic come out. */
+  function upbeatFraction(bpm) { return upbeatFractionOf(bpm, currentGroove()); }
 
-      @p secondsPerBeatNow is the spacing this bar was *booked* at, and is a
-      parameter rather than a call to `secondsPerBeat()` for the reason the
-      tempo ramp exists: every beat is booked at the tempo it will be played
-      at, and a swing ratio that read the live tempo would slide under a bar
-      already in the diary. `compBar`, `bassBar` and `drumsBar` were already
-      being handed this for exactly that reason.
-  */
-  function beatsIntoBar(beat, tick, secondsPerBeatNow) {
-    var swung = tick === ENGINE_TICKS_PER_BEAT / 2
-                  ? swungUpbeatTick(60 / secondsPerBeatNow) : null;
-
-    return beat + (swung === null ? tick : swung) / ENGINE_TICKS_PER_BEAT;
+  function swungUpbeatTick(bpm) {
+    return swungUpbeatTickOf(bpm, currentGroove(), swinging() && compFeelIsEighths());
   }
 
-  /** The other direction: a moment, as beats into the bar, written back onto
-      the grid the engine reads.
+  function beatsIntoBar(beat, tick, secondsPerBeatNow) {
+    return beatsIntoBarOf(beat, tick, secondsPerBeatNow, currentGroove(),
+                          swinging() && compFeelIsEighths());
+  }
 
-      Quantised to the positions music is actually written in rather than to
-      the nearest of twenty-four, so a note played a little early is the note
-      the player meant. The swung eighth folds back onto the straight one,
-      because in a swung bar they are not two positions - they are the same
-      moment, and the engine should see the one a player would write.
-  */
   function positionFromBeats(beats, secondsPerBeatNow) {
-    var beat = Math.floor(beats);
-    var fraction = beats - beat;
-    var wanted = fraction * ENGINE_TICKS_PER_BEAT;
-
-    // 0, a sixteenth, a triplet, an eighth, three sixteenths, the next
-    // downbeat. The positions music is written in - note that the swung
-    // eighth is no longer among them.
-    var slots = [0, 6, 8, 12, 18, ENGINE_TICKS_PER_BEAT];
-    var tick = slots[0];
-
-    slots.forEach(function (slot) {
-      if (Math.abs(slot - wanted) < Math.abs(tick - wanted)) tick = slot;
-    });
-
-    /*  The swung eighth is a candidate of its own rather than a row in that
-        table, because where it falls is the groove's and the tempo's and is
-        usually not a whole tick at all. It folds back onto tick 12: in a swung
-        bar the two are not two positions, they are the same moment, and the
-        engine should see the one a player would write.
-
-        It wins ties, which decides the one case where the two collide - a
-        shuffle puts the upbeat at three sixteenths exactly, and in a shuffle
-        bar that is the swung eighth rather than a sixteenth figure. */
-    var swung = swungUpbeatTick(60 / secondsPerBeatNow);
-
-    if (swung !== null && Math.abs(swung - wanted) <= Math.abs(tick - wanted))
-      return { beat: beat, tick: ENGINE_TICKS_PER_BEAT / 2 };
-
-    if (tick === ENGINE_TICKS_PER_BEAT) { beat += 1; tick = 0; }
-
-    return { beat: beat, tick: tick };
+    return positionFromBeatsOf(beats, secondsPerBeatNow, currentGroove(),
+                               swinging() && compFeelIsEighths());
   }
 
   /** Sounds a comped voicing, at @p when on the web and as soon as it arrives

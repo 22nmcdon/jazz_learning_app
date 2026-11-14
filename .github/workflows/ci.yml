@@ -42,6 +42,20 @@ jobs:
       - name: The quoted test count is the real one
         run: ./tools/test-count.sh --check
 
+  # The page's arithmetic, which needs no browser and no WebAssembly - so it
+  # runs here, in seconds, on every branch and every pull request, rather than
+  # in `pages.yml` behind an emsdk build and a browser download. Everything
+  # else about the page is checked by driving it, which is the right tool for
+  # a layout and the wrong one for a swing ratio: a ratio that is subtly wrong
+  # still sounds like music and still lights a key.
+  timing:
+    name: The page's timing core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Unit-test the timing core
+        run: node web/unit-test.mjs
+
   app:
     name: Standalone app
     runs-on: ubuntu-latest

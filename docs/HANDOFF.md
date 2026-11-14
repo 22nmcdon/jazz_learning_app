@@ -331,6 +331,16 @@ Small, verified, and none of them urgent.
   was not captured and three runs immediately after were clean. Two
   occurrences, no diagnosis.
 
+- **One smoke check is flaky at a low rate, and now has a name.** *"and its
+  notes are sounded onto the keys (0 lit)"* - the one that presses *Show me a
+  line* and counts lit keys - has failed three times across this session's
+  runs and passed every other time. Measured when the timing core was
+  extracted, because that refactor touches the playback it uses: **0 of 4 runs
+  failed on the refactored page and 0 of 4 on the committed one**, and the two
+  earlier sightings predate the refactor entirely. So it is not that change;
+  it is a wait that is too short for a machine under load. The honest fix is
+  to wait on the keys being lit rather than on a timeout.
+
 - **Two checks report a value that changes run to run.** The same build, run
   twice, gives *"a comped chord is placed against the style"* as `idiomatic`
   or `offStyle`, and *"the take is read back as placement, register and
