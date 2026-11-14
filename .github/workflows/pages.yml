@@ -45,7 +45,14 @@ permissions: {}
 jobs:
   build:
     name: Build the WebAssembly engine
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest`, and the pin is the fix for a real break:
+    # the hosted label rolled to Ubuntu 26.04 and `playwright install
+    # --with-deps` refused outright - "Playwright does not support chromium on
+    # ubuntu26.04-x64" - which took the page's only check out on a commit that
+    # had not touched it. A browser install pinned to a Playwright version has
+    # to be pinned to an OS that version knows about; the two travel together
+    # or neither is pinned at all. Bump both when convenient, never one.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
