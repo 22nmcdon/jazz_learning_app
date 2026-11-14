@@ -242,6 +242,42 @@ TEST ("rebuilds a chart from chords laid out on a page")
               std::string ("| Dm7 | G7 | Cmaj7 | Cmaj7 | Cm7 | F7 | Bbmaj7 | Bbmaj7 |"));
 }
 
+TEST ("a line of chords reads left to right even when its runs jitter")
+{
+    /*  Two bugs in one comparator, and this is the one that would have shown
+        up on a real export.
+
+        Reading order used to be decided by a single comparator that treated
+        two items as equal when their y values were within **0.01** and then
+        compared x. Lines are grouped against `lineTolerance`, which is
+        **6.0** - six hundred times that - so any two runs on one line further
+        apart than a hundredth of a point were ordered by *y* instead of by x,
+        and the line came out in whatever vertical order the glyphs happened to
+        sit in. A PDF whose runs sit on exactly the same baseline to within
+        0.01 is a generated one; a real one jitters.
+
+        The chords below are handed over out of order, with the jitter a real
+        page has and well inside the 6.0 that makes them one line. They have to
+        come back as a bar line reads.
+
+        (The same comparator was also not a strict weak ordering - y of 0.000,
+        0.008 and 0.016 gave a == b, b == c and a < c - which is undefined
+        behaviour in `stable_sort` rather than a wrong answer. That is fixed by
+        the same change and cannot be observed from out here.) */
+    std::vector<PlacedText> items {
+        { 300.0, 100.4, "Cmaj7" },
+        {  60.0, 100.0, "Dm7" },
+        { 420.0,  99.7, "Cmaj7" },
+        { 180.0, 100.9, "G7" } };
+
+    const auto result = chartFromPlacedText (std::move (items));
+
+    CHECK (result.ok());
+    CHECK_EQ (result.chart->measureCount(), 4);
+    CHECK_EQ (result.chart->toProgressionText(),
+              std::string ("| Dm7 | G7 | Cmaj7 | Cmaj7 |"));
+}
+
 TEST ("text that is not a chord is left on the page")
 {
     auto items = pageOf ({ { "Dm7", "G7", "Cmaj7", "Cmaj7" } });

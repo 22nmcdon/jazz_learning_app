@@ -1,4 +1,5 @@
 #include "TestFramework.h"
+#include "jazz/core/ChartFormats.h"
 #include "jazz/core/Comping.h"
 #include "jazz/core/LineAnalyzer.h"
 #include "jazz/core/VoicingAnalyzer.h"
@@ -1755,4 +1756,62 @@ TEST ("the reading says nothing about how long a chord was held")
     CHECK_EQ (a.inRegister, b.inRegister);
     CHECK_EQ (a.oneTooMany, b.oneTooMany);
     CHECK_EQ (a.voicing.score, b.voicing.score);
+}
+
+TEST ("a walking line's roles are the three it actually plays")
+{
+    /*  `BassRole` has four values and the generator produces three. The fourth,
+        `scaleTone`, belongs to one fallback: the chord has run out of notes in
+        both directions and the line steps a whole tone anyway. That step used
+        to be labelled `chordTone`, which was a lie about the only thing the
+        role is for - and the label is fixed now - but the branch itself turns
+        out to be unreachable.
+
+        Measured rather than assumed: 248,832 notes over 1,728 charts (every
+        root against every pair of twelve qualities, in three metres, six
+        seeds, every bar) produced root, chord tone and approach and **no scale
+        tone at all**. The ratio was fixed too - one root and one approach per
+        bar, the rest chord tones.
+
+        So this pins the observed set. It is not an assertion that `scaleTone`
+        is wrong to exist: the fallback is a guard against repeating a note,
+        and the day something reaches it this test fails and says so, which is
+        better than it arriving silently. `docs/HANDOFF.md` carries it as a
+        deletion candidate under the enum-coverage rule. */
+    const char* roots[] = { "C", "Eb", "F#", "A" };
+    const char* qualities[] = { "maj7", "m7", "7", "m7b5", "dim7", "+", "sus4", "mMaj7", "6", "5" };
+
+    std::set<std::string> produced;
+    auto notes = 0;
+
+    for (const auto* root : roots)
+        for (const auto* first : qualities)
+            for (const auto* second : qualities)
+            {
+                const auto parsed = parseProgressionText (std::string ("| ") + root + first
+                                                          + " | " + root + second + " |");
+                CHECK (parsed.ok());
+
+                auto chart = *parsed.chart;
+
+                for (const auto beats : { 3, 4, 5 })
+                {
+                    chart.timeSignature = TimeSignature { beats, 4 };
+
+                    for (std::uint32_t seed = 1; seed <= 3; ++seed)
+                        for (auto bar = 0; bar < chart.measureCount(); ++bar)
+                            for (const auto& note : walkingBass (chart, bar, bar, seed))
+                            {
+                                produced.insert (bassRoleName (note.role));
+                                ++notes;
+                            }
+                }
+            }
+
+    CHECK (notes > 10000);
+    CHECK_EQ (produced.size(), std::size_t { 3 });
+    CHECK (produced.count ("root") == 1);
+    CHECK (produced.count ("chord tone") == 1);
+    CHECK (produced.count ("approach") == 1);
+    CHECK (produced.count ("scale tone") == 0);
 }

@@ -28,6 +28,7 @@
 #include <locale>
 #include <optional>
 #include <sstream>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -791,6 +792,15 @@ std::string chartFromPage (const char* tabSeparatedItems)
         {
             continue;   // a row we cannot read is a row we skip
         }
+
+        /*  `std::stod` reads "nan" and "inf" as numbers, and a NaN coordinate
+            is worse than a missing one: it compares false against everything,
+            so it is neither less than nor equal to any other item and the sort
+            that puts the page in reading order stops being an ordering at all.
+            A row whose position is not a position is a row we skip, like any
+            other we cannot read. */
+        if (! std::isfinite (item.x) || ! std::isfinite (item.y))
+            continue;
 
         // The width of the run is optional: a reader that knows it lets the
         // engine split words on real gaps rather than on a guessed threshold.

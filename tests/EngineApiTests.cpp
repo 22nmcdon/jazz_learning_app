@@ -1387,3 +1387,47 @@ TEST ("a comping take says the same, off the chart it was graded against")
     CHECK (contains (json, "\"qualities\":6"));       // minor | dominant
     CHECK (contains (json, "\"roots\":132"));         // D and G
 }
+
+
+//==============================================================================
+//  Reading a page of positioned text, which had no test on this side at all.
+
+TEST ("a page of positioned text comes back as a chart")
+{
+    const auto json = chartFromPage ("60\t100\tDm7\n"
+                                     "180\t100\tG7\n"
+                                     "300\t100\tCmaj7\n");
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "Dm7 | G7 | Cmaj7"));
+}
+
+TEST ("a row whose position is not a position is skipped, not sorted")
+{
+    /*  `std::stod` reads "nan" and "inf" as numbers, so a reader that hands
+        over a broken coordinate used to get it all the way into the sort that
+        puts the page in reading order - and NaN compares false against
+        everything, so it is neither less than nor equal to anything else and
+        the comparator stops being an ordering. That is undefined behaviour in
+        `stable_sort`, not a wrong answer, which is why it is refused at the
+        wire rather than handled downstream.
+
+        The other three chords still have to arrive: one unreadable row is a
+        row we skip, the same as a row with too few fields. */
+    /*  The three good rows are spaced exactly as the test above, so this
+        asserts the guard and nothing else: where the bars fall is decided by
+        the gaps between x values, and a skipped row that moved one of them
+        would have this test measuring the bar-splitting heuristic instead.
+        (It did, on the first attempt - the expectation was wrong, not the
+        code.) */
+    const auto json = chartFromPage ("60\t100\tDm7\n"
+                                     "nan\tnan\tBb7\n"
+                                     "180\t100\tG7\n"
+                                     "240\tinf\tAb7\n"
+                                     "300\t100\tCmaj7\n");
+
+    CHECK (contains (json, "\"ok\":true"));
+    CHECK (contains (json, "| Dm7 | G7 | Cmaj7 |"));
+    CHECK (! contains (json, "Bb7"));
+    CHECK (! contains (json, "Ab7"));
+}

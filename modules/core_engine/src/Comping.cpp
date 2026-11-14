@@ -717,12 +717,24 @@ std::vector<BassNote> walkingBass (const Chart& chart, int fromBar, int toBar,
                                 next = tone;
                 }
 
+                /*  Still nowhere to go in either direction, so the chord has
+                    run out of notes and the line steps anyway. That step is
+                    not a chord tone and must not say it is: `scaleTone` is
+                    what the enum has it down as - "filling, from the scale
+                    when the chord has run out of notes" - and labelling it
+                    `chordTone` told a player the line was spelling the chord
+                    when it was walking past it. */
+                auto role = BassRole::chordTone;
+
                 if (next == walker)
+                {
                     next = std::max (lowestBassNote,
                                      std::min (highestBassNote, walker + (rising ? 2 : -2)));
+                    role = BassRole::scaleTone;
+                }
 
                 notes.push_back (next);
-                roles.push_back (BassRole::chordTone);
+                roles.push_back (role);
                 walker = next;
             }
 

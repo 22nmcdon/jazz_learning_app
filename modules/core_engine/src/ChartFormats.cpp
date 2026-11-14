@@ -1004,14 +1004,24 @@ ChartParseResult chartFromPlacedText (std::vector<PlacedText> items, PageReading
     if (looksLikeIRealProPage (items))
         return chartFromSpokenPage (items, options);
 
-    // Top of the page first, then left to right: reading order.
-    std::stable_sort (items.begin(), items.end(), [] (const PlacedText& a, const PlacedText& b)
-                      {
-                          if (std::abs (a.y - b.y) > 0.01)
-                              return a.y < b.y;
+    /*  Top of the page first, then left to right: reading order, in two passes
+        rather than one comparator.
 
-                          return a.x < b.x;
-                      });
+        It used to be one, and it was **not a strict weak ordering**: it called
+        two items equal when their y values were within 0.01 and compared x
+        instead. Equality like that is not transitive - y of 0.000, 0.008 and
+        0.016 gives a == b, b == c and a < c - and a comparator that is not an
+        ordering is undefined behaviour in `stable_sort`, not merely a wrong
+        answer.
+
+        It was also doing the next loop's job badly. Lines are grouped below
+        against `options.lineTolerance`, which is larger than 0.01, so any two
+        runs on one line further apart than 0.01 in y were ordered by y and the
+        line came out **not left to right** - which is what `joinRunsIntoWords`
+        then reads. So sorting by y alone, grouping, and ordering each line by
+        x is both well-defined and more nearly right than what it replaces. */
+    std::stable_sort (items.begin(), items.end(),
+                      [] (const PlacedText& a, const PlacedText& b) { return a.y < b.y; });
 
     std::vector<std::vector<PlacedText>> lines;
 
@@ -1022,6 +1032,10 @@ ChartParseResult chartFromPlacedText (std::vector<PlacedText> items, PageReading
         else
             lines.push_back ({ item });
     }
+
+    for (auto& line : lines)
+        std::stable_sort (line.begin(), line.end(),
+                          [] (const PlacedText& a, const PlacedText& b) { return a.x < b.x; });
 
     Chart chart;
     auto sawAnyChord = false;
