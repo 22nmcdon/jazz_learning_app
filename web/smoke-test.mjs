@@ -789,8 +789,28 @@ try {
     () => /^[A-G]/.test(document.querySelector("#soloAgainst").textContent), null, { timeout: 15000 });
 
   const firstLine = await lineShown();
-  const lit = await page.evaluate(() =>
-    document.querySelectorAll("#keyboard .key.sounded").length);
+
+  /*  Waited for, not sampled, because the keys **strobe**: `writeLine` sets
+      `#soloAgainst` synchronously and then schedules one `setTimeout` per
+      note, and `flashKey` holds each key for `beat * 460`ms - about 230 of
+      the 250ms between eighths at 120bpm. So the keyboard is dark before the
+      first note, dark for ~20ms between every pair after it, and dark again
+      once the line ends, and reading the count once asked which of those the
+      round trip happened to land in.
+
+      Measured rather than assumed, after this failed in CI and passed here:
+      the line itself is identical in both (`D5 E5 F5 G5 E5 C5 D5`), and the
+      immediate count is 1 on three runs in a row locally against CI's 0. The
+      line is deterministic and the sample is not, which leaves the sampling
+      as the only thing that can differ.
+
+      Waiting asserts what the check is named for - that the notes are sounded
+      onto the keys at all - rather than that one was mid-flash at a moment
+      nothing controls. A timeout reads back as none lit rather than throwing,
+      so a real regression stays one FAIL and does not abort the run. */
+  const lit = await page.waitForFunction(
+    () => document.querySelectorAll("#keyboard .key.sounded").length,
+    null, { timeout: 8000 }).then(found => found.jsonValue(), () => 0);
 
   check(`a line is written over the bar (${firstLine.split(".")[0]})`,
         firstLine.split(" ").length > 2);
