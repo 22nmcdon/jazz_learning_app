@@ -359,7 +359,15 @@ void ElectricPiano::noteOff (int midiNote)
 
     for (auto& voice : voices)
     {
-        if (voice.active.load() && voice.midiNote == midiNote && ! voice.comping
+        /*  The player's own voices only. A comp voice was already excluded and
+            a **walking-bass** one was not, so releasing a key that happened to
+            match the note the bass was on cut the bass off under the player -
+            on any tune where a hand goes near the bass register, which is most
+            of them in chord practice. The two paths either side of this one -
+            re-striking a note and lifting the pedal - have asked about both
+            since they were written; this one asked about half. */
+        if (voice.active.load() && voice.midiNote == midiNote
+            && ! voice.comping && ! voice.walking
             && voice.stage != Voice::Stage::release)
         {
             // The damper is off the string, so the note keeps ringing until the
