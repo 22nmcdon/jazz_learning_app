@@ -4508,6 +4508,54 @@ try {
 
   await narrow.locator("#armTake").click();
   await narrow.close();
+
+  /*  Space must not reach through a dialog, on a page of its own and last,
+      because by now the shared one has a clock, a take and a line behind it -
+      and this check is about a guard, not about what that page is doing.
+
+      `typingInto` keeps a space a space inside the boxes in a dialog, and that
+      was the whole guard - so Space landing on the dialog's own surface, or on
+      a button in it, still armed a take behind the thing the player was
+      reading. In solo practice and in time the handler does not look at the
+      target at all before toggling. */
+  {
+    const reading = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+
+    await reading.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await reading.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await reading.locator("#helpDialog[open]").count()) await reading.locator("#helpClose").click();
+
+    await reading.locator("#modeSolo").click();
+    if (await reading.locator("#helpDialog[open]").count()) await reading.locator("#helpClose").click();
+
+    /*  One click opens it when that bar is already the selected one, which
+        bar 0 is on a fresh page - a second would land on the modal and wait
+        thirty seconds for a surface that is not clickable. */
+    await reading.locator("#systems .bar").nth(0).click();
+    await reading.waitForTimeout(200);
+
+    if (! (await reading.locator("#chordDialog[open]").count()))
+      await reading.locator("#systems .bar").nth(0).click();
+
+    await reading.waitForSelector("#chordDialog[open]", { timeout: 10000 });
+
+    await reading.keyboard.press("Space");
+    await reading.waitForTimeout(400);
+
+    /*  What is asserted is only that no take was armed. Whether the dialog is
+        still open afterwards is not this check's business and was the wrong
+        thing to pin: `showModal` focuses a control, and Space on a focused
+        button activates it, so the close button taking the keypress is the
+        browser behaving. Before the guard, `preventDefault` swallowed that and
+        armed a take instead - so the take is the thing that tells the two
+        apart. */
+    const behindIt = await reading.evaluate(() =>
+      document.querySelector("#armTake").getAttribute("aria-pressed"));
+
+    check(`Space through an open dialog arms nothing (${behindIt})`, behindIt === "false");
+
+    await reading.close();
+  }
 } catch (error) {
   check(`no exception (${error.message.split("\n")[0]})`, false);
 } finally {

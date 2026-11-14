@@ -268,12 +268,23 @@ std::string grooves (const char* chartStyle);
 
     The menu a shell builds its picker from, and - because a line style
     carries the scale vocabulary it draws on - the thing that replaced asking
-    for a scale style separately. `scaleStyles()` stays exactly as it was: the
-    bar dialog still reads against it, and this sends a key into it rather
-    than a copy of it.
+    for a scale style separately. The bar dialog is still *read against* a
+    scale style, but it sends a key into the engine rather than fetching the
+    catalogue: `scalesForChord` resolves it there.
 */
 std::string lineStyles();
 
+/** Every scale style there is.
+
+    **Not on the wire**, and that is the correction rather than an omission.
+    It was exported and listed among the calls the page checks for at boot,
+    and no shell has called it since a line style absorbed the scale style -
+    a name in that list the page never asks for is the same shape of lie as an
+    enum value no record carries. It is kept here because the catalogue is the
+    engine's to state and a shell that wants the list should get it from here
+    rather than keep a copy; re-exporting is three lines in
+    `JazzWebBindings.cpp`, `build.sh` and `ENGINE_CALLS`.
+*/
 std::string scaleStyles();
 
 std::string soloStartTake();

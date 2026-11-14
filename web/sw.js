@@ -94,11 +94,17 @@ self.addEventListener("fetch", (event) => {
         ? await fetch(request.url, { cache: "reload", credentials: "same-origin" })
         : await fetch(request);
 
-      // Opaque responses - the webfonts, which are the only cross-origin
-      // request left now that pdf.js is served from here - have a status of 0
-      // and are still worth keeping: they cannot be read here, only replayed,
-      // which is exactly what is wanted. A partial response is not.
-      if (response.status !== 206) {
+      /*  What is worth keeping, which used to be "anything that is not a
+          partial response" - and that included **a 404 or a 500**, so one bad
+          answer from the network overwrote the good offline copy of the page
+          or the engine. An offline cache whose job is to survive a bad network
+          was being poisoned by exactly that.
+
+          Opaque responses - the webfonts, the only cross-origin request left
+          now that pdf.js is served from here - have a status of 0 and are
+          still kept: they cannot be read here, only replayed, which is what is
+          wanted. A partial response is not, and `ok` does not exclude one. */
+      if (response.type === "opaque" || (response.ok && response.status !== 206)) {
         const copy = response.clone();
 
         // Stored under the plain URL for the same reason: one entry per file,

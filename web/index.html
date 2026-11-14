@@ -4113,7 +4113,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       checkout, long before it is a deploy.
   */
   var ENGINE_CALLS = [
-    "jazzParseChart", "jazzScalesForChord", "jazzScaleStyles", "jazzReharmonise",
+    "jazzParseChart", "jazzScalesForChord", "jazzReharmonise",
     "jazzReharmPlans", "jazzReharmStyles", "jazzVoicedGuideTones", "jazzAnalyseVoicing", "jazzIdiomaticVoicings",
     "jazzIdentifyChord", "jazzRecogniseSubstitution",
     "jazzVoicingShape", "jazzVoicingFromShape",
@@ -5109,9 +5109,18 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       return;
     }
 
+    /*  Which question this is, so a slower answer cannot overwrite a faster
+        one. Engine calls are synchronous on the web and a promise over the
+        app's bridge, so two keys pressed quickly can come back in the other
+        order and leave the verdict describing a hand that is no longer down.
+        `updateGuideHint` has guarded this since it was written - this is the
+        same guard, and the panel it writes is the more visible of the two. */
+    var askingAbout = chord + "|" + state.heldNotes.join(",");
+    voicingQuestion.asked = askingAbout;
+
     var result = await call("jazzAnalyseVoicing", ["string", "string", "string"],
                       [chord, state.heldNotes.join(","), state.style === "any" ? "" : state.style]);
-    if (result === null || !result.ok) return;
+    if (result === null || !result.ok || voicingQuestion.asked !== askingAbout) return;
 
     el.verdict.textContent = result.summary;
     el.verdict.classList.toggle("matches", result.matches && result.matchesStyle);
@@ -5387,6 +5396,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   //  chord goes down and not before.
 
   var guide = { showing: false, hand: [], tones: [], asked: "" };
+
+  /** The voicing question currently outstanding, so a slower answer to an
+      older one can be dropped - `guide.asked` just above is the same idea for
+      the hint. Not called `voicing`: a local of that name holds a result. */
+  var voicingQuestion = { asked: "" };
 
   /** The chord the hand is heading into.
 
@@ -11293,6 +11307,13 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
   document.addEventListener("keydown", function (event) {
     if (event.code !== "Space" || typingInto(event.target)) return;
 
+    /*  And not through a dialog. `typingInto` covers the boxes inside one, but
+        Space on the dialog's own surface - or on a button in it - was still
+        arming or stopping a take behind it, in solo practice and in time,
+        where the first branch below does not look at the target at all. The
+        arrow handler has asked this since it was written; this one did not. */
+    if (aDialogIsOpen()) return;
+
     if (state.mode === "solo" || transport.inTime) {
       event.preventDefault();
       toggleTake();
@@ -11377,6 +11398,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       back. Kept beside the MIDI state because a pedal is a MIDI controller
       first, but the on-screen button sets exactly the same thing. */
   var pedal = { down: false, holding: [] };
+
 
   /** Puts the pedal down or lifts it.
 

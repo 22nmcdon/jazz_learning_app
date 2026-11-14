@@ -74,11 +74,6 @@ JAZZ_EXPORT const char* jazzLineStyles()
     return hold (jazz::api::lineStyles());
 }
 
-JAZZ_EXPORT const char* jazzScaleStyles()
-{
-    return hold (jazz::api::scaleStyles());
-}
-
 JAZZ_EXPORT const char* jazzGrooves (const char* chartStyle)
 {
     return hold (jazz::api::grooves (orEmpty (chartStyle)));
