@@ -1302,23 +1302,21 @@ Two things in it are not the repository's own, and
 
 ## Open questions carried over from the design doc
 
-These were left open rather than silently decided:
+All four were left open rather than silently decided, and all four are now
+answered. The arguments are in [`docs/DECISIONS.md`](docs/DECISIONS.md), which
+is where a decision is written down so nobody re-makes it:
 
-1. **Import scope** — **answered.** iReal Pro and PDF both import, in both shells.
-   MusicXML/MuseScore is not wanted.
-2. **Rule-based vs. data-informed reharmonisation** — **answered: rule-based.** The thing
-   that looked like the question was a bug: the style tag on all 36 rules was unreachable
-   from either shell, so the first move was to collect that rather than reach for a corpus.
-   Counting the tags is what mattered - two of the five vocabularies had one rule and none
-   respectively - so they were deleted and the remaining two put on the wire. A
-   corpus-ranked reharmoniser would replace rules that each explain themselves with a
-   number that cannot, and the way back in is more rules or better tags, not a model.
-3. **Solo/improv feedback layer** — in, both static and in time: you arm a take and either
-   walk the chart yourself or let the clock walk it. Rhythm is answered above: words.
-4. **A dense, DAW-style desktop layout** — **answered: denser yes, multi-column no.**
-   The page is laid out as an instrument rather than an article now - a fixed three-zone
-   frame with the chart taking every pixel the other two do not - but it stays one
-   responsive column. No side panel, no wide-screen layout of its own, and no size classes.
-   If it is revisited, the thing to weigh has changed: the settings did not end up in one
-   panel that a side panel would simply pin open. They ended up in five, each beside what
-   it acts on - so a side panel now means moving a control away from the thing it changes.
+1. **Import scope** — iReal Pro and PDF both import, in both shells.
+   MusicXML/MuseScore is **not wanted**.
+2. **Rule-based vs. data-informed reharmonisation** — **rule-based.** The thing
+   that looked like the question was a bug: the style tag on all 36 rules was
+   unreachable from either shell, and two of the five vocabularies turned out to
+   be tagged on one rule and none respectively.
+3. **Solo/improv feedback layer** — in, both static and in time: you arm a take
+   and either walk the chart yourself or let the clock walk it. Rhythm is
+   answered under *Not built* above: **words, until you pick a line style**, and
+   then a second number that leaves the tier score alone.
+4. **A dense, DAW-style desktop layout** — **denser yes, multi-column no.** A
+   fixed three-zone frame with the chart taking every pixel the other two do
+   not, but still one responsive column: no side panel, no wide-screen layout of
+   its own, no size classes.

@@ -2,13 +2,19 @@
 
 Guidance for Claude Code (or any Claude instance) working in this repository.
 
-For **what the app does and how each feature behaves**, see `README.md`. For
-the reasoning behind solo practice, see `docs/SOLO_PRACTICE.md`; for comping,
-`docs/COMPING.md`; for the rhythm grid they share, `docs/RHYTHM.md`; for the
-practice record, `docs/PROGRESS.md`. Read the relevant one before touching
-`LineAnalyzer`, `Comping.h`/`compPlan()`, `Rhythm.h` or `PracticeLog.h`. This file is only for what you need to not break the repo or redo
-settled work. For what is **left** to do — work in progress, unbuilt features
-and their open design questions, and known loose ends — see `docs/HANDOFF.md`.
+**This file is the rules; `docs/` holds the arguments.** Solo practice is in
+`docs/SOLO_PRACTICE.md`, comping in `docs/COMPING.md`, the rhythm grid they
+share in `docs/RHYTHM.md`, the practice record in `docs/PROGRESS.md`, the
+typefaces in `docs/BRANDING.md`. Read the relevant one before touching
+`LineAnalyzer`, `Comping.h`/`compPlan()`, `Rhythm.h` or `PracticeLog.h`. For
+**what the app does and how each feature behaves**, see `README.md`. For what
+is **left** to do, see `docs/HANDOFF.md`; for why a rule below is the rule,
+when the reasoning belongs to no single feature, see `docs/DECISIONS.md`.
+
+Every session loads this file, so it earns its length by being the part you
+cannot look up afterwards: a rule, the one sentence saying what breaks without
+it, and where the reasoning lives. Reasoning that belongs to one feature goes
+to that feature's doc.
 
 ## Project Overview
 
@@ -53,126 +59,99 @@ Three layers, as separate modules. Do not blur this boundary.
 - Keeping Core Engine UI-agnostic keeps a future AUv3/VST3 target open. Don't
   couple engine logic to the standalone shell.
 
+**The wire is four files, one per question it answers** — `ChartApi.cpp`,
+`VoicingApi.cpp`, `CompingApi.cpp`, `SoloApi.cpp` — behind one unchanged public
+header. `src/Wire.h` holds only what **two callers in two different files**
+need; a helper one domain uses stays in that domain's file, beside the call
+that wants it.
+
 ## UI Conventions
 
 One page (`web/index.html`) serves both desktop and mobile — "responsive"
 means CSS, not per-platform builds.
 
-- **Every pixel number below was first measured in quirks mode, and they have
-  been re-measured since.** The page shipped with no doctype and no viewport
-  meta for its whole life: it rendered in `BackCompat` everywhere, and on a
-  393px phone the layout engine assumed 980px and scaled down, so the 760px
-  breakpoint never fired on hardware. The tags are there now; the only numbers
-  that moved were `.chart-bar` (19px → 26px at every width, a line box the
-  quirks parser did not make) and therefore the sheet's top edge, 7px lower.
-  Every check still passes. **A width measured with Playwright's `viewport` is
-  a CSS-pixel width**, which is exactly the case a missing viewport meta does
-  not break — so the suite now carries four checks in an `isMobile` context,
-  and those are the ones that can tell a real phone from a narrow window.
-
+- **Every pixel number below was measured, and re-measured after the doctype
+  landed.** The page rendered in quirks mode for its whole life; the tags are
+  there now, and the only numbers that moved were `.chart-bar` (19px → 26px at
+  every width) and therefore the sheet's top edge, 7px lower. **A width set with
+  Playwright's `viewport` is a CSS-pixel width**, which is exactly the case a
+  missing viewport meta does not break — so four checks run in an `isMobile`
+  context, and those are the ones that can tell a real phone from a narrow
+  window.
 - **The page is a frame, not a document.** Three zones: `.top-bar` at its own
   height, `<main class="chart-zone">` taking everything left and scrolling
   *itself*, and `.dock` at the bottom. `body` is a flex column at `100dvh`.
-  Laid out as a document — masthead, article, footer, all scrolling together —
-  the chart got whatever was left over and lost: four bars of twelve were
-  readable at 1280×860, and **none at all** at 430×860. Anything added to the
-  top bar or the dock is taken out of the chart, so it has to earn it.
-- **The top bar has room for one more labelled control, and does not currently
-  have it spare.** This was measured when the practice record needed a button:
-  `.top-bar-right` wraps, and a labelled button there costs **38px of chart** at
-  1024px — a laptop, not an edge case. Even a three-letter label does. So that
-  button is a glyph, with its name on `aria-label`, and the measurements are in
-  the stylesheet beside the rule. Two things to know before putting anything
-  else up there: something has to leave first, and **390px is not the width
-  that catches it** — `.top-bar-right` is already four lines deep there, so one
-  more control changes nothing. Measure bar height with the control and without
-  it, at a narrow width *and* at 1024.
+  Laid out as a document the chart gets whatever is left over and loses: four
+  bars of twelve were readable at 1280×860 and **none at all** at 430×860.
+  Anything added to the top bar or the dock is taken out of the chart.
+- **The top bar has room for one more labelled control, and does not have it
+  spare.** A labelled button in `.top-bar-right` costs **38px of chart** at
+  1024px — a laptop, not an edge case — even with a three-letter label. So the
+  practice-record button is a glyph with its name on `aria-label`. Before
+  putting anything else there: something has to leave first, and **390px is not
+  the width that catches it**, because `.top-bar-right` is already four lines
+  deep there. Measure bar height with the control and without it, at a narrow
+  width *and* at 1024.
 - **The row above the chart is where a control goes instead, and it is free.**
   `.chart-bar` exists either way and is the same height whatever is in it, so a
   button hung from it (`.chart-bar-end`, right-aligned) costs the chart **zero**
-  — measured at 390, 900, 1024 and 1440, with the sheet's top edge unmoved at
-  every one. That is not a cheaper version of the top bar's 38px; it is
-  different arithmetic, because the row is already there. It is where two of the
-  three groups that left `#menuPanel` went. What this placement does cost is
-  that those buttons scroll away with a long chart — which is right for things
-  you set the room up with and wrong for anything you reach for mid-take, so the
-  transport strip is still the place for those.
+  — measured at 390, 900, 1024 and 1440 with the sheet's top edge unmoved. What
+  it does cost is that those buttons scroll away with a long chart, which is
+  right for what you set the room up with and wrong for anything you reach for
+  mid-take; those still belong on the transport strip.
   **The check measures `.chart-bar`, never `.chart-zone`.** The zone is the flex
-  child that takes whatever the window has left and therefore never changes size
-  whatever is inside it, so measuring it asks nothing — a negative control
-  caught exactly that: forcing both buttons onto a row of their own passed the
-  version of this check that measured the zone, and fails the one that measures
-  the bar by 48px at all four widths.
-- **The chart's head is in the top bar**, not in the sheet. A lead sheet is
-  engraved feel / title / credit and still reads that way, along a line; in the
-  sheet it scrolled away with the music, so the one thing naming what you are
-  playing left the screen as soon as you played past the first line.
-- **The top bar's second row is the transport strip**, and it holds what a
-  player reaches for while playing: Static / In time, the metre and tempo
-  (`#timeSig`, `#tempo`), the take button and the beat dots. What a take is set
-  up with rather than played with - count-in, loop, ramp, reharmonise-as-you-go
-  - is one popover off it (`#transportButton`). **Its row count must not depend
-  on what is showing.** Most of the strip needs a clock, and the take button
-  needs a mode that can grade one, so a strip left to wrap freely is one, two or
-  three rows deep depending on which corner of mode x In time you are in - and
-  every one of those moves the top of the chart. The two groups
-  (`.transport-clock`, `.transport-take`) are each one row at any width and each
-  reserve that row empty. A check measures the chart's top edge in both settings
-  at two sizes and fails if it moves.
+  child that takes whatever the window has left, so it never changes size and
+  measuring it asks nothing — a negative control proved exactly that.
+- **The chart's head is in the top bar**, not in the sheet: in the sheet it
+  scrolled away with the music, so the one thing naming what you are playing
+  left the screen as soon as you played past the first line.
+- **The top bar's second row is the transport strip**, holding what a player
+  reaches for while playing: Static / In time, the metre and tempo (`#timeSig`,
+  `#tempo`), the take button and the beat dots. What a take is *set up* with —
+  count-in, loop, ramp, reharmonise-as-you-go — is one popover off it
+  (`#transportButton`). **Its row count must not depend on what is showing.**
+  The two groups (`.transport-clock`, `.transport-take`) are each one row at any
+  width and each reserve that row empty; left to wrap freely the strip is one,
+  two or three rows deep depending on which corner of mode × In time you are in,
+  and every one of those moves the top of the chart. A check measures the
+  chart's top edge in both settings at two sizes and fails if it moves.
 - **A reserved height is a pixel count, so it holds or fails to hold *per
-  typeface*.** The page renders in two by design (`docs/BRANDING.md`): Jost over
-  the web, the fallback stack in the app and offline. Every control on the strip
-  is a button or a form control whose height comes from `line-height: normal` —
-  the font's own metrics — so each one is given an explicit `line-height` (a
-  `height` for the select, which does not size from one) and the reservation is
-  sized against that arithmetic. Sized against one face instead, it was 29px
-  against controls that are 37–39 in the other, stopped binding altogether, and
-  shipped a chart that moved when the clock came on while every local run said
-  otherwise. **Measuring a layout on a machine that cannot reach Google Fonts
-  measures the wrong page** — so the check runs a second pass with
-  `ascent-override`/`descent-override` forcing taller metrics, which needs no
-  network.
+  typeface*.** The page renders in two by design (`docs/BRANDING.md`). Every
+  control on the strip is a button or form control whose height comes from
+  `line-height: normal` — the font's own metrics — so each is given an explicit
+  `line-height` (a `height` for the select, which does not size from one) and
+  the reservation is sized against that arithmetic. Sized against one face
+  instead it was 29px against controls that are 37–39 in the other, and shipped
+  a chart that moved while every local run said otherwise. **Measuring a layout
+  on a machine that cannot reach Google Fonts measures the wrong page** — so the
+  check runs a second pass with `ascent-override`/`descent-override` forcing
+  taller metrics, which needs no network.
 - **`#menuPanel` is the machine, and it is three sections**: Sound, MIDI
-  keyboard, About. What the app is running on — not what you are practising. It
-  held six for a while, and three of them were in the wrong room. *The band* is
-  three switches, a style picker with an editor button and two sound pickers —
-  seven controls wanting two columns, which a 300px column sharing its height
-  with five other sections could not give them; *Voicings* and *Scales* are the
-  reading the page holds you to, which you change **looking at the music**
-  rather than looking at a menu. Both left for panels of their own on the
-  chart's row. What is left is a settings panel in the honest sense — you open
-  it when something about the machine is wrong, not while you are playing.
+  keyboard, About — what the app is running on, not what you are practising.
   Below 760px it is a bottom sheet, which is why it has a `.menu-head` close
   row: at that width it covers the button that would otherwise close it.
   **The line to check before adding a section is about the machine versus about
-  the music**, and it is the line the six-section version did not draw.
+  the music.**
 - **Five popovers, each one question asked where it applies.** *Practice*
   (`#menuPanel`, top bar) — the machine. *Take setup* (`#transportPanel`,
-  transport strip) — this take: count-in, loop, ramp, reharmonise-as-you-go.
-  *Chart* (`#chartPanel`, left of the chart's row) — which tune: import/export,
-  reharmonise, edit, restore, saved tunes. *Voicings* / *Scales*
-  (`#readingPanel`, right of that row) — what the page is reading you against,
-  under **one** button whose label follows the mode, because the two are never
-  both on offer and a button that changed what it opened would be a trap. *The
-  band* (`#bandPanel`, beside it) — who is playing with you.
-  **This replaces a rule that said three menus was the ceiling, and the ceiling
-  was the wrong shape of rule.** It counted panels when the thing worth counting
-  is questions: it expected a fourth panel to mean something was in the wrong
-  room, and what actually happened is that one panel turned out to be holding
-  three questions. The half that was doing the work survives — **a panel is one
-  question, and its button sits where that question is asked.** A new one names
-  its question and says why the row it is on is the row it belongs to; something
-  with no question of its own is a section of an existing panel, not a sixth.
-- **The chart is justified into its zone, by `layOutChart()`.** A twelve-bar
-  tune is 404px of music in a 560px zone on a 1440×900 window, and top-anchored
-  the difference banks at the bottom as dead cream. It is given away in two
-  goes: the **gaps between systems grow first**, capped at `MAX_EXTRA_GAP`,
-  because slack spread through the chart reads as breathing room while the same
-  slack at the end reads as a void — then **what is left becomes symmetric
-  padding on `.sheet`**, which is the only thing that helps a tune of one
-  system, since one system has no gaps. When the chart is taller than the zone
-  this does nothing at all and the zone scrolls as it always did. It measures
-  with both custom properties cleared, or it measures its own last answer.
+  transport strip) — this take. *Chart* (`#chartPanel`, left of the chart's row)
+  — which tune. *Voicings* / *Scales* (`#readingPanel`, right of that row) —
+  what the page is reading you against, under **one** button whose label follows
+  the mode, because the two are never both on offer and a button that changed
+  what it opened would be a trap. *The band* (`#bandPanel`, beside it) — who is
+  playing with you.
+  **A panel is one question, and its button sits where that question is asked.**
+  A new one names its question and says why the row it is on is the row it
+  belongs to; something with no question of its own is a section of an existing
+  panel, not a sixth.
+- **The chart is justified into its zone, by `layOutChart()`.** Slack is given
+  away in two goes: the **gaps between systems grow first**, capped at
+  `MAX_EXTRA_GAP`, because slack spread through the chart reads as breathing
+  room while the same slack at the end reads as a void — then **what is left
+  becomes symmetric padding on `.sheet`**, which is the only thing that helps a
+  tune of one system. When the chart is taller than the zone this does nothing
+  and the zone scrolls as before. It measures with both custom properties
+  cleared, or it measures its own last answer.
   **It re-runs on four things and needs all four**: after `renderSheet()`, when
   `#editToggle` shows or hides the editor, a `ResizeObserver` on `.chart-zone`
   (the page's only one — a `resize` listener would miss the dock changing height
@@ -184,38 +163,32 @@ means CSS, not per-platform builds.
   window with the browser's own chrome collapsed, and the part that goes under
   it is the bottom of the frame — the dock.
 - **Breakpoints: 760px for the page, and two scoped to the cheat sheet.**
-  `max-width: 760px` is the page's own and still the only one that lays the
-  page out differently. `#helpDialog` adds `min-width: 700px` (two columns once
-  there is width for them) and `max-height: 700px` (tighter spacing on a short
-  window) — a *height* query, which is the first of those here. No
-  compact/regular/expanded size classes. Add another only when something
-  actually collides, and say in the commit message what collided and at what
-  size; both of the help dialog's were added that way, against a measurement.
-  Test with `JAZZ_UI_SIZE=430x860` or a 430px viewport — and note that neither
-  of the help dialog's breakpoints is exercised at that size.
+  `max-width: 760px` is the page's own and still the only one that lays the page
+  out differently. `#helpDialog` adds `min-width: 700px` (two columns) and
+  `max-height: 700px` (tighter spacing on a short window) — a *height* query,
+  the first here. No compact/regular/expanded size classes. Add another only
+  when something actually collides, and say in the commit message what collided
+  and at what size. Test with `JAZZ_UI_SIZE=430x860` or a 430px viewport — and
+  note that neither of the help dialog's breakpoints is exercised at that size.
 - **Differences are by input type, not platform** (e.g. the scale picker is a
   dialog or a bottom sheet depending on room, never two implementations).
 - **Anything mode- or platform-specific is `data-mode`/`onTheWeb` + a CSS/JS
-  branch — never a second component.** Both modes also have a **Static / In
-  time** setting meaning the same kind of thing in each — the same question with
-  a clock behind it, and readings that are silent without one. Reach for that
-  before reaching for a third mode, a second keyboard or a second dock.
-- **The bar dialog has three panels and shows two.** Scales (solo), Reharmonise
-  (chord practice) and **This bar's take**, which appears only when the last
-  take covered that bar. The tab strip is hidden whenever there is only one
-  panel to show, which is what it has always done — a bar with take data is
-  simply the first case where there are two. The other mode's tab is *hidden*,
-  not disabled: it is a question this mode is not about, which is why the
-  panels were split by mode in the first place.
+  branch — never a second component.** Both modes have a **Static / In time**
+  setting meaning the same thing in each: the same question with a clock behind
+  it, and readings that are silent without one. Reach for that before reaching
+  for a third mode, a second keyboard or a second dock.
+- **The bar dialog has three panels and shows two.** Scales (solo),
+  Reharmonise (chord practice) and **This bar's take**, which appears only when
+  the last take covered that bar. The tab strip is hidden whenever there is only
+  one panel to show. The other mode's tab is *hidden*, not disabled: it is a
+  question this mode is not about.
 - **The cheat sheet is five sections and never scrolls.** `#helpDialog` has its
-  own tab strip — Chart, Playing, Reading, In time, Band — because it stopped
-  fitting: solo practice's sheet was 2,650px of content in 590px of dialog at a
-  phone width. Sections that mean the same in both modes are written **once**
-  and shown in both; only what genuinely differs (what the keys do, what the
-  page is reading) carries `data-mode`, on the individual `<li>` rather than on
-  the list. An entry is a bold lead you can scan plus a quieter detail. A check
-  measures every section in both modes at two sizes and fails if any has to
-  scroll — so a section that grows has to be split, not allowed to overflow.
+  own tab strip — Chart, Playing, Reading, In time, Band. Sections that mean the
+  same in both modes are written **once** and shown in both; only what genuinely
+  differs carries `data-mode`, on the individual `<li>` rather than on the list.
+  An entry is a bold lead you can scan plus a quieter detail. A check measures
+  every section in both modes at two sizes and fails if any has to scroll — so a
+  section that grows has to be split, not allowed to overflow.
 - **The on-screen keyboard is first-class**, not a fallback: 2 octaves by
   default, widens with a connected MIDI keyboard or an out-of-range note. No
   octave-shift control.
@@ -228,61 +201,49 @@ In scope: MIDI keyboard (USB/Bluetooth), on-screen keyboard (touch/mouse), and
 the **computer keyboard**, off by default and turned on under *Practice*.
 
 **The computer keys are given `midiNoteOn`/`midiNoteOff` rather than a path of
-their own**, which is the one-input-interface rule rather than a convenience: a
-computer keyboard is a MIDI keyboard without the hardware, so every mode
-branch, the chord window, the pedal's deferred releases and the take all come
-along. What it adds that no other input here has is a **chord without
-hardware** — a pointer plays one key at a time however fast it is clicked, so
-before this nobody without a MIDI keyboard could strike a four-note voicing as
-one gesture, which is the gesture both modes are about. Two rows, two octaves,
-48–72, matching the range the keyboard is drawn at, read from `event.code` so
-the shape survives a non-QWERTY layout — and therefore **no octave-shift
-binding**, which leaves that rule where it was. `playingByKey()` is what the
-dock asks, never `midi.connected`.
+their own** — that is the one-input-interface rule, not a convenience: a
+computer keyboard is a MIDI keyboard without the hardware, so every mode branch,
+the chord window, the pedal's deferred releases and the take all come along.
+What it adds that no other input here has is a **chord without hardware**, since
+a pointer plays one key at a time however fast it is clicked. Two rows, two
+octaves, 48–72, matching the range the keyboard is drawn at, read from
+`event.code` so the shape survives a non-QWERTY layout — and therefore **no
+octave-shift binding**. `playingByKey()` is what the dock asks, never
+`midi.connected`.
 
 **Audio / pitch-detection input is out, and that is an answer rather than a
-deferral.** It was recorded for a long time as "much larger DSP undertaking,
-deferred" — true, and not the reason. The reason is that this is a pianist's
-app the whole way down: `twoHandedReach`, guide tones badged on *keys*, the
-low-interval limit, `compingVoicing`'s anchor sweep, `chordSoFar()` reading an
-attack as a voicing. Every reader downstream assumes several notes at once from
-a keyboard, and a keyboard already has MIDI. Pitch detection buys monophonic
-input for a horn player, which is a different app.
-
-**The computer keyboard does not weaken that argument, and it is worth saying
-which way round.** A third input arriving might look like the door opening, but
-a typed keyboard is still polyphonic and still a keyboard: every assumption
-above holds for it unchanged, which is exactly why it needed no new reader. An
-input that *did* reopen the question would be one those assumptions failed for.
-
-So the thing that would reopen it is **a non-keyboard audience**, not the DSP
-getting easier. `app/CMakeLists.txt` already says as much in the line that
-turns the microphone permission off.
+deferral.** This is a pianist's app the whole way down: `twoHandedReach`, guide
+tones badged on *keys*, the low-interval limit, `compingVoicing`'s anchor sweep,
+`chordSoFar()` reading an attack as a voicing. Every reader downstream assumes
+several notes at once from a keyboard, and a keyboard already has MIDI. Pitch
+detection buys monophonic input for a horn player, which is a different app. The
+computer keyboard does not reopen this — a typed keyboard is still polyphonic
+and still a keyboard, which is why it needed no new reader. What would reopen it
+is **a non-keyboard audience**, not the DSP getting easier;
+`app/CMakeLists.txt` says as much in the line that turns the microphone
+permission off.
 
 ## Platform Notes
 
-**What is actually built and run, and what is intent.** This section used to
-read as though four platforms were in service; one is. Keeping the difference
-visible is the point - a claim nobody can check is worse than a gap somebody
-can see.
+**What is actually built and run, and what is intent.** Keeping the difference
+visible is the point — a claim nobody can check is worse than a gap somebody can
+see.
 
 - **Linux is the only platform anything is built on.** CI builds the engine
-  without JUCE on a GUI-less runner and the full app on `ubuntu-latest`, and
-  the page is driven in headless Chromium. Every measurement in this file was
-  taken here.
+  without JUCE on a GUI-less runner and the full app on `ubuntu-latest`, and the
+  page is driven in headless Chromium. Every measurement in this file was taken
+  here.
 - **macOS and Windows**: the shell is JUCE and nothing in it is Linux-only, so
   they are expected to build. Neither has been built or run. `WKWebView` in
-  particular has never been loaded - see `docs/HANDOFF.md`, which also has it
+  particular has never been loaded — see `docs/HANDOFF.md`, which also has it
   down as the strictest of the three webviews about `file://` subresources and
   the first thing to suspect if the app cannot read a PDF on a Mac.
-- **iOS and Android have no build at all.** There is no Xcode project, no
-  `.jucer` and no Gradle file in this repository, so neither target has ever
-  been compiled. What exists for mobile is the shape rather than the shipping:
-  `MidiDeviceInput::showBluetoothPairingDialog()` is written, is the only
-  pairing entry point either would need, and **has no caller** - which is why
-  "Bluetooth MIDI works out of the box" was a claim this repository could not
-  support. `app/CMakeLists.txt` still requests the Bluetooth permission for
-  it, deliberately.
+- **iOS and Android have no build at all.** No Xcode project, no `.jucer`, no
+  Gradle file. `MidiDeviceInput::showBluetoothPairingDialog()` is written, is
+  the only pairing entry point either would need, and **has no caller** — which
+  is why "Bluetooth MIDI works out of the box" is a claim this repository cannot
+  support. `app/CMakeLists.txt` still requests the Bluetooth permission for it,
+  deliberately.
 - What is true about mobile MIDI when somebody does build it: iOS takes
   Bluetooth through JUCE and USB through a camera adapter; Android has had
   Bluetooth MIDI since 6 and USB over OTG, and JUCE's Android MIDI is the less
@@ -300,8 +261,9 @@ Two rules the build enforces:
 - **Core Engine links no JUCE.** `cmake -DJAZZ_BUILD_APP=OFF` must build the
   engine and its tests with no JUCE/GUI libraries present. If a change breaks
   this, the layering has been broken.
-- **Tests live with the engine** (`tests/`, against `modules/core_engine` only,
-  using the harness in `tests/TestFramework.h` — no third-party test dep).
+- **Tests live with the engine** (`tests/`, against `modules/core_engine` and
+  `modules/engine_api` only, using the harness in `tests/TestFramework.h` — no
+  third-party test dep).
 
 `web/` is both the UI and a second transport to the engine (Emscripten →
 WebAssembly via `web/build.sh`). If `web/build.sh` fails, something
@@ -309,15 +271,15 @@ platform-specific has leaked into Core Engine.
 
 CI (`.github/workflows/ci.yml`): one job builds with `-DJAZZ_BUILD_APP=OFF` on a
 GUI-less runner (a failure here means broken layering, not a missing package —
-check that before reaching for `apt-get`); another builds the full app.
+check that before reaching for `apt-get`); another builds the full app; a third
+runs `node web/unit-test.mjs`, the page's arithmetic, which needs no browser.
 
 **The test count is generated, not typed.** `README.md` and the page's colophon
 quote it; the suite is the only thing that knows it, and it went stale twice
 when both were written by hand. `tools/test-count.sh` asks the built binary and
 writes the number into both files; `--check` changes nothing and fails, and is
 what CI runs. **After adding a test, run it** rather than editing either file.
-It is also an error for a file to contain *no* count — a generator quietly
-maintaining nothing looks exactly like one with nothing to do.
+It is also an error for a file to contain *no* count.
 
 `.github/workflows/pages.yml` builds the wasm, deploys to GitHub Pages, and runs
 `web/smoke-test.mjs` against the built page before deploy. Run it yourself after
@@ -326,292 +288,133 @@ web/smoke-test.mjs out` — a build that compiles has not been the thing that go
 wrong here.
 
 Android would be the exception to CMake-everywhere, since JUCE's CMake support
-does not cover it - the Projucer/Gradle exporter over the same source tree is
-the route. **None of that exists here**: there is no `.jucer` and no Gradle
-file in the repository, so this is the plan rather than a description of the
-build. It read as the latter.
+does not cover it — the Projucer/Gradle exporter over the same source tree is
+the route. **None of that exists here**, so this is the plan rather than a
+description of the build.
 
 ## Feature Status
 
-Full behavior is in `README.md`. Status only, so a session doesn't re-plan
-something finished or assume something unfinished is done:
+Behaviour is `README.md`'s job and the reasoning is each feature's doc. This is
+status plus the one rule a contributor must not break, so a session doesn't
+re-plan something finished or assume something unfinished is done.
 
 - **Reharmonization Assistant, Real-Time Chord/Voicing Analyzer** — done.
-  **A substitution carries three classifications and they are not the same
-  axis**, which is worth knowing before adding a fourth. `SubstitutionFamily`
-  is what the bar dialog groups by, nearest the original harmony outwards.
-  `ReharmPlanKind` is the six whole-tune plans. `ReharmStyle` is the vocabulary
-  filter behind the bar dialog's picker — and note that `ReharmPlanKind::modalColour`
-  gets its effect by filtering on *family*, so the two "modal"s in that file are
-  unrelated mechanisms sharing a word. A style lives in the enum only while at
-  least one rule is tagged with it; a test says so, because `brazilian` once
-  shipped tagged on nothing at all. **That rule is the general one**, and it is
-  enforced for the lick catalogue too - `LickSource::transcription` and
-  `LickOrnament::grace` were deleted for the same reason, since an enum value
-  no record carries is a menu entry that is a lie.
-  **The style filter reaches two of the three reharm calls on purpose.** Not
-  `recogniseSubstitution` — narrowing the pool there stops the app noticing
-  substitutions the player actually found, and noticing is its whole job. Not
-  the plans, for the family-vs-style reason above.
-- **Solo practice** (line analysis, take scoring, walking-bass reading) —
-  done. See `docs/SOLO_PRACTICE.md` before touching `LineAnalyzer`.
-  **A chord in a line is read as a chord, and nothing new reads it.** The line
-  reading is per-note and complete, but a chord is not a fact about any of its
-  notes — Eb Gb A C over Dm7 is a passing Ebdim7, and no reading of that Eb
-  gets to the first sentence. So `chordSoFar()` hands the attack it already
-  groups to `VoicingAnalyzer` (the shape, and whether the notes carry the bar)
-  and `ChordIdentifier` (what they spell instead). That is the boundary the
-  header states — a voicing is a thing, a line is a stream — kept by *calling*
-  the readers rather than growing a second one; a chord reader inside
-  `LineAnalyzer` is the thing not to write. The reading leads with the **top**
-  note, because a block-chord soloist harmonises downwards from the melody. It
-  is read **when struck**, against the symbol that was on the stand at the
-  time, so reharmonising mid-take cannot rewrite it. And `saysTheChord` is not
-  a pass mark: the chords between the chart's own are most of what block-chord
-  playing is, so one that spells something else is named, never marked.
-  **A take now carries a second number: where its notes fell, read against the
-  line style the player picked.** `readLinePlacement` (`LinePlacement.h`), and
-  it is not reachable from `score()` — different file, style as an argument,
-  never touches a `LineStats`. Three parts weighted 2/1/1 the way comping's
-  are: the grid (per *onset*, so a block chord counts once), the phrasing
-  (one-way — running on costs, stopping early does not) and the register (per
-  note). Only what the style states as a rule is in it; see the invariant
-  below and `docs/SOLO_PRACTICE.md`.
-  **The grid it reads against is `subdivisionsFor`** - the style's own feel
-  plus the feels of the licks it can draw on - so a bebop line is allowed its
-  triplets. One source for that answer, read by `readLinePlacement` and
-  `lineFaults` alike, because the app teaching a figure and then marking a
-  player for playing it is the failure the round trip exists to prevent. **`LineBar`'s strong-beat counts cross
-  the wire now too**, through `LineAnalyzer::barFor` — they had been counted
-  since the grid arrived and nothing outside the engine could see them.
+  **A substitution carries three classifications on three different axes**:
+  `SubstitutionFamily` (what the bar dialog groups by), `ReharmPlanKind` (the
+  six whole-tune plans) and `ReharmStyle` (the vocabulary filter). Note that
+  `ReharmPlanKind::modalColour` gets its effect by filtering on *family*, so the
+  two "modal"s in that file are unrelated mechanisms sharing a word.
+  **The style filter reaches two of the three reharm calls on purpose** — not
+  `recogniseSubstitution`, because narrowing the pool there stops the app
+  noticing substitutions the player actually found, and noticing is its whole
+  job; and not the plans, for the family-versus-style reason above. See
+  `Reharmonizer.h`.
+- **Solo practice** (line analysis, take scoring, walking-bass reading) — done.
+  Read `docs/SOLO_PRACTICE.md` before touching `LineAnalyzer`. The rules:
+  **a chord in a line is read as a chord, and nothing new reads it** —
+  `chordSoFar()` hands the attack to `VoicingAnalyzer` and `ChordIdentifier`
+  rather than growing a second reader inside `LineAnalyzer`; it is read **when
+  struck**, against the symbol that was on the stand at the time; and
+  `saysTheChord` is not a pass mark. A take also carries a second number,
+  `readLinePlacement` (`LinePlacement.h`), which is **not reachable from
+  `score()`** — different file, style as an argument, never touches a
+  `LineStats`. The grid both it and `lineFaults` read against is
+  `subdivisionsFor`, one source, because the app teaching a figure and then
+  marking a player for playing it is the failure the round trip exists to
+  prevent.
 - **Comping** — done, both halves: the band that plays under a soloist, and the
   exercise. The exercise lives in **chord practice's *In time***, not in a third
-  mode; that decision was recorded as a third mode for a long time and was
-  reversed, because In time already meant "the same mode, with a clock, adding
-  readings that are silent without one" — which is exactly what comping is to
-  chord practice. `state.mode` is still two-valued.
-  **The band's voicings are a weighted draw, not a minimum.** There used to be
-  exactly one voicing per chord for ever; `compingVoicing`'s seeded overload
-  now shortlists candidates within a spread of the best and draws by shape
-  weight — two-handed rootless plain 100, rich 80, one-hand rootless 34/20,
-  and **never a shell** (the root at the bottom is the fault `readCompHit`
-  flags in a player). Weight decides the draw, never the cost: in the cost it
-  rules a shape out instead of making it rarer. Travel is measured *per voice*,
-  because a summed distance penalises a shape for having fewer notes and kept
-  the thin shapes unreachable. The **unseeded** overload is unchanged and must
-  stay so — it answers "what would a comper play here", which has one answer
-  and is the ii-V-I the README walks through. The page puts the **chorus** in
-  the seed, which is what makes the second time round the form a second time.
-  A style also says **how long each hit rings** (`CompSlot::heldFor`, falling
-  back to `CompStyleDefinition::heldFor`), trimmed by `compPlan` so nothing
-  sounds into the chord after it — one instrument plays them in order, and a
-  number a shell had to correct would be two opinions about one thing. **The
-  evaluator says nothing about duration and cannot**: a `PlayedHit` has nowhere
-  to put one. That is the decision, not an omission — a style says what the
-  *band* does, and a comper holding a chord through a four-to-the-bar is
-  reading a style that does not say not to.
-  **The four styles are a catalogue, not a ceiling: a style can be described
-  rather than named.** The three comping calls take a style *reference* - a
-  catalogue key, or a whole description of a style the engine has never seen -
-  and a user-made style is **data the shell hands over on every call**, the way
-  a chart's progression text is. The engine gained no registry and no memory;
-  core needed no change at all, because every function there already took a
-  `const CompStyleDefinition&`. The description is **flat delimited text, never
-  JSON** - results are JSON because encoding them is the shell's business,
-  inputs are text because the engine has no JSON reader and must not grow one.
-  It carries no key, name or summary, which is what keeps the grammar free of
-  quoting. **An unknown key falls back to the first style; a malformed
-  description is an error** - a renamed style should still comp, but a broken
-  message must not comp four-to-the-bar under someone who just wrote their own
-  figure. **`variation` is advised, never clamped**: `compPlan` is seeded and
-  byte-reproducible so a clamp is a latent change to every existing style, and
-  the consequence it guards is a sound rather than a fault. See
-  `docs/COMPING.md`.
-  **A style's slots are the figure the band plays, never a fence around the
-  player**: placement is read against the grid the style's `feel` implies, and
-  the slots keep a tier of their own for words rather than points. Reading the
-  two as one was a real bug — the Charleston accepted three of the eight
-  positions a swing comper uses, and nothing in the catalogue accepted the and
-  of one at all. See `docs/COMPING.md` before touching any of it.
-- **The band's velocity is humanised in the page, not the engine.** Stroke to
-  stroke, voice to voice inside a chord (top carries, inner sit under, bottom
-  is the hand), and lighter off the beat than on it — seeded off `spread()`
-  like everything else, so a loop still comes round the same. A style says
-  where chords fall, how long they ring and in what register; this is the
-  difference between a player and a sequencer playing that part, which is why
-  it is not on `CompStyleDefinition`. **What crosses to the app is a
-  multiplier, never a level** — the two shells have their own idea of how loud
-  an accompaniment is, and each keeps it.
+  mode; `state.mode` is still two-valued. Read `docs/COMPING.md` before touching
+  any of it. The rules: the band's voicings are a **weighted draw and never a
+  shell**, with weight deciding the draw and never the cost, and travel measured
+  **per voice**; the **unseeded** `compingVoicing` overload answers "what would a
+  comper play here", has one answer, and must stay unchanged; the page puts the
+  **chorus** in the seed, which is what makes the second time round the form a
+  second time; **the evaluator says nothing about duration and cannot**, which is
+  the decision rather than an omission. A style can be **described rather than
+  named** — a user-made style is data the shell hands over on every call, as
+  **flat delimited text, never JSON**, because the engine has no JSON reader and
+  must not grow one. **An unknown key falls back to the first style; a malformed
+  description is an error.** `variation` is advised, never clamped. **A style's
+  slots are the figure the band plays, never a fence around the player.**
+- **The band's velocity is humanised in the page, not the engine**, seeded off
+  `spread()` so a loop comes round the same. **What crosses to the app is a
+  multiplier, never a level** — the two shells have their own idea of how loud an
+  accompaniment is, and each keeps it.
 - **Drums** — done. The one member of the band with no engine call: the page
-  owns the pattern, each shell owns the sound (synthesised in both, like the
-  click — there is no kit in `assets/` and four unpitched one-shots would not
-  earn one). Written on the shared grid and swung through `beatsIntoBar` like
-  everything else, so the ride and the comp agree about where the and of two
-  is. The pattern follows the **metre**, not the comping style, and needs the
-  clock — there is no figure to play to a bar you are sitting on.
-- **Voice-leading visualiser** — done, **on the keys, not on the chart**. It was
-  drawn over the bars first and that was the wrong place: a picture of where the
-  guide tones are answers a question a player having it explained already knows
-  the answer to, and the one they actually have — where do my fingers go — it
-  leaves them to work out. So `voiceGuideTones()` takes the chord that is coming
-  *and the notes just played*, and the two keys are badged with their degree.
-  **Voiced, not named**: the same chord asked of a left hand low down and of two
-  hands in the middle gives marks an octave apart, and the octave is the half a
-  chart cannot give you. The notes are **paired** to the tones so the hand moves
-  least overall — tone by tone, both claim the same finger and the other voice is
-  stranded — and one note leads into both when there is no second one, which is
-  the ordinary case in solo practice. A guide tone already under a finger keeps
-  its badge, inverted: that one does not move. The page points at the next bar
-  that says something **different**, not simply the next bar, or two bars of one
-  chord read "stay where you are" and then say nothing on the bar it changes.
-  `guideToneMotion` is still what answers it for two chord *symbols* and is
-  untouched.
-- **The page's layout** — done, and the reasoning is in UI Conventions above.
-  Three zones; the chart's head in the top bar; the cheat sheet sectioned. The
+  owns the pattern, each shell owns the sound. Written on the shared grid and
+  swung through `beatsIntoBar`, so the ride and the comp agree about where the
+  and of two is. The pattern follows the **metre**, not the comping style, and
+  needs the clock.
+- **Voice-leading visualiser** — done, **on the keys, not on the chart**.
+  `voiceGuideTones()` takes the chord that is coming *and the notes just
+  played*, and badges two keys with their degree. **Voiced, not named**: the
+  octave is the half a chart cannot give you. The notes are **paired** to the
+  tones so the hand moves least overall, and one note leads into both when there
+  is no second one. A guide tone already under a finger keeps its badge,
+  inverted. The page points at the next bar that says something **different**,
+  not simply the next bar. `guideToneMotion` still answers it for two chord
+  *symbols* and is untouched.
+- **The page's layout** — done; the reasoning is in UI Conventions above. The
   rolling bar brings itself into view, which nothing on this page did for
-  anything before — there was no `scrollIntoView`, `scrollTo` or `scrollTop` in
-  the file at all, so on a tune longer than the chart zone the mark simply
-  rolled off the bottom. The transport is out of the menu and onto a strip of
-  its own, the settings are five popovers each hung beside what they act on
-  rather than two dropdowns in opposite corners, the dock foot is two groups —
-  what you press and what you read — practice settings survive a reload, and the
-  chart is justified into its zone rather than leaving a void under it (see UI
-  Conventions above). The three screenshots in `docs/` are shot against this
-  shape, in the webfont; `docs/HANDOFF.md` says how, since a machine that cannot
-  reach Google Fonts will otherwise photograph the fallback face.
+  anything before.
 - **Progress tracking** — done, and it is a record of *what was practised*
-  rather than a scoreboard. A take writes one row of counts; the dashboard
-  hands the rows back to the engine and draws what it says. **The one thing it
-  keeps no version of is a mark.** `score()` calls itself a reading of a bar
-  and not a grade for a player, and the same number plotted over weeks is
-  exactly that grade — so the row has no field for one, the wire has its own
+  rather than a scoreboard. See `docs/PROGRESS.md`. The rules: **it keeps no
+  version of a mark** — the row has no field for one, the wire has its own
   score-free emitter rather than reusing `lineStatsJson`, and a check reads the
-  rendered panel and fails on the word. A count beside an earlier count is
-  still a fact; a mark beside an earlier mark is a verdict about a person.
-  **The engine learns nothing.** `readPractice` and `readTuneProgress` are free
-  functions over a vector the caller owns, `today` arrives as an argument the
-  way a `BarPosition` does, and a history is data the shell hands over on every
-  call — the third time that answer has been the right one here, after the
-  chart's progression text and a described comping style.
-  **A tune's own memory is the half no single take can give.** It counts how
-  many takes ever *reached* each bar, which is how the back eight of a standard
-  turns out to have been played twice in eleven takes. It says nothing at all
-  below three takes, nothing about a tune played end to end every time, and
-  names a hard bar only when it stands apart. See `docs/PROGRESS.md`.
-  **Saved tunes came with it**, and with them the amendment to the
-  remembered-settings invariant below — the page still opens on a clean stand.
-- **Reading a PDF** — done in **both** shells. The engine's reader was always
-  format-agnostic, and the app's missing half was never theory: it was the
-  extractor. pdf.js is vendored under `assets/` like the band's recordings, so
-  the app compiles it in and `WebUi` writes it beside the page — which is why
-  the page is written to a temp **folder** now rather than a temp file. The
-  shell sends a PDF's bytes over the bridge and the page's own `readPdf` does
-  the rest, so there is one reader and not two. **Printing is still the
-  browser's alone**, and the button is hidden in the app.
-- **Personal voicing library** — done, and the question that kept it unbuilt was
-  *what a voicing is saved against*. **A chord quality, as semitone offsets from
-  the root**, plus the register the shape sat in. Saved against the literal
-  symbol a shape found over Dm7 is invisible on Gm7; saved against a bar of a
-  tune it is a fingering note rather than a vocabulary. Offsets transpose, which
-  is already how `idiomaticVoicings` thinks. **The register is part of the
-  shape** for the reason `voiceGuideTones` gives about voicing a guide tone
-  rather than naming one — the octave is the half a chart cannot give you — so
+  rendered panel and fails on the word; **the engine learns nothing**, since
+  `readPractice` and `readTuneProgress` are free functions over a vector the
+  caller owns and `today` arrives as an argument; and a tune's own memory says
+  nothing below three takes and names a hard bar only when it stands apart.
+- **Reading a PDF** — done in **both** shells. pdf.js is vendored under
+  `assets/`, the app compiles it in and `WebUi` writes it beside the page —
+  which is why the page is written to a temp **folder** now rather than a temp
+  file. The shell sends a PDF's bytes over the bridge and the page's own
+  `readPdf` does the rest, so there is one reader and not two. **Printing is
+  still the browser's alone**, and the button is hidden in the app.
+- **Personal voicing library** — done. A voicing is saved against **a chord
+  quality, as semitone offsets from the root**, plus the register the shape sat
+  in: offsets transpose, which is how `idiomaticVoicings` already thinks, and
+  the register is part of the shape for the same reason `voiceGuideTones` gives.
   `voicingFromShape` picks the root octave by the anchor and walks the octaves
   rather than dividing, which is where the off-by-an-octave lives.
-  What earns it its place is that **`Show me one` cycles yours before the
-  engine's**, in the same control. Yours are *not* filtered by the shape being
-  practised, which the engine's are: a shape you chose to keep is not a
+  **`Show me one` cycles yours before the engine's**, and yours are *not*
+  filtered by the shape being practised: a shape you chose to keep is not a
   suggestion to be overruled.
-  **`savedCollection` is the shelf, written once.** It holds what a tune
-  library, a voicing library and a shelf of comping styles share — an array and
-  a counter, ids that only go up, a cap, and dropping a record rather than
-  migrating it — and takes *what makes a record readable* as a function, since
-  those fields are genuinely not shared. Its array property name is a parameter
-  only because renaming the tune envelope would drop every tune anybody saved.
-- **Line suggestions** — done, and rebuilt around phrases. `LineWriter` writes a
-  line where `LineAnalyzer` reads one, and solo practice's dock button says
-  **Show me a line** where it used to say *Which scale?* and hand back a set.
-  **`planPhrases` runs before any note is chosen** — a length from the style's
-  range, a start on a tick the style starts phrases on, a rest after it — and
-  the note chooser walks what it produced. Two passes, because pitch cannot see
-  phrase shape and phrase shape does not need pitch. What it replaced laid a
-  full eighth grid over each bar and thinned it per slot, which is a texture
-  rather than phrasing.
-  **A `LineStyleDefinition` absorbed the scale style**, so solo practice has one
-  picker and not two: choosing "bebop" chooses the bebop scales *and* how a
-  bebop line is shaped. `scaleStyles()` is unchanged and still what the bar
-  dialog reads against — a line style carries the key into it. The remembered
-  `jazzScaleStyle` was dropped rather than mapped onto a line style, because
-  "modes" and "modal" are not the same kind of thing.
-  **An approach and the note it lands on are one gesture**, and the writer owes
-  the landing. Choosing them separately let an approach arrive nowhere on a
-  pentatonic — no half steps to land by — and let an approach follow an
-  approach on the same pitch. Only *blues* failed, which is why the round trip
-  sweeps every style rather than one.
-  **In time, the line is a voice the transport books**, beside the comp, the
-  bass and the ride, through the same `beatsIntoBar`. It comes round with the
-  loop, so it is something to play along with. It still refuses to sound over a
-  take — two lines at once is neither — but that refusal is about the take and
-  not about the clock: the roll it starts grades nothing.
+  **`savedCollection` is the shelf, written once** — an array and a counter, ids
+  that only go up, a cap, and dropping a record rather than migrating it.
+- **Line suggestions** — done, and built around phrases. See
+  `docs/SOLO_PRACTICE.md`. The rules: **`planPhrases` runs before any note is
+  chosen**, and the note chooser walks what it produced — two passes, because
+  pitch cannot see phrase shape and phrase shape does not need pitch. A
+  `LineStyleDefinition` absorbed the scale style, so solo practice has one
+  picker and not two; `scaleStyles()` is unchanged and still what the bar dialog
+  reads against. **An approach and the note it lands on are one gesture**, and
+  an approach note must be **outside the scale the take reads against** —
+  `readingScaleFor` is public so the writer and the reader cannot disagree about
+  which scale that is. **It commits to the colour, never to the gesture**: an
+  `ApproachKind` on a `WrittenNote` is something the round trip refuses, because
+  the analyser reads the gesture from the line *around* a note.
   **It quotes before it invents.** `LickCatalogue.h` holds twenty-three
-  documented figures - eighteen from the research's Part B (Barry Harris,
-  Wynton Kelly, Red Garland, a Parker cliche) and five written afterwards -
-  each keyed on a **chord-sequence shape** (qualities plus the root offsets
-  between them, which is `VoicingShape` one dimension up) and each carrying its
-  `attribution` and `source`.
-  **It reaches all eight chord qualities, and only four of those came from the
-  research.** Part B is a ii-V catalogue, so a diminished, suspended, augmented
-  or minor-major bar quoted nothing at all until one lick each was written for
-  it (L18, L19, L21, L22), plus L20, a short pentatonic cell that is what lets
-  the pentatonic style quote anything - see `docs/SOLO_PRACTICE.md`. Two things
-  to know before adding more. **A lick the research does not contain is a
-  `composite` unless a real named practice is behind it**, which is the same
-  honesty `LickSource` was split for: exactly one of the five is a
-  `documentedDevice`. And **a sweep only cross-checks what it plays** - the
-  cross-checks swept four ii-V tunes, so the five new licks were held to
-  nothing until the habitats of the new qualities joined that list. A new lick
-  over harmony no sweep chart carries is a lick nothing checks. A phrase is quoted whole or
-  written note by note, never half of each; `lickShare` is how often a phrase
-  *reaches* for a quote, and one that finds nothing generates as before. The
-  page says what it drew on, which is why the catalogue was built rather than
-  more atoms added - this app explains every substitution it offers, and a line
-  it could not explain would be the one thing arriving from nowhere.
-  **`lineFaults` validates *generated* material only**, and that is a scope
-  rather than an exemption: a documented device may be deliberately outside the
-  scale a take reads against and may land a chromatic on beat one, and the
-  reading saying so is correct. The register is still checked for every note.
-  **Colours are computed, never authored** - `LickRole` is what the transcriber
-  said and `NoteColour` is what the analyser will read, and over two hundred
-  seeds they agreed on the pitch classification every time and differed on the
-  colour about one note in forty, always approach against outside. **Two tests
-  cross-check the source**: a note it calls a chord tone is never read as
-  outside, and one it calls outside is never read as a chord tone. That is what
-  catches a degree typed wrong, which the round trip cannot - it only asks that
-  writer and reader agree, and they agree about a wrong note. What they do not
-  assert is named in `docs/SOLO_PRACTICE.md`, and each exclusion is a real
-  ambiguity rather than slack.
-  **A bar with two chords is written against the first**, in the writer *and*
-  in the take: `chart.chordAt (bar)` answers with beat one's chord and
-  `setTarget` takes a bar, so the two agree and the round trip never sees it.
-  L17 is the only lick keyed on two chords to a bar. A test pins it; the fix is
-  the take model, not a `chordAt` argument. See `docs/HANDOFF.md`.
-  **An ornament is a rendering hint and never a position**: a crush is written
-  at its target's tick and struck early by whoever plays it, the same split
-  `docs/RHYTHM.md` draws for swing. See `docs/SOLO_PRACTICE.md`.
-  **The writer carries the analyser's vocabulary**, which is the design rather
-  than a convenience: `LineWriterTests` asserts over twenty-four seeds that
-  every note reads back from a real take as the colour it was written as. Same
-  shape as `VoicingAnalyzerTests`' rule about `idiomaticVoicings`, same reason
-  — otherwise the app hands you a line and then marks it wrong.
-  **It commits to the colour, never to the gesture.** `WrittenNote` had an
-  `ApproachKind` and the round trip refused it: the analyser reads the gesture
-  from the line *around* a note, so an approach stepped into and out of the
-  same way is a passing tone. The writer cannot know which, because that
-  depends on the note after it. And an approach note must be **outside the
-  scale the take reads against**, or the reading quite correctly calls it a
-  scale tone — when neither neighbour is, the line plays a scale tone instead.
-  `readingScaleFor` is public so the writer and the reader cannot disagree
-  about which scale that is. See `docs/SOLO_PRACTICE.md`.
+  documented figures, each keyed on a **chord-sequence shape** and each carrying
+  its `attribution` and `source`. A phrase is quoted whole or written note by
+  note, never half of each; `lickShare` is how often a phrase *reaches* for a
+  quote. Two rules before adding one: **a lick the research does not contain is
+  a `composite` unless a real named practice is behind it**, and **a sweep only
+  cross-checks what it plays** — a lick over harmony no sweep chart carries is a
+  lick nothing checks. **Colours are computed, never authored**, and two tests
+  cross-check the source: a note the transcriber calls a chord tone is never
+  read as outside, and one it calls outside is never read as a chord tone.
+  **`lineFaults` validates *generated* material only** — a documented device may
+  be deliberately outside the scale; the register is still checked for every
+  note. **A bar with two chords is written against the first**, in the writer
+  *and* in the take; a test pins it, and the fix is the take model, not a
+  `chordAt` argument. **An ornament is a rendering hint and never a position.**
+  **The writer carries the analyser's vocabulary**: `LineWriterTests` asserts
+  over twenty-four seeds that every note reads back as the colour it was written
+  as, because otherwise the app hands you a line and then marks it wrong.
+  In time, the line is a voice the transport books, through the same
+  `beatsIntoBar`; it still refuses to sound over a take.
 - **Nothing is left under "not built".** `docs/HANDOFF.md` carries loose ends
   only.
 - **Closed, so nobody re-plans them**: ear training and MusicXML/MuseScore
@@ -622,168 +425,120 @@ something finished or assume something unfinished is done:
 ## Critical Invariants
 
 These aren't stylistic preferences — violating them breaks something in a way
-that's easy to miss in review:
+that's easy to miss in review.
 
 - **Every beat time is an origin plus a beat count at one spacing**, so anything
   that changes the spacing mid-roll must move the origin to the beat the change
   takes effect on — and must reset `transport.countInBeats`, which is a fact
-  about *this roll* rather than about the count-in checkbox. Worked out from the
-  checkbox instead, a tempo change halfway through a take counted the player in
-  again. The tempo ramp changes tempo only at a chorus boundary, and does it
-  while beats are being *booked* rather than when one sounds, so every beat in
-  the diary was written down at the tempo it will be played at.
+  about *this roll* rather than about the count-in checkbox. The tempo ramp
+  changes tempo only at a chorus boundary, and does it while beats are being
+  *booked* rather than when one sounds, so every beat in the diary was written
+  down at the tempo it will be played at.
 - **Reharmonise as you play changes the chart on the *last* bar of a chorus,
   not at the top of the next one.** Reharmonising asks the engine and redraws,
   which is a turn of the event loop; the band is booked a bar ahead and
-  synchronously. At the boundary the first bar of the new chorus still plays
-  the old chord. A bar early, everything is the new tune by the downbeat. It
-  restores `reharm.before` when the transport stops — an exercise, not an edit
-  — and clears only the `reharmonised` marks it put there itself. **How much**
-  (`reharm.amount`: a bar / a few bars / the whole tune) and **how far**
-  (`reharm.reach`) are separate questions, and a plan carries its own reach so
-  the second is hidden for the whole-tune amount. The whole-tune amount applies
-  a named plan to the chart *as it stands*, which is what makes it escalate;
-  a plan with nothing left to change falls through to moving a bar. **In time
-  with the exercise armed, `planDialog` chooses the take's plan instead of
-  rewriting the chart** — same dialog, same six write-ups, the clock decides
-  which question is being asked.
+  synchronously, so at the boundary the first bar of the new chorus still plays
+  the old chord. It restores `reharm.before` when the transport stops — an
+  exercise, not an edit — and clears only the `reharmonised` marks it put there
+  itself. **How much** (`reharm.amount`) and **how far** (`reharm.reach`) are
+  separate questions, and a plan carries its own reach so the second is hidden
+  for the whole-tune amount. The whole-tune amount applies a named plan to the
+  chart *as it stands*, which is what makes it escalate. **In time with the
+  exercise armed, `planDialog` chooses the take's plan instead of rewriting the
+  chart.**
 - **The engine has no clock and must never get one.** Time/position enters as
   data (a `BarPosition`, a beat+tick on the shared grid in `docs/RHYTHM.md`)
   that the shell computed from its own clock — never as something the engine
   infers about when a call arrived. This is what keeps `LineAnalyzer` and
-  comping's `compPlan()` testable.
-  **A groove does not breach this, and the distinction is worth keeping.**
-  `Groove.h` states how far a swung eighth is bent, as a fraction of a beat at
-  each end of a tempo band — a *relationship*, which the shell evaluates with
-  the tempo it holds. `upbeatAt (groove, bpm)` is a pure function of two
-  numbers the caller already has; the engine is told the tempo and never asks.
-  Nothing there moves a tick, and the engine still writes every eighth at 12.
+  `compPlan()` testable.
+  **A groove does not breach this.** `Groove.h` states how far a swung eighth is
+  bent as a *relationship*, which the shell evaluates with the tempo it holds;
+  `upbeatAt (groove, bpm)` is a pure function of two numbers the caller already
+  has. Nothing there moves a tick, and the engine still writes every eighth
+  at 12.
 - **Swing is per-tune and tempo-dependent, and lives in one function.**
   `beatsIntoBar` on the page, which takes the spacing the bar was *booked* at
-  rather than reading the live tempo — the ramp books every beat at the tempo
-  it will be played at, and a ratio that read the clock would slide under a bar
-  already in the diary. Its inverse `positionFromBeats` has to move with it, or
-  notes come back onto the grid at a position nobody played. The click, the
-  beat dots, the count-in and the ramp are all straight and must stay so: the
-  whole page's timing rests on the click being `origin + index × spacing`, and
-  the tempo-ramp check measures exactly that to 0.01s.
+  rather than reading the live tempo. Its inverse `positionFromBeats` has to
+  move with it, or notes come back onto the grid at a position nobody played.
+  The click, the beat dots, the count-in and the ramp are all straight and must
+  stay so: the whole page's timing rests on the click being
+  `origin + index × spacing`, and the tempo-ramp check measures exactly that to
+  0.01s.
 - **A number needs a standard the player chose. Everything else is words.**
-  This is the general form of a rule that used to be written as "rhythm
-  produces words, never points — in solo practice", and the general form is
-  what it always meant: it turns on one test — *is there a standard the player
-  picked?* — and never on which mode is showing. `LineStats::score()` is
-  untouched by timing or line-shape; see its own doc comment before changing
-  that. **The chord reading is the same rule one step further out**: a block
-  chord in a line is named, never scored, and a voicing that spells something
-  other than the bar costs the take nothing — there is no number anywhere that
-  `saysTheChord` moves.
-  **Both modes now score placement, and it is the same rule applied twice
-  rather than two rules.** A `CompStyleDefinition` was the standard for a
-  comp; a `LineStyleDefinition`, off solo practice's own picker, is the
-  standard for a line, which is exactly the condition
-  `docs/SOLO_PRACTICE.md` named when it closed this question — *"a rhythmic
-  vocabulary a player deliberately picks to be held to"*. So the condition was
-  met, not the rule bent. **`score()` did not change and must not**: the
-  placement is a *second* number, in `LinePlacement.h`, which takes the style
-  as an argument and never touches a `LineStats` — the separation is
-  structural rather than a matter of discipline, and the test that says the
-  same notes score the same with and without positions is still green and
-  still the evidence.
-  **What is still words is everything a chosen standard does not state.** In a
-  line style that is `startTicks` (a bias — `planPhrases` says so), `descending`
-  (a percentage over a corpus) and `usesApproaches` (colour, which `score()`
-  reads already, so a number would mark the same note twice). It is also R1, a
-  chromatic on an accented beat: `lineFaults` refuses one, but that is the
-  engine's rule about its own generator rather than something the style put its
-  name to. A chart still names the chord and still never says where in the bar
-  a note belongs — what changed is that the player can now say. The arguments
-  are in `docs/COMPING.md` and `docs/SOLO_PRACTICE.md`.
-  **A reading with no chosen standard behind it says nothing rather than
-  nought**, in both modes: `CompEvaluation::fit` and `LinePlacementReading::fit`
-  are both `std::optional<int>` and cross the wire as `null`.
+  It turns on one test — *is there a standard the player picked?* — and never on
+  which mode is showing. **Both modes score placement, and it is the same rule
+  applied twice rather than two rules**: a `CompStyleDefinition` is the standard
+  for a comp, a `LineStyleDefinition` off solo practice's own picker is the
+  standard for a line. **`score()` did not change and must not** — the placement
+  is a *second* number, in `LinePlacement.h`, and the test that says the same
+  notes score the same with and without positions is the evidence.
+  **What is still words is everything a chosen standard does not state**: in a
+  line style that is `startTicks`, `descending` and `usesApproaches`, and it is
+  also R1, a chromatic on an accented beat, which is the engine's rule about its
+  own generator rather than something the style put its name to. **The chord
+  reading is the same rule one step further out**: a block chord in a line is
+  named, never scored, and there is no number anywhere that `saysTheChord`
+  moves. **A reading with no chosen standard behind it says nothing rather than
+  nought** — `CompEvaluation::fit` and `LinePlacementReading::fit` are both
+  `std::optional<int>` and cross the wire as `null`.
 - **Single source of truth for anything on the wire.** `scaleStyles()`,
   `compStyles()` etc. come from the engine via `EngineApi`; never hardcode a
-  copy in a shell — it will drift the first time the engine's catalogue
-  changes. The same principle is why the rhythm grid has one doc, not three.
-- **`VoicingAnalyzerTests` holds two invariants that must hold after any
-  change to a voicing/shape table**: every voicing `idiomaticVoicings` offers
-  must classify as the type it was offered for, and none may exceed what one
-  hand can reach. Comping reuses these shapes — see `docs/COMPING.md`.
+  copy in a shell — it will drift the first time the engine's catalogue changes.
+  The same principle is why the rhythm grid has one doc, not three.
+- **`VoicingAnalyzerTests` holds two invariants that must hold after any change
+  to a voicing/shape table**: every voicing `idiomaticVoicings` offers must
+  classify as the type it was offered for, and none may exceed what one hand can
+  reach. Comping reuses these shapes — see `docs/COMPING.md`.
 - **A wider chord vocabulary is not automatically better** — `ChordIdentifier`
-  scores every known name against the notes played, so a new name competes
-  with all the rest. Check what a new name costs the chords that already
-  resolve correctly (e.g. a complete but obscure name beating a common
-  rootless voicing) before adding it.
+  scores every known name against the notes played, so a new name competes with
+  all the rest. Check what a new name costs the chords that already resolve
+  correctly before adding it.
 - **Nothing comes back unless you asked for it by name.** One pair of accessors
   (`remember`/`recall`, plus `rememberFlag`/`recallFlag`/`recallNumber`) is the
   only thing on the page that touches `localStorage`, under flat `jazz*` keys.
   What survives a reload is how the room is set up — tempo, metre, In time, the
-  sound bank, the band, the comping style, the reharmonisation vocabulary,
-  guide tones, the loop — plus the two shelves you filled on purpose: your
-  saved tunes and your saved voicings. What must
-  never survive **on its own** is the chart, a take, or anything mid-exercise.
-  Three rules the
-  recall keeps: it **makes no sound** (turning the piano on by hand sounds the
-  bar you are on, which is wrong for a page that has just opened); it **never
-  overrides the chart** (a metre is remembered in the picker's handler, not in
-  `setMetre`, which an import also calls); and it **validates every value**,
-  since a store the page does not own can hold anything. A recalled loop goes
-  back through `fillLoopRange()` — bars 1–12 on a four-bar chart is two numbers,
-  not a loop.
+  sound bank, the band, the comping style, the reharmonisation vocabulary, guide
+  tones, the loop — plus the two shelves you filled on purpose: your saved tunes
+  and your saved voicings. What must never survive **on its own** is the chart,
+  a take, or anything mid-exercise.
+  Three rules the recall keeps: it **makes no sound**; it **never overrides the
+  chart** (a metre is remembered in the picker's handler, not in `setMetre`,
+  which an import also calls); and it **validates every value**, since a store
+  the page does not own can hold anything. A recalled loop goes back through
+  `fillLoopRange()`.
   **A comping style you wrote is remembered too, and it is the one structured
   value here.** Its accessors (`rememberObject`/`recallObject`) are built *on*
-  the one pair rather than beside it, like the flag and number ones — there is
-  still exactly one door to `localStorage`. It is **dropped rather than
-  migrated** when it stops matching what the engine sends: the grid's own
-  `ticksPerBeat` is stored beside it (derived, never a hand-raised version
-  number), the field list is checked against the engine's *current* answer as
-  well as against the store, and the feel is held to the list the engine just
-  sent. A preference that cannot be read back is one you remake in a minute;
-  a migration path for eleven fields is more code than the editor.
-  **This rule used to read "practice settings are remembered; work is not",
-  and that was over-stated rather than wrong.** What it was protecting is that
-  the page opens on a clean stand: nothing half-played returns, no take is
-  restored into the session, and you are never handed a chart you did not ask
-  for. All of that still holds — `boot` puts no tune up, and `solo.take` and
-  `comp.hits` still die with the page. What the tune library adds is that a
-  chart you *deliberately saved and named* is yours to open again, by picking
-  it. So the line is not settings-versus-work; it is **asked-for versus
-  assumed**, and a check enforces exactly that: save a tune, reload, and the
-  stand still holds the chart the page shipped with.
-  **The practice record is remembered on the same terms, and it is a record
-  that you practised rather than a copy of what you played.** A row is counts,
-  a day number and two bitmasks saying which harmony was underneath; there is
-  no line, no voicing and no note in it, so nothing here could reconstruct a
-  performance. It is **dropped a row at a time** when a row stops matching
-  what this page writes — one unreadable row is not a reason to forget a year,
-  and a row reaching the engine that its grammar refuses reads back as an
-  error over the *whole* history rather than as one lost take. Both stores can
-  be forgotten from the panel, separately, because not wanting a history kept
-  and tidying a shelf of tunes are different things to want.
+  the one pair rather than beside it — there is still exactly one door to
+  `localStorage`. It is **dropped rather than migrated** when it stops matching
+  what the engine sends: the grid's own `ticksPerBeat` is stored beside it
+  (derived, never a hand-raised version number), and the field list and the feel
+  are both checked against the engine's *current* answer.
+  **The line is asked-for versus assumed, not settings versus work.** `boot`
+  puts no tune up, and `solo.take` and `comp.hits` still die with the page; a
+  chart you deliberately saved and named is yours to open again by picking it. A
+  check enforces exactly that: save a tune, reload, and the stand still holds
+  the chart the page shipped with.
+  **The practice record is remembered on the same terms**, and it is a record
+  that you practised rather than a copy of what you played — a row is counts, a
+  day number and two bitmasks, so nothing here could reconstruct a performance.
+  It is **dropped a row at a time**; a row reaching the engine that its grammar
+  refuses reads back as an error over the *whole* history rather than as one
+  lost take. Both stores can be forgotten from the panel, separately.
 - **Engine/page version mismatch has no symptom of its own, so the page checks
   for it.** A cached engine paired with a fresh page makes a feature simply
-  *vanish* — empty menu, engine chip still saying ready — because `ccall` on a
-  name the engine does not export throws something that names neither the call
-  nor the cause. Two things answer that: `web/index.html` requests
-  `jazz-engine.js?v=<build stamp>` so the pair is fetched together, and at boot
-  it checks every call in `ENGINE_CALLS` against the engine's exports and
-  raises a banner naming what is missing. **A call added to the page goes in
-  `ENGINE_CALLS` and in `web/build.sh`'s `EXPORTED_FUNCTIONS`** — the check is
-  what makes forgetting either one visible instead of silent. It tests
-  existence, never invocation (a take is armed by one of these), and says
-  nothing when it finds *no* exports at all, because that means the lookup is
-  wrong rather than the engine empty — a false banner on a good engine would be
-  worse than the silence it replaces. The app needs none of this (one binary,
-  no cache between the two) but is covered anyway, out of the `No engine call
-  named` answer `WebUi.cpp` already returns.
-  **It tests that a call exists, never what shape its answer has**, so a
-  feature adding no new call is invisible to it. The comping-style editor is
-  the case: an older cached engine takes a described style, fails to find it as
-  a key, and comps four-to-the-bar with the chip still reading ready. A change
-  like that has to **feature-detect on the data** — the page offers the editor
-  only when `compStyles()`'s answer carries a style's `slots` — which is
-  strictly better than a name check, since it also catches an engine that has
-  the call but the old shape.
+  *vanish* — empty menu, engine chip still saying ready. Two things answer that:
+  `web/index.html` requests `jazz-engine.js?v=<build stamp>` so the pair is
+  fetched together, and at boot it checks every call in `ENGINE_CALLS` against
+  the engine's exports and raises a banner naming what is missing. **A call
+  added to the page goes in `ENGINE_CALLS` and in `web/build.sh`'s
+  `EXPORTED_FUNCTIONS`.** It tests existence, never invocation, and says nothing
+  when it finds *no* exports at all, because that means the lookup is wrong
+  rather than the engine empty.
+  **It tests that a call exists, never what shape its answer has**, so a feature
+  adding no new call is invisible to it — the comping-style editor is the case.
+  A change like that has to **feature-detect on the data** (the page offers the
+  editor only when `compStyles()`'s answer carries a style's `slots`), which
+  also catches an engine that has the call but the old shape.
 - **The frame has four silent failure modes, all of them CSS.** Each looks like
   nothing happening rather than like an error:
   - **`min-height: 0` on `.chart-zone`.** A flex child's `min-height` is `auto`
@@ -791,16 +546,15 @@ that's easy to miss in review:
     whole chart, the body overflows, and the frame does nothing at all.
   - **`overflow-y`, not `overflow`, on `body`.** Hidden on *both* axes
     propagates to the viewport and pins `documentElement.scrollWidth` to the
-    window, which is exactly what the narrow-layout check reads. With it, a
+    window, which is exactly what the narrow-layout check reads: with it, a
     deliberately 900px-wide control at a 390px viewport was caught by **neither
     half** of that check. Vertical is clipped; horizontal is left visible so an
     overflow is still detectable.
   - **`#helpDialog[open] { display: flex }`.** A `<dialog>` is `display: none`
     until it is open, so a bare `display: flex` shows it on every page load.
   - **`border-bottom` + `:last-child` is wrong for a mode-filtered list.** The
-    last *visible* entry is not the last child once an entry is hidden by mode,
-    so a rule is left hanging under nothing. Space between entries has no
-    opinion about what is hidden.
+    last *visible* entry is not the last child once an entry is hidden by mode.
+    Space between entries has no opinion about what is hidden.
 - **The app's UI must never block on the network** — a render-blocking resource
   that never arrives leaves the whole webview invisible (backgrounds paint, no
   text does). Webfonts are requested by script, only when served over the web.
@@ -824,33 +578,14 @@ that's easy to miss in review:
 **There are none open right now**, which is a statement with a short shelf life
 rather than a boast — the section stays because the rule does: **if work runs
 into an ambiguity this file does not answer, flag it rather than silently
-picking a direction.** That is how every answer below got made.
+picking a direction.** That is how every answer in `docs/DECISIONS.md` got
+made.
 
-What was here, and what it turned out to be:
-
-- ~~How much of the reharm suggestion engine should be rule-based vs.
-  data/ML-informed?~~ **Answered: rule-based, and the thing that looked like the
-  question was a bug.** `ReharmStyle` tagged all 36 rules and `Options::style`
-  filtered on them, and no shell could reach it — so the first move was to
-  collect that rather than reach for a corpus. Counting the tags is what
-  mattered: `brazilian` was on **no rule at all** and `quartal` on **one**, so
-  the menu that filter would have shipped had an entry that was a lie. Both were
-  deleted, the m11 rule retagged `modal`, and what is on the wire now is two
-  vocabularies that exist. A corpus-ranked reharmoniser would replace 36 rules
-  that each carry their own explanation with a number that carries none, which
-  is a bad trade in a teaching app — and the way back in, if anyone wants one,
-  is **more rules or better tags**, not a model.
-- ~~Is MusicXML/MuseScore import needed, given iReal Pro and PDF both ship?~~
-  **Answered: no.** Not wanted.
-- ~~Is a future dense, DAW-style desktop layout worth designing for now, or
-  deferred?~~ **Answered: no, and the evidence moved against it.** The page is
-  laid out as an instrument rather than an article — a fixed three-zone frame
-  with the chart taking every pixel the other two do not — but it stays *one
-  responsive column*. No side panel, no wide-screen layout of its own. The thing
-  to weigh is no longer what it was: settings did *not* converge into one panel
-  to be pinned open. They spread into five, each hung beside the thing it acts
-  on (see UI Conventions), so a side panel now means moving a control **away**
-  from what it changes — which is the move the chart's row was chosen over.
+The three that were here are answered there: reharmonisation is
+**rule-based** (the thing that looked like the
+question was a bug); MusicXML/MuseScore import is **not wanted**; and a dense,
+DAW-style desktop layout is **no** — the page is laid out as an instrument
+rather than an article, but it stays one responsive column.
 
 ## Working Conventions
 
@@ -859,8 +594,8 @@ What was here, and what it turned out to be:
   platform-conditional forks.
 - **JUCE idioms apply to the shell only, and the shell is small** — `WebUi`
   (holds the webview) and `MidiDeviceInput` (Bluetooth pairing sheet) are the
-  only JUCE classes with real UI. A new `resized()`/`paint()` elsewhere is a sign
-  something's being built in the wrong layer.
+  only JUCE classes with real UI. A new `resized()`/`paint()` elsewhere is a
+  sign something's being built in the wrong layer.
 - **Which scales/styles belong together is theory — the engine holds the list**,
   never a shell-side copy (see Critical Invariants).
 - **Check the narrow window before calling a layout done** — things that overlap
