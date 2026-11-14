@@ -10,26 +10,44 @@
 # stale the first time the engine changed without anyone noticing.
 name: Pages
 
+# The build below is the only thing that checks the page - the wasm compiles,
+# the page boots, and 286 smoke checks drive it in a real browser - so it runs
+# on **every branch and every pull request**. It used to run only on pushes to
+# one branch, which meant a pull request that broke `web/index.html` got a
+# green tick from `ci.yml` (which builds the engine and the app and never opens
+# the page) and nothing else ever looked.
+#
+# Deploying is the part that stays on one branch, so the gate moved from the
+# trigger down onto the two steps that publish - and it asks the repository
+# which branch is its default rather than naming one. `docs/HANDOFF.md` had
+# the literal name down as a hazard: renaming the default branch would have
+# stopped deploys with no error anywhere, and there is now nothing to rename.
 on:
   push:
-    branches: ["claude/gifted-wozniak-7z4jt6"]
+    branches: ["**"]
+  pull_request:
   workflow_dispatch:
 
 # One deployment at a time, and never cancel one halfway: a half-published site
 # is worse than an old one.
+# Per ref, so a pull request's build does not sit in the deploy queue - only
+# one ref publishes, so deploys still serialise.
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+# Nothing here is granted at the workflow level any more: the build only reads
+# the checkout, and writing to Pages is the deploy job's alone. A build that
+# runs on every pull request, fork ones included, should not be handed a token
+# that can publish the site.
+permissions: {}
 
 jobs:
   build:
     name: Build the WebAssembly engine
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
 
@@ -80,13 +98,18 @@ jobs:
         run: node web/smoke-test.mjs "$GITHUB_WORKSPACE/_site"
 
       - uses: actions/upload-pages-artifact@v3
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request'
         with:
           path: _site
 
   deploy:
     name: Deploy to Pages
     needs: build
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

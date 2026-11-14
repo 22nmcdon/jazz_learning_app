@@ -383,9 +383,10 @@ Small, verified, and none of them urgent.
   desktop app carries 1.4MB of pdf.js with its licence left behind. A licensing
   judgement rather than a cleanup, which is why it was flagged and not fixed.
 
-- **`pages.yml` pins a literal branch name** (`claude/gifted-wozniak-7z4jt6`) as
-  its deploy trigger. Correct today - that is the default branch - but renaming
-  the default would stop deploys with no error anywhere.
+- ~~**`pages.yml` pins a literal branch name.**~~ Gone: the deploy gate asks
+  `github.event.repository.default_branch` instead, so there is no name to
+  rename. It moved off the trigger at the same time, because the build it was
+  gating is the only thing that checks the page.
 
 - **The groove's fractions are starting points, not findings.** 0.6 for the
   fourth of five is arithmetic and 0.75 for a shuffle is notation, but 0.72 for
