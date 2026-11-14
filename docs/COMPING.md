@@ -538,8 +538,9 @@ The four the engine ships are a catalogue, not a ceiling. A style can now be
   by hand, so the catalogue was never really the only caller.
 - **JSON goes one way only.** Results are JSON because encoding them is the
   shell's business and every shell has a parser. Inputs are flat delimited
-  text, because the engine has no JSON reader and `EngineApi.cpp` says at the
-  top that it must not grow one — `parseNoteList`, `readHit` and `readHitList`
+  text, because the engine has no JSON reader and `modules/engine_api` says at
+  the top of every file that it must not grow one — `parseNoteList`, `readHit`
+  and `readHitList`
   are the precedent. So the page holds a *writer* and never a reader, and the
   engine holds a reader and never a JSON one.
 - **No key, name or summary in the description.** The engine needs none of the

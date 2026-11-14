@@ -29,7 +29,7 @@ namespace
         desktop app down with it.
 
         So this refuses instead. It is the rule `numberIn` states one layer up,
-        in `EngineApi.cpp`, applied where it was missing: clamping belongs where
+        in the wire's `Wire.h`, applied where it was missing: clamping belongs where
         a value is computed, and this is where one is *received*. A metre that
         cannot be read leaves the chart in the one it opens in, which is what
         the rest of this reader already does with anything it cannot make sense
