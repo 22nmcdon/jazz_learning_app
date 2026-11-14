@@ -1275,6 +1275,24 @@ The reasoning, including why the engine gained no memory to do any of this, is i
   it was. See [`docs/SOLO_PRACTICE.md`](docs/SOLO_PRACTICE.md) and
   [`docs/COMPING.md`](docs/COMPING.md).
 
+## Licence
+
+The code in this repository is **MIT** — see [`LICENSE`](LICENSE).
+
+Two things in it are not the repository's own, and
+[`assets/README.md`](assets/README.md) lists them file by file:
+
+- **pdf.js** (`assets/pdf.min.js`, `assets/pdf.worker.min.js`) is Mozilla's,
+  under Apache 2.0, vendored rather than fetched so the app can read a PDF
+  offline. Its licence ships beside it in both shells.
+- **The three `.wav` samples** were found as free-to-use files and where they
+  came from was not written down. That is recorded as a gap rather than
+  glossed as a permission: treat them as the one part of this repository you
+  have no licence for. They are due to be replaced with the author's own
+  recordings. Deleting them leaves the sampled banks silent and everything
+  else working.
+
+
 ## Open questions carried over from the design doc
 
 These were left open rather than silently decided:

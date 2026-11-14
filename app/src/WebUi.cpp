@@ -286,6 +286,12 @@ String WebUi::pageUrl()
     writeResource (assets.getChildFile ("pdf.min.js"), "pdf_min_js");
     writeResource (assets.getChildFile ("pdf.worker.min.js"), "pdf_worker_min_js");
 
+    //  And its licence, which Apache 2.0 asks to travel with it. The page has
+    //  had it beside pdf.js since the web build was written; the app shipped
+    //  the library without it, which `docs/HANDOFF.md` had down as a licensing
+    //  judgement left unmade. It is made: the file is four lines of build.
+    writeResource (assets.getChildFile ("pdf.js-LICENSE"), "pdf_jsLICENSE");
+
     return page.getFullPathName().startsWith ("/")
              ? "file://" + page.getFullPathName()
              : page.getFullPathName();

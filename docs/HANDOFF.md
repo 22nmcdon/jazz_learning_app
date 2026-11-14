@@ -377,11 +377,11 @@ Small, verified, and none of them urgent.
   `WebUi::DeviceRelay` a listener); it is these two that nothing outside the
   tests touches. Noted so the next audit does not re-derive it.
 
-- **`assets/pdf.js-LICENSE` is not compiled into the app binary.**
-  `app/CMakeLists.txt` lists five of the six files in `assets/`; the licence is
-  the omission, while `web/build.sh` does ship it beside the page. So the
-  desktop app carries 1.4MB of pdf.js with its licence left behind. A licensing
-  judgement rather than a cleanup, which is why it was flagged and not fixed.
+- ~~**`assets/pdf.js-LICENSE` is not compiled into the app binary.**~~ Made:
+  Apache 2.0 asks the licence to travel with the thing it covers, so the sixth
+  file in `assets/` joins the other five in `app/CMakeLists.txt` and `WebUi`
+  lays it down beside the two scripts. Verified by running the app and looking
+  in the folder it writes: 10,174 bytes of licence next to 1.4MB of pdf.js.
 
 - ~~**`pages.yml` pins a literal branch name.**~~ Gone: the deploy gate asks
   `github.event.repository.default_branch` instead, so there is no name to

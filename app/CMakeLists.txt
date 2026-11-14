@@ -47,7 +47,12 @@ juce_add_binary_data(JazzWebUiData
         ${CMAKE_CURRENT_SOURCE_DIR}/../assets/bass-electric.wav
         ${CMAKE_CURRENT_SOURCE_DIR}/../assets/piano-grand.wav
         ${CMAKE_CURRENT_SOURCE_DIR}/../assets/pdf.min.js
-        ${CMAKE_CURRENT_SOURCE_DIR}/../assets/pdf.worker.min.js)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../assets/pdf.worker.min.js
+        # Apache 2.0 requires the licence to travel with the thing it covers,
+        # and the app was shipping 1.4MB of pdf.js without it. `web/build.sh`
+        # has copied it beside the page from the start; this is the binary
+        # catching up. `WebUi` lays it down next to the two scripts.
+        ${CMAKE_CURRENT_SOURCE_DIR}/../assets/pdf.js-LICENSE)
 
 target_sources(JazzLearningApp PRIVATE
     src/Main.cpp
