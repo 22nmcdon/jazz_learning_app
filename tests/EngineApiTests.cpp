@@ -1,4 +1,5 @@
 #include "TestFramework.h"
+#include "JsonWellFormed.h"
 
 #include <cctype>
 #include "jazz/api/EngineApi.h"
@@ -1430,4 +1431,116 @@ TEST ("a row whose position is not a position is skipped, not sorted")
     CHECK (contains (json, "| Dm7 | G7 | Cmaj7 |"));
     CHECK (! contains (json, "Bb7"));
     CHECK (! contains (json, "Ab7"));
+}
+
+
+//==============================================================================
+//  Is any of this actually JSON?
+
+TEST ("the JSON check can tell a good answer from a bad one")
+{
+    /*  A validator that always says yes is worth nothing, and the sweep below
+        leans entirely on this one - so it is held to both directions first.
+        Every bad case here is a way **string concatenation** goes wrong, which
+        is how every answer in this file is built. */
+    using jazz::testing::isWellFormedJson;
+
+    CHECK (isWellFormedJson (R"({"ok":true})"));
+    CHECK (isWellFormedJson (R"({"a":[1,-2,3.5,1e3],"b":null,"c":"x","d":{"e":false}})"));
+    CHECK (isWellFormedJson (R"([])"));
+    CHECK (isWellFormedJson (R"({"s":"a \" b \\ c \u00e9"})"));
+
+    CHECK (! isWellFormedJson (""));
+    CHECK (! isWellFormedJson (R"({"a":1,})"));              // a trailing comma
+    CHECK (! isWellFormedJson (R"({"a":[1,2,]})"));          // and in an array
+    CHECK (! isWellFormedJson (R"({"a":1)"));                // never closed
+    CHECK (! isWellFormedJson (R"({"a":})"));                // no value
+    CHECK (! isWellFormedJson (R"({a:1})"));                 // an unquoted key
+    CHECK (! isWellFormedJson (R"({"a":nan})"));             // what stod lets through
+    CHECK (! isWellFormedJson (R"({"a":inf})"));
+    CHECK (! isWellFormedJson (R"({"a":01})"));
+    CHECK (! isWellFormedJson (R"({"a":"it is "quoted""})")); // an unescaped quote
+    CHECK (! isWellFormedJson ("{\"a\":\"one\nline\"}"));   // a raw newline in a string
+    CHECK (! isWellFormedJson (R"({"a":1} trailing)"));      // anything after the value
+}
+
+TEST ("every answer the wire gives is JSON, on the happy path and the sad one")
+{
+    /*  The gap this closes: every other assertion in this file is `contains`
+        on a fragment, so an answer could be malformed in a way no fragment
+        notices - a stray comma, an unescaped quote out of an error message,
+        a bare `nan` where a number goes - and the first anybody would know is
+        `SyntaxError` in the page, naming neither the call nor the cause.
+
+        Both paths, because they are built differently: the happy one
+        concatenates fields and the sad one pastes a message somebody wrote,
+        and a message is the thing most likely to carry a quote or a newline.
+        Each call appears once here; what it *says* is asserted elsewhere. */
+    using jazz::testing::isWellFormedJson;
+
+    const auto good = [] (const char* name, const std::string& json)
+    {
+        if (! isWellFormedJson (json))
+            CHECK_EQ (std::string (name) + ": " + json.substr (0, 200),
+                      std::string (name) + ": well-formed JSON");
+
+        CHECK (isWellFormedJson (json));
+    };
+
+    const auto tune = "| Dm7 | G7 | Cmaj7 | Cmaj7 |";
+    const auto notes = "60,64,67";
+
+    //  The catalogues, which take nothing and can only be right or empty.
+    good ("reharmStyles", reharmStyles());
+    good ("compStyles", compStyles());
+    good ("lineStyles", lineStyles());
+    good ("scaleStyles", scaleStyles());
+    good ("grooves", grooves ("Medium Swing"));
+
+    //  The chart.
+    good ("parseChart", parseChart (tune));
+    good ("parseChart/bad", parseChart ("| ||| not a chart |||"));
+    good ("importIRealPro", importIRealPro ("irealb://nonsense"));
+    good ("exportIRealPro", exportIRealPro (tune, "A Tune", "Nobody", "Medium Swing", 4, 4));
+    good ("chartFromPage", chartFromPage ("60\t100\tDm7\n180\t100\tG7\n"));
+    good ("chartFromPage/bad", chartFromPage ("nonsense with no tabs"));
+
+    //  Harmony.
+    good ("scalesForChord", scalesForChord ("Dm7", "bebop"));
+    good ("scalesForChord/bad", scalesForChord ("not a chord", ""));
+    good ("reharmonise", reharmonise (tune, 1, 1, 1, "bebop"));
+    good ("reharmPlans", reharmPlans (tune));
+    good ("recogniseSubstitution", recogniseSubstitution (tune, 1, notes, 1));
+    good ("identifyChord", identifyChord (notes));
+    good ("identifyChord/empty", identifyChord (""));
+
+    //  Voicings.
+    good ("analyseVoicing", analyseVoicing ("Dm7", notes, ""));
+    good ("analyseVoicing/bad", analyseVoicing ("not a chord", notes, ""));
+    good ("voicingShape", voicingShape ("Dm7", notes));
+    good ("voicingFromShape", voicingFromShape ("Dm7", "0,3,7", 60));
+    good ("idiomaticVoicings", idiomaticVoicings ("Dm7", 60, "", 0));
+    good ("compingVoicing", compingVoicing ("Dm7", notes));
+    good ("voicedGuideTones", voicedGuideTones ("G7", notes));
+
+    //  The band, including a described style and a broken one.
+    good ("compPlan", compPlan (tune, "swing", 0, 3, 7));
+    good ("compPlan/unknown style", compPlan (tune, "no such style", 0, 3, 7));
+    good ("compPlan/broken description", compPlan (tune, "feel=nonsense;slots=;;;", 0, 3, 7));
+    good ("compHit", compHit (tune, "swing", 0, 1, 0, notes, 0));
+    good ("compTake", compTake (tune, "swing", 0, 3, ""));
+    good ("walkingBass", walkingBass (tune, 0, 3, 5));
+
+    //  Solo practice, in the order a take happens.
+    good ("improvisedLine", improvisedLine (tune, 0, 3, "", "bebop", 5));
+    good ("soloStartTake", soloStartTake());
+    good ("soloSetBar", soloSetBar (0, "Dm7", "", "bebop", 4));
+    good ("soloPlayNote", soloPlayNote (62, 0, 0, 0));
+    good ("soloEndTake", soloEndTake ("bebop"));
+
+    //  The practice record, including a history whose grammar is refused.
+    good ("practiceReading", practiceReading ("", 100));
+    good ("practiceReading/bad", practiceReading ("this is not a history", 100));
+    good ("tuneProgress", tuneProgress (tune, "", 100));
+    good ("tuneProgress/bad", tuneProgress (tune, "nor is this", 100));
 }
