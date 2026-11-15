@@ -664,7 +664,13 @@ namespace
             "| Cmaj7 | C#dim7 | Dm7 | G7 | Cmaj7 | C#dim7 | Dm7 | G7 |",
             "| Fsus4 | Fsus4 | Ebsus4 | Ebsus4 | Dsus4 | Dsus4 | Csus4 | Csus4 |",
             "| CmMaj7 | CmMaj7 | Ab7 | G7 | CmMaj7 | CmMaj7 | Fm7 | G7 |",
-            "| C+ | C+ | Fmaj7 | Fmaj7 | C+ | C+ | Fmaj7 | Fmaj7 |" };
+            "| C+ | C+ | Fmaj7 | Fmaj7 | C+ | C+ | Fmaj7 | Fmaj7 |",
+            /*  Two chords to a bar, which nothing else in this list has. It is
+                shaped as a full I-VI-ii-V with the trailing major bar because
+                that is what L17 is keyed on - the first version of this chart
+                stopped at the V, nothing was placed on it at all, and it
+                proved nothing while passing. */
+            "| C6 A7 | Dm7 G7 | Cmaj7 | Cmaj7 |" };
 
         return tunes;
     }
@@ -691,8 +697,15 @@ namespace
             {
                 bar = note.measureIndex;
 
-                if (const auto* chord = chart.chordAt (bar))
-                    analyzer.setTarget (bar, *chord);
+                /*  The whole bar, not its first chord. This helper set a
+                    target per bar for as long as a target *was* one chord, and
+                    that is what made the writer's own per-bar lookup invisible
+                    to the sweep: both halves were wrong the same way, so they
+                    agreed. */
+                const auto chords = chart.barChords (bar);
+
+                if (! chords.empty())
+                    analyzer.setTarget (bar, chords);
             }
 
             analyzer.play (note.midiNote, note.at);

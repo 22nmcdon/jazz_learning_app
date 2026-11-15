@@ -378,7 +378,15 @@ void LineAnalyzer::setOptions (Options newOptions)
     // The bar in front of the player is read the new way immediately; the notes
     // behind them keep the reading they were given.
     if (target.has_value())
-        setTarget (target->measureIndex, target->chord);
+    {
+        std::vector<BarChord> again;
+        again.reserve (target->chords.size());
+
+        for (const auto& one : target->chords)
+            again.push_back ({ one.fromBeat, one.chord });
+
+        setTarget (target->measureIndex, again);
+    }
 }
 
 void LineAnalyzer::startTake()
@@ -575,10 +583,30 @@ void LineAnalyzer::publishJust (const std::vector<LineNote>& line)
 
 void LineAnalyzer::setTarget (int measureIndex, const ChordSymbol& chord)
 {
+    setTarget (measureIndex, std::vector<BarChord> { { 0, chord } });
+}
+
+void LineAnalyzer::setTarget (int measureIndex, const std::vector<BarChord>& chords)
+{
+    /*  An empty bar is not a target. The overload above can never produce one
+        and a shell should not either, but the lookup promises a first entry
+        and this is the only place that can keep that promise. */
+    if (chords.empty())
+        return;
+
     Target next;
     next.measureIndex = measureIndex;
-    next.chord = chord;
-    next.scales = scalesFor (chord, options);
+    next.chords.reserve (chords.size());
+
+    /*  The scales are worked out here rather than per note, which is what the
+        single-chord version was for and still is: a bar of two chords costs
+        two lookups when the player arrives on it, not two per note. */
+    for (const auto& one : chords)
+        next.chords.push_back ({ one.fromBeat, one.chord, scalesFor (one.chord, options) });
+
+    // Whatever the shell said, the bar starts at its beginning: the lookup
+    // reads backwards from the last chord and must find something at beat 0.
+    next.chords.front().fromBeat = 0;
 
     target = std::move (next);
 }
@@ -638,7 +666,13 @@ LineNote LineAnalyzer::play (int midiNote, Attack attack)
     if (note.colour == NoteColour::outside && target.has_value())
     {
         note.colour = NoteColour::unresolved;
-        describeResolution (note, target->chord, target->scales);
+        /*  Against the chord this note was read against, not the bar's first:
+            "a semitone up lands on the 3" has to be true of the harmony the
+            player can hear, or the one genuinely useful thing said about an
+            outside note points at the wrong key. */
+        const auto& sounding = target->at (note.at);
+
+        describeResolution (note, sounding.chord, sounding.scales);
     }
 
     line.push_back (note);
@@ -701,8 +735,12 @@ LineNote LineAnalyzer::play (int midiNote, Attack attack)
 
     currentChord.reset();
 
+    /*  Read against the chord the attack landed on. A block chord is one
+        gesture at one instant, so every note of it shares a position and the
+        lookup gives the same answer for all of them - which is what makes
+        `saysTheChord` mean anything on a bar of two chords. */
     if (target.has_value())
-        currentChord = readChord (line, attackNow, target->chord);
+        currentChord = readChord (line, attackNow, target->at (line.back().at).chord);
 
     if (! currentChord.has_value())
     {
@@ -1054,7 +1092,13 @@ LineNote LineAnalyzer::readAgainstTarget (int midiNote) const
         return note;
     }
 
-    return readAgainst (midiNote, target->measureIndex, target->chord, target->scales);
+    /*  `pendingPosition` is where this note fell, set by the positional
+        `play()` just before it and empty otherwise - so on a bar of two chords
+        this is read against the one that was sounding, and with no clock
+        against the bar's first, exactly as it always was. */
+    const auto& sounding = target->at (pendingPosition);
+
+    return readAgainst (midiNote, target->measureIndex, sounding.chord, sounding.scales);
 }
 
 //==============================================================================

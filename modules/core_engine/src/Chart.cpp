@@ -26,6 +26,27 @@ const ChordSymbol* Chart::chordAt (int measureIndex, int beat) const
     return measure.slots.empty() ? nullptr : &measure.slots.back().chord;
 }
 
+std::vector<BarChord> Chart::barChords (int measureIndex) const
+{
+    std::vector<BarChord> chords;
+
+    if (measureIndex < 0 || measureIndex >= measureCount())
+        return chords;
+
+    const auto& measure = measures[static_cast<std::size_t> (measureIndex)];
+    auto beatsSoFar = 0;
+
+    chords.reserve (measure.slots.size());
+
+    for (const auto& slot : measure.slots)
+    {
+        chords.push_back ({ beatsSoFar, slot.chord });
+        beatsSoFar += slot.beats;
+    }
+
+    return chords;
+}
+
 Chart Chart::transposed (int semitones) const
 {
     auto copy = *this;

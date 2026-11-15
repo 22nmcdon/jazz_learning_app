@@ -17,6 +17,22 @@ struct ChordSlot
     int beats { 4 };
 };
 
+/** One chord of a measure and the beat it arrives on.
+
+    The same facts as a `ChordSlot` read from the other end - a start rather
+    than a duration - because that is what a reader of a *played* note wants:
+    given a beat, which chord was sounding. Durations are what a chart is
+    written with and starts are what a take is read against, and turning one
+    into the other is `Chart::barChords`, beside `chordAt`, which does the same
+    running total. Two places doing that arithmetic is two chances to disagree
+    about where the second chord of a bar begins.
+*/
+struct BarChord
+{
+    int fromBeat {};   ///< 0-based; the first chord of a measure is always 0
+    ChordSymbol chord;
+};
+
 struct Measure
 {
     std::vector<ChordSlot> slots;
@@ -46,6 +62,14 @@ public:
 
     /** The chord sounding at a position, or nullptr if the position is empty. */
     const ChordSymbol* chordAt (int measureIndex, int beat = 0) const;
+
+    /** Every chord of a measure with the beat it arrives on, in order.
+
+        Empty for an empty measure or an index off the end, which is the same
+        answer `chordAt` gives and means the same thing: there is no harmony
+        here to read anything against.
+    */
+    std::vector<BarChord> barChords (int measureIndex) const;
 
     Chart transposed (int semitones) const;
 

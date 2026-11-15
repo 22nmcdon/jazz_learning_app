@@ -1,5 +1,6 @@
 #pragma once
 
+#include "jazz/core/Chart.h"
 #include "jazz/core/ChordSymbol.h"
 #include "jazz/core/Rhythm.h"
 #include "jazz/core/ScaleSuggester.h"
@@ -106,7 +107,7 @@ enum class Attack
     withPrevious   ///< struck with the note before it - the two are one chord
 };
 
-/** One note of a line, read against the bar it landed in. */
+/** One note of a line, read against the chord that was sounding under it. */
 struct LineNote
 {
     int midiNote {};
@@ -343,6 +344,12 @@ struct LineBar
         the air. An approach note does not clear it: the flag asks whether the
         line found anything to say over this chord, and a note on its way
         somewhere else has not answered that.
+
+        On a bar of two chords it means what it always meant, and needs no
+        special case: it is counted from the notes' own colours, and each note
+        is coloured against the chord *it* was played over. A line that spells
+        C6 then A7 through `| C6 A7 |` has still never left the chord, which is
+        the right answer - it found nothing to say over either half.
     */
     bool neverLeftTheChord {};
 
@@ -596,7 +603,31 @@ public:
     */
     void setTarget (int measureIndex, const ChordSymbol& chord);
 
+    /** The same, for a bar carrying more than one chord.
+
+        `| C6 A7 |` is the last two bars of a thousand standards, and a target
+        that was one chord read the notes from beat three on against C6. Each
+        entry is a chord and the beat it arrives on - `Chart::barChords` is
+        what turns a measure into these; one entry is exactly the overload
+        above.
+
+        **Which chord a note is read against needs the note's position**, so
+        with no clock running there is nothing to choose by and the bar's first
+        chord is used - which is what this always did. That is not a shortfall
+        to be fixed later: `LineNote::at` is empty precisely when the shell
+        could not say where the note fell, and a made-up beat would pick a
+        chord the player never heard.
+    */
+    void setTarget (int measureIndex, const std::vector<BarChord>& chords);
+
     bool hasTarget() const noexcept { return target.has_value(); }
+
+    /** How many chords the bar in front of the player carries. Zero with no
+        target set. */
+    std::size_t chordsInBar() const noexcept
+    {
+        return target.has_value() ? target->chords.size() : 0;
+    }
 
     /** Reads a note against the current bar, keeping it when a take is running.
 
@@ -738,11 +769,33 @@ private:
 
     Options options;
 
+    struct TargetChord
+    {
+        int fromBeat {};
+        ChordSymbol chord;
+        std::vector<ScaleSuggestion> scales;  ///< cached: one lookup per chord, not per note
+    };
+
     struct Target
     {
         int measureIndex {};
-        ChordSymbol chord;
-        std::vector<ScaleSuggestion> scales;  ///< cached: one lookup per bar, not per note
+
+        /** Never empty, and the first entry always starts at beat 0. */
+        std::vector<TargetChord> chords;
+
+        /** The chord sounding where a note fell, or the bar's first chord when
+            the shell could not say where it fell. The fallback is the whole of
+            what a no-clock take does here and is why one of these is exactly
+            what a single-chord target always was. */
+        const TargetChord& at (const std::optional<BarPosition>& where) const
+        {
+            if (where.has_value())
+                for (auto i = chords.size(); i-- > 1;)
+                    if (where->beat >= chords[i].fromBeat)
+                        return chords[i];
+
+            return chords.front();
+        }
     };
 
     std::optional<Target> target;

@@ -1776,3 +1776,77 @@ TEST ("reading a chord adds words and no numbers")
     CHECK_EQ (take.overall.outside, 2);         // Eb and Gb, which nothing took home
     CHECK_EQ (take.overall.score(), statsOf (2, 0, 2).score());
 }
+
+TEST ("a bar of two chords reads each note against the one that was sounding")
+{
+    /*  `| C6 A7 |` is the last bar of a thousand standards and the target used
+        to be one chord, so the notes from beat three on were read against C6.
+        A player outlining the A7 was told their C# was outside.
+
+        C6 is C E G A; A7 is A C# E G. C# is the 3 of the A7 and outside C6,
+        which is what makes it the note worth checking.
+    */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, { { 0, chordFrom ("C6") }, { 2, chordFrom ("A7") } });
+    analyzer.startTake();
+
+    analyzer.play (72, BarPosition { 0, 0 });   // C  - the root of C6
+    const auto overTheSecond = analyzer.play (73, BarPosition { 2, 0 });  // C# - the 3 of A7
+
+    CHECK_EQ (overTheSecond.chordSymbol, std::string ("A7"));
+    CHECK_EQ (overTheSecond.degree, std::string ("3"));
+    CHECK (overTheSecond.colour == NoteColour::chordTone);
+
+    analyzer.endTake();
+
+    const auto take = analyzer.summary();
+    CHECK_EQ (take.overall.chordTones, 2);
+    CHECK_EQ (take.overall.outside, 0);
+}
+
+TEST ("with no clock a bar of two chords reads against the first, as it always did")
+{
+    /*  The other half, and the one that is a rule rather than a fix. A note
+        with no position is a note the shell could not place, so there is
+        nothing to choose the chord by - and inventing a beat would read it
+        against harmony the player never heard. So it falls back to the bar's
+        first chord, which is exactly what a single-chord target always was.
+
+        The same C# as above, played statically: outside C6, and correctly so.
+    */
+    LineAnalyzer analyzer;
+    analyzer.setTarget (0, { { 0, chordFrom ("C6") }, { 2, chordFrom ("A7") } });
+    analyzer.startTake();
+
+    const auto noPosition = analyzer.play (73);   // C#, and nothing says where
+
+    CHECK_EQ (noPosition.chordSymbol, std::string ("C6"));
+    CHECK (! noPosition.at.has_value());
+
+    /*  `unresolved` rather than `outside` because a take waits to see whether
+        the line closes it - the ordinary reading of an outside note, reached
+        here through the bar's first chord. */
+    CHECK (noPosition.colour == NoteColour::unresolved);
+}
+
+TEST ("a bar of one chord is a bar of one chord, however it is set")
+{
+    /*  The two overloads must not drift: a single-chord target and a one-entry
+        list are the same target, and the list version is what the wire will
+        send for every ordinary bar on the chart. */
+    LineAnalyzer byChord;
+    byChord.setTarget (3, chordFrom ("Dm7"));
+
+    LineAnalyzer byList;
+    byList.setTarget (3, { { 0, chordFrom ("Dm7") } });
+
+    CHECK_EQ (byChord.chordsInBar(), std::size_t (1));
+    CHECK_EQ (byList.chordsInBar(), std::size_t (1));
+
+    const auto one = byChord.play (62, BarPosition { 2, 0 });
+    const auto other = byList.play (62, BarPosition { 2, 0 });
+
+    CHECK_EQ (one.chordSymbol, other.chordSymbol);
+    CHECK_EQ (one.degree, other.degree);
+    CHECK_EQ (static_cast<int> (one.colour), static_cast<int> (other.colour));
+}
