@@ -598,13 +598,61 @@ std::string soloStartTake()
     return hold ("{\"ok\":true,\"taking\":true," + lineStatsJson (soloTake().stats()) + "}");
 }
 
+namespace
+{
+    /** The bar's chords, read off the wire: `C6:0|A7:2`, or a bare `Dm7`.
+
+        Refuses rather than salvages, the way every reader on this wire does:
+        a bar the shell garbled must not read back as a bar with one chord on
+        it, because that is the exact failure this whole change is about and
+        it would be invisible. The one thing it does fix up is the first
+        chord's beat, which is 0 whatever the text says - the lookup reads
+        backwards and has to find something at the top of the bar.
+    */
+    std::optional<std::vector<BarChord>> readBarChords (const std::string& text)
+    {
+        std::vector<BarChord> chords;
+
+        for (const auto& one : splitOn (text, '|'))
+        {
+            const auto colon = one.rfind (':');
+            const auto symbol = colon == std::string::npos ? one : one.substr (0, colon);
+            const auto chord = ChordSymbol::parse (symbol);
+
+            if (! chord.has_value())
+                return {};
+
+            auto fromBeat = 0;
+
+            if (colon != std::string::npos)
+            {
+                const auto beat = numberIn (one.substr (colon + 1), 0, 64);
+
+                if (! beat.has_value())
+                    return {};
+
+                fromBeat = *beat;
+            }
+
+            chords.push_back ({ fromBeat, *chord });
+        }
+
+        if (chords.empty())
+            return {};
+
+        chords.front().fromBeat = 0;
+        return chords;
+    }
+}
+
 std::string soloSetBar (int measureIndex, const char* symbol, const char* chosenScale,
                         const char* style, int beatsPerBar)
 {
-    const auto chord = ChordSymbol::parse (symbol != nullptr ? symbol : "");
+    const std::string barText = symbol != nullptr ? symbol : "";
+    const auto chords = readBarChords (barText);
 
-    if (! chord.has_value())
-        return hold (jsonError (std::string ("Not a chord symbol: ") + (symbol != nullptr ? symbol : "")));
+    if (! chords.has_value())
+        return hold (jsonError ("Not a chord symbol: " + barText));
 
     LineAnalyzer::Options options;
     options.chosenScale = chosenScale != nullptr ? chosenScale : "";
@@ -616,12 +664,22 @@ std::string soloSetBar (int measureIndex, const char* symbol, const char* chosen
 
     auto& analyzer = soloTake();
     analyzer.setOptions (options);
-    analyzer.setTarget (measureIndex, *chord);
+    analyzer.setTarget (measureIndex, *chords);
+
+    /*  The bar is named by its first chord, which is what the chart draws and
+        what the player is looking at. Every note's own chord is on the note,
+        so a turnaround's reading is not lost by naming the bar `C6`. */
+    const auto& named = chords->front().chord;
 
     // Clicking a bar is how the player asks what they have done on it, so the
     // answer comes back with the move rather than needing a call of its own.
+    //
+    // `chords` is what a shell feature-detects on: this call's name did not
+    // change, so the page's boot check cannot tell a new engine from an old
+    // one and the data has to.
     return hold ("{\"ok\":true,\"taking\":" + std::string (analyzer.isTaking() ? "true" : "false")
-                 + ",\"bar\":" + lineBarJson (analyzer.barFor (measureIndex), chord->toString())
+                 + ",\"chords\":" + std::to_string (chords->size())
+                 + ",\"bar\":" + lineBarJson (analyzer.barFor (measureIndex), named.toString())
                  + ",\"take\":{" + lineStatsJson (analyzer.stats()) + "}}");
 }
 

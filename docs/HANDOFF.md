@@ -331,6 +331,25 @@ Small, verified, and none of them urgent.
   was not captured and three runs immediately after were clean. Two
   occurrences, no diagnosis.
 
+- **A keyboard key cannot be clicked from an own-page smoke block.** Every
+  check that presses a key does it on the shared `page`; a block that opens
+  its own with `browser.newPage(...)` gets
+  `locator.click: Timeout 30000ms exceeded` with
+  *"waiting for element to be visible, enabled and stable"*, on a white key as
+  well as a black one. Measured rather than guessed: the key resolves, it is
+  visible, and its bounding box is byte-identical over five samples 300ms
+  apart, so "stable" is not what is actually failing and the message is
+  pointing somewhere else - a rendering or animation-frame difference between
+  the two kinds of page is the thing to suspect. Reproduced on a page that
+  does nothing but load, dismiss the cheat sheet and switch to solo, so it is
+  not any particular chart or state.
+
+  It cost the turnaround check its interesting half (see
+  `a bar of two chords is drawn as two`), and it will cost the next person the
+  same unless they find it written down. The way round it, if one is needed
+  before this is understood, is to drive the note through the MIDI stub the
+  shared page installs rather than through a click.
+
 - **Two checks report a value that changes run to run.** The same build, run
   twice, gives *"a comped chord is placed against the style"* as `idiomatic`
   or `offStyle`, and *"the take is read back as placement, register and
@@ -476,24 +495,20 @@ Small, verified, and none of them urgent.
   the matcher; the catalogue simply has no waltz in it, and the tunes worth
   having one for (Someday My Prince Will Come, Bluesette) are standards.
 
-- **A bar with two chords is written, and read, against the first.** Found
-  while writing the lick cross-check, and silent until then. `improvisedLine`
-  asks `chart.chordAt (bar)`, which answers with the chord on beat one, so on
-  `| C6 A7 |` the four notes that sound over A7 are written against C6 and
-  labelled C6. The take agrees, because `LineAnalyzer::setTarget` takes a
-  *bar* and a chord and the page's `selectBar` targets bars too - which is why
-  the round trip has never had anything to say about it and why nothing looks
-  wrong on screen.
+- **A bar with two chords is read against the first when there is no clock**,
+  and that is the design rather than what is left of the bug above it. Which
+  chord a note belongs to is a question about *where it fell*, and practising
+  statically the shell cannot say - so the bar's first chord is used, which is
+  what a single-chord target always did.
 
-  It is not a `chordAt` argument. A target would have to become a chord
-  *within* a bar, in the engine's take model, on the wire (`soloSetBar`) and in
-  the page. Until then, turnarounds are read a bar at a time.
-
-  **L17 is the lick this actually costs.** It is the only one keyed on two
-  chords to a bar, so `licksFitting` places it only where the boundaries line
-  up - and then half of it is coloured against the wrong chord. A test in
-  `LickCatalogueTests` pins the behaviour so it stays a known property rather
-  than a surprise.
+  What it costs: on `| C6 A7 |` with the transport off, a player outlining the
+  A7 is still read against C6. In time they are read correctly. Closing it
+  means letting a player say which chord of a bar they are on without a clock,
+  and that is a **UI** question rather than an engine one - the bar is a single
+  element on the chart, and the obvious answers (splitting the bar's click
+  target, a chooser in the bar dialog) each cost something on a phone. Nobody
+  has asked for it; it is written down so the asymmetry is a decision on the
+  record rather than an oversight.
 
 - **Nothing renders a lick's ornament.** `LickNote::ornament` is authored on
   L13's two crushes and carried through the catalogue, and no shell reads it:

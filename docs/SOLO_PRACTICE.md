@@ -358,16 +358,33 @@ voices first, which `docs/HANDOFF.md` carries.
     claims checked went 2,211 to 3,338 and outside claims 91 to 161, no
     violation either way. A lick authored, drawn and credited to somebody by
     name while held to nothing is worse than one that does not exist.
-- **A bar with two chords is written against the first**, and that is a
-  property of solo practice rather than of the catalogue. `improvisedLine` asks
-  `chart.chordAt (bar)`, which answers with the chord on beat one, so on
-  `| C6 A7 |` the four notes that sound over A7 are written against C6. The
-  take reads them back the same way — `LineAnalyzer::setTarget` takes a *bar*,
-  and the page targets bars too — so writer and reader agree and the round trip
-  has never had anything to say about it. L17 is the one lick keyed on two
-  chords to a bar, which is how it came to light. A test pins it so it stops
-  being silent; fixing it is the take model rather than a `chordAt` argument,
-  and `docs/HANDOFF.md` carries it.
+- **A bar with two chords is read, and written, against the chord that is
+  sounding.** `| C6 A7 |` is the last bar of a thousand standards, and both
+  halves of solo practice used to take the bar's first chord: `improvisedLine`
+  asked `chart.chordAt (bar)` and `LineAnalyzer::setTarget` took a *bar* and a
+  chord, so the four notes over the A7 were written against C6 and read back
+  against C6. Writer and reader agreed, which is exactly why the round trip
+  never caught it. L17, the one lick keyed on two chords to a bar, is how it
+  came to light.
+
+  `Chart::chordAt` always took a beat and nobody passed one. The writer passes
+  the note's own; the take holds the bar's chords with the beat each arrives on
+  (`Chart::barChords`) and picks by the position the note already carries. On a
+  turnaround that is about half the notes: measured at 1,020 of 2,047 over four
+  styles and twenty-four seeds.
+
+  **With no clock it is still the bar's first chord**, and that is the rule
+  rather than the remainder of the bug. Which chord a note belongs to is a
+  question about where it fell, and a shell practising statically cannot say —
+  `LineNote::at` is empty for exactly that reason, and choosing from a made-up
+  beat would read the note against harmony the player never heard. So the
+  reading is unchanged without the transport, a test says so, and what it
+  costs is in `docs/HANDOFF.md`.
+
+  **One rule moved with the writer.** Its approach test read "the chord is
+  about to change" as "a bar line is about to arrive", which on a turnaround
+  are different things — and the change from C6 to A7 inside one bar is the one
+  a bebop line most wants to approach.
 
 ### Line styles, and the scale styles underneath them
 - **A line style is the one thing a player picks**, and it answers two

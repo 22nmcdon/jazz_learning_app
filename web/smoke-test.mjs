@@ -4576,6 +4576,44 @@ try {
 
     await reading.close();
   }
+
+  /*  A bar carrying two chords, which the page now sends whole: `| C6 A7 |` is
+      the last bar of a thousand standards, and a take told only `C6` reads the
+      notes from beat three on against the wrong chord.
+
+      What is checked here is only that the chart draws it, which is less than
+      was wanted. Playing a note over such a bar and asserting which chord it
+      was read against needs a key press, and a key press in an own-page block
+      times out on Playwright's actionability check while the identical press
+      works on the shared page - reproduced on a page that does nothing but
+      load and switch to solo, so it is this suite rather than anything here.
+      Written up in `docs/HANDOFF.md`.
+
+      What does cover the rest: `EngineApiTests` drives the grammar end to end,
+      including a note on beat three reading against the bar's second chord,
+      and `web/unit-test.mjs` covers the running total this page does to build
+      the text. The gap is the glue between them, which is three lines.
+
+      On a page of its own because it rewrites the chart. */
+  {
+    const turnaround = await browser.newPage({ viewport: { width: 1100, height: 800 } });
+    await turnaround.goto(`${origin}/index.html`, { waitUntil: "load" });
+    await turnaround.waitForSelector("#engineStatus[data-state='ready']", { timeout: 60000 });
+    if (await turnaround.locator("#helpDialog[open]").count()) await turnaround.locator("#helpClose").click();
+
+    await turnaround.locator("#chartButton").click();
+    await turnaround.locator("#editToggle").click();
+    await turnaround.fill("#progression", "| C6 A7 | Dm7 G7 |");
+    await turnaround.dispatchEvent("#progression", "input");
+    await turnaround.waitForFunction(
+      () => document.querySelectorAll("#systems .chord").length === 4, null, { timeout: 10000 });
+
+    check(`a bar of two chords is drawn as two (${
+            (await turnaround.locator("#systems .chord").allInnerTexts()).join(" ")})`,
+          (await turnaround.locator("#systems .chord").count()) === 4);
+
+    await turnaround.close();
+  }
 } catch (error) {
   check(`no exception (${error.message.split("\n")[0]})`, false);
 } finally {

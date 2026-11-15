@@ -1544,3 +1544,56 @@ TEST ("every answer the wire gives is JSON, on the happy path and the sad one")
     good ("tuneProgress", tuneProgress (tune, "", 100));
     good ("tuneProgress/bad", tuneProgress (tune, "nor is this", 100));
 }
+
+TEST ("a bar's chords cross the wire as flat text, and a bare symbol still works")
+{
+    /*  `C6:0|A7:2` is the grammar; `Dm7` is one chord from beat 0 and is what
+        this argument has always been, so a shell that knows nothing about the
+        delimiters is unaffected. Flat text rather than JSON for the reason
+        every input here is: the engine has no JSON reader. */
+    soloStartTake();
+
+    const auto one = soloSetBar (0, "Dm7", "", "");
+    CHECK (contains (one, "\"chords\":1"));
+
+    const auto two = soloSetBar (0, "C6:0|A7:2", "", "", 4);
+    CHECK (contains (two, "\"ok\":true"));
+    CHECK (contains (two, "\"chords\":2"));
+
+    /*  Named by the first chord, because that is what the chart draws and what
+        the player clicked. The per-note truth rides on the notes. */
+    CHECK (contains (two, "\"chord\":\"C6\""));
+
+    soloEndTake();
+}
+
+TEST ("a note over a bar's second chord is read against that chord")
+{
+    /*  End to end over the wire: C# is the 3 of A7 and outside C6, played on
+        beat three of a bar carrying both. */
+    soloStartTake();
+    soloSetBar (0, "C6:0|A7:2", "", "", 4);
+
+    const auto json = soloPlayNote (73, 2, 0);
+
+    CHECK (contains (json, "\"chord\":\"A7\""));
+    CHECK (contains (json, "\"colour\":\"chordTone\""));
+    CHECK (contains (json, "\"degree\":\"3\""));
+
+    soloEndTake();
+}
+
+TEST ("a garbled bar is refused rather than read as one chord")
+{
+    /*  The asymmetry every reader on this wire draws, and it matters more here
+        than most: a bar the shell garbled must not come back as a bar with one
+        chord on it, because that is exactly the bug this grammar exists to fix
+        and it would be silent. */
+    soloStartTake();
+
+    CHECK (contains (soloSetBar (0, "C6:0|notachord:2", "", ""), "\"ok\":false"));
+    CHECK (contains (soloSetBar (0, "C6:0|A7:notabeat", "", ""), "\"ok\":false"));
+    CHECK (contains (soloSetBar (0, "", "", ""), "\"ok\":false"));
+
+    soloEndTake();
+}

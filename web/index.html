@@ -2421,7 +2421,7 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
           <div class="menu-group">
             <span class="menu-title">About</span>
             <div class="colophon">
-              <span>Engine: <code>modules/core_engine</code> - 623 unit tests, no JUCE.</span>
+              <span>Engine: <code>modules/core_engine</code> - 626 unit tests, no JUCE.</span>
               <span id="colophonEngine"></span>
               <span id="colophonFraming"></span>
               <span id="colophonBuild"></span>
@@ -4449,6 +4449,48 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
     return measure && measure.chords.length ? measure.chords[0].symbol : null;
   }
 
+  /*  Pure, and unit-tested by `web/unit-test.mjs` without a browser. Reads
+      nothing from outside itself. See the note on the timing core below for
+      why this is a marked block in one file rather than a module - and note
+      that the marker has to be a line comment of its own, because the slicer
+      starts at the end of the marker's line and would otherwise read the rest
+      of this comment as code. */
+  //  ==== JAZZ-CHART-CORE-BEGIN ====
+
+  /** A bar's chords for the engine: "C6:0|A7:2", each a symbol, a colon and
+      the beat it arrives on.
+
+      The chart is written in **durations** and a take is read against
+      **starts**, so the running total happens here - the same one
+      `Chart::barChords` does on the other side, for a shell that holds the
+      parsed measures rather than the chart.
+
+      Flat text because that is what every input on this wire is: results are
+      JSON because every shell has a parser, inputs are delimited because the
+      engine has no JSON reader and must not grow one.
+
+      A bar of one chord comes out as `Dm7:0`, which the engine reads as the
+      one chord it is - the same answer as the bare `Dm7` this argument used
+      to carry, so there is no special case here for the ordinary bar. */
+  function barChordsText(chords) {
+    if (!chords || !chords.length) return null;
+
+    var beat = 0;
+
+    return chords.map(function (slot) {
+      var at = beat;
+      beat += slot.beats || 0;
+      return slot.symbol + ":" + at;
+    }).join("|");
+  }
+
+  //  ==== JAZZ-CHART-CORE-END ====
+
+  function selectedBarChords() {
+    var measure = state.measures[state.selected];
+    return measure ? barChordsText(measure.chords) : null;
+  }
+
   /** Re-reads the chart, then re-reads what is under the hands against it.
 
       The two are sequenced rather than fired together: the analysis is against
@@ -5197,8 +5239,11 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
      with its own bar's numbers: the engine is answering the question once and
      the page is remembering the answers. Disarming replaces the lot with the
      engine's own breakdown, so a long take cannot drift from it. */
+  /*  `engineTakesBars`: whether the engine beside this page understands a bar
+      of more than one chord. Assumed until it says otherwise - see
+      `soloMoveToBar`, which turns it off on the one reply that can tell. */
   var solo = { armed: false, bar: null, take: null, bars: {}, open: {},
-               lastStruck: 0, lastAt: null, lastBar: -1 };
+               lastStruck: 0, lastAt: null, lastBar: -1, engineTakesBars: true };
 
   /*  Comping practice: what was played, and never what it meant.
 
@@ -5951,13 +5996,36 @@ dialog::backdrop { background: rgba(36, 31, 29, 0.45); }
       }
     }
 
-    // The metre rides along, because which beats are strong is the metre's
-    // business and the metre is the chart's. Nothing over there reads it
-    // unless the notes also arrive with positions.
-    var result = await call("jazzSoloSetBar",
-                            ["number", "string", "string", "string", "number"],
-                            [state.selected, chord, soloChosenScale(), soloStyle(),
-                             transport.beats]);
+    /*  The whole bar, not its first chord: `| C6 A7 |` is the last bar of a
+        thousand standards, and a take told only `C6` reads the notes from
+        beat three on against the wrong chord.
+
+        The metre rides along, because which beats are strong is the metre's
+        business and the metre is the chart's. Nothing over there reads it
+        unless the notes also arrive with positions. */
+    var bar = solo.engineTakesBars ? (selectedBarChords() || chord) : chord;
+
+    var send = function (text) {
+      return call("jazzSoloSetBar",
+                  ["number", "string", "string", "string", "number"],
+                  [state.selected, text, soloChosenScale(), soloStyle(),
+                   transport.beats]);
+    };
+
+    var result = await send(bar);
+
+    /*  A cached engine from before this grammar reads `C6:0|A7:2` as one
+        chord symbol, fails to parse it and answers `ok:false` - and the line
+        below would swallow that, leaving the take panel silently empty. This
+        call's *name* did not change, so the boot check cannot see the skew and
+        the data has to, which is the rule `compStyles().slots` already follows.
+
+        Once, then never again this session: setting a target is idempotent and
+        this runs on every bar move, so the retry costs one call. */
+    if (solo.engineTakesBars && bar !== chord && (result === null || !result.ok)) {
+      solo.engineTakesBars = false;
+      result = await send(chord);
+    }
 
     if (result === null || !result.ok) return;
 

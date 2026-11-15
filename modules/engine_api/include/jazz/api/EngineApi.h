@@ -288,6 +288,33 @@ std::string lineStyles();
 std::string scaleStyles();
 
 std::string soloStartTake();
+
+/** Moves the take to a bar and says what harmony is on it.
+
+    @param symbol  the bar's chords, as `C6:0|A7:2` - each one a symbol, a
+                   colon and the beat it arrives on, in order. A bare `Dm7` is
+                   one chord from beat 0, which is every ordinary bar and is
+                   what this argument used to be, so a shell that knows
+                   nothing about the grammar still works.
+
+                   Flat delimited text rather than JSON for the reason every
+                   input on this wire is: the engine has no JSON reader and
+                   must not grow one. `parseNoteList`, `readHit` and a
+                   described comping style are the precedent.
+
+                   **A bar with two chords is why this is not one symbol.**
+                   `| C6 A7 |` is the last bar of a thousand standards, and a
+                   take told only `C6` reads the notes from beat three on
+                   against the wrong chord. Which chord a note is read against
+                   needs the note's own position, so with no clock running the
+                   bar's first chord is used - see `LineAnalyzer::setTarget`.
+
+    The reply carries `"chords"`, how many the engine took. A shell can read
+    that to tell this engine from one that only understands a bare symbol:
+    an older one answers a delimited bar with `ok:false` naming the text it
+    could not parse, which is the data to feature-detect on, since the call's
+    *name* has not changed and the page's boot check cannot see this.
+*/
 std::string soloSetBar (int measureIndex, const char* symbol, const char* chosenScale,
                         const char* style, int beatsPerBar = 4);
 /** @param beat  negative when the shell has no clock and cannot say where

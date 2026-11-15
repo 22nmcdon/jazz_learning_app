@@ -45,6 +45,7 @@ const between = (from, to) => {
 };
 
 const core = between("==== JAZZ-TIMING-CORE-BEGIN ====", "//  ==== JAZZ-TIMING-CORE-END");
+const chart = between("==== JAZZ-CHART-CORE-BEGIN ====", "//  ==== JAZZ-CHART-CORE-END");
 
 const ticks = /var ENGINE_TICKS_PER_BEAT = (\d+);/.exec(page);
 if (!ticks) throw new Error("ENGINE_TICKS_PER_BEAT is not declared in web/index.html");
@@ -61,6 +62,9 @@ const load = new Function(`
 `);
 
 const { upbeatFractionOf, swungUpbeatTickOf, beatsIntoBarOf, positionFromBeatsOf } = load();
+
+//  The chart core, on its own terms: no constant, no DOM, no engine.
+const { barChordsText } = new Function(`${chart}\nreturn { barChordsText };`)();
 
 //==============================================================================
 let failures = 0;
@@ -165,6 +169,40 @@ check("a note played a little early is read as the note the player meant",
 check("the swung eighth folds back onto the straight one rather than a tick of its own",
       positionFromBeatsOf(beatsIntoBarOf(0, TICKS / 2, spbAt(120), swing, true),
                           spbAt(120), swing, true).tick === TICKS / 2);
+
+//==============================================================================
+console.log("\n-- a bar's chords, as the engine is told them --");
+
+check("one chord is that chord from beat 0",
+      barChordsText([{ symbol: "Dm7", beats: 4 }]) === "Dm7:0");
+
+check("two chords carry the beat each one arrives on",
+      barChordsText([{ symbol: "C6", beats: 2 }, { symbol: "A7", beats: 2 }]) === "C6:0|A7:2");
+
+//  Durations in, starts out: the second chord's beat is the first's *length*,
+//  not its index, which is the whole of what this function is for.
+check("an uneven split puts the change where the first chord ends",
+      barChordsText([{ symbol: "C6", beats: 3 }, { symbol: "A7", beats: 1 }]) === "C6:0|A7:3");
+
+check("three to a bar keep accumulating",
+      barChordsText([{ symbol: "C6", beats: 2 }, { symbol: "A7", beats: 1 },
+                     { symbol: "Dm7", beats: 1 }]) === "C6:0|A7:2|Dm7:3");
+
+/*  There is deliberately no metre case here. This accumulates the durations
+    it is given and never asks how many beats a bar has, so a waltz and a bar
+    of four with the same slot lengths come out as the same text - a check
+    written to look like a 3/4 one would be the 4/4 one again with a different
+    name on it. Which beats exist is the chart's business and the engine is
+    told the metre separately. */
+
+check("an empty bar is nothing to say, not an empty string",
+      barChordsText([]) === null && barChordsText(undefined) === null);
+
+//  The engine refuses a bar it cannot read rather than taking the first chord
+//  of it, so a missing duration must not silently collapse two chords onto
+//  beat 0 - it stays readable, with the change where the data put it.
+check("a slot with no duration does not move the ones after it onto its beat",
+      barChordsText([{ symbol: "C6" }, { symbol: "A7", beats: 2 }]) === "C6:0|A7:0");
 
 //==============================================================================
 console.log(`\n${ran - failures}/${ran} checks passed`);
