@@ -385,14 +385,21 @@ bool writeQuote (std::vector<WrittenNote>& line,
             continue;
 
         const auto bar = fromBar + at / barTicks;
-        const auto* over = chart.chordAt (bar);
+        const auto where = BarPosition::fromTicks (at % barTicks);
+
+        /*  The chord at this note's own beat, not the bar's first chord. L17 is
+            the one lick keyed on two chords to a bar, so it is also the one
+            this changes: it used to be placed where the boundaries lined up
+            and then have half its notes coloured against the chord they were
+            not played over. */
+        const auto* over = chart.chordAt (bar, where.beat);
 
         if (over == nullptr)
             continue;
 
         WrittenNote note;
         note.measureIndex = bar;
-        note.at = BarPosition::fromTicks (at % barTicks);
+        note.at = where;
         note.midiNote = lick.midiFor (quotedNote, root);
         note.chordSymbol = over->toString();
         note.lengthTicks = quotedNote.lengthTicks;
@@ -653,7 +660,13 @@ std::vector<WrittenNote> improvisedLine (const Chart& chart,
     for (std::size_t i = 0; i < planned.size(); ++i)
     {
         const auto& slot = planned[i];
-        const auto* chord = chart.chordAt (slot.measureIndex);
+
+        /*  Per *position*, not per bar. On `| C6 A7 |` the notes from beat
+            three on are over A7, and writing them against C6 made the tones,
+            the reading scale and therefore the colour all wrong together -
+            which is why the round trip never caught it: the analyser was
+            handed the same wrong chord and agreed. */
+        const auto* chord = chart.chordAt (slot.measureIndex, slot.at.beat);
 
         if (chord == nullptr)
             continue;
@@ -697,11 +710,17 @@ std::vector<WrittenNote> improvisedLine (const Chart& chart,
             neighbour is outside there is no approach to write, and the line
             plays an ordinary note instead. */
         const auto* comingNext = i + 1 < planned.size()
-                                     ? chart.chordAt (planned[i + 1].measureIndex)
+                                     ? chart.chordAt (planned[i + 1].measureIndex,
+                                                      planned[i + 1].at.beat)
                                      : nullptr;
 
+        /*  "The chord is about to change" used to mean "a bar line is about to
+            arrive", and on a turnaround those are not the same thing: the
+            change from C6 to A7 inside one bar is the one a bebop line most
+            wants to approach, and the writer could not see it. The root
+            comparison is what the test always was - the bar inequality was
+            standing in for it and getting it wrong half the time. */
         const auto changes = comingNext != nullptr
-                          && planned[i + 1].measureIndex != slot.measureIndex
                           && comingNext->root() != chord->root();
 
         auto aimedAt = -1;

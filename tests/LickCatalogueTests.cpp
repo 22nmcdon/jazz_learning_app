@@ -847,28 +847,24 @@ TEST ("what the source calls outside is never read as a chord tone")
     CHECK (checked > 120);
 }
 
-TEST ("a bar with two chords is written against the first, and that is known")
+TEST ("a bar with two chords is written against the chord that is sounding")
 {
-    /*  Not an assertion that this is right. It pins a limitation that was
-        found while writing the cross-check above and was silent until then,
-        so that it is a stated property of solo practice rather than something
-        the next person rediscovers.
+    /*  This test used to assert the opposite, deliberately: it pinned a
+        limitation found while writing the cross-check above, where
+        `improvisedLine` asked `chart.chordAt (bar)` and so wrote every note in
+        `| C6 A7 |` against C6 - the four in its second half included, which
+        sound over A7. It was invisible because the take read it back the same
+        way, so writer and reader agreed about the wrong chord and the round
+        trip had nothing to say.
 
-        `improvisedLine` asks `chart.chordAt (bar)`, which answers with the
-        chord on beat one. On `| C6 A7 |` every note in the bar is therefore
-        written against C6 - including the four in its second half, which
-        sound over A7. The take reads it back the same way, because
-        `LineAnalyzer::setTarget` takes a *bar* and a chord and the page
-        targets bars too, so writer and reader agree and the round trip has
-        never had anything to say about it.
+        The pin is now the check. `chart.chordAt` always took a beat and no
+        caller passed one; the writer passes the note's own beat, so the tones,
+        the reading scale and therefore the colour are all against the harmony
+        the note was actually played over.
 
-        It matters here because L17 is the one lick keyed on two chords to a
-        bar: `licksFitting` will only place it where the boundaries line up,
-        and then half of it is coloured against the wrong chord.
-
-        Fixing it is not a `chordAt` argument. It is the take model: a target
-        would have to become a chord *within* a bar, in the engine, on the wire
-        and in the page's `selectBar`. Recorded in docs/HANDOFF.md.
+        A turnaround is where this is worth having: `| C6 A7 | Dm7 G7 |` is the
+        last two bars of a thousand standards, and L17 is the one lick keyed on
+        two chords to a bar.
     */
     const auto chart = chartOf ("| C6 A7 | Dm7 G7 | Cmaj7 | Cmaj7 |");
 
@@ -882,15 +878,27 @@ TEST ("a bar with two chords is written against the first, and that is known")
 
     for (const auto& note : written)
     {
-        // Every note carries the chord on beat one of its bar, whatever the
-        // chart says is sounding where it actually falls.
-        CHECK_EQ (note.chordSymbol, chart.chordAt (note.measureIndex, 0)->toString());
+        CHECK_EQ (note.chordSymbol,
+                  chart.chordAt (note.measureIndex, note.at.beat)->toString());
 
         if (note.at.beat >= 2 && note.measureIndex <= 1)
             ++secondHalf;
     }
 
-    // And there really are notes in the half of the bar this gets wrong, so
-    // the check above is not passing for want of anything to look at.
+    /*  And there really are notes in the half of the bar this is about, so the
+        check above is not passing for want of anything to look at. This is the
+        line that made the old version of the test worth writing, and it earns
+        its place here for the same reason. */
     CHECK (secondHalf > 0);
+
+    /*  The half that the per-note check cannot see: a chord symbol that is not
+        the bar's first one has to actually turn up, or every note could be on
+        beat one of its own bar and the test would still pass. */
+    auto sawTheSecondChord = false;
+
+    for (const auto& note : written)
+        if (note.measureIndex == 0 && note.chordSymbol == "A7")
+            sawTheSecondChord = true;
+
+    CHECK (sawTheSecondChord);
 }
